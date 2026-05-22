@@ -67,11 +67,13 @@ export function ContactOrgSection({
           <tbody className="divide-y divide-slate-100">
             {items.map((item) => (
               <tr key={item.id}>
-                <Td className="font-medium text-slate-900">{item.name}</Td>
-                <Td>{item.contactPerson || "—"}</Td>
-                <Td>{item.email || "—"}</Td>
-                <Td>{item.phone || "—"}</Td>
-                <Td>
+                <Td label="Name" className="font-medium text-slate-900">
+                  {item.name}
+                </Td>
+                <Td label="Contact">{item.contactPerson || "—"}</Td>
+                <Td label="Email">{item.email || "—"}</Td>
+                <Td label="Phone">{item.phone || "—"}</Td>
+                <Td label="Status">
                   <Badge tone={item.isActive ? "green" : "slate"}>
                     {item.isActive ? "Active" : "Inactive"}
                   </Badge>

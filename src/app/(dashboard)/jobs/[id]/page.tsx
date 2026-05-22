@@ -98,7 +98,7 @@ export default async function JobDetailPage({
       <Card title="Status">
         <form action={changeJobStatus} className="flex flex-wrap items-end gap-2">
           <input type="hidden" name="id" value={job.id} />
-          <div className="w-48">
+          <div className="w-full sm:w-48">
             <label
               htmlFor="status"
               className="mb-1 block text-xs font-medium text-slate-500"
@@ -203,7 +203,7 @@ export default async function JobDetailPage({
             <tbody className="divide-y divide-slate-100">
               {submissions.map((s) => (
                 <tr key={s.id} className="hover:bg-slate-50">
-                  <Td>
+                  <Td label="Candidate">
                     <Link
                       href={`/submissions/${s.id}`}
                       className="font-medium text-indigo-600 hover:underline"
@@ -211,16 +211,16 @@ export default async function JobDetailPage({
                       {s.candidate.fullName}
                     </Link>
                   </Td>
-                  <Td>{s.submittedBy.fullName}</Td>
-                  <Td className="whitespace-nowrap">
+                  <Td label="Submitted by">{s.submittedBy.fullName}</Td>
+                  <Td label="Submitted" className="whitespace-nowrap">
                     {formatDate(s.submittedAt)}
                   </Td>
-                  <Td>
+                  <Td label="Status">
                     <Badge tone={SUBMISSION_STATUS_TONE[s.status]}>
                       {SUBMISSION_STATUS_LABEL[s.status]}
                     </Badge>
                   </Td>
-                  <Td>
+                  <Td label="Resume">
                     {s.resumeDriveLink ? (
                       <a
                         href={s.resumeDriveLink}
@@ -234,10 +234,10 @@ export default async function JobDetailPage({
                       "—"
                     )}
                   </Td>
-                  <Td className="text-right tabular-nums">
+                  <Td label="Rate" className="text-right tabular-nums">
                     {formatRate(s.candidateRate)}
                   </Td>
-                  <Td className="text-right tabular-nums">
+                  <Td label="Rounds" className="text-right tabular-nums">
                     {s._count.interviewRounds}
                   </Td>
                 </tr>

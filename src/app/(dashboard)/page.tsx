@@ -249,7 +249,7 @@ export default async function DashboardPage({
             <tbody className="divide-y divide-slate-100">
               {data.recruiterPerf.map((r) => (
                 <tr key={r.id} className="hover:bg-slate-50">
-                  <Td>
+                  <Td label="Recruiter">
                     <Link
                       href={`/recruiters/${r.id}`}
                       className="font-medium text-indigo-600 hover:underline"
@@ -257,10 +257,18 @@ export default async function DashboardPage({
                       {r.fullName}
                     </Link>
                   </Td>
-                  <Td className="text-right tabular-nums">{r.submissions}</Td>
-                  <Td className="text-right tabular-nums">{r.interviews}</Td>
-                  <Td className="text-right tabular-nums">{r.selected}</Td>
-                  <Td className="text-right tabular-nums">{r.joined}</Td>
+                  <Td label="Submissions" className="text-right tabular-nums">
+                    {r.submissions}
+                  </Td>
+                  <Td label="Interviews" className="text-right tabular-nums">
+                    {r.interviews}
+                  </Td>
+                  <Td label="Selected" className="text-right tabular-nums">
+                    {r.selected}
+                  </Td>
+                  <Td label="Joined" className="text-right tabular-nums">
+                    {r.joined}
+                  </Td>
                 </tr>
               ))}
             </tbody>

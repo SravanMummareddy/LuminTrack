@@ -107,7 +107,7 @@ export function ResumeSection({
                     <iframe
                       src={previewUrl}
                       title={`${r.label} preview`}
-                      className="mt-3 h-[600px] w-full rounded-md border border-slate-200"
+                      className="mt-3 h-[70vh] w-full rounded-md border border-slate-200 md:h-[600px]"
                     />
                   ) : (
                     <p className="mt-3 text-xs text-slate-500">

@@ -5,6 +5,7 @@ import { LinkButton } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, Th, Td } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
+import { MobileSort } from "@/components/ui/mobile-sort";
 import { Pagination } from "@/components/ui/pagination";
 import { JobFilters } from "@/components/jobs/job-filters";
 import {
@@ -132,6 +133,18 @@ export default async function JobsPage({
           <p className="text-xs text-slate-500">
             {total} job{total === 1 ? "" : "s"}
           </p>
+          <MobileSort
+            options={[
+              { column: "title", label: "Job title" },
+              { column: "client", label: "Client" },
+              { column: "vendor", label: "Vendor" },
+              { column: "source", label: "Source" },
+              { column: "location", label: "Location" },
+              { column: "status", label: "Status" },
+              { column: "subs", label: "Subs", defaultDir: "desc" },
+              { column: "created", label: "Created", defaultDir: "desc" },
+            ]}
+          />
           <Table>
             <thead className="border-b border-slate-200 bg-slate-50">
               <tr>
@@ -154,7 +167,7 @@ export default async function JobsPage({
             <tbody className="divide-y divide-slate-100">
               {jobs.map((job) => (
                 <tr key={job.id} className="hover:bg-slate-50">
-                  <Td>
+                  <Td label="Job title">
                     <Link
                       href={`/jobs/${job.id}`}
                       className="font-medium text-indigo-600 hover:underline"
@@ -162,22 +175,26 @@ export default async function JobsPage({
                       {job.title}
                     </Link>
                   </Td>
-                  <Td>{job.client.name}</Td>
-                  <Td>{job.vendor.name}</Td>
-                  <Td>{job.sisterCompanySource.name}</Td>
-                  <Td>{job.location || "—"}</Td>
-                  <Td>
+                  <Td label="Client">{job.client.name}</Td>
+                  <Td label="Vendor">{job.vendor.name}</Td>
+                  <Td label="Source">{job.sisterCompanySource.name}</Td>
+                  <Td label="Location">{job.location || "—"}</Td>
+                  <Td label="Recruiters">
                     {job.assignments.length
                       ? job.assignments.map((a) => a.recruiter.fullName).join(", ")
                       : "—"}
                   </Td>
-                  <Td>
+                  <Td label="Status">
                     <Badge tone={JOB_STATUS_TONE[job.status]}>
                       {JOB_STATUS_LABEL[job.status]}
                     </Badge>
                   </Td>
-                  <Td className="text-right tabular-nums">{job._count.submissions}</Td>
-                  <Td className="whitespace-nowrap">{formatDate(job.createdAt)}</Td>
+                  <Td label="Subs" className="text-right tabular-nums">
+                    {job._count.submissions}
+                  </Td>
+                  <Td label="Created" className="whitespace-nowrap">
+                    {formatDate(job.createdAt)}
+                  </Td>
                 </tr>
               ))}
             </tbody>

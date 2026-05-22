@@ -72,12 +72,24 @@ function DimensionTable({ rows }: { rows: ReportsData["byClient"] }) {
       <tbody className="divide-y divide-slate-100">
         {rows.map((r) => (
           <tr key={r.name} className="hover:bg-slate-50">
-            <Td className="font-medium text-slate-800">{r.name}</Td>
-            <Td className="text-right tabular-nums">{r.jobs}</Td>
-            <Td className="text-right tabular-nums">{r.submissions}</Td>
-            <Td className="text-right tabular-nums">{r.interviews}</Td>
-            <Td className="text-right tabular-nums">{r.selected}</Td>
-            <Td className="text-right tabular-nums">{r.joined}</Td>
+            <Td label="Name" className="font-medium text-slate-800">
+              {r.name}
+            </Td>
+            <Td label="Jobs" className="text-right tabular-nums">
+              {r.jobs}
+            </Td>
+            <Td label="Submissions" className="text-right tabular-nums">
+              {r.submissions}
+            </Td>
+            <Td label="Interviews" className="text-right tabular-nums">
+              {r.interviews}
+            </Td>
+            <Td label="Selected" className="text-right tabular-nums">
+              {r.selected}
+            </Td>
+            <Td label="Joined" className="text-right tabular-nums">
+              {r.joined}
+            </Td>
           </tr>
         ))}
       </tbody>
@@ -198,11 +210,21 @@ export default async function ReportsPage({
             <tbody className="divide-y divide-slate-100">
               {data.byRecruiter.map((r) => (
                 <tr key={r.name} className="hover:bg-slate-50">
-                  <Td className="font-medium text-slate-800">{r.name}</Td>
-                  <Td className="text-right tabular-nums">{r.submissions}</Td>
-                  <Td className="text-right tabular-nums">{r.interviews}</Td>
-                  <Td className="text-right tabular-nums">{r.selected}</Td>
-                  <Td className="text-right tabular-nums">{r.joined}</Td>
+                  <Td label="Recruiter" className="font-medium text-slate-800">
+                    {r.name}
+                  </Td>
+                  <Td label="Submissions" className="text-right tabular-nums">
+                    {r.submissions}
+                  </Td>
+                  <Td label="Interviews" className="text-right tabular-nums">
+                    {r.interviews}
+                  </Td>
+                  <Td label="Selected" className="text-right tabular-nums">
+                    {r.selected}
+                  </Td>
+                  <Td label="Joined" className="text-right tabular-nums">
+                    {r.joined}
+                  </Td>
                 </tr>
               ))}
             </tbody>
@@ -247,7 +269,7 @@ export default async function ReportsPage({
               <tbody className="divide-y divide-slate-100">
                 {data.openJobs.map((j) => (
                   <tr key={j.id} className="hover:bg-slate-50">
-                    <Td>
+                    <Td label="Job">
                       <Link
                         href={`/jobs/${j.id}`}
                         className="font-medium text-indigo-600 hover:underline"
@@ -255,14 +277,16 @@ export default async function ReportsPage({
                         {j.title}
                       </Link>
                     </Td>
-                    <Td>{j.client}</Td>
-                    <Td>
+                    <Td label="Client">{j.client}</Td>
+                    <Td label="Status">
                       <Badge tone={JOB_STATUS_TONE[j.status]}>
                         {JOB_STATUS_LABEL[j.status]}
                       </Badge>
                     </Td>
-                    <Td className="text-right tabular-nums">{j.days}</Td>
-                    <Td>
+                    <Td label="Days open" className="text-right tabular-nums">
+                      {j.days}
+                    </Td>
+                    <Td label="Aging">
                       <Badge tone={AGING_BUCKET_TONE[j.bucket]}>
                         {AGING_BUCKET_LABEL[j.bucket]}
                       </Badge>

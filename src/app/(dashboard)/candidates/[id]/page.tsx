@@ -200,7 +200,7 @@ export default async function CandidateDetailPage({
             <tbody className="divide-y divide-slate-100">
               {submissions.map((s) => (
                 <tr key={s.id} className="hover:bg-slate-50">
-                  <Td>
+                  <Td label="Job">
                     <Link
                       href={`/submissions/${s.id}`}
                       className="font-medium text-indigo-600 hover:underline"
@@ -208,14 +208,14 @@ export default async function CandidateDetailPage({
                       {s.job.title}
                     </Link>
                   </Td>
-                  <Td>{s.job.client.name}</Td>
-                  <Td>{s.job.vendor.name}</Td>
-                  <Td>{s.job.sisterCompanySource.name}</Td>
-                  <Td>{s.submittedBy.fullName}</Td>
-                  <Td className="whitespace-nowrap">
+                  <Td label="Client">{s.job.client.name}</Td>
+                  <Td label="Vendor">{s.job.vendor.name}</Td>
+                  <Td label="Source">{s.job.sisterCompanySource.name}</Td>
+                  <Td label="Submitted by">{s.submittedBy.fullName}</Td>
+                  <Td label="Submitted" className="whitespace-nowrap">
                     {formatDate(s.submittedAt)}
                   </Td>
-                  <Td>
+                  <Td label="Status">
                     <Badge tone={SUBMISSION_STATUS_TONE[s.status]}>
                       {SUBMISSION_STATUS_LABEL[s.status]}
                     </Badge>
@@ -248,7 +248,7 @@ export default async function CandidateDetailPage({
             <tbody className="divide-y divide-slate-100">
               {interviews.map((r) => (
                 <tr key={r.id} className="hover:bg-slate-50">
-                  <Td>
+                  <Td label="Job">
                     <Link
                       href={`/submissions/${r.submission.id}`}
                       className="font-medium text-indigo-600 hover:underline"
@@ -256,20 +256,20 @@ export default async function CandidateDetailPage({
                       {r.submission.job.title}
                     </Link>
                   </Td>
-                  <Td>
+                  <Td label="Round">
                     Round {r.roundOrder} · {r.roundName}
                   </Td>
-                  <Td>{INTERVIEW_TYPE_LABEL[r.interviewType]}</Td>
-                  <Td>{r.interviewerName || "—"}</Td>
-                  <Td className="whitespace-nowrap">
+                  <Td label="Type">{INTERVIEW_TYPE_LABEL[r.interviewType]}</Td>
+                  <Td label="Interviewer">{r.interviewerName || "—"}</Td>
+                  <Td label="Date & time" className="whitespace-nowrap">
                     {r.scheduledAt ? formatDateTime(r.scheduledAt) : "—"}
                   </Td>
-                  <Td>
+                  <Td label="Result">
                     <Badge tone={INTERVIEW_RESULT_TONE[r.result]}>
                       {INTERVIEW_RESULT_LABEL[r.result]}
                     </Badge>
                   </Td>
-                  <Td>
+                  <Td label="Feedback">
                     <span className="block max-w-xs whitespace-pre-wrap">
                       {r.feedback || "—"}
                     </span>

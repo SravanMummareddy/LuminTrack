@@ -5,6 +5,7 @@ import { LinkButton } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, Th, Td } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
+import { MobileSort } from "@/components/ui/mobile-sort";
 import { Pagination } from "@/components/ui/pagination";
 import { CandidateFilters } from "@/components/candidates/candidate-filters";
 import {
@@ -104,6 +105,17 @@ export default async function CandidatesPage({
           <p className="text-xs text-slate-500">
             {total} candidate{total === 1 ? "" : "s"}
           </p>
+          <MobileSort
+            options={[
+              { column: "name", label: "Name" },
+              { column: "email", label: "Email" },
+              { column: "phone", label: "Phone" },
+              { column: "location", label: "Location" },
+              { column: "experience", label: "Experience" },
+              { column: "subs", label: "Subs", defaultDir: "desc" },
+              { column: "updated", label: "Updated", defaultDir: "desc" },
+            ]}
+          />
           <Table>
             <thead className="border-b border-slate-200 bg-slate-50">
               <tr>
@@ -125,7 +137,7 @@ export default async function CandidatesPage({
             <tbody className="divide-y divide-slate-100">
               {candidates.map((c) => (
                 <tr key={c.id} className="hover:bg-slate-50">
-                  <Td>
+                  <Td label="Name">
                     <Link
                       href={`/candidates/${c.id}`}
                       className="font-medium text-indigo-600 hover:underline"
@@ -133,13 +145,13 @@ export default async function CandidatesPage({
                       {c.fullName}
                     </Link>
                   </Td>
-                  <Td>{c.email || "—"}</Td>
-                  <Td>{c.phone || "—"}</Td>
-                  <Td>{c.currentLocation || "—"}</Td>
-                  <Td className="whitespace-nowrap">
+                  <Td label="Email">{c.email || "—"}</Td>
+                  <Td label="Phone">{c.phone || "—"}</Td>
+                  <Td label="Location">{c.currentLocation || "—"}</Td>
+                  <Td label="Experience" className="whitespace-nowrap">
                     {formatExperience(c.totalExperienceYears)}
                   </Td>
-                  <Td>
+                  <Td label="Skills">
                     {c.skills.length === 0 ? (
                       "—"
                     ) : (
@@ -152,10 +164,12 @@ export default async function CandidatesPage({
                       </div>
                     )}
                   </Td>
-                  <Td className="text-right tabular-nums">
+                  <Td label="Subs" className="text-right tabular-nums">
                     {c._count.submissions}
                   </Td>
-                  <Td className="whitespace-nowrap">{formatDate(c.updatedAt)}</Td>
+                  <Td label="Updated" className="whitespace-nowrap">
+                    {formatDate(c.updatedAt)}
+                  </Td>
                 </tr>
               ))}
             </tbody>

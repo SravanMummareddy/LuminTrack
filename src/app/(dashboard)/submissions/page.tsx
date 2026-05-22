@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Table, Td } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
+import { MobileSort } from "@/components/ui/mobile-sort";
 import { Pagination } from "@/components/ui/pagination";
 import { SubmissionFilters } from "@/components/submissions/submission-filters";
 import {
@@ -134,6 +135,18 @@ export default async function SubmissionsPage({
           <p className="text-xs text-slate-500">
             {total} submission{total === 1 ? "" : "s"}
           </p>
+          <MobileSort
+            options={[
+              { column: "candidate", label: "Candidate" },
+              { column: "job", label: "Job" },
+              { column: "client", label: "Client" },
+              { column: "vendor", label: "Vendor" },
+              { column: "recruiter", label: "Submitted by" },
+              { column: "status", label: "Status" },
+              { column: "rounds", label: "Rounds", defaultDir: "desc" },
+              { column: "submitted", label: "Submitted", defaultDir: "desc" },
+            ]}
+          />
           <Table>
             <thead className="border-b border-slate-200 bg-slate-50">
               <tr>
@@ -159,7 +172,7 @@ export default async function SubmissionsPage({
             <tbody className="divide-y divide-slate-100">
               {submissions.map((s) => (
                 <tr key={s.id} className="hover:bg-slate-50">
-                  <Td>
+                  <Td label="Candidate">
                     <Link
                       href={`/submissions/${s.id}`}
                       className="font-medium text-indigo-600 hover:underline"
@@ -167,7 +180,7 @@ export default async function SubmissionsPage({
                       {s.candidate.fullName}
                     </Link>
                   </Td>
-                  <Td>
+                  <Td label="Job">
                     <Link
                       href={`/jobs/${s.job.id}`}
                       className="text-slate-700 hover:underline"
@@ -175,18 +188,20 @@ export default async function SubmissionsPage({
                       {s.job.title}
                     </Link>
                   </Td>
-                  <Td>{s.job.client.name}</Td>
-                  <Td>{s.job.vendor.name}</Td>
-                  <Td>{s.submittedBy.fullName}</Td>
-                  <Td>
+                  <Td label="Client">{s.job.client.name}</Td>
+                  <Td label="Vendor">{s.job.vendor.name}</Td>
+                  <Td label="Submitted by">{s.submittedBy.fullName}</Td>
+                  <Td label="Status">
                     <Badge tone={SUBMISSION_STATUS_TONE[s.status]}>
                       {SUBMISSION_STATUS_LABEL[s.status]}
                     </Badge>
                   </Td>
-                  <Td className="text-right tabular-nums">
+                  <Td label="Rounds" className="text-right tabular-nums">
                     {s._count.interviewRounds}
                   </Td>
-                  <Td className="whitespace-nowrap">{formatDate(s.submittedAt)}</Td>
+                  <Td label="Submitted" className="whitespace-nowrap">
+                    {formatDate(s.submittedAt)}
+                  </Td>
                 </tr>
               ))}
             </tbody>

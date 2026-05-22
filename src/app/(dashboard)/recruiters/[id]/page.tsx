@@ -186,7 +186,7 @@ export default async function RecruiterDetailPage({
             <tbody className="divide-y divide-slate-100">
               {assignments.map((a) => (
                 <tr key={a.id} className="hover:bg-slate-50">
-                  <Td>
+                  <Td label="Job">
                     <Link
                       href={`/jobs/${a.job.id}`}
                       className="font-medium text-indigo-600 hover:underline"
@@ -194,17 +194,17 @@ export default async function RecruiterDetailPage({
                       {a.job.title}
                     </Link>
                   </Td>
-                  <Td>{a.job.client.name}</Td>
-                  <Td>{a.job.vendor.name}</Td>
-                  <Td>
+                  <Td label="Client">{a.job.client.name}</Td>
+                  <Td label="Vendor">{a.job.vendor.name}</Td>
+                  <Td label="Status">
                     <Badge tone={JOB_STATUS_TONE[a.job.status]}>
                       {JOB_STATUS_LABEL[a.job.status]}
                     </Badge>
                   </Td>
-                  <Td className="text-right tabular-nums">
+                  <Td label="Submissions" className="text-right tabular-nums">
                     {a.job._count.submissions}
                   </Td>
-                  <Td className="whitespace-nowrap">
+                  <Td label="Assigned" className="whitespace-nowrap">
                     {formatDate(a.assignedAt)}
                   </Td>
                 </tr>
@@ -233,7 +233,7 @@ export default async function RecruiterDetailPage({
             <tbody className="divide-y divide-slate-100">
               {submissions.map((s) => (
                 <tr key={s.id} className="hover:bg-slate-50">
-                  <Td>
+                  <Td label="Candidate">
                     <Link
                       href={`/submissions/${s.id}`}
                       className="font-medium text-indigo-600 hover:underline"
@@ -241,16 +241,16 @@ export default async function RecruiterDetailPage({
                       {s.candidate.fullName}
                     </Link>
                   </Td>
-                  <Td>{s.job.title}</Td>
-                  <Td>
+                  <Td label="Job">{s.job.title}</Td>
+                  <Td label="Status">
                     <Badge tone={SUBMISSION_STATUS_TONE[s.status]}>
                       {SUBMISSION_STATUS_LABEL[s.status]}
                     </Badge>
                   </Td>
-                  <Td className="text-right tabular-nums">
+                  <Td label="Rounds" className="text-right tabular-nums">
                     {s._count.interviewRounds}
                   </Td>
-                  <Td className="whitespace-nowrap">
+                  <Td label="Submitted" className="whitespace-nowrap">
                     {formatDate(s.submittedAt)}
                   </Td>
                 </tr>

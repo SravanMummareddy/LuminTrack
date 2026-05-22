@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Table, Td } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
+import { MobileSort } from "@/components/ui/mobile-sort";
 import { Pagination } from "@/components/ui/pagination";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
 import {
@@ -69,6 +70,19 @@ export default async function RecruitersPage({
         </div>
       ) : (
         <div className="space-y-3">
+          <MobileSort
+            options={[
+              { column: "name", label: "Recruiter" },
+              { column: "jobs", label: "Jobs assigned", defaultDir: "desc" },
+              { column: "submissions", label: "Submissions", defaultDir: "desc" },
+              { column: "interviews", label: "Interviews", defaultDir: "desc" },
+              { column: "selected", label: "Selected", defaultDir: "desc" },
+              { column: "offers", label: "Offers", defaultDir: "desc" },
+              { column: "joined", label: "Joined", defaultDir: "desc" },
+              { column: "rejected", label: "Rejected", defaultDir: "desc" },
+              { column: "onhold", label: "On hold", defaultDir: "desc" },
+            ]}
+          />
           <Table>
             <thead className="border-b border-slate-200 bg-slate-50">
               <tr>
@@ -126,7 +140,7 @@ export default async function RecruitersPage({
             <tbody className="divide-y divide-slate-100">
               {rows.map((r) => (
                 <tr key={r.id} className="hover:bg-slate-50">
-                  <Td>
+                  <Td label="Recruiter">
                     <Link
                       href={`/recruiters/${r.id}`}
                       className="font-medium text-indigo-600 hover:underline"
@@ -139,16 +153,33 @@ export default async function RecruitersPage({
                       </Badge>
                     )}
                   </Td>
-                  <Td className="text-right tabular-nums">{r.jobsAssigned}</Td>
-                  <Td className="text-right tabular-nums font-medium text-slate-900">
+                  <Td label="Jobs assigned" className="text-right tabular-nums">
+                    {r.jobsAssigned}
+                  </Td>
+                  <Td
+                    label="Submissions"
+                    className="text-right tabular-nums font-medium text-slate-900"
+                  >
                     {r.submissions}
                   </Td>
-                  <Td className="text-right tabular-nums">{r.interviews}</Td>
-                  <Td className="text-right tabular-nums">{r.selected}</Td>
-                  <Td className="text-right tabular-nums">{r.offerReleased}</Td>
-                  <Td className="text-right tabular-nums">{r.joined}</Td>
-                  <Td className="text-right tabular-nums">{r.rejected}</Td>
-                  <Td className="text-right tabular-nums">{r.onHold}</Td>
+                  <Td label="Interviews" className="text-right tabular-nums">
+                    {r.interviews}
+                  </Td>
+                  <Td label="Selected" className="text-right tabular-nums">
+                    {r.selected}
+                  </Td>
+                  <Td label="Offers" className="text-right tabular-nums">
+                    {r.offerReleased}
+                  </Td>
+                  <Td label="Joined" className="text-right tabular-nums">
+                    {r.joined}
+                  </Td>
+                  <Td label="Rejected" className="text-right tabular-nums">
+                    {r.rejected}
+                  </Td>
+                  <Td label="On hold" className="text-right tabular-nums">
+                    {r.onHold}
+                  </Td>
                 </tr>
               ))}
             </tbody>

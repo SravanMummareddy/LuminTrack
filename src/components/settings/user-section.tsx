@@ -60,14 +60,16 @@ export function UserSection({
         <tbody className="divide-y divide-slate-100">
           {items.map((item) => (
             <tr key={item.id}>
-              <Td className="font-medium text-slate-900">{item.fullName}</Td>
-              <Td>{item.email}</Td>
-              <Td>
+              <Td label="Name" className="font-medium text-slate-900">
+                {item.fullName}
+              </Td>
+              <Td label="Email">{item.email}</Td>
+              <Td label="Role">
                 <Badge tone={item.role === "ADMIN" ? "indigo" : "slate"}>
                   {item.role === "ADMIN" ? "Administrator" : "Recruiter"}
                 </Badge>
               </Td>
-              <Td>
+              <Td label="Status">
                 <Badge tone={item.isActive ? "green" : "slate"}>
                   {item.isActive ? "Active" : "Inactive"}
                 </Badge>

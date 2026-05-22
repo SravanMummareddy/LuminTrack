@@ -50,9 +50,11 @@ export function ClientSection({ items }: { items: ClientRow[] }) {
           <tbody className="divide-y divide-slate-100">
             {items.map((item) => (
               <tr key={item.id}>
-                <Td className="font-medium text-slate-900">{item.name}</Td>
-                <Td>{item.location || "—"}</Td>
-                <Td>
+                <Td label="Name" className="font-medium text-slate-900">
+                  {item.name}
+                </Td>
+                <Td label="Location">{item.location || "—"}</Td>
+                <Td label="Status">
                   <Badge tone={item.isActive ? "green" : "slate"}>
                     {item.isActive ? "Active" : "Inactive"}
                   </Badge>

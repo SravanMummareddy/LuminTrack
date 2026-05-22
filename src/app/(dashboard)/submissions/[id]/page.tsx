@@ -197,7 +197,7 @@ export default async function SubmissionDetailPage({
               <iframe
                 src={resumePreviewUrl}
                 title="Resume preview"
-                className="h-[600px] w-full rounded-md border border-slate-200"
+                className="h-[70vh] w-full rounded-md border border-slate-200 md:h-[600px]"
               />
             ) : (
               <p className="text-xs text-slate-500">
