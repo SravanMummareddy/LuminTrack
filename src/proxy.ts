@@ -3,12 +3,22 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth-token";
 
 const PUBLIC_PATHS = ["/login"];
 
+// Code-generated metadata routes have no file extension, so the matcher below
+// doesn't skip them — bypass auth explicitly so icons stay publicly fetchable
+// (the browser and iOS request them outside any signed-in context).
+const ASSET_PATHS = ["/icon", "/apple-icon"];
+
 function isPublic(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (ASSET_PATHS.includes(pathname)) {
+    return NextResponse.next();
+  }
+
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const userId = token ? await verifySessionToken(token) : null;
 
