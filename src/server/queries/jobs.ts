@@ -1,7 +1,7 @@
 import { prisma } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
 import type { JobStatus } from "@/generated/prisma/enums";
-import type { DateRange } from "@/lib/filters";
+import { PAGE_SIZE, type DateRange, type SortDir, type SortState } from "@/lib/filters";
 
 export type JobListFilters = {
   q?: string;
@@ -12,7 +12,27 @@ export type JobListFilters = {
   status?: JobStatus;
   location?: string;
   createdRange?: DateRange;
+  sort?: SortState;
+  page?: number;
 };
+
+/** Columns the Jobs list can be sorted by → their Prisma `orderBy`. */
+const JOB_SORTS: Record<
+  string,
+  (d: SortDir) => Prisma.JobOrderByWithRelationInput
+> = {
+  title: (d) => ({ title: d }),
+  client: (d) => ({ client: { name: d } }),
+  vendor: (d) => ({ vendor: { name: d } }),
+  source: (d) => ({ sisterCompanySource: { name: d } }),
+  location: (d) => ({ location: d }),
+  status: (d) => ({ status: d }),
+  subs: (d) => ({ submissions: { _count: d } }),
+  created: (d) => ({ createdAt: d }),
+};
+
+export const JOB_SORT_KEYS = Object.keys(JOB_SORTS);
+export const JOB_DEFAULT_SORT: SortState = { key: "created", dir: "desc" };
 
 export async function listJobs(filters: JobListFilters) {
   const where: Prisma.JobWhereInput = {};
@@ -30,9 +50,23 @@ export async function listJobs(filters: JobListFilters) {
   if (filters.createdRange?.gte || filters.createdRange?.lte)
     where.createdAt = filters.createdRange;
 
-  return prisma.job.findMany({
+  const sort = filters.sort ?? JOB_DEFAULT_SORT;
+  const sortFn = JOB_SORTS[sort.key] ?? JOB_SORTS.created;
+  // `id` tiebreaker keeps pagination stable when the sort column has ties.
+  const orderBy: Prisma.JobOrderByWithRelationInput[] = [
+    sortFn(sort.dir),
+    { id: "asc" },
+  ];
+
+  const total = await prisma.job.count({ where });
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
+
+  const rows = await prisma.job.findMany({
     where,
-    orderBy: { createdAt: "desc" },
+    orderBy,
+    skip: (page - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
     include: {
       client: { select: { name: true } },
       vendor: { select: { name: true } },
@@ -43,9 +77,11 @@ export async function listJobs(filters: JobListFilters) {
       _count: { select: { submissions: true } },
     },
   });
+
+  return { rows, total, page };
 }
 
-export type JobListRow = Awaited<ReturnType<typeof listJobs>>[number];
+export type JobListRow = Awaited<ReturnType<typeof listJobs>>["rows"][number];
 
 export function getJobDetail(id: string) {
   return prisma.job.findUnique({

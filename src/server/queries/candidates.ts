@@ -1,6 +1,6 @@
 import { prisma } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
-import type { DateRange } from "@/lib/filters";
+import { PAGE_SIZE, type DateRange, type SortDir, type SortState } from "@/lib/filters";
 
 export type CandidateListFilters = {
   q?: string;
@@ -10,7 +10,30 @@ export type CandidateListFilters = {
   currentCompany?: string;
   minExperience?: number;
   createdRange?: DateRange;
+  sort?: SortState;
+  page?: number;
 };
+
+/** Columns the Candidates list can be sorted by → their Prisma `orderBy`. */
+const CANDIDATE_SORTS: Record<
+  string,
+  (d: SortDir) => Prisma.CandidateOrderByWithRelationInput
+> = {
+  name: (d) => ({ fullName: d }),
+  email: (d) => ({ email: d }),
+  phone: (d) => ({ phone: d }),
+  location: (d) => ({ currentLocation: d }),
+  experience: (d) => ({ totalExperienceYears: d }),
+  subs: (d) => ({ submissions: { _count: d } }),
+  updated: (d) => ({ updatedAt: d }),
+};
+
+export const CANDIDATE_SORT_KEYS = Object.keys(CANDIDATE_SORTS);
+export const CANDIDATE_DEFAULT_SORT: SortState = { key: "updated", dir: "desc" };
+
+const candidateListInclude = {
+  _count: { select: { submissions: true } },
+} satisfies Prisma.CandidateInclude;
 
 export async function listCandidates(filters: CandidateListFilters) {
   const where: Prisma.CandidateWhereInput = {};
@@ -33,24 +56,52 @@ export async function listCandidates(filters: CandidateListFilters) {
   if (filters.createdRange?.gte || filters.createdRange?.lte)
     where.createdAt = filters.createdRange;
 
-  const candidates = await prisma.candidate.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    include: { _count: { select: { submissions: true } } },
-  });
+  const sort = filters.sort ?? CANDIDATE_DEFAULT_SORT;
+  const sortFn = CANDIDATE_SORTS[sort.key] ?? CANDIDATE_SORTS.updated;
+  const orderBy: Prisma.CandidateOrderByWithRelationInput[] = [
+    sortFn(sort.dir),
+    { id: "asc" },
+  ];
+
+  const skill = filters.skill?.toLowerCase();
 
   // `skills` is a Postgres text array — Prisma can't do a case-insensitive
-  // partial match on array elements, so that filter runs in memory.
-  if (filters.skill) {
-    const needle = filters.skill.toLowerCase();
-    return candidates.filter((c) =>
-      c.skills.some((s) => s.toLowerCase().includes(needle)),
+  // partial match on array elements, so the skill filter (and therefore
+  // pagination) runs in memory when a skill is supplied.
+  if (skill) {
+    const all = await prisma.candidate.findMany({
+      where,
+      orderBy,
+      include: candidateListInclude,
+    });
+    const filtered = all.filter((c) =>
+      c.skills.some((s) => s.toLowerCase().includes(skill)),
     );
+    const total = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
+    const rows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+    return { rows, total, page };
   }
-  return candidates;
+
+  const total = await prisma.candidate.count({ where });
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
+
+  const rows = await prisma.candidate.findMany({
+    where,
+    orderBy,
+    skip: (page - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
+    include: candidateListInclude,
+  });
+
+  return { rows, total, page };
 }
 
-export type CandidateListRow = Awaited<ReturnType<typeof listCandidates>>[number];
+export type CandidateListRow = Awaited<
+  ReturnType<typeof listCandidates>
+>["rows"][number];
 
 export function getCandidateDetail(id: string) {
   return prisma.candidate.findUnique({

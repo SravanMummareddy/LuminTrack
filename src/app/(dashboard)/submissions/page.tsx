@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
-import { Table, Th, Td } from "@/components/ui/table";
+import { Table, Td } from "@/components/ui/table";
+import { SortableHeader } from "@/components/ui/sortable-header";
+import { Pagination } from "@/components/ui/pagination";
 import { SubmissionFilters } from "@/components/submissions/submission-filters";
 import {
   listSubmissions,
+  SUBMISSION_SORT_KEYS,
+  SUBMISSION_DEFAULT_SORT,
   type SubmissionListFilters,
 } from "@/server/queries/submissions";
 import {
@@ -13,8 +17,12 @@ import {
   listSisterCompanies,
   listUsers,
 } from "@/server/queries/org";
-import { parseDateRange } from "@/lib/filters";
-import { SUBMISSION_STATUSES, SUBMISSION_STATUS_LABEL, SUBMISSION_STATUS_TONE } from "@/lib/labels";
+import { parseDateRange, parseSort, parsePage, PAGE_SIZE } from "@/lib/filters";
+import {
+  SUBMISSION_STATUSES,
+  SUBMISSION_STATUS_LABEL,
+  SUBMISSION_STATUS_TONE,
+} from "@/lib/labels";
 import { formatDate } from "@/lib/format";
 import type { SubmissionStatus } from "@/generated/prisma/enums";
 
@@ -49,6 +57,13 @@ export default async function SubmissionsPage({
     to: clean(sp.to),
   };
 
+  const sort = parseSort(
+    clean(sp.sort),
+    clean(sp.dir),
+    SUBMISSION_SORT_KEYS,
+    SUBMISSION_DEFAULT_SORT,
+  );
+
   const filters: SubmissionListFilters = {
     q: current.q,
     status: asSubmissionStatus(current.status),
@@ -61,15 +76,25 @@ export default async function SubmissionsPage({
       from: current.from,
       to: current.to,
     }),
+    sort,
+    page: parsePage(clean(sp.page)),
   };
 
-  const [submissions, clients, vendors, sources, recruiters] = await Promise.all([
+  const [
+    { rows: submissions, total, page },
+    clients,
+    vendors,
+    sources,
+    recruiters,
+  ] = await Promise.all([
     listSubmissions(filters),
     listClients(),
     listVendors(),
     listSisterCompanies(),
     listUsers(),
   ]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const hasFilters = Boolean(
     current.q ||
@@ -96,7 +121,7 @@ export default async function SubmissionsPage({
         recruiters={recruiters}
       />
 
-      {submissions.length === 0 ? (
+      {total === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">
           <p className="text-sm text-slate-500">
             {hasFilters
@@ -105,21 +130,30 @@ export default async function SubmissionsPage({
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           <p className="text-xs text-slate-500">
-            {submissions.length} submission{submissions.length === 1 ? "" : "s"}
+            {total} submission{total === 1 ? "" : "s"}
           </p>
           <Table>
             <thead className="border-b border-slate-200 bg-slate-50">
               <tr>
-                <Th>Candidate</Th>
-                <Th>Job</Th>
-                <Th>Client</Th>
-                <Th>Vendor</Th>
-                <Th>Submitted by</Th>
-                <Th>Status</Th>
-                <Th className="text-right">Rounds</Th>
-                <Th>Submitted</Th>
+                <SortableHeader column="candidate" label="Candidate" />
+                <SortableHeader column="job" label="Job" />
+                <SortableHeader column="client" label="Client" />
+                <SortableHeader column="vendor" label="Vendor" />
+                <SortableHeader column="recruiter" label="Submitted by" />
+                <SortableHeader column="status" label="Status" />
+                <SortableHeader
+                  column="rounds"
+                  label="Rounds"
+                  align="right"
+                  defaultDir="desc"
+                />
+                <SortableHeader
+                  column="submitted"
+                  label="Submitted"
+                  defaultDir="desc"
+                />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -157,6 +191,7 @@ export default async function SubmissionsPage({
               ))}
             </tbody>
           </Table>
+          <Pagination page={page} totalPages={totalPages} total={total} />
         </div>
       )}
     </div>

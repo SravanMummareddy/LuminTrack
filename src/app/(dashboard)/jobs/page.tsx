@@ -4,15 +4,22 @@ import { PageHeader } from "@/components/ui/page-header";
 import { LinkButton } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, Th, Td } from "@/components/ui/table";
+import { SortableHeader } from "@/components/ui/sortable-header";
+import { Pagination } from "@/components/ui/pagination";
 import { JobFilters } from "@/components/jobs/job-filters";
-import { listJobs, type JobListFilters } from "@/server/queries/jobs";
+import {
+  listJobs,
+  JOB_SORT_KEYS,
+  JOB_DEFAULT_SORT,
+  type JobListFilters,
+} from "@/server/queries/jobs";
 import {
   listClients,
   listVendors,
   listSisterCompanies,
   listUsers,
 } from "@/server/queries/org";
-import { parseDateRange } from "@/lib/filters";
+import { parseDateRange, parseSort, parsePage, PAGE_SIZE } from "@/lib/filters";
 import { JOB_STATUSES, JOB_STATUS_LABEL, JOB_STATUS_TONE } from "@/lib/labels";
 import { formatDate } from "@/lib/format";
 import type { JobStatus } from "@/generated/prisma/enums";
@@ -49,6 +56,13 @@ export default async function JobsPage({
     to: clean(sp.to),
   };
 
+  const sort = parseSort(
+    clean(sp.sort),
+    clean(sp.dir),
+    JOB_SORT_KEYS,
+    JOB_DEFAULT_SORT,
+  );
+
   const filters: JobListFilters = {
     q: current.q,
     clientId: current.clientId,
@@ -62,15 +76,20 @@ export default async function JobsPage({
       from: current.from,
       to: current.to,
     }),
+    sort,
+    page: parsePage(clean(sp.page)),
   };
 
-  const [jobs, clients, vendors, sources, recruiters] = await Promise.all([
-    listJobs(filters),
-    listClients(),
-    listVendors(),
-    listSisterCompanies(),
-    listUsers(),
-  ]);
+  const [{ rows: jobs, total, page }, clients, vendors, sources, recruiters] =
+    await Promise.all([
+      listJobs(filters),
+      listClients(),
+      listVendors(),
+      listSisterCompanies(),
+      listUsers(),
+    ]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const hasFilters = Boolean(
     current.q ||
@@ -100,7 +119,7 @@ export default async function JobsPage({
         recruiters={recruiters}
       />
 
-      {jobs.length === 0 ? (
+      {total === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">
           <p className="text-sm text-slate-500">
             {hasFilters
@@ -109,22 +128,27 @@ export default async function JobsPage({
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           <p className="text-xs text-slate-500">
-            {jobs.length} job{jobs.length === 1 ? "" : "s"}
+            {total} job{total === 1 ? "" : "s"}
           </p>
           <Table>
             <thead className="border-b border-slate-200 bg-slate-50">
               <tr>
-                <Th>Job title</Th>
-                <Th>Client</Th>
-                <Th>Vendor</Th>
-                <Th>Source</Th>
-                <Th>Location</Th>
+                <SortableHeader column="title" label="Job title" />
+                <SortableHeader column="client" label="Client" />
+                <SortableHeader column="vendor" label="Vendor" />
+                <SortableHeader column="source" label="Source" />
+                <SortableHeader column="location" label="Location" />
                 <Th>Recruiters</Th>
-                <Th>Status</Th>
-                <Th className="text-right">Subs</Th>
-                <Th>Created</Th>
+                <SortableHeader column="status" label="Status" />
+                <SortableHeader
+                  column="subs"
+                  label="Subs"
+                  align="right"
+                  defaultDir="desc"
+                />
+                <SortableHeader column="created" label="Created" defaultDir="desc" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -158,6 +182,7 @@ export default async function JobsPage({
               ))}
             </tbody>
           </Table>
+          <Pagination page={page} totalPages={totalPages} total={total} />
         </div>
       )}
     </div>

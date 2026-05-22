@@ -1,7 +1,7 @@
 import { prisma } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
 import type { SubmissionStatus } from "@/generated/prisma/enums";
-import type { DateRange } from "@/lib/filters";
+import { PAGE_SIZE, type DateRange, type SortDir, type SortState } from "@/lib/filters";
 
 export type SubmissionListFilters = {
   q?: string;
@@ -11,9 +11,32 @@ export type SubmissionListFilters = {
   vendorId?: string;
   sisterCompanySourceId?: string;
   submittedRange?: DateRange;
+  sort?: SortState;
+  page?: number;
 };
 
-export function listSubmissions(filters: SubmissionListFilters) {
+/** Columns the Submissions list can be sorted by → their Prisma `orderBy`. */
+const SUBMISSION_SORTS: Record<
+  string,
+  (d: SortDir) => Prisma.SubmissionOrderByWithRelationInput
+> = {
+  candidate: (d) => ({ candidate: { fullName: d } }),
+  job: (d) => ({ job: { title: d } }),
+  client: (d) => ({ job: { client: { name: d } } }),
+  vendor: (d) => ({ job: { vendor: { name: d } } }),
+  recruiter: (d) => ({ submittedBy: { fullName: d } }),
+  status: (d) => ({ status: d }),
+  rounds: (d) => ({ interviewRounds: { _count: d } }),
+  submitted: (d) => ({ submittedAt: d }),
+};
+
+export const SUBMISSION_SORT_KEYS = Object.keys(SUBMISSION_SORTS);
+export const SUBMISSION_DEFAULT_SORT: SortState = {
+  key: "submitted",
+  dir: "desc",
+};
+
+export async function listSubmissions(filters: SubmissionListFilters) {
   const where: Prisma.SubmissionWhereInput = {};
 
   if (filters.status) where.status = filters.status;
@@ -34,9 +57,22 @@ export function listSubmissions(filters: SubmissionListFilters) {
       { job: { title: { contains: filters.q, mode: "insensitive" } } },
     ];
 
-  return prisma.submission.findMany({
+  const sort = filters.sort ?? SUBMISSION_DEFAULT_SORT;
+  const sortFn = SUBMISSION_SORTS[sort.key] ?? SUBMISSION_SORTS.submitted;
+  const orderBy: Prisma.SubmissionOrderByWithRelationInput[] = [
+    sortFn(sort.dir),
+    { id: "asc" },
+  ];
+
+  const total = await prisma.submission.count({ where });
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
+
+  const rows = await prisma.submission.findMany({
     where,
-    orderBy: { submittedAt: "desc" },
+    orderBy,
+    skip: (page - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
     include: {
       candidate: { select: { id: true, fullName: true } },
       job: {
@@ -51,9 +87,13 @@ export function listSubmissions(filters: SubmissionListFilters) {
       _count: { select: { interviewRounds: true } },
     },
   });
+
+  return { rows, total, page };
 }
 
-export type SubmissionListRow = Awaited<ReturnType<typeof listSubmissions>>[number];
+export type SubmissionListRow = Awaited<
+  ReturnType<typeof listSubmissions>
+>["rows"][number];
 
 export function getSubmissionDetail(id: string) {
   return prisma.submission.findUnique({

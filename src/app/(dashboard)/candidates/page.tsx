@@ -4,12 +4,16 @@ import { PageHeader } from "@/components/ui/page-header";
 import { LinkButton } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, Th, Td } from "@/components/ui/table";
+import { SortableHeader } from "@/components/ui/sortable-header";
+import { Pagination } from "@/components/ui/pagination";
 import { CandidateFilters } from "@/components/candidates/candidate-filters";
 import {
   listCandidates,
+  CANDIDATE_SORT_KEYS,
+  CANDIDATE_DEFAULT_SORT,
   type CandidateListFilters,
 } from "@/server/queries/candidates";
-import { parseDateRange } from "@/lib/filters";
+import { parseDateRange, parseSort, parsePage, PAGE_SIZE } from "@/lib/filters";
 import { formatDate, formatExperience } from "@/lib/format";
 
 function clean(value: string | string[] | undefined): string | undefined {
@@ -39,6 +43,13 @@ export default async function CandidatesPage({
 
   const minExp = current.minExperience ? Number(current.minExperience) : undefined;
 
+  const sort = parseSort(
+    clean(sp.sort),
+    clean(sp.dir),
+    CANDIDATE_SORT_KEYS,
+    CANDIDATE_DEFAULT_SORT,
+  );
+
   const filters: CandidateListFilters = {
     q: current.q,
     skill: current.skill,
@@ -51,9 +62,13 @@ export default async function CandidatesPage({
       from: current.from,
       to: current.to,
     }),
+    sort,
+    page: parsePage(clean(sp.page)),
   };
 
-  const candidates = await listCandidates(filters);
+  const { rows: candidates, total, page } = await listCandidates(filters);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const hasFilters = Boolean(
     current.q ||
@@ -76,7 +91,7 @@ export default async function CandidatesPage({
 
       <CandidateFilters current={current} />
 
-      {candidates.length === 0 ? (
+      {total === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">
           <p className="text-sm text-slate-500">
             {hasFilters
@@ -85,21 +100,26 @@ export default async function CandidatesPage({
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           <p className="text-xs text-slate-500">
-            {candidates.length} candidate{candidates.length === 1 ? "" : "s"}
+            {total} candidate{total === 1 ? "" : "s"}
           </p>
           <Table>
             <thead className="border-b border-slate-200 bg-slate-50">
               <tr>
-                <Th>Name</Th>
-                <Th>Email</Th>
-                <Th>Phone</Th>
-                <Th>Location</Th>
-                <Th>Experience</Th>
+                <SortableHeader column="name" label="Name" />
+                <SortableHeader column="email" label="Email" />
+                <SortableHeader column="phone" label="Phone" />
+                <SortableHeader column="location" label="Location" />
+                <SortableHeader column="experience" label="Experience" />
                 <Th>Skills</Th>
-                <Th className="text-right">Subs</Th>
-                <Th>Updated</Th>
+                <SortableHeader
+                  column="subs"
+                  label="Subs"
+                  align="right"
+                  defaultDir="desc"
+                />
+                <SortableHeader column="updated" label="Updated" defaultDir="desc" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -140,6 +160,7 @@ export default async function CandidatesPage({
               ))}
             </tbody>
           </Table>
+          <Pagination page={page} totalPages={totalPages} total={total} />
         </div>
       )}
     </div>
