@@ -1,0 +1,50 @@
+import { notFound } from "next/navigation";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
+import { SubmissionEditForm } from "@/components/submissions/submission-edit-form";
+import { updateSubmission } from "@/server/actions/submissions";
+import { getSubmissionForEdit } from "@/server/queries/submissions";
+
+export default async function EditSubmissionPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const submission = await getSubmissionForEdit(id);
+  if (!submission) notFound();
+
+  return (
+    <div className="mx-auto max-w-3xl space-y-6">
+      <Link
+        href={`/submissions/${submission.id}`}
+        className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to submission
+      </Link>
+
+      <PageHeader
+        title="Edit submission"
+        description={`${submission.candidate.fullName} → ${submission.job.title}`}
+      />
+
+      <div className="rounded-lg border border-slate-200 bg-white p-6">
+        <SubmissionEditForm
+          action={updateSubmission}
+          submissionId={submission.id}
+          candidateName={submission.candidate.fullName}
+          jobTitle={submission.job.title}
+          recruiterName={submission.submittedBy.fullName}
+          resumes={submission.candidate.resumes}
+          values={{
+            candidateRate: submission.candidateRate?.toString() ?? "",
+            resumeSelection: submission.candidateResumeId ?? "",
+            submissionNotes: submission.submissionNotes ?? "",
+          }}
+        />
+      </div>
+    </div>
+  );
+}

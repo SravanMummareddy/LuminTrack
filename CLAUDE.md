@@ -87,6 +87,11 @@ All 7 build phases are complete and verified:
   `resumeDriveLink` as a snapshot (so history survives résumé edits/deletes) plus a
   nullable `candidateResumeId` FK; `Candidate.resumeDriveLink` was dropped. Shown on the
   submission detail (inline preview) and as a column on the job's candidate table.
+- **Submission edit form** — `/submissions/[id]/edit` lets the rate, résumé, and notes
+  of an existing submission be changed (candidate, job, and recruiter stay fixed at
+  creation; status keeps its own form). Reuses the résumé picker via a shared
+  `submissionEditSchema`; `updateSubmission` logs a new `SUBMISSION_UPDATED` audit
+  action (migration `20260522020000_submission_updated_action`).
 
 ## Docs & demo data
 

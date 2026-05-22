@@ -12,6 +12,7 @@ import { requireUser } from "@/lib/session";
 import { logActivity } from "@/server/activity";
 import {
   submissionSchema,
+  submissionEditSchema,
   SUBMISSION_STATUS_VALUES,
 } from "@/lib/validation/submission";
 import { toFieldErrors } from "@/lib/validation/common";
@@ -152,6 +153,133 @@ export async function createSubmission(
   revalidatePath("/submissions");
   revalidatePath(`/jobs/${d.jobId}`);
   revalidatePath(`/candidates/${d.candidateId}`);
+  redirect(`/submissions/${submissionId}`);
+}
+
+function readSubmissionEdit(formData: FormData) {
+  return submissionEditSchema.safeParse({
+    candidateRate: formData.get("candidateRate") ?? "",
+    submissionNotes: formData.get("submissionNotes") ?? "",
+    resumeChoice: formData.get("resumeChoice") ?? "none",
+    candidateResumeId: formData.get("candidateResumeId") ?? "",
+    newResumeLabel: formData.get("newResumeLabel") ?? "",
+    newResumeLink: formData.get("newResumeLink") ?? "",
+  });
+}
+
+/**
+ * Edits a submission's rate, résumé, and notes (spec §7.7). Candidate, job, and
+ * submitting recruiter are fixed at creation and not editable here; status has
+ * its own form (`changeSubmissionStatus`).
+ */
+export async function updateSubmission(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requireUser();
+  const submissionId = String(formData.get("id") ?? "").trim();
+  if (!submissionId) return { error: "Missing submission reference." };
+
+  const parsed = readSubmissionEdit(formData);
+  if (!parsed.success)
+    return {
+      error: "Please fix the highlighted fields.",
+      fieldErrors: toFieldErrors(parsed.error),
+    };
+  const d = parsed.data;
+
+  const existing = await prisma.submission.findUnique({
+    where: { id: submissionId },
+    include: {
+      candidate: { select: { id: true, fullName: true } },
+      job: { select: { id: true, title: true } },
+    },
+  });
+  if (!existing) return { error: "This submission no longer exists." };
+
+  // Resolve a previously-saved résumé up front so a bad pick returns cleanly.
+  let pickedResume: { id: string; driveLink: string } | null = null;
+  if (d.resumeChoice === "existing" && d.candidateResumeId) {
+    const resume = await prisma.candidateResume.findUnique({
+      where: { id: d.candidateResumeId },
+      select: { id: true, driveLink: true, candidateId: true },
+    });
+    if (!resume || resume.candidateId !== existing.candidateId)
+      return {
+        error: "Please fix the highlighted fields.",
+        fieldErrors: {
+          candidateResumeId: "Pick a resume that belongs to this candidate.",
+        },
+      };
+    pickedResume = { id: resume.id, driveLink: resume.driveLink };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    // Settle the résumé: an existing library entry, a new one, or none.
+    let candidateResumeId: string | null = null;
+    let resumeSnapshot: string | null = null;
+
+    if (pickedResume) {
+      candidateResumeId = pickedResume.id;
+      resumeSnapshot = pickedResume.driveLink;
+    } else if (d.resumeChoice === "new" && d.newResumeLabel && d.newResumeLink) {
+      const newResume = await tx.candidateResume.create({
+        data: {
+          candidateId: existing.candidateId,
+          label: d.newResumeLabel,
+          driveLink: d.newResumeLink,
+        },
+      });
+      candidateResumeId = newResume.id;
+      resumeSnapshot = newResume.driveLink;
+      await logActivity(tx, {
+        entityType: "CANDIDATE",
+        action: "RESUME_UPDATED",
+        description: `Resume "${newResume.label}" added`,
+        performedById: user.id,
+        candidateId: existing.candidateId,
+      });
+    }
+
+    // Record which fields actually changed, for a meaningful audit entry.
+    const changed: string[] = [];
+    const compare = (label: string, before: unknown, after: unknown) => {
+      if (String(before ?? "") !== String(after ?? "")) changed.push(label);
+    };
+    compare("candidate rate", existing.candidateRate?.toString(), d.candidateRate);
+    compare("notes", existing.submissionNotes, d.submissionNotes);
+    if (
+      String(existing.candidateResumeId ?? "") !== String(candidateResumeId ?? "") ||
+      String(existing.resumeDriveLink ?? "") !== String(resumeSnapshot ?? "")
+    )
+      changed.push("resume");
+
+    await tx.submission.update({
+      where: { id: submissionId },
+      data: {
+        candidateRate: d.candidateRate ?? null,
+        submissionNotes: d.submissionNotes ?? null,
+        candidateResumeId,
+        // Snapshot the link used so it survives résumé edits/deletes.
+        resumeDriveLink: resumeSnapshot,
+      },
+    });
+
+    if (changed.length)
+      await logActivity(tx, {
+        entityType: "SUBMISSION",
+        action: "SUBMISSION_UPDATED",
+        description: `${existing.candidate.fullName} on "${existing.job.title}": submission updated (${changed.join(", ")})`,
+        newValue: changed.join(", "),
+        performedById: user.id,
+        submissionId,
+      });
+  });
+
+  revalidatePath("/submissions");
+  revalidatePath(`/submissions/${submissionId}`);
+  revalidatePath(`/jobs/${existing.jobId}`);
+  revalidatePath(`/candidates/${existing.candidateId}`);
   redirect(`/submissions/${submissionId}`);
 }
 

@@ -152,6 +152,10 @@ Decision (Selected / Rejected / On Hold) → Offer Released → Joined`
 Use the **status selector → Update** control. Choosing **Rejected** lets you
 record a rejection reason. Every change is written to the activity timeline.
 
+Use **Edit submission** (top right of the submission page) to correct the
+candidate rate, the résumé used, or the submission notes after creation. The
+candidate, job and submitting recruiter are fixed at creation and stay locked.
+
 ### Workflow 6 — Record interview rounds *(Submission page)*
 1. On the submission, click **Add round**.
 2. Enter a **round name** (e.g. "Technical Round 1"), an **interview type**

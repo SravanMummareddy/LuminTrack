@@ -117,6 +117,32 @@ export function getSubmissionDetail(id: string) {
   });
 }
 
+/** One submission for the edit form — fixed candidate/job/recruiter plus the
+ *  candidate's full résumé library so the form can offer the résumé picker. */
+export function getSubmissionForEdit(id: string) {
+  return prisma.submission.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      candidateRate: true,
+      submissionNotes: true,
+      candidateResumeId: true,
+      resumeDriveLink: true,
+      job: { select: { title: true } },
+      submittedBy: { select: { fullName: true } },
+      candidate: {
+        select: {
+          fullName: true,
+          resumes: {
+            orderBy: { createdAt: "asc" },
+            select: { id: true, label: true, driveLink: true },
+          },
+        },
+      },
+    },
+  });
+}
+
 /** Submissions for one job — the submitted-candidates table on the job detail page. */
 export function getJobSubmissions(jobId: string) {
   return prisma.submission.findMany({

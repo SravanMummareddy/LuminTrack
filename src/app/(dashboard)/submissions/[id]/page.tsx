@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { ArrowLeft, ExternalLink, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { LinkButton } from "@/components/ui/button";
 import { StatusPipeline } from "@/components/submissions/status-pipeline";
 import { SubmissionStatusForm } from "@/components/submissions/submission-status-form";
 import { InterviewRoundsManager } from "@/components/interviews/interview-rounds-manager";
@@ -95,6 +96,10 @@ export default async function SubmissionDetailPage({
             · {job.client.name} · {job.vendor.name}
           </p>
         </div>
+        <LinkButton href={`/submissions/${submission.id}/edit`} variant="secondary">
+          <Pencil className="h-4 w-4" />
+          Edit submission
+        </LinkButton>
       </div>
 
       <Card title="Status pipeline">
