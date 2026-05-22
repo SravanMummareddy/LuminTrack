@@ -108,6 +108,7 @@ export function getSubmissionDetail(id: string) {
         },
       },
       submittedBy: { select: { fullName: true } },
+      candidateResume: { select: { label: true } },
       interviewRounds: {
         orderBy: { roundOrder: "asc" },
         include: { updatedBy: { select: { fullName: true } } },
@@ -124,6 +125,7 @@ export function getJobSubmissions(jobId: string) {
     include: {
       candidate: { select: { id: true, fullName: true } },
       submittedBy: { select: { fullName: true } },
+      candidateResume: { select: { label: true } },
       _count: { select: { interviewRounds: true } },
     },
   });

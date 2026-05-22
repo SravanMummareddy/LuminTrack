@@ -29,7 +29,6 @@ function readCandidate(formData: FormData) {
     currentCompany: formData.get("currentCompany") ?? "",
     skills: parseSkills(formData.get("skills")),
     linkedinUrl: formData.get("linkedinUrl") ?? "",
-    resumeDriveLink: formData.get("resumeDriveLink") ?? "",
     notes: formData.get("notes") ?? "",
   });
 }
@@ -46,7 +45,6 @@ function candidateData(d: CandidateInput) {
     currentCompany: d.currentCompany ?? null,
     skills: d.skills,
     linkedinUrl: d.linkedinUrl ?? null,
-    resumeDriveLink: d.resumeDriveLink ?? null,
     notes: d.notes ?? null,
   };
 }
@@ -135,8 +133,6 @@ export async function updateCandidate(
   compare("skills", existing.skills.join(", "), d.skills.join(", "));
   compare("LinkedIn", existing.linkedinUrl, d.linkedinUrl);
   compare("notes", existing.notes, d.notes);
-  const resumeChanged =
-    String(existing.resumeDriveLink ?? "") !== String(d.resumeDriveLink ?? "");
 
   await prisma.$transaction(async (tx) => {
     await tx.candidate.update({
@@ -149,14 +145,6 @@ export async function updateCandidate(
         action: "CANDIDATE_UPDATED",
         description: `Candidate details updated (${changed.join(", ")})`,
         newValue: changed.join(", "),
-        performedById: user.id,
-        candidateId,
-      });
-    if (resumeChanged)
-      await logActivity(tx, {
-        entityType: "CANDIDATE",
-        action: "RESUME_UPDATED",
-        description: "Resume link updated",
         performedById: user.id,
         candidateId,
       });

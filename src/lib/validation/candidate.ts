@@ -26,7 +26,6 @@ export const candidateSchema = z
     currentCompany: optionalText,
     skills: z.array(z.string().trim().min(1)).max(60).default([]),
     linkedinUrl: optionalUrl,
-    resumeDriveLink: optionalUrl,
     notes: optionalText,
   })
   .refine((d) => Boolean(d.email || d.phone), {

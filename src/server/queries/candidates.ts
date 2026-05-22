@@ -108,6 +108,10 @@ export function getCandidateDetail(id: string) {
     where: { id },
     include: {
       createdBy: { select: { fullName: true } },
+      resumes: {
+        orderBy: { createdAt: "asc" },
+        include: { _count: { select: { submissions: true } } },
+      },
     },
   });
 }
@@ -116,11 +120,19 @@ export function getCandidateForEdit(id: string) {
   return prisma.candidate.findUnique({ where: { id } });
 }
 
-/** Lightweight candidate list for select inputs (e.g. the new-submission form). */
+/** Lightweight candidate list for select inputs (e.g. the new-submission form),
+ *  each with its saved résumés so the submission form can offer a picker. */
 export function listCandidateOptions() {
   return prisma.candidate.findMany({
     orderBy: { fullName: "asc" },
-    select: { id: true, fullName: true },
+    select: {
+      id: true,
+      fullName: true,
+      resumes: {
+        orderBy: { createdAt: "asc" },
+        select: { id: true, label: true, driveLink: true },
+      },
+    },
   });
 }
 

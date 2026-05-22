@@ -30,6 +30,7 @@ export default async function NewSubmissionPage({
     id: c.id,
     fullName: c.fullName,
     alreadySubmitted: submitted.has(c.id),
+    resumes: c.resumes,
   }));
 
   return (

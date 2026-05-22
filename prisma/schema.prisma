@@ -206,7 +206,6 @@ model Candidate {
   skills              String[]
   linkedinUrl         String?
   resumeBlobUrl       String?
-  resumeDriveLink     String?
   notes               String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -215,12 +214,29 @@ model Candidate {
   createdBy   User   @relation(fields: [createdById], references: [id])
 
   submissions Submission[]
+  resumes     CandidateResume[]
   noteEntries Note[]
   activities  Activity[]
 
   @@index([email])
   @@index([phone])
   @@index([fullName])
+}
+
+// A candidate's saved résumés — one candidate keeps many labelled Drive links,
+// and a submission references the one used (see Submission.candidateResume).
+model CandidateResume {
+  id          String   @id @default(cuid())
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  label       String
+  driveLink   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  submissions Submission[]
+
+  @@index([candidateId])
 }
 
 model Submission {
@@ -241,6 +257,10 @@ model Submission {
   job           Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
   submittedById String
   submittedBy   User      @relation(fields: [submittedById], references: [id])
+  // The library résumé chosen for this submission; resumeDriveLink above keeps a
+  // snapshot of its link so history survives edits/deletes of the library entry.
+  candidateResumeId String?
+  candidateResume   CandidateResume? @relation(fields: [candidateResumeId], references: [id], onDelete: SetNull)
 
   interviewRounds InterviewRound[]
   noteEntries     Note[]
@@ -251,6 +271,7 @@ model Submission {
   @@index([jobId])
   @@index([candidateId])
   @@index([submittedById])
+  @@index([candidateResumeId])
   @@index([submittedAt])
 }
 

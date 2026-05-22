@@ -17,7 +17,6 @@ export type CandidateFormValues = {
   currentCompany: string;
   skills: string[];
   linkedinUrl: string;
-  resumeDriveLink: string;
   notes: string;
 };
 
@@ -33,7 +32,6 @@ type Fields = {
   currentCompany: string;
   skills: string;
   linkedinUrl: string;
-  resumeDriveLink: string;
   notes: string;
 };
 
@@ -49,7 +47,6 @@ function initialFields(values?: CandidateFormValues): Fields {
       currentCompany: "",
       skills: "",
       linkedinUrl: "",
-      resumeDriveLink: "",
       notes: "",
     };
   }
@@ -63,7 +60,6 @@ function initialFields(values?: CandidateFormValues): Fields {
     currentCompany: values.currentCompany,
     skills: values.skills.join(", "),
     linkedinUrl: values.linkedinUrl,
-    resumeDriveLink: values.resumeDriveLink,
     notes: values.notes,
   };
 }
@@ -199,33 +195,21 @@ export function CandidateForm({
         />
       </Field>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="LinkedIn URL" htmlFor="linkedinUrl" error={errors.linkedinUrl}>
-          <Input
-            id="linkedinUrl"
-            name="linkedinUrl"
-            type="url"
-            value={fields.linkedinUrl}
-            onChange={set("linkedinUrl")}
-            placeholder="https://linkedin.com/in/…"
-          />
-        </Field>
-        <Field
-          label="Resume — Google Drive link"
-          htmlFor="resumeDriveLink"
-          hint="Paste a shared Drive link; it previews on the candidate page."
-          error={errors.resumeDriveLink}
-        >
-          <Input
-            id="resumeDriveLink"
-            name="resumeDriveLink"
-            type="url"
-            value={fields.resumeDriveLink}
-            onChange={set("resumeDriveLink")}
-            placeholder="https://drive.google.com/file/d/…"
-          />
-        </Field>
-      </div>
+      <Field
+        label="LinkedIn URL"
+        htmlFor="linkedinUrl"
+        hint="Résumés are managed on the candidate's page after saving."
+        error={errors.linkedinUrl}
+      >
+        <Input
+          id="linkedinUrl"
+          name="linkedinUrl"
+          type="url"
+          value={fields.linkedinUrl}
+          onChange={set("linkedinUrl")}
+          placeholder="https://linkedin.com/in/…"
+        />
+      </Field>
 
       <Field label="Notes" htmlFor="notes" error={errors.notes}>
         <Textarea

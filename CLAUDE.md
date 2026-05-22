@@ -16,8 +16,9 @@ timeline, and recruiter performance. Replaces a manual Excel/Word process.
 - **Tailwind CSS v4** — hand-rolled UI primitives in `src/components/ui/` (shadcn/ui not used)
 - **Zod 4** validation, react-hook-form
 - Auth: hand-rolled session (`bcryptjs` + `jose` JWT cookie) — NOT NextAuth
-- Resumes = Google Drive links with inline preview (Phase 3); `@vercel/blob` file upload
-  deferred until a Blob store is provisioned. Recharts for charts (Phase 7)
+- Resumes = a per-candidate **résumé library** (`CandidateResume`) of labelled Google
+  Drive links with inline preview; each submission picks one and snapshots its link.
+  `@vercel/blob` file upload deferred until a Blob store is provisioned. Recharts (Phase 7)
 - Deploy target: Vercel
 
 ## Critical version gotchas
@@ -61,12 +62,35 @@ npm run db:studio   # prisma studio
 `DATABASE_URL` (Neon pooled), `DIRECT_URL` (Neon direct), `AUTH_SECRET`,
 `BLOB_READ_WRITE_TOKEN` (Phase 3), `SEED_ADMIN_*`.
 
-## Build phases (delivery: check-in after each)
+## Build status
 
-- **Phase 1 — Foundation & Auth** ✅ done & verified (migration applied, seeded, login works)
-- **Phase 2 — Jobs & org entities** ✅ done & verified (Settings CRUD, job CRUD + filters, job detail)
-- **Phase 3 — Candidates** ← NEXT (CRUD, Drive-link resume + inline preview, duplicate warning)
-- Phase 4 — Submissions (pipeline, duplicate prevention)
-- Phase 5 — Interview rounds
-- Phase 6 — Timeline / audit UI + Notes
-- Phase 7 — Dashboard & Reports
+All 7 build phases are complete and verified:
+
+- **Phase 1** — Foundation & Auth ✅
+- **Phase 2** — Jobs & org entities ✅
+- **Phase 3** — Candidates (Drive-link résumé + inline preview, duplicate warning) ✅
+- **Phase 4** — Submissions (status pipeline, duplicate prevention) ✅
+- **Phase 5** — Interview rounds ✅
+- **Phase 6** — Timeline / audit UI + Notes ✅
+- **Phase 7** — Dashboard, Reports, Recruiters, global search ✅
+
+**Post-Phase-7 work (committed to `main`):**
+- List pages (Jobs/Candidates/Submissions/Recruiters) gained clickable column
+  **sorting** (`?sort=&dir=`), **10-row pagination** (`?page=`), and a **collapsible
+  filter bar** — shared primitives `src/components/ui/{sortable-header,pagination,filter-bar}.tsx`;
+  list queries return `{ rows, total, page }`.
+- Phase 7 review bugs fixed (Dashboard "Active jobs" KPI subtitle, dead recruiter-detail
+  filter, admin excluded from the Recruiters list, `$/hr` rate units, clearer timeline labels).
+- **Résumé library** — each candidate keeps many labelled Google Drive résumés
+  (`CandidateResume`, 1:N), managed in a section on the candidate detail page. Submitting
+  a candidate picks a saved résumé or adds one inline (optional). The submission keeps
+  `resumeDriveLink` as a snapshot (so history survives résumé edits/deletes) plus a
+  nullable `candidateResumeId` FK; `Candidate.resumeDriveLink` was dropped. Shown on the
+  submission detail (inline preview) and as a column on the job's candidate table.
+
+## Docs & demo data
+
+- `DEMO_GUIDE.md` (project root) — end-to-end app & workflow walkthrough for demos.
+- `prisma/seed-demo.ts` wipes the DB and loads ~3 months of realistic sample data
+  (8 users, 50 jobs, 30 candidates, 160 submissions). Admin login:
+  `admin@lumintrack.com` / `LuminTrack2026!` (all sample recruiters share that password).

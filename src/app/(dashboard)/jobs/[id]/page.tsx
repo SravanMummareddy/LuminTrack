@@ -195,6 +195,7 @@ export default async function JobDetailPage({
                 <Th>Submitted by</Th>
                 <Th>Submitted</Th>
                 <Th>Status</Th>
+                <Th>Resume</Th>
                 <Th className="text-right">Rate</Th>
                 <Th className="text-right">Rounds</Th>
               </tr>
@@ -218,6 +219,20 @@ export default async function JobDetailPage({
                     <Badge tone={SUBMISSION_STATUS_TONE[s.status]}>
                       {SUBMISSION_STATUS_LABEL[s.status]}
                     </Badge>
+                  </Td>
+                  <Td>
+                    {s.resumeDriveLink ? (
+                      <a
+                        href={s.resumeDriveLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-indigo-600 hover:underline"
+                      >
+                        {s.candidateResume?.label ?? "Resume"}
+                      </a>
+                    ) : (
+                      "—"
+                    )}
                   </Td>
                   <Td className="text-right tabular-nums">
                     {formatRate(s.candidateRate)}

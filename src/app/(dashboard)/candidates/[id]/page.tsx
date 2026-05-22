@@ -6,12 +6,12 @@ import { Badge } from "@/components/ui/badge";
 import { Table, Th, Td } from "@/components/ui/table";
 import { ActivityTimeline } from "@/components/timeline/activity-timeline";
 import { NotesSection } from "@/components/notes/notes-section";
+import { ResumeSection } from "@/components/candidates/resume-section";
 import { getCandidateDetail } from "@/server/queries/candidates";
 import { getCandidateSubmissions } from "@/server/queries/submissions";
 import { getCandidateInterviewRounds } from "@/server/queries/interviews";
 import { getTimelineFor } from "@/server/queries/timeline";
 import { getNotesFor } from "@/server/queries/notes";
-import { toDrivePreviewUrl } from "@/lib/resume";
 import {
   SUBMISSION_STATUS_LABEL,
   SUBMISSION_STATUS_TONE,
@@ -68,10 +68,6 @@ export default async function CandidateDetailPage({
       getNotesFor("CANDIDATE", id),
     ]);
   if (!candidate) notFound();
-
-  const previewUrl = candidate.resumeDriveLink
-    ? toDrivePreviewUrl(candidate.resumeDriveLink)
-    : null;
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
@@ -173,35 +169,15 @@ export default async function CandidateDetailPage({
         </div>
       </Card>
 
-      <Card title="Resume">
-        {!candidate.resumeDriveLink ? (
-          <p className="text-sm text-slate-400">No resume link added.</p>
-        ) : (
-          <div className="space-y-3">
-            <a
-              href={candidate.resumeDriveLink}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:underline"
-            >
-              Open resume in a new tab
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-            {previewUrl ? (
-              <iframe
-                src={previewUrl}
-                title="Resume preview"
-                className="h-[600px] w-full rounded-md border border-slate-200"
-              />
-            ) : (
-              <p className="text-xs text-slate-500">
-                Inline preview is available for Google Drive links only — use
-                the link above to open this resume.
-              </p>
-            )}
-          </div>
-        )}
-      </Card>
+      <ResumeSection
+        candidateId={candidate.id}
+        resumes={candidate.resumes.map((r) => ({
+          id: r.id,
+          label: r.label,
+          driveLink: r.driveLink,
+          submissionCount: r._count.submissions,
+        }))}
+      />
 
       <Card title={`Job submissions (${submissions.length})`}>
         {submissions.length === 0 ? (

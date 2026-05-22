@@ -384,6 +384,15 @@ async function chunkedCreateMany<T>(
   }
 }
 
+const RESUME_LABELS = [
+  "General",
+  "Backend Engineer",
+  "Data Analyst",
+  "Full Stack",
+  "Cloud / DevOps",
+  "Frontend Engineer",
+];
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -392,6 +401,7 @@ async function main() {
   await prisma.note.deleteMany();
   await prisma.interviewRound.deleteMany();
   await prisma.submission.deleteMany();
+  await prisma.candidateResume.deleteMany();
   await prisma.jobAssignment.deleteMany();
   await prisma.job.deleteMany();
   await prisma.candidate.deleteMany();
@@ -595,7 +605,13 @@ async function main() {
 
   // ── Candidates ──
   console.log("Creating 30 candidates…");
-  const candidates: { id: string; fullName: string; createdAt: Date }[] = [];
+  const candidates: {
+    id: string;
+    fullName: string;
+    createdAt: Date;
+    resumes: { id: string; driveLink: string }[];
+  }[] = [];
+  let resumeCount = 0;
   for (let i = 0; i < 30; i++) {
     const first = pick(FIRST_NAMES);
     const last = pick(LAST_NAMES);
@@ -605,7 +621,6 @@ async function main() {
       new Date(NOW.getTime() - 3 * DAY),
     );
     const creator = pick(recruiters);
-    const hasDrive = chance(0.6);
 
     const candidate = await prisma.candidate.create({
       data: {
@@ -621,11 +636,6 @@ async function main() {
         currentCompany: pick(CURRENT_COMPANIES),
         skills: pickN(SKILLS, randInt(4, 8)),
         linkedinUrl: `https://www.linkedin.com/in/${first}-${last}-${i}`.toLowerCase(),
-        resumeDriveLink: hasDrive
-          ? "https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz" +
-            i +
-            "/view"
-          : null,
         notes: chance(0.35) ? pick(CANDIDATE_NOTES) : null,
         createdById: creator.id,
         createdAt,
@@ -633,6 +643,28 @@ async function main() {
       },
       select: { id: true },
     });
+
+    // Résumé library — most candidates keep 1-3 labelled résumés.
+    const resumes: { id: string; driveLink: string }[] = [];
+    if (chance(0.8)) {
+      const labels = pickN(RESUME_LABELS, randInt(1, 3));
+      for (let j = 0; j < labels.length; j++) {
+        const created = await prisma.candidateResume.create({
+          data: {
+            candidateId: candidate.id,
+            label: labels[j],
+            driveLink:
+              "https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz" +
+              `${i}-${j}` +
+              "/view",
+            createdAt,
+          },
+          select: { id: true, driveLink: true },
+        });
+        resumes.push(created);
+        resumeCount++;
+      }
+    }
 
     activityRows.push({
       entityType: "CANDIDATE",
@@ -643,7 +675,7 @@ async function main() {
       createdAt,
     });
     updatedAtFixes.push({ table: "Candidate", id: candidate.id, ts: createdAt });
-    candidates.push({ id: candidate.id, fullName, createdAt });
+    candidates.push({ id: candidate.id, fullName, createdAt, resumes });
   }
 
   // ── Submissions + interview rounds ──
@@ -779,6 +811,12 @@ async function main() {
       times.push(new Date(t));
     }
 
+    // Most submissions carry one of the candidate's saved résumés.
+    const pickedResume =
+      candidate.resumes.length > 0 && chance(0.8)
+        ? pick(candidate.resumes)
+        : null;
+
     const submission = await prisma.submission.create({
       data: {
         candidateId: candidate.id,
@@ -789,6 +827,8 @@ async function main() {
         rejectionReason:
           finalStatus === "REJECTED" ? pick(REJECTION_REASONS) : null,
         submissionNotes: chance(0.4) ? pick(SUBMISSION_NOTES) : null,
+        candidateResumeId: pickedResume?.id ?? null,
+        resumeDriveLink: pickedResume?.driveLink ?? null,
         submittedAt,
         createdAt: submittedAt,
         updatedAt: times[times.length - 1],
@@ -1059,6 +1099,7 @@ async function main() {
   console.log(`  Users:        ${recruiters.length + 1} (1 admin, ${recruiters.length} recruiters)`);
   console.log(`  Jobs:         ${jobs.length}`);
   console.log(`  Candidates:   ${candidates.length}`);
+  console.log(`  Resumes:      ${resumeCount}`);
   console.log(`  Submissions:  ${submissionCount}`);
   console.log(`  Interview rounds: ${roundCount}`);
   console.log(`  Notes:        ${noteRows.length}`);

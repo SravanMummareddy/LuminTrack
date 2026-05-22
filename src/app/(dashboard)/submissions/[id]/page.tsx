@@ -12,6 +12,7 @@ import { getTimelineFor } from "@/server/queries/timeline";
 import { getNotesFor } from "@/server/queries/notes";
 import { SUBMISSION_STATUS_LABEL, SUBMISSION_STATUS_TONE } from "@/lib/labels";
 import { formatDate, formatRate } from "@/lib/format";
+import { toDrivePreviewUrl } from "@/lib/resume";
 
 function SummaryItem({
   label,
@@ -59,6 +60,9 @@ export default async function SubmissionDetailPage({
   if (!submission) notFound();
 
   const { candidate, job } = submission;
+  const resumePreviewUrl = submission.resumeDriveLink
+    ? toDrivePreviewUrl(submission.resumeDriveLink)
+    : null;
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
@@ -137,21 +141,6 @@ export default async function SubmissionDetailPage({
           <SummaryItem label="Candidate rate">
             {formatRate(submission.candidateRate)}
           </SummaryItem>
-          <SummaryItem label="Resume used">
-            {submission.resumeDriveLink ? (
-              <a
-                href={submission.resumeDriveLink}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-indigo-600 hover:underline"
-              >
-                Open resume
-                <ExternalLink className="h-3.5 w-3.5" />
-              </a>
-            ) : (
-              "—"
-            )}
-          </SummaryItem>
           <SummaryItem label="Last updated">
             {formatDate(submission.updatedAt)}
           </SummaryItem>
@@ -174,6 +163,43 @@ export default async function SubmissionDetailPage({
             <dd className="mt-0.5 whitespace-pre-wrap text-sm text-slate-800">
               {submission.rejectionReason || "—"}
             </dd>
+          </div>
+        )}
+      </Card>
+
+      <Card title="Resume used">
+        {!submission.resumeDriveLink ? (
+          <p className="text-sm text-slate-400">
+            No resume recorded for this submission.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+              {submission.candidateResume && (
+                <Badge tone="indigo">{submission.candidateResume.label}</Badge>
+              )}
+              <a
+                href={submission.resumeDriveLink}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:underline"
+              >
+                Open resume in a new tab
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </div>
+            {resumePreviewUrl ? (
+              <iframe
+                src={resumePreviewUrl}
+                title="Resume preview"
+                className="h-[600px] w-full rounded-md border border-slate-200"
+              />
+            ) : (
+              <p className="text-xs text-slate-500">
+                Inline preview is available for Google Drive links only — use
+                the link above to open this resume.
+              </p>
+            )}
           </div>
         )}
       </Card>

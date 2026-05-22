@@ -24,8 +24,11 @@ function readSubmission(formData: FormData) {
     jobId: formData.get("jobId") ?? "",
     submittedById: formData.get("submittedById") ?? "",
     candidateRate: formData.get("candidateRate") ?? "",
-    resumeDriveLink: formData.get("resumeDriveLink") ?? "",
     submissionNotes: formData.get("submissionNotes") ?? "",
+    resumeChoice: formData.get("resumeChoice") ?? "none",
+    candidateResumeId: formData.get("candidateResumeId") ?? "",
+    newResumeLabel: formData.get("newResumeLabel") ?? "",
+    newResumeLink: formData.get("newResumeLink") ?? "",
   });
 }
 
@@ -49,7 +52,7 @@ export async function createSubmission(
     }),
     prisma.candidate.findUnique({
       where: { id: d.candidateId },
-      select: { id: true, fullName: true, resumeDriveLink: true },
+      select: { id: true, fullName: true },
     }),
   ]);
   if (!job) return { error: "This job no longer exists." };
@@ -59,17 +62,65 @@ export async function createSubmission(
       fieldErrors: { candidateId: "Select a candidate." },
     };
 
+  // Resolve a previously-saved résumé up front so a bad pick returns cleanly.
+  let pickedResume: { id: string; driveLink: string } | null = null;
+  if (d.resumeChoice === "existing" && d.candidateResumeId) {
+    const resume = await prisma.candidateResume.findUnique({
+      where: { id: d.candidateResumeId },
+      select: { id: true, driveLink: true, candidateId: true },
+    });
+    if (!resume || resume.candidateId !== d.candidateId)
+      return {
+        error: "Please fix the highlighted fields.",
+        fieldErrors: {
+          candidateResumeId: "Pick a resume that belongs to this candidate.",
+        },
+      };
+    pickedResume = { id: resume.id, driveLink: resume.driveLink };
+  }
+
   let submissionId: string;
   try {
     submissionId = await prisma.$transaction(async (tx) => {
+      // Settle the résumé: an existing library entry, a new one, or none.
+      let candidateResumeId: string | null = null;
+      let resumeSnapshot: string | null = null;
+
+      if (pickedResume) {
+        candidateResumeId = pickedResume.id;
+        resumeSnapshot = pickedResume.driveLink;
+      } else if (
+        d.resumeChoice === "new" &&
+        d.newResumeLabel &&
+        d.newResumeLink
+      ) {
+        const newResume = await tx.candidateResume.create({
+          data: {
+            candidateId: d.candidateId,
+            label: d.newResumeLabel,
+            driveLink: d.newResumeLink,
+          },
+        });
+        candidateResumeId = newResume.id;
+        resumeSnapshot = newResume.driveLink;
+        await logActivity(tx, {
+          entityType: "CANDIDATE",
+          action: "RESUME_UPDATED",
+          description: `Resume "${newResume.label}" added`,
+          performedById: user.id,
+          candidateId: d.candidateId,
+        });
+      }
+
       const created = await tx.submission.create({
         data: {
           candidateId: d.candidateId,
           jobId: d.jobId,
           submittedById: d.submittedById,
           candidateRate: d.candidateRate ?? null,
-          // Fall back to the candidate's resume on file when none is given.
-          resumeDriveLink: d.resumeDriveLink ?? candidate.resumeDriveLink ?? null,
+          candidateResumeId,
+          // Snapshot the link used so it survives résumé edits/deletes.
+          resumeDriveLink: resumeSnapshot,
           submissionNotes: d.submissionNotes ?? null,
         },
       });

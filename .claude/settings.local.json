@@ -30,7 +30,12 @@
       "Bash(echo \"127.0.0.1: $\\(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/login\\)\")",
       "Bash(curl -s -o /dev/null -w '%{http_code}' 'http://[::1]:3000/login')",
       "Bash(echo \"ipv6 ::1: $\\(curl -s -o /dev/null -w '%{http_code}' 'http://[::1]:3000/login' 2>/dev/null || echo fail\\)\")",
-      "Bash(node -e \"const p=require\\('./package.json'\\);console.log\\('recharts:',\\(p.dependencies||{}\\).recharts||\\(p.devDependencies||{}\\).recharts\\);console.log\\('react:',\\(p.dependencies||{}\\).react\\);console.log\\('next:',\\(p.dependencies||{}\\).next\\)\")"
+      "Bash(node -e \"const p=require\\('./package.json'\\);console.log\\('recharts:',\\(p.dependencies||{}\\).recharts||\\(p.devDependencies||{}\\).recharts\\);console.log\\('react:',\\(p.dependencies||{}\\).react\\);console.log\\('next:',\\(p.dependencies||{}\\).next\\)\")",
+      "Bash(findstr /v \"ui/\")",
+      "Bash(grep -l \"use client\\\\|useState\\\\|useRouter\" \"C:\\\\Users\\\\mumma\\\\OneDrive\\\\Documents\\\\Lumin_recruiter_dashboard\\\\src\\\\components\"/*.tsx 2>nul)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\mumma\\\\OneDrive\\\\Documents\\\\Lumin_recruiter_dashboard\" -Recurse -Directory)",
+      "Bash(Select-Object -First 20)",
+      "Bash(Format-Table FullName)"
     ]
   }
 }

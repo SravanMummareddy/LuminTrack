@@ -27,7 +27,6 @@ export default async function EditCandidatePage({
     currentCompany: candidate.currentCompany ?? "",
     skills: candidate.skills,
     linkedinUrl: candidate.linkedinUrl ?? "",
-    resumeDriveLink: candidate.resumeDriveLink ?? "",
     notes: candidate.notes ?? "",
   };
 

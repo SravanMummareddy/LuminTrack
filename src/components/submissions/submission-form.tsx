@@ -6,10 +6,12 @@ import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { Button, buttonClass } from "@/components/ui/button";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 
+type ResumeOption = { id: string; label: string; driveLink: string };
 type CandidateOption = {
   id: string;
   fullName: string;
   alreadySubmitted: boolean;
+  resumes: ResumeOption[];
 };
 type Recruiter = { id: string; fullName: string; isActive: boolean };
 
@@ -22,9 +24,14 @@ type Fields = {
   candidateId: string;
   submittedById: string;
   candidateRate: string;
-  resumeDriveLink: string;
+  // "" = no résumé, "__new__" = add a new one, otherwise a saved résumé id.
+  resumeSelection: string;
+  newResumeLabel: string;
+  newResumeLink: string;
   submissionNotes: string;
 };
+
+const NEW_RESUME = "__new__";
 
 export function SubmissionForm({
   action,
@@ -48,7 +55,9 @@ export function SubmissionForm({
     candidateId: "",
     submittedById: defaultRecruiterId,
     candidateRate: defaultCandidateRate,
-    resumeDriveLink: "",
+    resumeSelection: "",
+    newResumeLabel: "",
+    newResumeLink: "",
     submissionNotes: "",
   });
   const set =
@@ -60,11 +69,35 @@ export function SubmissionForm({
     ) =>
       setFields((f) => ({ ...f, [name]: e.target.value }));
 
+  // Switching candidate clears the résumé pick — a résumé belongs to one candidate.
+  const onCandidateChange = (e: React.ChangeEvent<HTMLSelectElement>) =>
+    setFields((f) => ({
+      ...f,
+      candidateId: e.target.value,
+      resumeSelection: "",
+      newResumeLabel: "",
+      newResumeLink: "",
+    }));
+
   const errors = state.fieldErrors ?? {};
+  const resumes =
+    candidates.find((c) => c.id === fields.candidateId)?.resumes ?? [];
+  const resumeChoice =
+    fields.resumeSelection === ""
+      ? "none"
+      : fields.resumeSelection === NEW_RESUME
+        ? "new"
+        : "existing";
 
   return (
     <form action={formAction} className="space-y-5">
       <input type="hidden" name="jobId" value={jobId} />
+      <input type="hidden" name="resumeChoice" value={resumeChoice} />
+      <input
+        type="hidden"
+        name="candidateResumeId"
+        value={resumeChoice === "existing" ? fields.resumeSelection : ""}
+      />
 
       <Field
         label="Candidate"
@@ -77,7 +110,7 @@ export function SubmissionForm({
           id="candidateId"
           name="candidateId"
           value={fields.candidateId}
-          onChange={set("candidateId")}
+          onChange={onCandidateChange}
           required
         >
           <option value="" disabled>
@@ -136,20 +169,60 @@ export function SubmissionForm({
       </div>
 
       <Field
-        label="Resume — Google Drive link"
-        htmlFor="resumeDriveLink"
-        hint="Leave blank to use the candidate's resume on file."
-        error={errors.resumeDriveLink}
+        label="Resume"
+        htmlFor="resumeSelection"
+        hint="Pick one of the candidate's saved resumes, add a new one, or leave as no resume."
+        error={errors.candidateResumeId}
       >
-        <Input
-          id="resumeDriveLink"
-          name="resumeDriveLink"
-          type="url"
-          value={fields.resumeDriveLink}
-          onChange={set("resumeDriveLink")}
-          placeholder="https://drive.google.com/file/d/…"
-        />
+        <Select
+          id="resumeSelection"
+          value={fields.resumeSelection}
+          onChange={set("resumeSelection")}
+          disabled={!fields.candidateId}
+        >
+          <option value="">No resume</option>
+          {resumes.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.label}
+            </option>
+          ))}
+          <option value={NEW_RESUME}>+ Add a new resume</option>
+        </Select>
       </Field>
+
+      {resumeChoice === "new" && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field
+            label="New resume label"
+            htmlFor="newResumeLabel"
+            required
+            error={errors.newResumeLabel}
+          >
+            <Input
+              id="newResumeLabel"
+              name="newResumeLabel"
+              value={fields.newResumeLabel}
+              onChange={set("newResumeLabel")}
+              placeholder="e.g. Backend Engineer"
+            />
+          </Field>
+          <Field
+            label="New resume — Google Drive link"
+            htmlFor="newResumeLink"
+            required
+            error={errors.newResumeLink}
+          >
+            <Input
+              id="newResumeLink"
+              name="newResumeLink"
+              type="url"
+              value={fields.newResumeLink}
+              onChange={set("newResumeLink")}
+              placeholder="https://drive.google.com/file/d/…"
+            />
+          </Field>
+        </div>
+      )}
 
       <Field
         label="Submission notes"
