@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p docs)",
+      "Bash(mv PROJECT_REQUIREMENTS.md docs/)",
+      "Bash(npx --yes create-next-app@latest tmp_scaffold --ts --tailwind --eslint --app --src-dir --import-alias \"@/*\" --use-npm --turbopack --skip-install --disable-git)",
+      "Bash(npm install *)",
+      "Bash(npx prisma *)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }; Start-Sleep -Seconds 1; \"port 3000 cleared\")",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(git log *)",
+      "Bash(git status *)",
+      "Bash(git branch *)",
+      "Bash(npx eslint *)",
+      "Bash(dir /b src\\\\app src\\\\server src\\\\components src\\\\lib)",
+      "Bash(node -e \"const i=require\\('lucide-react'\\); const want=['Briefcase','Send','CalendarCheck','CircleCheck','CircleCheckBig','CheckCircle2','FileText','UserCheck','CircleX','XCircle','CirclePause','PauseCircle','TrendingUp','Users','Clock','ArrowLeft','ChartColumn','Award','Target','Hourglass']; for\\(const n of want\\) console.log\\(n.padEnd\\(16\\), n in i ? 'OK':'MISSING'\\);\")"
+    ]
+  }
+}
