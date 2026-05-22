@@ -22,8 +22,9 @@ export function Table({
           "[&_thead]:hidden md:[&_thead]:table-header-group",
           "[&_tbody]:block md:[&_tbody]:table-row-group",
           "[&_tbody_tr]:block md:[&_tbody_tr]:table-row",
-          // Each mobile card is a positioning context for the stretched card link.
-          "[&_tbody_tr]:relative md:[&_tbody_tr]:static",
+          // Each mobile card is a positioning context for the stretched card
+          // link, with a right gutter that keeps content clear of the chevron.
+          "[&_tbody_tr]:relative [&_tbody_tr]:pr-8 md:[&_tbody_tr]:static md:[&_tbody_tr]:pr-0",
           className,
         )}
       >
@@ -80,7 +81,7 @@ export function Td({
     return (
       <td
         className={cn(
-          "block py-2 pl-3 pr-9 text-[15px] text-slate-700",
+          "block px-3 py-2 text-[15px] text-slate-700",
           "md:table-cell md:px-4 md:py-3 md:align-top md:text-sm",
           className,
         )}
@@ -110,12 +111,12 @@ export function Td({
   return (
     <td
       className={cn(
-        "flex gap-3 px-3 py-1.5 text-slate-700 md:table-cell md:px-4 md:py-3 md:align-top",
+        "flex gap-3 px-3 py-1.5 text-slate-700 max-md:text-left md:table-cell md:px-4 md:py-3 md:align-top",
         className,
       )}
     >
       {label && (
-        <span className="w-28 shrink-0 text-xs font-medium uppercase tracking-wide text-slate-400 md:hidden">
+        <span className="w-28 shrink-0 text-left text-xs font-medium uppercase tracking-wide text-slate-400 md:hidden">
           {label}
         </span>
       )}
