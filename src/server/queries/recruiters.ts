@@ -84,7 +84,8 @@ export async function listRecruiterPerformance(
 
   const [users, submissions, assignments] = await Promise.all([
     prisma.user.findMany({
-      where: { isActive: true },
+      // Recruiters only — admins aren't part of the performance list.
+      where: { isActive: true, role: "RECRUITER" },
       select: { id: true, fullName: true, email: true, role: true },
       orderBy: { fullName: "asc" },
     }),

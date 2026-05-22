@@ -110,7 +110,7 @@ export default async function DashboardPage({
           value={data.activeJobs}
           icon={Briefcase}
           tone="green"
-          hint={`${data.openJobs} open · ${data.closedJobs} closed`}
+          hint={`${data.openJobs} open · ${data.onHoldJobs} on hold`}
         />
         <StatCard
           label="Total submissions"

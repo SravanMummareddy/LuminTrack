@@ -115,6 +115,10 @@ export async function changeSubmissionStatus(formData: FormData): Promise<void> 
 
   const submission = await prisma.submission.findUnique({
     where: { id: submissionId },
+    include: {
+      candidate: { select: { fullName: true } },
+      job: { select: { title: true } },
+    },
   });
   if (!submission || submission.status === status) return;
   const next = status as SubmissionStatus;
@@ -144,7 +148,7 @@ export async function changeSubmissionStatus(formData: FormData): Promise<void> 
     await logActivity(tx, {
       entityType: "SUBMISSION",
       action,
-      description: `Status changed from ${SUBMISSION_STATUS_LABEL[submission.status]} to ${SUBMISSION_STATUS_LABEL[next]}`,
+      description: `${submission.candidate.fullName} on "${submission.job.title}": status changed from ${SUBMISSION_STATUS_LABEL[submission.status]} to ${SUBMISSION_STATUS_LABEL[next]}`,
       oldValue: SUBMISSION_STATUS_LABEL[submission.status],
       newValue: SUBMISSION_STATUS_LABEL[next],
       performedById: user.id,

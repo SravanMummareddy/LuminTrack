@@ -27,6 +27,7 @@ export function AnalyticsFilters({
   sources,
   recruiters,
   showStatusFilters = true,
+  showRecruiterFilter = true,
 }: {
   current: AnalyticsParamState;
   basePath: string;
@@ -35,6 +36,8 @@ export function AnalyticsFilters({
   sources: Option[];
   recruiters: { id: string; fullName: string }[];
   showStatusFilters?: boolean;
+  /** Off for the recruiter detail page, which is already scoped to one recruiter. */
+  showRecruiterFilter?: boolean;
 }) {
   const clientName = clients.find((c) => c.id === current.clientId)?.name;
   const vendorName = vendors.find((v) => v.id === current.vendorId)?.name;
@@ -52,7 +55,7 @@ export function AnalyticsFilters({
   const chips: FilterChip[] = [];
   if (presetLabel)
     chips.push({ keys: ["preset", "from", "to"], label: `Date: ${presetLabel}` });
-  if (recruiterName)
+  if (showRecruiterFilter && recruiterName)
     chips.push({ keys: ["recruiterId"], label: `Recruiter: ${recruiterName}` });
   if (clientName)
     chips.push({ keys: ["clientId"], label: `Client: ${clientName}` });
@@ -95,23 +98,25 @@ export function AnalyticsFilters({
           ))}
         </Select>
       </div>
-      <div className="sm:w-52">
-        <label className={labelClass} htmlFor="f-recruiter">
-          Recruiter
-        </label>
-        <Select
-          id="f-recruiter"
-          name="recruiterId"
-          defaultValue={current.recruiterId ?? ""}
-        >
-          <option value="">All recruiters</option>
-          {recruiters.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.fullName}
-            </option>
-          ))}
-        </Select>
-      </div>
+      {showRecruiterFilter && (
+        <div className="sm:w-52">
+          <label className={labelClass} htmlFor="f-recruiter">
+            Recruiter
+          </label>
+          <Select
+            id="f-recruiter"
+            name="recruiterId"
+            defaultValue={current.recruiterId ?? ""}
+          >
+            <option value="">All recruiters</option>
+            {recruiters.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.fullName}
+              </option>
+            ))}
+          </Select>
+        </div>
+      )}
     </>
   );
 

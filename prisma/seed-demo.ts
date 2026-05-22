@@ -461,7 +461,7 @@ async function main() {
           createdAt: adminCreatedAt,
           updatedAt: adminCreatedAt,
         },
-        select: { id: true },
+        select: { id: true, name: true },
       }),
     );
   }
@@ -509,6 +509,7 @@ async function main() {
     const vendorRate = randInt(75, 150);
     const candidateRate = vendorRate - randInt(8, 22);
     const creator = chance(0.7) ? admin : pick(recruiters);
+    const client = pick(clients);
 
     const job = await prisma.job.create({
       data: {
@@ -517,12 +518,12 @@ async function main() {
         vendorRate,
         candidateRate,
         status,
-        description: `${title} opening for ${pick(CLIENT_NAMES)}. ${randInt(
+        description: `${title} opening at ${client.name}. ${randInt(
           4,
           10,
         )}+ years of experience required. Solid hands-on skills expected across the core stack.`,
         notes: chance(0.4) ? pick(JOB_NOTES) : null,
-        clientId: pick(clients).id,
+        clientId: client.id,
         vendorId: pick(vendors).id,
         sisterCompanySourceId: pick(sources).id,
         createdById: creator.id,
@@ -816,7 +817,7 @@ async function main() {
       activityRows.push({
         entityType: "SUBMISSION",
         action: milestoneAction(to),
-        description: `Status changed from ${SUB_LABEL[from]} to ${SUB_LABEL[to]}`,
+        description: `${candidate.fullName} on "${job.title}": status changed from ${SUB_LABEL[from]} to ${SUB_LABEL[to]}`,
         oldValue: SUB_LABEL[from],
         newValue: SUB_LABEL[to],
         performedById: submittedById,

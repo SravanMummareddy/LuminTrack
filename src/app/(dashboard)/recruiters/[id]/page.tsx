@@ -104,6 +104,7 @@ export default async function RecruiterDetailPage({
         sources={sources}
         recruiters={recruiters}
         showStatusFilters={false}
+        showRecruiterFilter={false}
       />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

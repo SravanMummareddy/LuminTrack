@@ -77,7 +77,7 @@ export const SUBMISSION_STATUS_TONE: Record<SubmissionStatus, BadgeTone> = {
 export const SUBMISSION_PIPELINE: string[] = [
   "Submitted",
   "Resume Picked",
-  "Vendor Screening",
+  "Vendor Screening Call",
   "Client Interview",
   "Decision",
   "Offer Released",

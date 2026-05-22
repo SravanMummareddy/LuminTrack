@@ -63,11 +63,9 @@ export async function getDashboardData(filters: AnalyticsFilters) {
   const jobStatusCount = (s: JobStatus) =>
     jobs.filter((j) => j.status === s).length;
   const openJobs = jobStatusCount("OPEN");
-  const activeJobs = openJobs + jobStatusCount("ON_HOLD");
-  const closedJobs =
-    jobStatusCount("CLOSED") +
-    jobStatusCount("FILLED") +
-    jobStatusCount("CANCELLED");
+  const onHoldJobs = jobStatusCount("ON_HOLD");
+  // "Active" = jobs still being worked: Open + On Hold.
+  const activeJobs = openJobs + onHoldJobs;
 
   // Open-job aging — OPEN and ON_HOLD jobs only.
   const agingCounts: Record<string, number> = {};
@@ -115,7 +113,7 @@ export async function getDashboardData(filters: AnalyticsFilters) {
     totalJobs: jobs.length,
     activeJobs,
     openJobs,
-    closedJobs,
+    onHoldJobs,
     jobsByStatus,
     jobsBySource,
     aging,

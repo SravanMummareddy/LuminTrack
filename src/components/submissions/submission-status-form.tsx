@@ -49,7 +49,7 @@ export function SubmissionStatusForm({
           </Select>
         </div>
         <Button type="submit" variant="secondary">
-          Update status
+          Update
         </Button>
       </div>
 
