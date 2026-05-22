@@ -1,7 +1,11 @@
 import { Input, Select } from "@/components/ui/field";
 import { FilterBar, type FilterChip } from "@/components/ui/filter-bar";
 import { DATE_PRESETS } from "@/lib/filters";
-import { SUBMISSION_STATUSES, SUBMISSION_STATUS_LABEL } from "@/lib/labels";
+import {
+  SUBMISSION_STATUSES,
+  SUBMISSION_STATUS_LABEL,
+  OTHER_SOURCE,
+} from "@/lib/labels";
 import type { SubmissionStatus } from "@/generated/prisma/enums";
 
 type Option = { id: string; name: string };
@@ -37,9 +41,10 @@ export function SubmissionFilters({
 }) {
   const clientName = clients.find((c) => c.id === current.clientId)?.name;
   const vendorName = vendors.find((v) => v.id === current.vendorId)?.name;
-  const sourceName = sources.find(
-    (s) => s.id === current.sisterCompanySourceId,
-  )?.name;
+  const sourceName =
+    current.sisterCompanySourceId === OTHER_SOURCE
+      ? "Other (manual)"
+      : sources.find((s) => s.id === current.sisterCompanySourceId)?.name;
   const recruiterName = recruiters.find(
     (r) => r.id === current.recruiterId,
   )?.fullName;
@@ -158,7 +163,7 @@ export function SubmissionFilters({
 
       <div>
         <label className={labelClass} htmlFor="f-source">
-          Sister company source
+          Source
         </label>
         <Select
           id="f-source"
@@ -171,6 +176,7 @@ export function SubmissionFilters({
               {s.name}
             </option>
           ))}
+          <option value={OTHER_SOURCE}>Other (manually entered)</option>
         </Select>
       </div>
 

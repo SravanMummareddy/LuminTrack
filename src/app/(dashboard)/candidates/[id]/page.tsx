@@ -18,6 +18,7 @@ import {
   INTERVIEW_TYPE_LABEL,
   INTERVIEW_RESULT_LABEL,
   INTERVIEW_RESULT_TONE,
+  jobSourceLabel,
 } from "@/lib/labels";
 import { formatDate, formatDateTime, formatExperience } from "@/lib/format";
 
@@ -81,9 +82,14 @@ export default async function CandidateDetailPage({
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold text-slate-900">
-            {candidate.fullName}
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold text-slate-900">
+              {candidate.fullName}
+            </h1>
+            <Badge tone={candidate.isActive ? "green" : "slate"}>
+              {candidate.isActive ? "Active" : "Inactive"}
+            </Badge>
+          </div>
           <p className="mt-1 text-sm text-slate-500">
             {candidate.currentCompany || "Company not set"}
           </p>
@@ -210,7 +216,7 @@ export default async function CandidateDetailPage({
                   </Td>
                   <Td label="Client">{s.job.client.name}</Td>
                   <Td label="Vendor">{s.job.vendor.name}</Td>
-                  <Td label="Source">{s.job.sisterCompanySource.name}</Td>
+                  <Td label="Source">{jobSourceLabel(s.job)}</Td>
                   <Td label="Submitted by">{s.submittedBy.fullName}</Td>
                   <Td label="Submitted" className="whitespace-nowrap">
                     {formatDate(s.submittedAt)}

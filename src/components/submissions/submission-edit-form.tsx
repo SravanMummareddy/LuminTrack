@@ -18,11 +18,30 @@ type EditValues = {
   // "" = no résumé, "__new__" = add a new one, otherwise a saved résumé id.
   resumeSelection: string;
   submissionNotes: string;
+  /** The raw submitted date — converted to a datetime-local value in the form. */
+  submittedAt: Date | string;
 };
 
-type Fields = EditValues & { newResumeLabel: string; newResumeLink: string };
+type Fields = {
+  candidateRate: string;
+  resumeSelection: string;
+  submissionNotes: string;
+  submittedAt: string;
+  newResumeLabel: string;
+  newResumeLink: string;
+};
 
 const NEW_RESUME = "__new__";
+
+/** Converts a stored date into a `datetime-local` input value in the browser's timezone. */
+function toDateTimeLocal(value: Date | string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+    date.getDate(),
+  )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
 
 function LockedField({ label, value }: { label: string; value: string }) {
   return (
@@ -59,6 +78,7 @@ export function SubmissionEditForm({
     candidateRate: values.candidateRate,
     resumeSelection: values.resumeSelection,
     submissionNotes: values.submissionNotes,
+    submittedAt: toDateTimeLocal(values.submittedAt),
     newResumeLabel: "",
     newResumeLink: "",
   });
@@ -95,21 +115,37 @@ export function SubmissionEditForm({
         <LockedField label="Submitted by" value={recruiterName} />
       </div>
 
-      <Field
-        label="Candidate rate"
-        htmlFor="candidateRate"
-        error={errors.candidateRate}
-      >
-        <Input
-          id="candidateRate"
-          name="candidateRate"
-          type="number"
-          min="0"
-          step="0.01"
-          value={fields.candidateRate}
-          onChange={set("candidateRate")}
-        />
-      </Field>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field
+          label="Submitted date"
+          htmlFor="submittedAt"
+          error={errors.submittedAt}
+        >
+          <Input
+            id="submittedAt"
+            name="submittedAt"
+            type="datetime-local"
+            value={fields.submittedAt}
+            onChange={set("submittedAt")}
+          />
+        </Field>
+
+        <Field
+          label="Candidate rate"
+          htmlFor="candidateRate"
+          error={errors.candidateRate}
+        >
+          <Input
+            id="candidateRate"
+            name="candidateRate"
+            type="number"
+            min="0"
+            step="0.01"
+            value={fields.candidateRate}
+            onChange={set("candidateRate")}
+          />
+        </Field>
+      </div>
 
       <Field
         label="Resume"

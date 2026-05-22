@@ -18,6 +18,7 @@ export type CandidateFormValues = {
   skills: string[];
   linkedinUrl: string;
   notes: string;
+  isActive: boolean;
 };
 
 type CandidateAction = (prev: FormState, formData: FormData) => Promise<FormState>;
@@ -78,6 +79,8 @@ export function CandidateForm({
   // after every submit, which would wipe entries on a validation or duplicate
   // warning. Controlled state survives those non-redirect returns.
   const [fields, setFields] = useState<Fields>(() => initialFields(values));
+  // New candidates default to Active; an existing one keeps its saved status.
+  const [isActive, setIsActive] = useState(values?.isActive ?? true);
   const set =
     (name: keyof Fields) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -220,6 +223,23 @@ export function CandidateForm({
           onChange={set("notes")}
         />
       </Field>
+
+      <div>
+        <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+          <input
+            type="checkbox"
+            name="isActive"
+            checked={isActive}
+            onChange={(e) => setIsActive(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-200"
+          />
+          Active candidate
+        </label>
+        <p className="mt-1 text-xs text-slate-500">
+          Uncheck to retire a candidate who is no longer available — their past
+          submissions are kept.
+        </p>
+      </div>
 
       {/* Once the user has been warned, this flag tells the action to skip the
           duplicate check on the next submit. */}

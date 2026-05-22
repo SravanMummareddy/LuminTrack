@@ -160,6 +160,7 @@ function readSubmissionEdit(formData: FormData) {
   return submissionEditSchema.safeParse({
     candidateRate: formData.get("candidateRate") ?? "",
     submissionNotes: formData.get("submissionNotes") ?? "",
+    submittedAt: formData.get("submittedAt") ?? "",
     resumeChoice: formData.get("resumeChoice") ?? "none",
     candidateResumeId: formData.get("candidateResumeId") ?? "",
     newResumeLabel: formData.get("newResumeLabel") ?? "",
@@ -248,6 +249,13 @@ export async function updateSubmission(
     };
     compare("candidate rate", existing.candidateRate?.toString(), d.candidateRate);
     compare("notes", existing.submissionNotes, d.submissionNotes);
+    // Compare the submitted date at minute precision — the datetime-local input
+    // only carries minutes, so a stored seconds component must not count as a change.
+    if (
+      Math.floor(existing.submittedAt.getTime() / 60000) !==
+      Math.floor(d.submittedAt.getTime() / 60000)
+    )
+      changed.push("submitted date");
     if (
       String(existing.candidateResumeId ?? "") !== String(candidateResumeId ?? "") ||
       String(existing.resumeDriveLink ?? "") !== String(resumeSnapshot ?? "")
@@ -259,6 +267,7 @@ export async function updateSubmission(
       data: {
         candidateRate: d.candidateRate ?? null,
         submissionNotes: d.submissionNotes ?? null,
+        submittedAt: d.submittedAt,
         candidateResumeId,
         // Snapshot the link used so it survives résumé edits/deletes.
         resumeDriveLink: resumeSnapshot,

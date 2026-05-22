@@ -42,6 +42,7 @@ export default async function EditSubmissionPage({
             candidateRate: submission.candidateRate?.toString() ?? "",
             resumeSelection: submission.candidateResumeId ?? "",
             submissionNotes: submission.submissionNotes ?? "",
+            submittedAt: submission.submittedAt,
           }}
         />
       </div>

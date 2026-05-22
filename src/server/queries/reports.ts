@@ -7,7 +7,7 @@ import {
   daysSince,
   type AnalyticsFilters,
 } from "@/lib/analytics";
-import { SUBMISSION_STATUSES } from "@/lib/labels";
+import { SUBMISSION_STATUSES, jobSourceLabel } from "@/lib/labels";
 import type { SubmissionStatus } from "@/generated/prisma/enums";
 
 type DimensionRow = {
@@ -65,6 +65,7 @@ export async function getReportsData(filters: AnalyticsFilters) {
         client: { select: { name: true } },
         vendor: { select: { name: true } },
         sisterCompanySource: { select: { name: true } },
+        sourceOther: true,
       },
     }),
     prisma.submission.findMany({
@@ -78,6 +79,7 @@ export async function getReportsData(filters: AnalyticsFilters) {
             client: { select: { name: true } },
             vendor: { select: { name: true } },
             sisterCompanySource: { select: { name: true } },
+            sourceOther: true,
           },
         },
       },
@@ -94,7 +96,7 @@ export async function getReportsData(filters: AnalyticsFilters) {
     interviews: s._count.interviewRounds,
     client: s.job.client.name,
     vendor: s.job.vendor.name,
-    source: s.job.sisterCompanySource.name,
+    source: jobSourceLabel(s.job),
   }));
 
   const byClient = performanceByDimension(
@@ -106,7 +108,7 @@ export async function getReportsData(filters: AnalyticsFilters) {
     subRows.map((s) => ({ name: s.vendor, status: s.status, interviews: s.interviews })),
   );
   const bySource = performanceByDimension(
-    jobs.map((j) => j.sisterCompanySource.name),
+    jobs.map((j) => jobSourceLabel(j)),
     subRows.map((s) => ({ name: s.source, status: s.status, interviews: s.interviews })),
   );
 

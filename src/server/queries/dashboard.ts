@@ -7,7 +7,7 @@ import {
   daysSince,
   type AnalyticsFilters,
 } from "@/lib/analytics";
-import { JOB_STATUSES, SUBMISSION_STATUSES } from "@/lib/labels";
+import { JOB_STATUSES, SUBMISSION_STATUSES, jobSourceLabel } from "@/lib/labels";
 import type { JobStatus, SubmissionStatus } from "@/generated/prisma/enums";
 
 /**
@@ -22,8 +22,8 @@ export async function getDashboardData(filters: AnalyticsFilters) {
       select: {
         status: true,
         createdAt: true,
-        sisterCompanySourceId: true,
         sisterCompanySource: { select: { name: true } },
+        sourceOther: true,
       },
     }),
     prisma.submission.findMany({
@@ -49,12 +49,10 @@ export async function getDashboardData(filters: AnalyticsFilters) {
 
   const sourceMap = new Map<string, { name: string; count: number }>();
   for (const job of jobs) {
-    const entry = sourceMap.get(job.sisterCompanySourceId) ?? {
-      name: job.sisterCompanySource.name,
-      count: 0,
-    };
+    const name = jobSourceLabel(job);
+    const entry = sourceMap.get(name) ?? { name, count: 0 };
     entry.count += 1;
-    sourceMap.set(job.sisterCompanySourceId, entry);
+    sourceMap.set(name, entry);
   }
   const jobsBySource = [...sourceMap.values()].sort(
     (a, b) => b.count - a.count,

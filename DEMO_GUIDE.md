@@ -58,7 +58,7 @@ The left sidebar has seven areas:
 | **Submissions** | Every candidate‑to‑job submission across all jobs. |
 | **Recruiters** | Performance counts per recruiter; drill into one recruiter. |
 | **Reports** | Management analytics — conversion funnel and performance breakdowns. |
-| **Settings** | Sister companies, clients, vendors and app users. |
+| **Settings** | Sources, clients, vendors and app users. |
 
 The **top bar** has a **global search** box (see Workflow 10) and the signed‑in
 user with a **Sign out** option.
@@ -67,9 +67,11 @@ user with a **Sign out** option.
 
 ## 4. Core concepts
 
-- **Job** — a requirement from a client. Has a client, a vendor, a sister
-  company source, a status, rate information and assigned recruiters.
-- **Candidate** — a person's profile: contact details, skills and experience.
+- **Job** — a requirement from a client. Has a client, a vendor, a **source**
+  (a managed sister company, or a free-text entry), a status, rate information
+  and assigned recruiters.
+- **Candidate** — a person's profile: contact details, skills, experience, and
+  an active/inactive status.
 - **Résumé** — a labelled Google Drive link saved against a candidate. A
   candidate keeps a **library** of résumés (e.g. one tailored per role type);
   each submission picks the résumé used for that job.
@@ -92,10 +94,14 @@ These are the workflows the app supports, in the order they are normally used.
 ### Workflow 1 — Set up organisation data *(Settings, admin)*
 Before jobs can be created, the supporting lists must exist.
 1. Go to **Settings**.
-2. Use the tabs to add records:
-   - **Sister Companies** — the internal sources jobs come through.
-   - **Clients** — the end companies hiring.
-   - **Vendors** — the staffing vendors/partners.
+2. Use the tabs to add records. Each tab has a **search box and a status
+   filter** (All / Active / Inactive) to narrow long lists:
+   - **Sources** — where jobs come through (typically sister companies). Each
+     holds a name, contact person, email, phone and location.
+   - **Clients** — the end companies hiring, with contact person, email, phone
+     and location.
+   - **Vendors** — the staffing vendors/partners, with the same contact
+     details.
    - **Users** — recruiter and admin accounts (admin only). "Add user" sets a
      name, email, role and password; "Edit" can change details or reset a
      password.
@@ -104,9 +110,10 @@ Before jobs can be created, the supporting lists must exist.
 
 ### Workflow 2 — Create a job requirement *(Jobs)*
 1. Go to **Jobs** and click **Add job**.
-2. Fill the form. Required: **Job title, Client, Vendor, Sister company
-   source**. Optional: status (defaults to *Open*), vendor rate, candidate
-   rate, location, description, notes.
+2. Fill the form. Required: **Job title, Client, Vendor, Source**. The
+   **Source** dropdown lists managed sources plus an **Other** option — choose
+   *Other* to type a one-off source by hand. Optional: status (defaults to
+   *Open*), vendor rate, candidate rate, location, description, notes.
 3. Tick the **recruiters** assigned to work the job.
 4. Save. The job appears in the Jobs list and on the assigned recruiters'
    pages.
@@ -116,7 +123,10 @@ Before jobs can be created, the supporting lists must exist.
 2. **Full name** is required; provide **at least an email or a phone number**.
    Add location, work authorization, experience, current company, skills
    (comma‑separated) and a LinkedIn URL.
-3. If the email or phone matches an existing candidate, the app shows a
+3. New candidates are **Active** by default. Uncheck **Active candidate** to
+   retire someone who is no longer available — their past submissions are
+   kept, and the Candidates list can be filtered by status.
+4. If the email or phone matches an existing candidate, the app shows a
    **duplicate warning** naming the match. You can correct the details or
    choose **Save anyway** to proceed deliberately.
 
@@ -150,14 +160,16 @@ as the candidate progresses:
 Decision (Selected / Rejected / On Hold) → Offer Released → Joined`
 
 Use the **status selector → Update** control. Alongside the new status you can
-record **when the change actually happened** (if it was earlier than now), a
-**note**, and — for **Rejected** / **On Hold** — a **reason** from a preset
-list. Every change is written to the activity timeline, which shows the note,
-the reason, and both the real event time and when it was recorded.
+record **when the change happened** (pre-filled with the current date and time
+— adjust it if the change happened earlier), a **note**, and — for **Rejected**
+/ **On Hold** — a **reason** from a preset list. Every change is written to the
+activity timeline, which shows the note, the reason, and both the event time
+and when it was recorded.
 
 Use **Edit submission** (top right of the submission page) to correct the
-candidate rate, the résumé used, or the submission notes after creation. The
-candidate, job and submitting recruiter are fixed at creation and stay locked.
+**submitted date**, the candidate rate, the résumé used, or the submission
+notes after creation. The candidate, job and submitting recruiter are fixed at
+creation and stay locked.
 
 ### Workflow 6 — Record interview rounds *(Submission page)*
 1. On the submission, click **Add round**.
@@ -165,7 +177,10 @@ candidate, job and submitting recruiter are fixed at creation and stay locked.
    (Vendor Screening, Client Interview, Manager Round, HR Round, Final Round,
    Other) and a **result** (Waiting, Need Another Round, Selected, Rejected,
    On Hold, Completed).
-3. Optionally add the interviewer's name, the date/time, feedback and notes.
+3. Optionally set the **interview mode** — *In person*, *Phone call* or *Video
+   call*. Choosing *Video call* reveals a **platform** field (Microsoft Teams,
+   Google Meet, Zoom, Other). Also optional: interviewer name, date/time,
+   feedback and notes.
 4. Rounds are listed in order on the submission and feed the "Interviews"
    counts across the app.
 
@@ -189,8 +204,8 @@ the entity's notes section and activity timeline.
   status, jobs by source, submissions by pipeline stage), an **open‑job aging**
   breakdown, and a recruiter performance table.
 - **Reports** — a **conversion funnel** (Submission → Interview, Interview →
-  Selection) and **performance breakdowns** by client, vendor, sister company
-  source and recruiter, plus an open‑job aging report.
+  Selection) and **performance breakdowns** by client, vendor, source and
+  recruiter, plus an open‑job aging report.
 - **Recruiters** — performance counts per recruiter; click a recruiter to see
   their stats, a six‑month submission trend, assigned jobs, submissions and
   recent activity.
@@ -247,16 +262,17 @@ On Hold · Completed
 
 1. **Log in** as the administrator and land on the **Dashboard** — point out
    the KPI cards and charts.
-2. Open **Settings** — show the Sister Companies, Clients, Vendors and Users
-   tabs (the supporting data).
+2. Open **Settings** — show the Sources, Clients, Vendors and Users tabs (the
+   supporting data), and the per-tab search / status filter.
 3. Go to **Jobs** — show the list, demonstrate **filtering**, **sorting** a
    column, and **pagination**. Open one job to show its detail and pipeline.
 4. From the job, click **Submit candidate** — show that already‑submitted
    candidates are blocked (duplicate prevention).
 5. Open a **Submission** — walk the **status pipeline**, update a status, and
    **Add an interview round**.
-6. Open a **Candidate** — show the profile and the **Résumés** library (add /
-   preview / edit); mention the **duplicate warning** on add.
+6. Open a **Candidate** — show the profile, the active/inactive status, and the
+   **Résumés** library (add / preview / edit); mention the **duplicate
+   warning** on add.
 7. Visit **Reports** — show the conversion funnel and performance breakdowns.
 8. Visit **Recruiters** — open one recruiter to show their performance detail.
 9. Use the **global search** in the top bar to jump to any record.

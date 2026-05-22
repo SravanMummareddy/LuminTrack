@@ -13,6 +13,7 @@ import {
   INTERVIEW_TYPE_LABEL,
   INTERVIEW_RESULT_LABEL,
   INTERVIEW_RESULT_TONE,
+  interviewModeLabel,
 } from "@/lib/labels";
 import { formatDateTime } from "@/lib/format";
 
@@ -95,6 +96,9 @@ export function InterviewRoundsManager({
               <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <RoundItem label="Interviewer">
                   {r.interviewerName || "—"}
+                </RoundItem>
+                <RoundItem label="Mode">
+                  {interviewModeLabel(r.interviewMode, r.interviewPlatform)}
                 </RoundItem>
                 <RoundItem label="Date & time">
                   {r.scheduledAt ? formatDateTime(r.scheduledAt) : "—"}

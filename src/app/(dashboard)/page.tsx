@@ -198,7 +198,7 @@ export default async function DashboardPage({
           )}
         </Card>
 
-        <Card title="Jobs by sister company source">
+        <Card title="Jobs by source">
           <BarChartCard data={jobsBySourceChart} />
         </Card>
       </div>

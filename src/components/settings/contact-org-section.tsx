@@ -1,12 +1,16 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Field, Input, Textarea } from "@/components/ui/field";
 import { Table, Th, Td } from "@/components/ui/table";
+import {
+  SettingsListFilter,
+  type StatusFilter,
+} from "@/components/settings/settings-list-filter";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 
 export type ContactOrg = {
@@ -15,13 +19,14 @@ export type ContactOrg = {
   contactPerson: string | null;
   email: string | null;
   phone: string | null;
+  location: string | null;
   notes: string | null;
   isActive: boolean;
 };
 
 type SaveAction = (prev: FormState, formData: FormData) => Promise<FormState>;
 
-/** Settings table for the two contact-style org entities: sister companies and vendors. */
+/** Settings table for the two contact-style org entities: sources and vendors. */
 export function ContactOrgSection({
   title,
   singular,
@@ -34,6 +39,18 @@ export function ContactOrgSection({
   action: SaveAction;
 }) {
   const [editing, setEditing] = useState<ContactOrg | "new" | null>(null);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<StatusFilter>("all");
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return items.filter((it) => {
+      if (status === "active" && !it.isActive) return false;
+      if (status === "inactive" && it.isActive) return false;
+      if (q && !it.name.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [items, search, status]);
 
   return (
     <section className="space-y-3">
@@ -48,9 +65,23 @@ export function ContactOrgSection({
         </Button>
       </div>
 
+      {items.length > 0 && (
+        <SettingsListFilter
+          search={search}
+          onSearchChange={setSearch}
+          status={status}
+          onStatusChange={setStatus}
+          searchPlaceholder={`Search ${title.toLowerCase()}…`}
+        />
+      )}
+
       {items.length === 0 ? (
         <p className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-400">
           No {title.toLowerCase()} yet.
+        </p>
+      ) : filtered.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-400">
+          No {title.toLowerCase()} match these filters.
         </p>
       ) : (
         <Table>
@@ -60,12 +91,13 @@ export function ContactOrgSection({
               <Th>Contact</Th>
               <Th>Email</Th>
               <Th>Phone</Th>
+              <Th>Location</Th>
               <Th>Status</Th>
               <Th />
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {items.map((item) => (
+            {filtered.map((item) => (
               <tr key={item.id}>
                 <Td label="Name" className="font-medium text-slate-900">
                   {item.name}
@@ -73,6 +105,7 @@ export function ContactOrgSection({
                 <Td label="Contact">{item.contactPerson || "—"}</Td>
                 <Td label="Email">{item.email || "—"}</Td>
                 <Td label="Phone">{item.phone || "—"}</Td>
+                <Td label="Location">{item.location || "—"}</Td>
                 <Td label="Status">
                   <Badge tone={item.isActive ? "green" : "slate"}>
                     {item.isActive ? "Active" : "Inactive"}
@@ -158,6 +191,14 @@ function ContactOrgForm({
           <Input id="phone" name="phone" defaultValue={entity?.phone ?? ""} />
         </Field>
       </div>
+
+      <Field label="Location" htmlFor="location" error={state.fieldErrors?.location}>
+        <Input
+          id="location"
+          name="location"
+          defaultValue={entity?.location ?? ""}
+        />
+      </Field>
 
       <Field label="Notes" htmlFor="notes" error={state.fieldErrors?.notes}>
         <Textarea id="notes" name="notes" rows={3} defaultValue={entity?.notes ?? ""} />

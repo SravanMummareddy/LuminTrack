@@ -14,7 +14,7 @@ import { ClientSection } from "@/components/settings/client-section";
 import { UserSection } from "@/components/settings/user-section";
 
 const TABS = [
-  { key: "sister-companies", label: "Sister Companies" },
+  { key: "sister-companies", label: "Sources" },
   { key: "clients", label: "Clients" },
   { key: "vendors", label: "Vendors" },
   { key: "users", label: "Users" },
@@ -40,8 +40,8 @@ export default async function SettingsPage({
   if (tab === "sister-companies") {
     content = (
       <ContactOrgSection
-        title="Sister Companies"
-        singular="sister company"
+        title="Sources"
+        singular="source"
         items={await listSisterCompanies()}
         action={saveSisterCompany}
       />
@@ -65,7 +65,7 @@ export default async function SettingsPage({
     <div className="mx-auto max-w-5xl space-y-6">
       <PageHeader
         title="Settings"
-        description="Manage sister companies, clients, vendors, and app users."
+        description="Manage sources, clients, vendors, and app users."
       />
 
       <div className="flex gap-1 border-b border-slate-200">

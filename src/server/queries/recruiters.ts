@@ -3,6 +3,7 @@ import { prisma } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
 import type { SubmissionStatus, UserRole } from "@/generated/prisma/enums";
 import { buildSubmissionWhere, type AnalyticsFilters } from "@/lib/analytics";
+import { OTHER_SOURCE } from "@/lib/labels";
 import { PAGE_SIZE, type SortState } from "@/lib/filters";
 
 /** Client/vendor/source filter for a job — used for assignment counts. */
@@ -11,7 +12,8 @@ function jobOrgWhere(f: AnalyticsFilters): Prisma.JobWhereInput {
   if (f.clientId) where.clientId = f.clientId;
   if (f.vendorId) where.vendorId = f.vendorId;
   if (f.sisterCompanySourceId)
-    where.sisterCompanySourceId = f.sisterCompanySourceId;
+    where.sisterCompanySourceId =
+      f.sisterCompanySourceId === OTHER_SOURCE ? null : f.sisterCompanySourceId;
   return where;
 }
 

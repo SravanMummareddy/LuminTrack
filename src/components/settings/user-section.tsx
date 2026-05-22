@@ -1,12 +1,16 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Field, Input, Select } from "@/components/ui/field";
 import { Table, Th, Td } from "@/components/ui/table";
+import {
+  SettingsListFilter,
+  type StatusFilter,
+} from "@/components/settings/settings-list-filter";
 import { saveUser } from "@/server/actions/users";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
 
@@ -26,6 +30,23 @@ export function UserSection({
   canManage: boolean;
 }) {
   const [editing, setEditing] = useState<UserRow | "new" | null>(null);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<StatusFilter>("all");
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return items.filter((it) => {
+      if (status === "active" && !it.isActive) return false;
+      if (status === "inactive" && it.isActive) return false;
+      if (
+        q &&
+        !it.fullName.toLowerCase().includes(q) &&
+        !it.email.toLowerCase().includes(q)
+      )
+        return false;
+      return true;
+    });
+  }, [items, search, status]);
 
   return (
     <section className="space-y-3">
@@ -47,48 +68,64 @@ export function UserSection({
         </p>
       )}
 
-      <Table>
-        <thead className="border-b border-slate-200 bg-slate-50">
-          <tr>
-            <Th>Name</Th>
-            <Th>Email</Th>
-            <Th>Role</Th>
-            <Th>Status</Th>
-            <Th />
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {items.map((item) => (
-            <tr key={item.id}>
-              <Td label="Name" className="font-medium text-slate-900">
-                {item.fullName}
-              </Td>
-              <Td label="Email">{item.email}</Td>
-              <Td label="Role">
-                <Badge tone={item.role === "ADMIN" ? "indigo" : "slate"}>
-                  {item.role === "ADMIN" ? "Administrator" : "Recruiter"}
-                </Badge>
-              </Td>
-              <Td label="Status">
-                <Badge tone={item.isActive ? "green" : "slate"}>
-                  {item.isActive ? "Active" : "Inactive"}
-                </Badge>
-              </Td>
-              <Td className="text-right">
-                {canManage && (
-                  <button
-                    type="button"
-                    onClick={() => setEditing(item)}
-                    className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
-                  >
-                    Edit
-                  </button>
-                )}
-              </Td>
+      {items.length > 0 && (
+        <SettingsListFilter
+          search={search}
+          onSearchChange={setSearch}
+          status={status}
+          onStatusChange={setStatus}
+          searchPlaceholder="Search by name or email…"
+        />
+      )}
+
+      {filtered.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-400">
+          No users match these filters.
+        </p>
+      ) : (
+        <Table>
+          <thead className="border-b border-slate-200 bg-slate-50">
+            <tr>
+              <Th>Name</Th>
+              <Th>Email</Th>
+              <Th>Role</Th>
+              <Th>Status</Th>
+              <Th />
             </tr>
-          ))}
-        </tbody>
-      </Table>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {filtered.map((item) => (
+              <tr key={item.id}>
+                <Td label="Name" className="font-medium text-slate-900">
+                  {item.fullName}
+                </Td>
+                <Td label="Email">{item.email}</Td>
+                <Td label="Role">
+                  <Badge tone={item.role === "ADMIN" ? "indigo" : "slate"}>
+                    {item.role === "ADMIN" ? "Administrator" : "Recruiter"}
+                  </Badge>
+                </Td>
+                <Td label="Status">
+                  <Badge tone={item.isActive ? "green" : "slate"}>
+                    {item.isActive ? "Active" : "Inactive"}
+                  </Badge>
+                </Td>
+                <Td className="text-right">
+                  {canManage && (
+                    <button
+                      type="button"
+                      onClick={() => setEditing(item)}
+                      className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
+                    >
+                      Edit
+                    </button>
+                  )}
+                </Td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      )}
 
       <Dialog
         open={editing !== null}

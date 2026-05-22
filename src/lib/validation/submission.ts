@@ -82,10 +82,15 @@ export type SubmissionInput = z.infer<typeof submissionSchema>;
 
 /**
  * Editing an existing submission. Candidate, job, and submitting recruiter are
- * fixed at creation, so only the rate, résumé, and notes are editable.
+ * fixed at creation, so only the submitted date, rate, résumé, and notes are
+ * editable.
  */
 export const submissionEditSchema = z
-  .object(resumeFields)
+  .object({
+    ...resumeFields,
+    // datetime-local string → Date; an empty/invalid value fails validation.
+    submittedAt: z.coerce.date(),
+  })
   .superRefine(refineResumeChoice);
 
 export type SubmissionEditInput = z.infer<typeof submissionEditSchema>;

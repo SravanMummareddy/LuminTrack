@@ -27,6 +27,7 @@ export const candidateSchema = z
     skills: z.array(z.string().trim().min(1)).max(60).default([]),
     linkedinUrl: optionalUrl,
     notes: optionalText,
+    isActive: z.boolean(),
   })
   .refine((d) => Boolean(d.email || d.phone), {
     message: "Enter at least an email address or a phone number.",

@@ -37,6 +37,7 @@ export default async function CandidatesPage({
     workAuthorization: clean(sp.workAuthorization),
     currentCompany: clean(sp.currentCompany),
     minExperience: clean(sp.minExperience),
+    status: clean(sp.status),
     preset: clean(sp.preset),
     from: clean(sp.from),
     to: clean(sp.to),
@@ -58,6 +59,12 @@ export default async function CandidatesPage({
     workAuthorization: current.workAuthorization,
     currentCompany: current.currentCompany,
     minExperience: minExp != null && !Number.isNaN(minExp) ? minExp : undefined,
+    isActive:
+      current.status === "active"
+        ? true
+        : current.status === "inactive"
+          ? false
+          : undefined,
     createdRange: parseDateRange({
       preset: current.preset,
       from: current.from,
@@ -78,6 +85,7 @@ export default async function CandidatesPage({
       current.workAuthorization ||
       current.currentCompany ||
       current.minExperience ||
+      current.status ||
       (current.preset && current.preset !== "all"),
   );
 
@@ -138,12 +146,15 @@ export default async function CandidatesPage({
               {candidates.map((c) => (
                 <tr key={c.id} className="hover:bg-slate-50">
                   <Td heading>
-                    <Link
-                      href={`/candidates/${c.id}`}
-                      className={`${cardLink} font-medium text-indigo-600 hover:underline`}
-                    >
-                      {c.fullName}
-                    </Link>
+                    <span className="flex items-center gap-2">
+                      <Link
+                        href={`/candidates/${c.id}`}
+                        className={`${cardLink} font-medium text-indigo-600 hover:underline`}
+                      >
+                        {c.fullName}
+                      </Link>
+                      {!c.isActive && <Badge tone="slate">Inactive</Badge>}
+                    </span>
                   </Td>
                   <Td label="Email" secondary>
                     {c.email || "—"}

@@ -18,6 +18,7 @@ import {
   JOB_STATUS_TONE,
   SUBMISSION_STATUS_LABEL,
   SUBMISSION_STATUS_TONE,
+  jobSourceLabel,
 } from "@/lib/labels";
 import { formatDate, formatRate } from "@/lib/format";
 
@@ -123,9 +124,7 @@ export default async function JobDetailPage({
         <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <SummaryItem label="Client">{job.client.name}</SummaryItem>
           <SummaryItem label="Vendor">{job.vendor.name}</SummaryItem>
-          <SummaryItem label="Sister company source">
-            {job.sisterCompanySource.name}
-          </SummaryItem>
+          <SummaryItem label="Source">{jobSourceLabel(job)}</SummaryItem>
           <SummaryItem label="Location">{job.location || "—"}</SummaryItem>
           <SummaryItem label="Vendor rate">{formatRate(job.vendorRate)}</SummaryItem>
           <SummaryItem label="Candidate rate">

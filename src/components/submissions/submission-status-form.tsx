@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Select, Textarea, Input } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
 import { changeSubmissionStatus } from "@/server/actions/submissions";
@@ -13,6 +13,15 @@ import {
 import type { SubmissionStatus } from "@/generated/prisma/enums";
 
 const labelClass = "mb-1 block text-xs font-medium text-slate-500";
+
+/** Current local date/time as a `datetime-local` input value. */
+function nowDateTimeLocal(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours(),
+  )}:${pad(d.getMinutes())}`;
+}
 
 /**
  * Status update control on the submission detail page. Alongside the new
@@ -33,6 +42,14 @@ export function SubmissionStatusForm({
   const [eventAt, setEventAt] = useState("");
   const [note, setNote] = useState("");
   const [reason, setReason] = useState("");
+
+  // Default "when this happened" to now. This must run after mount, not in a
+  // useState initializer: the client's local "now" is unknown during SSR, so
+  // seeding it on the server would trip a hydration mismatch on the input.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only initial value
+    setEventAt(nowDateTimeLocal());
+  }, []);
 
   const showReason = selected === "REJECTED" || selected === "ON_HOLD";
 
@@ -74,8 +91,8 @@ export function SubmissionStatusForm({
         </Button>
       </div>
       <p className="text-xs text-slate-400">
-        Set &ldquo;when this happened&rdquo; only if the change occurred earlier
-        than now — otherwise leave it blank.
+        &ldquo;When this happened&rdquo; defaults to now — adjust it if the
+        change actually happened earlier.
       </p>
 
       {showReason && (

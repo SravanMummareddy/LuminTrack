@@ -1,18 +1,25 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Field, Input, Textarea } from "@/components/ui/field";
 import { Table, Th, Td } from "@/components/ui/table";
+import {
+  SettingsListFilter,
+  type StatusFilter,
+} from "@/components/settings/settings-list-filter";
 import { saveClient } from "@/server/actions/org";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
 
 export type ClientRow = {
   id: string;
   name: string;
+  contactPerson: string | null;
+  email: string | null;
+  phone: string | null;
   location: string | null;
   notes: string | null;
   isActive: boolean;
@@ -20,6 +27,18 @@ export type ClientRow = {
 
 export function ClientSection({ items }: { items: ClientRow[] }) {
   const [editing, setEditing] = useState<ClientRow | "new" | null>(null);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<StatusFilter>("all");
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return items.filter((it) => {
+      if (status === "active" && !it.isActive) return false;
+      if (status === "inactive" && it.isActive) return false;
+      if (q && !it.name.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [items, search, status]);
 
   return (
     <section className="space-y-3">
@@ -33,26 +52,44 @@ export function ClientSection({ items }: { items: ClientRow[] }) {
         </Button>
       </div>
 
+      {items.length > 0 && (
+        <SettingsListFilter
+          search={search}
+          onSearchChange={setSearch}
+          status={status}
+          onStatusChange={setStatus}
+          searchPlaceholder="Search clients…"
+        />
+      )}
+
       {items.length === 0 ? (
         <p className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-400">
           No clients yet.
+        </p>
+      ) : filtered.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-400">
+          No clients match these filters.
         </p>
       ) : (
         <Table>
           <thead className="border-b border-slate-200 bg-slate-50">
             <tr>
               <Th>Name</Th>
+              <Th>Contact</Th>
+              <Th>Email</Th>
               <Th>Location</Th>
               <Th>Status</Th>
               <Th />
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {items.map((item) => (
+            {filtered.map((item) => (
               <tr key={item.id}>
                 <Td label="Name" className="font-medium text-slate-900">
                   {item.name}
                 </Td>
+                <Td label="Contact">{item.contactPerson || "—"}</Td>
+                <Td label="Email">{item.email || "—"}</Td>
                 <Td label="Location">{item.location || "—"}</Td>
                 <Td label="Status">
                   <Badge tone={item.isActive ? "green" : "slate"}>
@@ -110,6 +147,32 @@ function ClientForm({
       <Field label="Client name" htmlFor="name" required error={state.fieldErrors?.name}>
         <Input id="name" name="name" defaultValue={entity?.name ?? ""} required />
       </Field>
+
+      <Field
+        label="Contact person"
+        htmlFor="contactPerson"
+        error={state.fieldErrors?.contactPerson}
+      >
+        <Input
+          id="contactPerson"
+          name="contactPerson"
+          defaultValue={entity?.contactPerson ?? ""}
+        />
+      </Field>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Email" htmlFor="email" error={state.fieldErrors?.email}>
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            defaultValue={entity?.email ?? ""}
+          />
+        </Field>
+        <Field label="Phone" htmlFor="phone" error={state.fieldErrors?.phone}>
+          <Input id="phone" name="phone" defaultValue={entity?.phone ?? ""} />
+        </Field>
+      </div>
 
       <Field label="Location" htmlFor="location" error={state.fieldErrors?.location}>
         <Input id="location" name="location" defaultValue={entity?.location ?? ""} />

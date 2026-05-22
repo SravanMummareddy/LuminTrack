@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +12,10 @@ import {
   INTERVIEW_TYPE_LABEL,
   INTERVIEW_RESULTS,
   INTERVIEW_RESULT_LABEL,
+  INTERVIEW_MODES,
+  INTERVIEW_MODE_LABEL,
+  INTERVIEW_PLATFORMS,
+  INTERVIEW_PLATFORM_LABEL,
 } from "@/lib/labels";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
 import type { InterviewType, InterviewResult } from "@/generated/prisma/enums";
@@ -22,6 +26,8 @@ export type InterviewRoundData = {
   roundName: string;
   interviewType: InterviewType;
   interviewerName: string | null;
+  interviewMode: string | null;
+  interviewPlatform: string | null;
   scheduledAt: Date | string | null;
   result: InterviewResult;
   feedback: string | null;
@@ -60,6 +66,8 @@ export function InterviewRoundForm({
   }, [state.ok, onDone]);
 
   const errors = state.fieldErrors ?? {};
+  // The video platform field only shows when the mode is a video call.
+  const [mode, setMode] = useState(round?.interviewMode ?? "");
 
   return (
     <form action={formAction} className="space-y-4">
@@ -118,6 +126,47 @@ export function InterviewRoundForm({
             ))}
           </Select>
         </Field>
+
+        <Field
+          label="Interview mode"
+          htmlFor="interviewMode"
+          error={errors.interviewMode}
+        >
+          <Select
+            id="interviewMode"
+            name="interviewMode"
+            value={mode}
+            onChange={(e) => setMode(e.target.value)}
+          >
+            <option value="">Not specified</option>
+            {INTERVIEW_MODES.map((m) => (
+              <option key={m} value={m}>
+                {INTERVIEW_MODE_LABEL[m]}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        {mode === "VIDEO" && (
+          <Field
+            label="Video platform"
+            htmlFor="interviewPlatform"
+            error={errors.interviewPlatform}
+          >
+            <Select
+              id="interviewPlatform"
+              name="interviewPlatform"
+              defaultValue={round?.interviewPlatform ?? ""}
+            >
+              <option value="">Not specified</option>
+              {INTERVIEW_PLATFORMS.map((p) => (
+                <option key={p} value={p}>
+                  {INTERVIEW_PLATFORM_LABEL[p]}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
 
         <Field
           label="Interviewer name"

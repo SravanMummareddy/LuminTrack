@@ -30,6 +30,7 @@ function readCandidate(formData: FormData) {
     skills: parseSkills(formData.get("skills")),
     linkedinUrl: formData.get("linkedinUrl") ?? "",
     notes: formData.get("notes") ?? "",
+    isActive: formData.get("isActive") != null,
   });
 }
 
@@ -46,6 +47,7 @@ function candidateData(d: CandidateInput) {
     skills: d.skills,
     linkedinUrl: d.linkedinUrl ?? null,
     notes: d.notes ?? null,
+    isActive: d.isActive,
   };
 }
 
@@ -133,6 +135,7 @@ export async function updateCandidate(
   compare("skills", existing.skills.join(", "), d.skills.join(", "));
   compare("LinkedIn", existing.linkedinUrl, d.linkedinUrl);
   compare("notes", existing.notes, d.notes);
+  compare("status", existing.isActive, d.isActive);
 
   await prisma.$transaction(async (tx) => {
     await tx.candidate.update({

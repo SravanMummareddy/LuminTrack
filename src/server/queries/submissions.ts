@@ -1,6 +1,7 @@
 import { prisma } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
 import type { SubmissionStatus } from "@/generated/prisma/enums";
+import { OTHER_SOURCE } from "@/lib/labels";
 import { PAGE_SIZE, type DateRange, type SortDir, type SortState } from "@/lib/filters";
 
 export type SubmissionListFilters = {
@@ -48,7 +49,11 @@ export async function listSubmissions(filters: SubmissionListFilters) {
   if (filters.clientId) job.clientId = filters.clientId;
   if (filters.vendorId) job.vendorId = filters.vendorId;
   if (filters.sisterCompanySourceId)
-    job.sisterCompanySourceId = filters.sisterCompanySourceId;
+    // OTHER_SOURCE matches jobs with a free-text source (no managed-source FK).
+    job.sisterCompanySourceId =
+      filters.sisterCompanySourceId === OTHER_SOURCE
+        ? null
+        : filters.sisterCompanySourceId;
   if (Object.keys(job).length) where.job = job;
 
   if (filters.q)
@@ -126,6 +131,7 @@ export function getSubmissionForEdit(id: string) {
       id: true,
       candidateRate: true,
       submissionNotes: true,
+      submittedAt: true,
       candidateResumeId: true,
       resumeDriveLink: true,
       job: { select: { title: true } },
@@ -172,6 +178,7 @@ export function getCandidateSubmissions(candidateId: string) {
           client: { select: { name: true } },
           vendor: { select: { name: true } },
           sisterCompanySource: { select: { name: true } },
+          sourceOther: true,
         },
       },
       submittedBy: { select: { fullName: true } },

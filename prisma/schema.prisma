@@ -113,6 +113,7 @@ model SisterCompanySource {
   contactPerson String?
   email         String?
   phone         String?
+  location      String?
   notes         String?
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
@@ -122,13 +123,16 @@ model SisterCompanySource {
 }
 
 model Client {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  location  String?
-  notes     String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @default(cuid())
+  name          String   @unique
+  contactPerson String?
+  email         String?
+  phone         String?
+  location      String?
+  notes         String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   jobs Job[]
 }
@@ -139,6 +143,7 @@ model Vendor {
   contactPerson String?
   email         String?
   phone         String?
+  location      String?
   notes         String?
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
@@ -160,13 +165,16 @@ model Job {
   updatedAt     DateTime  @updatedAt
 
   clientId              String
-  client                Client              @relation(fields: [clientId], references: [id])
+  client                Client               @relation(fields: [clientId], references: [id])
   vendorId              String
-  vendor                Vendor              @relation(fields: [vendorId], references: [id])
-  sisterCompanySourceId String
-  sisterCompanySource   SisterCompanySource @relation(fields: [sisterCompanySourceId], references: [id])
+  vendor                Vendor               @relation(fields: [vendorId], references: [id])
+  // Either a managed source (FK) or a free-text source typed on the job — see
+  // `sourceOther`. Exactly one is set; `jobSourceLabel()` resolves the display name.
+  sisterCompanySourceId String?
+  sisterCompanySource   SisterCompanySource? @relation(fields: [sisterCompanySourceId], references: [id])
+  sourceOther           String?
   createdById           String
-  createdBy             User                @relation(fields: [createdById], references: [id])
+  createdBy             User                 @relation(fields: [createdById], references: [id])
 
   assignments JobAssignment[]
   submissions Submission[]
@@ -208,6 +216,7 @@ model Candidate {
   linkedinUrl         String?
   resumeBlobUrl       String?
   notes               String?
+  isActive            Boolean  @default(true)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -281,6 +290,11 @@ model InterviewRound {
   roundOrder     Int
   roundName      String
   interviewType  InterviewType
+  // How the interview is conducted. `interviewMode` is one of IN_PERSON / PHONE /
+  // VIDEO; `interviewPlatform` (Teams / Google Meet / Zoom / Other) is only set
+  // when the mode is VIDEO. Plain strings — see INTERVIEW_MODES in src/lib/labels.ts.
+  interviewMode     String?
+  interviewPlatform String?
   interviewerName String?
   scheduledAt    DateTime?
   result         InterviewResult @default(WAITING)

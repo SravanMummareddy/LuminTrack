@@ -1,10 +1,10 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import Link from "next/link";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { Button, buttonClass } from "@/components/ui/button";
-import { JOB_STATUSES, JOB_STATUS_LABEL } from "@/lib/labels";
+import { JOB_STATUSES, JOB_STATUS_LABEL, OTHER_SOURCE } from "@/lib/labels";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 
 type Option = { id: string; name: string; isActive: boolean };
@@ -16,6 +16,7 @@ export type JobFormValues = {
   clientId: string;
   vendorId: string;
   sisterCompanySourceId: string;
+  sourceOther: string;
   status: string;
   location: string;
   vendorRate: string;
@@ -52,6 +53,17 @@ export function JobForm({
   const errors = state.fieldErrors ?? {};
   const assigned = new Set(values?.recruiterIds ?? []);
   const cancelHref = values ? `/jobs/${values.id}` : "/jobs";
+
+  // The source is either a managed source (FK) or a free-text entry. When a
+  // saved job has no FK but a `sourceOther`, the select shows the "Other" option.
+  const [sourceValue, setSourceValue] = useState(
+    values?.sisterCompanySourceId
+      ? values.sisterCompanySourceId
+      : values?.sourceOther
+        ? OTHER_SOURCE
+        : "",
+  );
+  const isOtherSource = sourceValue === OTHER_SOURCE;
 
   return (
     <form action={formAction} className="space-y-5">
@@ -99,7 +111,7 @@ export function JobForm({
         </Field>
 
         <Field
-          label="Sister company source"
+          label="Source"
           htmlFor="sisterCompanySourceId"
           required
           error={errors.sisterCompanySourceId}
@@ -107,7 +119,8 @@ export function JobForm({
           <Select
             id="sisterCompanySourceId"
             name="sisterCompanySourceId"
-            defaultValue={values?.sisterCompanySourceId ?? ""}
+            value={sourceValue}
+            onChange={(e) => setSourceValue(e.target.value)}
             required
           >
             <option value="" disabled>
@@ -118,6 +131,7 @@ export function JobForm({
                 {optionLabel(s.name, s.isActive)}
               </option>
             ))}
+            <option value={OTHER_SOURCE}>Other — enter manually</option>
           </Select>
         </Field>
 
@@ -157,6 +171,22 @@ export function JobForm({
           />
         </Field>
       </div>
+
+      {isOtherSource && (
+        <Field
+          label="Source name"
+          htmlFor="sourceOther"
+          required
+          error={errors.sourceOther}
+        >
+          <Input
+            id="sourceOther"
+            name="sourceOther"
+            defaultValue={values?.sourceOther ?? ""}
+            placeholder="e.g. LinkedIn, referral, direct application"
+          />
+        </Field>
+      )}
 
       <Field label="Location" htmlFor="location" error={errors.location}>
         <Input

@@ -7,7 +7,7 @@ import { requireUser } from "@/lib/session";
 import { logActivity } from "@/server/activity";
 import { jobSchema, JOB_STATUS_VALUES } from "@/lib/validation/job";
 import { toFieldErrors } from "@/lib/validation/common";
-import { JOB_STATUS_LABEL } from "@/lib/labels";
+import { JOB_STATUS_LABEL, OTHER_SOURCE } from "@/lib/labels";
 import type { FormState } from "@/lib/form-state";
 
 function readJob(formData: FormData) {
@@ -16,6 +16,7 @@ function readJob(formData: FormData) {
     clientId: formData.get("clientId") ?? "",
     vendorId: formData.get("vendorId") ?? "",
     sisterCompanySourceId: formData.get("sisterCompanySourceId") ?? "",
+    sourceOther: formData.get("sourceOther") ?? "",
     status: formData.get("status") ?? "OPEN",
     location: formData.get("location") ?? "",
     vendorRate: formData.get("vendorRate") ?? "",
@@ -38,6 +39,7 @@ export async function createJob(
       fieldErrors: toFieldErrors(parsed.error),
     };
   const d = parsed.data;
+  const isOtherSource = d.sisterCompanySourceId === OTHER_SOURCE;
 
   const job = await prisma.$transaction(async (tx) => {
     const created = await tx.job.create({
@@ -45,7 +47,8 @@ export async function createJob(
         title: d.title,
         clientId: d.clientId,
         vendorId: d.vendorId,
-        sisterCompanySourceId: d.sisterCompanySourceId,
+        sisterCompanySourceId: isOtherSource ? null : d.sisterCompanySourceId,
+        sourceOther: isOtherSource ? (d.sourceOther ?? null) : null,
         status: d.status,
         location: d.location ?? null,
         vendorRate: d.vendorRate ?? null,
@@ -90,6 +93,9 @@ export async function updateJob(
       fieldErrors: toFieldErrors(parsed.error),
     };
   const d = parsed.data;
+  const isOtherSource = d.sisterCompanySourceId === OTHER_SOURCE;
+  const nextSourceId = isOtherSource ? null : d.sisterCompanySourceId;
+  const nextSourceOther = isOtherSource ? (d.sourceOther ?? null) : null;
 
   const existing = await prisma.job.findUnique({
     where: { id: jobId },
@@ -105,7 +111,11 @@ export async function updateJob(
   compare("title", existing.title, d.title);
   compare("client", existing.clientId, d.clientId);
   compare("vendor", existing.vendorId, d.vendorId);
-  compare("source", existing.sisterCompanySourceId, d.sisterCompanySourceId);
+  compare(
+    "source",
+    existing.sisterCompanySourceId ?? existing.sourceOther,
+    nextSourceId ?? nextSourceOther,
+  );
   compare("status", existing.status, d.status);
   compare("location", existing.location, d.location);
   compare("vendor rate", existing.vendorRate?.toString(), d.vendorRate);
@@ -136,7 +146,8 @@ export async function updateJob(
         title: d.title,
         clientId: d.clientId,
         vendorId: d.vendorId,
-        sisterCompanySourceId: d.sisterCompanySourceId,
+        sisterCompanySourceId: nextSourceId,
+        sourceOther: nextSourceOther,
         status: d.status,
         location: d.location ?? null,
         vendorRate: d.vendorRate ?? null,

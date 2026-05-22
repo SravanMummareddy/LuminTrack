@@ -1,7 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 import type { JobStatus, SubmissionStatus } from "@/generated/prisma/enums";
 import type { BadgeTone } from "@/lib/labels";
-import { JOB_STATUSES, SUBMISSION_STATUSES } from "@/lib/labels";
+import { JOB_STATUSES, SUBMISSION_STATUSES, OTHER_SOURCE } from "@/lib/labels";
 import { parseDateRange, type DateRange } from "@/lib/filters";
 
 /** Hex equivalents of the badge tones, for Recharts (which needs real colours). */
@@ -75,7 +75,8 @@ export function buildJobWhere(f: AnalyticsFilters): Prisma.JobWhereInput {
   if (f.clientId) where.clientId = f.clientId;
   if (f.vendorId) where.vendorId = f.vendorId;
   if (f.sisterCompanySourceId)
-    where.sisterCompanySourceId = f.sisterCompanySourceId;
+    where.sisterCompanySourceId =
+      f.sisterCompanySourceId === OTHER_SOURCE ? null : f.sisterCompanySourceId;
   if (f.recruiterId)
     where.assignments = { some: { recruiterId: f.recruiterId } };
   return where;
@@ -94,7 +95,8 @@ export function buildSubmissionWhere(
   if (f.clientId) job.clientId = f.clientId;
   if (f.vendorId) job.vendorId = f.vendorId;
   if (f.sisterCompanySourceId)
-    job.sisterCompanySourceId = f.sisterCompanySourceId;
+    job.sisterCompanySourceId =
+      f.sisterCompanySourceId === OTHER_SOURCE ? null : f.sisterCompanySourceId;
   if (f.jobStatus) job.status = f.jobStatus;
   if (Object.keys(job).length) where.job = job;
 

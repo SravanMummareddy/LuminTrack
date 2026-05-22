@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { optionalText, optionalNonNegativeNumber } from "./common";
+import { OTHER_SOURCE } from "@/lib/labels";
 
 export const JOB_STATUS_VALUES = [
   "OPEN",
@@ -9,18 +10,37 @@ export const JOB_STATUS_VALUES = [
   "CANCELLED",
 ] as const;
 
-export const jobSchema = z.object({
-  title: z.string().trim().min(1, "Job title is required.").max(200),
-  clientId: z.string().min(1, "Select a client."),
-  vendorId: z.string().min(1, "Select a vendor."),
-  sisterCompanySourceId: z.string().min(1, "Select a sister company source."),
-  status: z.enum(JOB_STATUS_VALUES),
-  location: optionalText,
-  vendorRate: optionalNonNegativeNumber,
-  candidateRate: optionalNonNegativeNumber,
-  description: optionalText,
-  notes: optionalText,
-  recruiterIds: z.array(z.string().min(1)).default([]),
-});
+export const jobSchema = z
+  .object({
+    title: z.string().trim().min(1, "Job title is required.").max(200),
+    clientId: z.string().min(1, "Select a client."),
+    vendorId: z.string().min(1, "Select a vendor."),
+    // Either a managed source FK, or the OTHER_SOURCE sentinel — in which case
+    // `sourceOther` carries the free-text name (see the superRefine below).
+    sisterCompanySourceId: z.string().default(""),
+    sourceOther: optionalText,
+    status: z.enum(JOB_STATUS_VALUES),
+    location: optionalText,
+    vendorRate: optionalNonNegativeNumber,
+    candidateRate: optionalNonNegativeNumber,
+    description: optionalText,
+    notes: optionalText,
+    recruiterIds: z.array(z.string().min(1)).default([]),
+  })
+  .superRefine((val, ctx) => {
+    if (!val.sisterCompanySourceId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["sisterCompanySourceId"],
+        message: "Select a source.",
+      });
+    } else if (val.sisterCompanySourceId === OTHER_SOURCE && !val.sourceOther) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["sourceOther"],
+        message: "Enter the source name.",
+      });
+    }
+  });
 
 export type JobInput = z.infer<typeof jobSchema>;

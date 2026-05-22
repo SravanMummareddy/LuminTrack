@@ -1,6 +1,7 @@
 import { prisma } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
 import type { JobStatus } from "@/generated/prisma/enums";
+import { OTHER_SOURCE } from "@/lib/labels";
 import { PAGE_SIZE, type DateRange, type SortDir, type SortState } from "@/lib/filters";
 
 export type JobListFilters = {
@@ -41,7 +42,11 @@ export async function listJobs(filters: JobListFilters) {
   if (filters.clientId) where.clientId = filters.clientId;
   if (filters.vendorId) where.vendorId = filters.vendorId;
   if (filters.sisterCompanySourceId)
-    where.sisterCompanySourceId = filters.sisterCompanySourceId;
+    // OTHER_SOURCE matches jobs with a free-text source (no managed-source FK).
+    where.sisterCompanySourceId =
+      filters.sisterCompanySourceId === OTHER_SOURCE
+        ? null
+        : filters.sisterCompanySourceId;
   if (filters.status) where.status = filters.status;
   if (filters.location)
     where.location = { contains: filters.location, mode: "insensitive" };

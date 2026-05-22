@@ -13,6 +13,7 @@ function readContactOrg(formData: FormData) {
     contactPerson: formData.get("contactPerson") ?? "",
     email: formData.get("email") ?? "",
     phone: formData.get("phone") ?? "",
+    location: formData.get("location") ?? "",
     notes: formData.get("notes") ?? "",
     isActive: formData.get("isActive") != null,
   });
@@ -32,6 +33,7 @@ export async function saveSisterCompany(
     contactPerson: parsed.data.contactPerson ?? null,
     email: parsed.data.email ?? null,
     phone: parsed.data.phone ?? null,
+    location: parsed.data.location ?? null,
     notes: parsed.data.notes ?? null,
     isActive: parsed.data.isActive,
   };
@@ -41,7 +43,7 @@ export async function saveSisterCompany(
     else await prisma.sisterCompanySource.create({ data });
   } catch (error) {
     if (isUniqueConstraintError(error))
-      return { fieldErrors: { name: "A sister company with this name already exists." } };
+      return { fieldErrors: { name: "A source with this name already exists." } };
     throw error;
   }
 
@@ -63,6 +65,7 @@ export async function saveVendor(
     contactPerson: parsed.data.contactPerson ?? null,
     email: parsed.data.email ?? null,
     phone: parsed.data.phone ?? null,
+    location: parsed.data.location ?? null,
     notes: parsed.data.notes ?? null,
     isActive: parsed.data.isActive,
   };
@@ -88,6 +91,9 @@ export async function saveClient(
   const id = String(formData.get("id") ?? "").trim();
   const parsed = clientSchema.safeParse({
     name: formData.get("name") ?? "",
+    contactPerson: formData.get("contactPerson") ?? "",
+    email: formData.get("email") ?? "",
+    phone: formData.get("phone") ?? "",
     location: formData.get("location") ?? "",
     notes: formData.get("notes") ?? "",
     isActive: formData.get("isActive") != null,
@@ -96,6 +102,9 @@ export async function saveClient(
 
   const data = {
     name: parsed.data.name,
+    contactPerson: parsed.data.contactPerson ?? null,
+    email: parsed.data.email ?? null,
+    phone: parsed.data.phone ?? null,
     location: parsed.data.location ?? null,
     notes: parsed.data.notes ?? null,
     isActive: parsed.data.isActive,

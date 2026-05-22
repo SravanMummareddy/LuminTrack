@@ -96,6 +96,65 @@ export const SUBMISSION_STAGE_INDEX: Record<SubmissionStatus, number> = {
   JOINED: 6,
 };
 
+// ─── Job source ──────────────────────────────────────────────────────────────
+
+/** Select sentinel for a manually-typed job source (vs. a managed source FK). */
+export const OTHER_SOURCE = "__OTHER__";
+
+/** A job's display source — a managed source's name, or its free-text fallback. */
+export function jobSourceLabel(job: {
+  sisterCompanySource: { name: string } | null;
+  sourceOther: string | null;
+}): string {
+  return job.sisterCompanySource?.name ?? job.sourceOther ?? "—";
+}
+
+// ─── Interview mode & platform ───────────────────────────────────────────────
+
+/**
+ * How an interview round is conducted. Plain strings (not a DB enum) so the
+ * list can evolve without a migration — see InterviewRound in the schema.
+ */
+export const INTERVIEW_MODES = ["IN_PERSON", "PHONE", "VIDEO"] as const;
+export type InterviewMode = (typeof INTERVIEW_MODES)[number];
+
+export const INTERVIEW_MODE_LABEL: Record<InterviewMode, string> = {
+  IN_PERSON: "In person",
+  PHONE: "Phone call",
+  VIDEO: "Video call",
+};
+
+/** Video platform — only meaningful when the interview mode is VIDEO. */
+export const INTERVIEW_PLATFORMS = [
+  "MICROSOFT_TEAMS",
+  "GOOGLE_MEET",
+  "ZOOM",
+  "OTHER",
+] as const;
+export type InterviewPlatform = (typeof INTERVIEW_PLATFORMS)[number];
+
+export const INTERVIEW_PLATFORM_LABEL: Record<InterviewPlatform, string> = {
+  MICROSOFT_TEAMS: "Microsoft Teams",
+  GOOGLE_MEET: "Google Meet",
+  ZOOM: "Zoom",
+  OTHER: "Other",
+};
+
+/** Display label for an interview round's mode, with the platform for video calls. */
+export function interviewModeLabel(
+  mode: string | null,
+  platform: string | null,
+): string {
+  if (!mode) return "—";
+  const modeText = INTERVIEW_MODE_LABEL[mode as InterviewMode] ?? mode;
+  if (mode === "VIDEO" && platform) {
+    const platformText =
+      INTERVIEW_PLATFORM_LABEL[platform as InterviewPlatform] ?? platform;
+    return `${modeText} · ${platformText}`;
+  }
+  return modeText;
+}
+
 /** Display order for interview types across forms and tables. */
 export const INTERVIEW_TYPES: InterviewType[] = [
   "VENDOR_SCREENING",

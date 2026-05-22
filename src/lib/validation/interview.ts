@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { optionalText, optionalDateTime } from "./common";
+import { optionalText, optionalDateTime, emptyToUndefined } from "./common";
+import { INTERVIEW_MODES, INTERVIEW_PLATFORMS } from "@/lib/labels";
 
 export const INTERVIEW_TYPE_VALUES = [
   "VENDOR_SCREENING",
@@ -19,15 +20,34 @@ export const INTERVIEW_RESULT_VALUES = [
   "COMPLETED",
 ] as const;
 
-export const interviewRoundSchema = z.object({
-  submissionId: z.string().min(1, "Missing submission reference."),
-  roundName: z.string().trim().min(1, "Round name is required.").max(120),
-  interviewType: z.enum(INTERVIEW_TYPE_VALUES),
-  result: z.enum(INTERVIEW_RESULT_VALUES),
-  interviewerName: optionalText,
-  scheduledAt: optionalDateTime,
-  feedback: optionalText,
-  notes: optionalText,
-});
+export const interviewRoundSchema = z
+  .object({
+    submissionId: z.string().min(1, "Missing submission reference."),
+    roundName: z.string().trim().min(1, "Round name is required.").max(120),
+    interviewType: z.enum(INTERVIEW_TYPE_VALUES),
+    result: z.enum(INTERVIEW_RESULT_VALUES),
+    interviewerName: optionalText,
+    // How the interview is held; `interviewPlatform` only applies to VIDEO.
+    interviewMode: z.preprocess(
+      emptyToUndefined,
+      z.enum(INTERVIEW_MODES).optional(),
+    ),
+    interviewPlatform: z.preprocess(
+      emptyToUndefined,
+      z.enum(INTERVIEW_PLATFORMS).optional(),
+    ),
+    scheduledAt: optionalDateTime,
+    feedback: optionalText,
+    notes: optionalText,
+  })
+  .superRefine((d, ctx) => {
+    if (d.interviewPlatform && d.interviewMode !== "VIDEO") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["interviewPlatform"],
+        message: "A platform applies to video interviews only.",
+      });
+    }
+  });
 
 export type InterviewRoundInput = z.infer<typeof interviewRoundSchema>;

@@ -28,6 +28,7 @@ export default async function EditCandidatePage({
     skills: candidate.skills,
     linkedinUrl: candidate.linkedinUrl ?? "",
     notes: candidate.notes ?? "",
+    isActive: candidate.isActive,
   };
 
   return (

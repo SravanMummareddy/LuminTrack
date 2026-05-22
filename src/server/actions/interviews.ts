@@ -16,6 +16,8 @@ function readRound(formData: FormData) {
     interviewType: formData.get("interviewType") ?? "",
     result: formData.get("result") ?? "WAITING",
     interviewerName: formData.get("interviewerName") ?? "",
+    interviewMode: formData.get("interviewMode") ?? "",
+    interviewPlatform: formData.get("interviewPlatform") ?? "",
     scheduledAt: formData.get("scheduledAt") ?? "",
     feedback: formData.get("feedback") ?? "",
     notes: formData.get("notes") ?? "",
@@ -58,6 +60,9 @@ export async function createInterviewRound(
         interviewType: d.interviewType,
         result: d.result,
         interviewerName: d.interviewerName ?? null,
+        interviewMode: d.interviewMode ?? null,
+        interviewPlatform:
+          d.interviewMode === "VIDEO" ? (d.interviewPlatform ?? null) : null,
         scheduledAt: d.scheduledAt ?? null,
         feedback: d.feedback ?? null,
         notes: d.notes ?? null,
@@ -110,6 +115,9 @@ export async function updateInterviewRound(
         interviewType: d.interviewType,
         result: d.result,
         interviewerName: d.interviewerName ?? null,
+        interviewMode: d.interviewMode ?? null,
+        interviewPlatform:
+          d.interviewMode === "VIDEO" ? (d.interviewPlatform ?? null) : null,
         scheduledAt: d.scheduledAt ?? null,
         feedback: d.feedback ?? null,
         notes: d.notes ?? null,

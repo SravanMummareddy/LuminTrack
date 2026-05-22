@@ -11,7 +11,11 @@ import { NotesSection } from "@/components/notes/notes-section";
 import { getSubmissionDetail } from "@/server/queries/submissions";
 import { getTimelineFor } from "@/server/queries/timeline";
 import { getNotesFor } from "@/server/queries/notes";
-import { SUBMISSION_STATUS_LABEL, SUBMISSION_STATUS_TONE } from "@/lib/labels";
+import {
+  SUBMISSION_STATUS_LABEL,
+  SUBMISSION_STATUS_TONE,
+  jobSourceLabel,
+} from "@/lib/labels";
 import { formatDate, formatRate } from "@/lib/format";
 import { toDrivePreviewUrl } from "@/lib/resume";
 
@@ -134,9 +138,7 @@ export default async function SubmissionDetailPage({
           </SummaryItem>
           <SummaryItem label="Client">{job.client.name}</SummaryItem>
           <SummaryItem label="Vendor">{job.vendor.name}</SummaryItem>
-          <SummaryItem label="Sister company source">
-            {job.sisterCompanySource.name}
-          </SummaryItem>
+          <SummaryItem label="Source">{jobSourceLabel(job)}</SummaryItem>
           <SummaryItem label="Submitted by">
             {submission.submittedBy.fullName}
           </SummaryItem>

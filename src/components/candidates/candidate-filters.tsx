@@ -18,6 +18,7 @@ export function CandidateFilters({
     workAuthorization?: string;
     currentCompany?: string;
     minExperience?: string;
+    status?: string;
     preset?: string;
     from?: string;
     to?: string;
@@ -49,6 +50,11 @@ export function CandidateFilters({
       keys: ["minExperience"],
       label: `Min exp: ${current.minExperience} yrs`,
     });
+  if (current.status === "active" || current.status === "inactive")
+    chips.push({
+      keys: ["status"],
+      label: `Status: ${current.status === "active" ? "Active" : "Inactive"}`,
+    });
   if (presetLabel)
     chips.push({ keys: ["preset", "from", "to"], label: `Date: ${presetLabel}` });
 
@@ -57,6 +63,7 @@ export function CandidateFilters({
     (current.workAuthorization ? 1 : 0) +
     (current.currentCompany ? 1 : 0) +
     (current.minExperience ? 1 : 0) +
+    (current.status ? 1 : 0) +
     (presetLabel ? 1 : 0);
 
   const primary = (
@@ -133,6 +140,17 @@ export function CandidateFilters({
           step="0.1"
           defaultValue={current.minExperience ?? ""}
         />
+      </div>
+
+      <div>
+        <label className={labelClass} htmlFor="f-status">
+          Status
+        </label>
+        <Select id="f-status" name="status" defaultValue={current.status ?? ""}>
+          <option value="">All candidates</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </Select>
       </div>
 
       <div>

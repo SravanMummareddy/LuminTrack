@@ -187,7 +187,7 @@ export default async function ReportsPage({
         <DimensionTable rows={data.byVendor} />
       </Card>
 
-      <Card title="Performance by sister company source">
+      <Card title="Performance by source">
         <DimensionTable rows={data.bySource} />
       </Card>
 

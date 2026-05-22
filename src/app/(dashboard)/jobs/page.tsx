@@ -21,7 +21,12 @@ import {
   listUsers,
 } from "@/server/queries/org";
 import { parseDateRange, parseSort, parsePage, PAGE_SIZE } from "@/lib/filters";
-import { JOB_STATUSES, JOB_STATUS_LABEL, JOB_STATUS_TONE } from "@/lib/labels";
+import {
+  JOB_STATUSES,
+  JOB_STATUS_LABEL,
+  JOB_STATUS_TONE,
+  jobSourceLabel,
+} from "@/lib/labels";
 import { formatDate } from "@/lib/format";
 import type { JobStatus } from "@/generated/prisma/enums";
 
@@ -180,7 +185,7 @@ export default async function JobsPage({
                     {job.vendor.name}
                   </Td>
                   <Td label="Source" secondary>
-                    {job.sisterCompanySource.name}
+                    {jobSourceLabel(job)}
                   </Td>
                   <Td label="Location" secondary>
                     {job.location || "—"}
