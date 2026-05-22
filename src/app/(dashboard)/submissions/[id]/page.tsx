@@ -108,9 +108,9 @@ export default async function SubmissionDetailPage({
 
       <Card title="Update status">
         <SubmissionStatusForm
+          key={submission.status}
           submissionId={submission.id}
           status={submission.status}
-          rejectionReason={submission.rejectionReason ?? ""}
         />
       </Card>
 

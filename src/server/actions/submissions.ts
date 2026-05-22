@@ -13,7 +13,7 @@ import { logActivity } from "@/server/activity";
 import {
   submissionSchema,
   submissionEditSchema,
-  SUBMISSION_STATUS_VALUES,
+  statusChangeSchema,
 } from "@/lib/validation/submission";
 import { toFieldErrors } from "@/lib/validation/common";
 import { SUBMISSION_STATUS_LABEL } from "@/lib/labels";
@@ -283,24 +283,37 @@ export async function updateSubmission(
   redirect(`/submissions/${submissionId}`);
 }
 
-/** Manual submission status change from the submission detail page (spec §9.8). */
+/**
+ * Manual submission status change from the submission detail page (spec §9.8).
+ * Optionally records when the event really happened, a note, and (for Rejected
+ * / On Hold) a reason category. Stays `void`-returning — every extra field is
+ * optional, so a parse failure just no-ops.
+ */
 export async function changeSubmissionStatus(formData: FormData): Promise<void> {
   const user = await requireUser();
-  const submissionId = String(formData.get("id") ?? "").trim();
-  const status = String(formData.get("status") ?? "");
-  const rejectionReason = String(formData.get("rejectionReason") ?? "").trim();
-  if (!submissionId) return;
-  if (!(SUBMISSION_STATUS_VALUES as readonly string[]).includes(status)) return;
+  const parsed = statusChangeSchema.safeParse({
+    id: formData.get("id") ?? "",
+    status: formData.get("status") ?? "",
+    eventAt: formData.get("eventAt") ?? "",
+    note: formData.get("note") ?? "",
+    reason: formData.get("reason") ?? "",
+  });
+  if (!parsed.success) return;
+  const d = parsed.data;
 
   const submission = await prisma.submission.findUnique({
-    where: { id: submissionId },
+    where: { id: d.id },
     include: {
       candidate: { select: { fullName: true } },
       job: { select: { title: true } },
     },
   });
-  if (!submission || submission.status === status) return;
-  const next = status as SubmissionStatus;
+  if (!submission || submission.status === d.status) return;
+  const next = d.status as SubmissionStatus;
+
+  // The reason category only applies to the Rejected / On Hold outcomes.
+  const reason =
+    next === "REJECTED" || next === "ON_HOLD" ? (d.reason ?? null) : null;
 
   // Emit the most specific audited action for the milestone statuses.
   const action: ActivityAction =
@@ -316,12 +329,12 @@ export async function changeSubmissionStatus(formData: FormData): Promise<void> 
 
   await prisma.$transaction(async (tx) => {
     await tx.submission.update({
-      where: { id: submissionId },
+      where: { id: d.id },
       data: {
         status: next,
-        ...(next === "REJECTED"
-          ? { rejectionReason: rejectionReason || null }
-          : {}),
+        // The note now carries the free-text detail the old rejection-reason
+        // textarea did, so the detail page's "Rejection reason" block is unchanged.
+        ...(next === "REJECTED" ? { rejectionReason: d.note ?? null } : {}),
       },
     });
     await logActivity(tx, {
@@ -330,13 +343,16 @@ export async function changeSubmissionStatus(formData: FormData): Promise<void> 
       description: `${submission.candidate.fullName} on "${submission.job.title}": status changed from ${SUBMISSION_STATUS_LABEL[submission.status]} to ${SUBMISSION_STATUS_LABEL[next]}`,
       oldValue: SUBMISSION_STATUS_LABEL[submission.status],
       newValue: SUBMISSION_STATUS_LABEL[next],
+      eventAt: d.eventAt ?? null,
+      note: d.note ?? null,
+      reason,
       performedById: user.id,
-      submissionId,
+      submissionId: d.id,
     });
   });
 
   revalidatePath("/submissions");
-  revalidatePath(`/submissions/${submissionId}`);
+  revalidatePath(`/submissions/${d.id}`);
   revalidatePath(`/jobs/${submission.jobId}`);
   revalidatePath(`/candidates/${submission.candidateId}`);
 }

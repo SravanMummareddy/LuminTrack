@@ -8,6 +8,10 @@ export type LogActivityInput = {
   performedById: string;
   oldValue?: string | null;
   newValue?: string | null;
+  // Optional context for a status change — see the Activity model.
+  eventAt?: Date | null;
+  note?: string | null;
+  reason?: string | null;
   // Exactly one of these should be set, matching `entityType`.
   jobId?: string;
   candidateId?: string;
@@ -28,6 +32,9 @@ export function logActivity(db: Prisma.TransactionClient, input: LogActivityInpu
       description: input.description,
       oldValue: input.oldValue ?? null,
       newValue: input.newValue ?? null,
+      eventAt: input.eventAt ?? null,
+      note: input.note ?? null,
+      reason: input.reason ?? null,
       performedById: input.performedById,
       jobId: input.jobId ?? null,
       candidateId: input.candidateId ?? null,

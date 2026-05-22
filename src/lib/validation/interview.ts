@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { optionalText, emptyToUndefined } from "./common";
+import { optionalText, optionalDateTime } from "./common";
 
 export const INTERVIEW_TYPE_VALUES = [
   "VENDOR_SCREENING",
@@ -18,12 +18,6 @@ export const INTERVIEW_RESULT_VALUES = [
   "ON_HOLD",
   "COMPLETED",
 ] as const;
-
-/** Optional datetime — empty allowed, otherwise coerced from a datetime-local string. */
-const optionalDateTime = z.preprocess(
-  emptyToUndefined,
-  z.coerce.date().optional(),
-);
 
 export const interviewRoundSchema = z.object({
   submissionId: z.string().min(1, "Missing submission reference."),

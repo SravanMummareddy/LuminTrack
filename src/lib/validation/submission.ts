@@ -3,8 +3,10 @@ import {
   optionalText,
   optionalUrl,
   optionalNonNegativeNumber,
+  optionalDateTime,
   emptyToUndefined,
 } from "./common";
+import { STATUS_CHANGE_REASONS } from "@/lib/labels";
 
 export const SUBMISSION_STATUS_VALUES = [
   "SUBMITTED",
@@ -87,3 +89,21 @@ export const submissionEditSchema = z
   .superRefine(refineResumeChoice);
 
 export type SubmissionEditInput = z.infer<typeof submissionEditSchema>;
+
+/**
+ * A submission status change with optional context: the real-world date/time
+ * the event happened, a free-text note, and a preset reason category. All three
+ * are optional — the action stays `void`-returning with no error UI.
+ */
+export const statusChangeSchema = z.object({
+  id: z.string().min(1),
+  status: z.enum(SUBMISSION_STATUS_VALUES),
+  eventAt: optionalDateTime,
+  note: optionalText,
+  reason: z.preprocess(
+    emptyToUndefined,
+    z.enum(STATUS_CHANGE_REASONS).optional(),
+  ),
+});
+
+export type StatusChangeInput = z.infer<typeof statusChangeSchema>;

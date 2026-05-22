@@ -149,8 +149,11 @@ as the candidate progresses:
 `Submitted → Resume Picked → Vendor Screening Call → Client Interview →
 Decision (Selected / Rejected / On Hold) → Offer Released → Joined`
 
-Use the **status selector → Update** control. Choosing **Rejected** lets you
-record a rejection reason. Every change is written to the activity timeline.
+Use the **status selector → Update** control. Alongside the new status you can
+record **when the change actually happened** (if it was earlier than now), a
+**note**, and — for **Rejected** / **On Hold** — a **reason** from a preset
+list. Every change is written to the activity timeline, which shows the note,
+the reason, and both the real event time and when it was recorded.
 
 Use **Edit submission** (top right of the submission page) to correct the
 candidate rate, the résumé used, or the submission notes after creation. The

@@ -142,3 +142,31 @@ export const INTERVIEW_RESULT_TONE: Record<InterviewResult, BadgeTone> = {
   ON_HOLD: "amber",
   COMPLETED: "blue",
 };
+
+/**
+ * Preset reasons offered on a status change (mainly Rejected / On Hold). Plain
+ * strings, not a DB enum, so the list can evolve without a migration.
+ */
+export const STATUS_CHANGE_REASONS = [
+  "CLIENT_FEEDBACK",
+  "VENDOR_FEEDBACK",
+  "RATE_MISMATCH",
+  "CANDIDATE_WITHDREW",
+  "CANDIDATE_UNRESPONSIVE",
+  "POSITION_CLOSED",
+  "AWAITING_DECISION",
+  "OTHER",
+] as const;
+
+export type StatusChangeReason = (typeof STATUS_CHANGE_REASONS)[number];
+
+export const STATUS_CHANGE_REASON_LABEL: Record<StatusChangeReason, string> = {
+  CLIENT_FEEDBACK: "Client feedback",
+  VENDOR_FEEDBACK: "Vendor / screening feedback",
+  RATE_MISMATCH: "Rate or budget mismatch",
+  CANDIDATE_WITHDREW: "Candidate withdrew",
+  CANDIDATE_UNRESPONSIVE: "Candidate unresponsive",
+  POSITION_CLOSED: "Position closed or cancelled",
+  AWAITING_DECISION: "Awaiting decision",
+  OTHER: "Other",
+};

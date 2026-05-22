@@ -92,6 +92,11 @@ All 7 build phases are complete and verified:
   creation; status keeps its own form). Reuses the résumé picker via a shared
   `submissionEditSchema`; `updateSubmission` logs a new `SUBMISSION_UPDATED` audit
   action (migration `20260522020000_submission_updated_action`).
+- **Status-change context** — the "Update status" form also captures an optional
+  real-world event date/time, a note, and (for Rejected / On Hold) a preset reason.
+  Stored on three new nullable `Activity` columns (`eventAt`, `note`, `reason`;
+  migration `20260522030000_status_change_details`) and shown on the activity
+  timeline. Reason presets live in `src/lib/labels.ts` as app-level strings.
 
 ## Docs & demo data
 

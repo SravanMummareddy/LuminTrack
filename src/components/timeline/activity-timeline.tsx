@@ -1,12 +1,19 @@
 import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/format";
 import type { ActivityAction } from "@/generated/prisma/enums";
+import {
+  STATUS_CHANGE_REASON_LABEL,
+  type StatusChangeReason,
+} from "@/lib/labels";
 
 type Entry = {
   id: string;
   action: ActivityAction;
   description: string;
   createdAt: Date | string;
+  eventAt: Date | string | null;
+  note: string | null;
+  reason: string | null;
   performedBy: { fullName: string };
 };
 
@@ -45,9 +52,25 @@ export function ActivityTimeline({ entries }: { entries: Entry[] }) {
                 )}
               />
               <p className="text-sm text-slate-800">{entry.description}</p>
-              <p className="text-xs text-slate-400">
+              {entry.reason && (
+                <p className="mt-1">
+                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-600">
+                    {STATUS_CHANGE_REASON_LABEL[
+                      entry.reason as StatusChangeReason
+                    ] ?? entry.reason}
+                  </span>
+                </p>
+              )}
+              {entry.note && (
+                <p className="mt-1 whitespace-pre-wrap rounded-md bg-slate-50 px-2 py-1 text-sm text-slate-600">
+                  {entry.note}
+                </p>
+              )}
+              <p className="mt-0.5 text-xs text-slate-400">
                 {entry.performedBy.fullName} ·{" "}
-                {formatDateTime(entry.createdAt)}
+                {entry.eventAt
+                  ? `happened ${formatDateTime(entry.eventAt)} · recorded ${formatDateTime(entry.createdAt)}`
+                  : formatDateTime(entry.createdAt)}
               </p>
             </li>
           ))}

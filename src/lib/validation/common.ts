@@ -30,6 +30,12 @@ export const optionalNonNegativeNumber = z.preprocess(
   z.coerce.number().nonnegative("Enter 0 or a positive number.").optional(),
 );
 
+/** Optional datetime — empty allowed, otherwise coerced from a datetime-local string. */
+export const optionalDateTime = z.preprocess(
+  emptyToUndefined,
+  z.coerce.date().optional(),
+);
+
 /** Flattens a ZodError into a { fieldName: message } map for form display. */
 export function toFieldErrors(error: z.ZodError): Record<string, string> {
   const result: Record<string, string> = {};

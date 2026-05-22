@@ -333,6 +333,12 @@ model Activity {
   description String
   oldValue    String?
   newValue    String?
+  // Optional context captured on a status change: when the event really
+  // happened (vs. `createdAt` = when it was recorded), a free-text note, and
+  // a preset reason category.
+  eventAt     DateTime?
+  note        String?
+  reason      String?
   createdAt   DateTime       @default(now())
 
   performedById String
