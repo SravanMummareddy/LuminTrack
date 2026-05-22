@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
-import { Table, Td } from "@/components/ui/table";
+import { Table, Td, cardLink } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { MobileSort } from "@/components/ui/mobile-sort";
 import { Pagination } from "@/components/ui/pagination";
@@ -140,10 +140,10 @@ export default async function RecruitersPage({
             <tbody className="divide-y divide-slate-100">
               {rows.map((r) => (
                 <tr key={r.id} className="hover:bg-slate-50">
-                  <Td label="Recruiter">
+                  <Td heading>
                     <Link
                       href={`/recruiters/${r.id}`}
-                      className="font-medium text-indigo-600 hover:underline"
+                      className={`${cardLink} font-medium text-indigo-600 hover:underline`}
                     >
                       {r.fullName}
                     </Link>
@@ -153,7 +153,7 @@ export default async function RecruitersPage({
                       </Badge>
                     )}
                   </Td>
-                  <Td label="Jobs assigned" className="text-right tabular-nums">
+                  <Td label="Jobs assigned" secondary className="text-right tabular-nums">
                     {r.jobsAssigned}
                   </Td>
                   <Td
@@ -165,19 +165,19 @@ export default async function RecruitersPage({
                   <Td label="Interviews" className="text-right tabular-nums">
                     {r.interviews}
                   </Td>
-                  <Td label="Selected" className="text-right tabular-nums">
+                  <Td label="Selected" secondary className="text-right tabular-nums">
                     {r.selected}
                   </Td>
-                  <Td label="Offers" className="text-right tabular-nums">
+                  <Td label="Offers" secondary className="text-right tabular-nums">
                     {r.offerReleased}
                   </Td>
                   <Td label="Joined" className="text-right tabular-nums">
                     {r.joined}
                   </Td>
-                  <Td label="Rejected" className="text-right tabular-nums">
+                  <Td label="Rejected" secondary className="text-right tabular-nums">
                     {r.rejected}
                   </Td>
-                  <Td label="On hold" className="text-right tabular-nums">
+                  <Td label="On hold" secondary className="text-right tabular-nums">
                     {r.onHold}
                   </Td>
                 </tr>

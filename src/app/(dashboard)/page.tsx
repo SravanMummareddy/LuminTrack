@@ -28,7 +28,7 @@ import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { BarChartCard, DonutChartCard } from "@/components/dashboard/charts";
 import { Badge } from "@/components/ui/badge";
-import { Table, Th, Td } from "@/components/ui/table";
+import { Table, Th, Td, cardLink } from "@/components/ui/table";
 
 function Card({
   title,
@@ -249,10 +249,10 @@ export default async function DashboardPage({
             <tbody className="divide-y divide-slate-100">
               {data.recruiterPerf.map((r) => (
                 <tr key={r.id} className="hover:bg-slate-50">
-                  <Td label="Recruiter">
+                  <Td heading>
                     <Link
                       href={`/recruiters/${r.id}`}
-                      className="font-medium text-indigo-600 hover:underline"
+                      className={`${cardLink} font-medium text-indigo-600 hover:underline`}
                     >
                       {r.fullName}
                     </Link>
@@ -260,10 +260,10 @@ export default async function DashboardPage({
                   <Td label="Submissions" className="text-right tabular-nums">
                     {r.submissions}
                   </Td>
-                  <Td label="Interviews" className="text-right tabular-nums">
+                  <Td label="Interviews" secondary className="text-right tabular-nums">
                     {r.interviews}
                   </Td>
-                  <Td label="Selected" className="text-right tabular-nums">
+                  <Td label="Selected" secondary className="text-right tabular-nums">
                     {r.selected}
                   </Td>
                   <Td label="Joined" className="text-right tabular-nums">

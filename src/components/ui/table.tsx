@@ -1,3 +1,4 @@
+import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 /**
@@ -21,6 +22,8 @@ export function Table({
           "[&_thead]:hidden md:[&_thead]:table-header-group",
           "[&_tbody]:block md:[&_tbody]:table-row-group",
           "[&_tbody_tr]:block md:[&_tbody_tr]:table-row",
+          // Each mobile card is a positioning context for the stretched card link.
+          "[&_tbody_tr]:relative md:[&_tbody_tr]:static",
           className,
         )}
       >
@@ -29,6 +32,14 @@ export function Table({
     </div>
   );
 }
+
+/**
+ * Apply to the title cell's `<Link>` so the whole mobile card is tappable: the
+ * `::before` pseudo-element covers the relative `<tr>`. Removed at `md+`, so the
+ * desktop table is unaffected.
+ */
+export const cardLink =
+  "before:absolute before:inset-0 before:z-10 before:content-[''] md:before:content-none";
 
 export function Th({
   children,
@@ -52,13 +63,50 @@ export function Th({
 export function Td({
   children,
   label,
+  heading,
+  secondary,
   className,
 }: {
   children?: React.ReactNode;
   /** Column name shown beside the value when the table is collapsed on mobile. */
   label?: string;
+  /** The card's title cell on mobile — rendered prominently with a tap chevron. */
+  heading?: boolean;
+  /** Non-essential cell — hidden on mobile, still shown in the desktop table. */
+  secondary?: boolean;
   className?: string;
 }) {
+  if (heading) {
+    return (
+      <td
+        className={cn(
+          "block py-2 pl-3 pr-9 text-[15px] text-slate-700",
+          "md:table-cell md:px-4 md:py-3 md:align-top md:text-sm",
+          className,
+        )}
+      >
+        {children}
+        <ChevronRight
+          aria-hidden
+          className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 md:hidden"
+        />
+      </td>
+    );
+  }
+
+  if (secondary) {
+    return (
+      <td
+        className={cn(
+          "hidden px-4 py-3 align-top text-slate-700 md:table-cell",
+          className,
+        )}
+      >
+        {children}
+      </td>
+    );
+  }
+
   return (
     <td
       className={cn(

@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { LinkButton } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Table, Th, Td } from "@/components/ui/table";
+import { Table, Th, Td, cardLink } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { MobileSort } from "@/components/ui/mobile-sort";
 import { Pagination } from "@/components/ui/pagination";
@@ -167,19 +167,25 @@ export default async function JobsPage({
             <tbody className="divide-y divide-slate-100">
               {jobs.map((job) => (
                 <tr key={job.id} className="hover:bg-slate-50">
-                  <Td label="Job title">
+                  <Td heading>
                     <Link
                       href={`/jobs/${job.id}`}
-                      className="font-medium text-indigo-600 hover:underline"
+                      className={`${cardLink} font-medium text-indigo-600 hover:underline`}
                     >
                       {job.title}
                     </Link>
                   </Td>
                   <Td label="Client">{job.client.name}</Td>
-                  <Td label="Vendor">{job.vendor.name}</Td>
-                  <Td label="Source">{job.sisterCompanySource.name}</Td>
-                  <Td label="Location">{job.location || "—"}</Td>
-                  <Td label="Recruiters">
+                  <Td label="Vendor" secondary>
+                    {job.vendor.name}
+                  </Td>
+                  <Td label="Source" secondary>
+                    {job.sisterCompanySource.name}
+                  </Td>
+                  <Td label="Location" secondary>
+                    {job.location || "—"}
+                  </Td>
+                  <Td label="Recruiters" secondary>
                     {job.assignments.length
                       ? job.assignments.map((a) => a.recruiter.fullName).join(", ")
                       : "—"}
@@ -192,7 +198,7 @@ export default async function JobsPage({
                   <Td label="Subs" className="text-right tabular-nums">
                     {job._count.submissions}
                   </Td>
-                  <Td label="Created" className="whitespace-nowrap">
+                  <Td label="Created" secondary className="whitespace-nowrap">
                     {formatDate(job.createdAt)}
                   </Td>
                 </tr>

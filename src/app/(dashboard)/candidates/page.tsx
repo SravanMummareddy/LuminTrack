@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { LinkButton } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Table, Th, Td } from "@/components/ui/table";
+import { Table, Th, Td, cardLink } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { MobileSort } from "@/components/ui/mobile-sort";
 import { Pagination } from "@/components/ui/pagination";
@@ -137,21 +137,25 @@ export default async function CandidatesPage({
             <tbody className="divide-y divide-slate-100">
               {candidates.map((c) => (
                 <tr key={c.id} className="hover:bg-slate-50">
-                  <Td label="Name">
+                  <Td heading>
                     <Link
                       href={`/candidates/${c.id}`}
-                      className="font-medium text-indigo-600 hover:underline"
+                      className={`${cardLink} font-medium text-indigo-600 hover:underline`}
                     >
                       {c.fullName}
                     </Link>
                   </Td>
-                  <Td label="Email">{c.email || "—"}</Td>
-                  <Td label="Phone">{c.phone || "—"}</Td>
+                  <Td label="Email" secondary>
+                    {c.email || "—"}
+                  </Td>
+                  <Td label="Phone" secondary>
+                    {c.phone || "—"}
+                  </Td>
                   <Td label="Location">{c.currentLocation || "—"}</Td>
                   <Td label="Experience" className="whitespace-nowrap">
                     {formatExperience(c.totalExperienceYears)}
                   </Td>
-                  <Td label="Skills">
+                  <Td label="Skills" secondary>
                     {c.skills.length === 0 ? (
                       "—"
                     ) : (
@@ -167,7 +171,7 @@ export default async function CandidatesPage({
                   <Td label="Subs" className="text-right tabular-nums">
                     {c._count.submissions}
                   </Td>
-                  <Td label="Updated" className="whitespace-nowrap">
+                  <Td label="Updated" secondary className="whitespace-nowrap">
                     {formatDate(c.updatedAt)}
                   </Td>
                 </tr>

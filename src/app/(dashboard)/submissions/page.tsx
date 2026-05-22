@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
-import { Table, Td } from "@/components/ui/table";
+import { Table, Td, cardLink } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { MobileSort } from "@/components/ui/mobile-sort";
 import { Pagination } from "@/components/ui/pagination";
@@ -172,10 +172,10 @@ export default async function SubmissionsPage({
             <tbody className="divide-y divide-slate-100">
               {submissions.map((s) => (
                 <tr key={s.id} className="hover:bg-slate-50">
-                  <Td label="Candidate">
+                  <Td heading>
                     <Link
                       href={`/submissions/${s.id}`}
-                      className="font-medium text-indigo-600 hover:underline"
+                      className={`${cardLink} font-medium text-indigo-600 hover:underline`}
                     >
                       {s.candidate.fullName}
                     </Link>
@@ -188,9 +188,15 @@ export default async function SubmissionsPage({
                       {s.job.title}
                     </Link>
                   </Td>
-                  <Td label="Client">{s.job.client.name}</Td>
-                  <Td label="Vendor">{s.job.vendor.name}</Td>
-                  <Td label="Submitted by">{s.submittedBy.fullName}</Td>
+                  <Td label="Client" secondary>
+                    {s.job.client.name}
+                  </Td>
+                  <Td label="Vendor" secondary>
+                    {s.job.vendor.name}
+                  </Td>
+                  <Td label="Submitted by" secondary>
+                    {s.submittedBy.fullName}
+                  </Td>
                   <Td label="Status">
                     <Badge tone={SUBMISSION_STATUS_TONE[s.status]}>
                       {SUBMISSION_STATUS_LABEL[s.status]}
@@ -199,7 +205,7 @@ export default async function SubmissionsPage({
                   <Td label="Rounds" className="text-right tabular-nums">
                     {s._count.interviewRounds}
                   </Td>
-                  <Td label="Submitted" className="whitespace-nowrap">
+                  <Td label="Submitted" secondary className="whitespace-nowrap">
                     {formatDate(s.submittedAt)}
                   </Td>
                 </tr>
