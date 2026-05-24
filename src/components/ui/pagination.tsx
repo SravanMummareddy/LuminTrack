@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { PAGE_SIZE } from "@/lib/filters";
@@ -37,6 +38,8 @@ export function Pagination({
 }) {
   const pathname = usePathname();
   const params = useSearchParams();
+  const router = useRouter();
+  const [jumpValue, setJumpValue] = useState(String(page));
 
   if (totalPages <= 1) return null;
 
@@ -66,7 +69,40 @@ export function Pagination({
         <span className="font-medium text-slate-700">{total}</span>
       </p>
 
-      <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center gap-3">
+        {totalPages > 7 ? (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const n = parseInt(jumpValue, 10);
+              if (Number.isNaN(n)) {
+                setJumpValue(String(page));
+                return;
+              }
+              const clamped = Math.min(Math.max(1, n), totalPages);
+              setJumpValue(String(clamped));
+              if (clamped !== page) router.push(hrefFor(clamped), { scroll: false });
+            }}
+            className="flex items-center gap-1.5 text-xs text-slate-500"
+          >
+            <label htmlFor="page-jump" className="whitespace-nowrap">
+              Go to
+            </label>
+            <input
+              id="page-jump"
+              type="number"
+              min={1}
+              max={totalPages}
+              value={jumpValue}
+              onChange={(e) => setJumpValue(e.target.value)}
+              className="h-8 w-16 rounded-md border border-slate-300 bg-white px-2 text-center text-sm tabular-nums focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              aria-label={`Go to page (1 to ${totalPages})`}
+            />
+            <span className="whitespace-nowrap text-slate-400">of {totalPages}</span>
+          </form>
+        ) : null}
+
+        <div className="flex items-center gap-1">
         {page <= 1 ? (
           <span className={cn(cell, off)} aria-disabled="true">
             <ChevronLeft className="h-4 w-4" />
@@ -118,6 +154,7 @@ export function Pagination({
             <ChevronRight className="h-4 w-4" />
           </Link>
         )}
+        </div>
       </div>
     </nav>
   );

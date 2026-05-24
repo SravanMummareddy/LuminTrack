@@ -131,6 +131,7 @@ export default async function CandidatesPage({
           <Table>
             <thead className="border-b border-slate-200 bg-slate-50">
               <tr>
+                <Th className="text-right">S.No</Th>
                 <Th>ID</Th>
                 <SortableHeader column="name" label="Name" />
                 <SortableHeader column="email" label="Email" />
@@ -148,8 +149,11 @@ export default async function CandidatesPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {candidates.map((c) => (
+              {candidates.map((c, idx) => (
                 <tr key={c.id} className="hover:bg-slate-50">
+                  <Td label="S.No" secondary className="text-right tabular-nums">
+                    {(page - 1) * PAGE_SIZE + idx + 1}
+                  </Td>
                   <Td label="ID" secondary className="whitespace-nowrap font-mono text-xs">
                     {formatCandidateDisplayId(c)}
                   </Td>

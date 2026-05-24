@@ -101,12 +101,21 @@ export const SUBMISSION_STAGE_INDEX: Record<SubmissionStatus, number> = {
 /** Select sentinel for a manually-typed job source (vs. a managed source FK). */
 export const OTHER_SOURCE = "__OTHER__";
 
-/** A job's display source — a managed source's name, or its free-text fallback. */
+/**
+ * A job's display source — managed source name, free-text fallback, or the
+ * external portal name if the job was imported (e.g. "Randstad iLabor").
+ */
 export function jobSourceLabel(job: {
   sisterCompanySource: { name: string } | null;
   sourceOther: string | null;
+  portal?: { name: string } | null;
 }): string {
-  return job.sisterCompanySource?.name ?? job.sourceOther ?? "—";
+  return (
+    job.sisterCompanySource?.name ??
+    job.sourceOther ??
+    job.portal?.name ??
+    "—"
+  );
 }
 
 // ─── Interview mode & platform ───────────────────────────────────────────────

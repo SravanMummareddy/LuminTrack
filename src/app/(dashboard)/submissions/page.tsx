@@ -150,6 +150,7 @@ export default async function SubmissionsPage({
           <Table>
             <thead className="border-b border-slate-200 bg-slate-50">
               <tr>
+                <Th className="text-right">S.No</Th>
                 <Th>ID</Th>
                 <SortableHeader column="candidate" label="Candidate" />
                 <SortableHeader column="job" label="Job" />
@@ -171,8 +172,11 @@ export default async function SubmissionsPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {submissions.map((s) => (
+              {submissions.map((s, idx) => (
                 <tr key={s.id} className="hover:bg-slate-50">
+                  <Td label="S.No" secondary className="text-right tabular-nums">
+                    {(page - 1) * PAGE_SIZE + idx + 1}
+                  </Td>
                   <Td label="ID" secondary className="whitespace-nowrap font-mono text-xs">
                     {formatSubmissionDisplayId(s)}
                   </Td>
