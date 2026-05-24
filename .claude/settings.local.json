@@ -35,7 +35,10 @@
       "Bash(grep -l \"use client\\\\|useState\\\\|useRouter\" \"C:\\\\Users\\\\mumma\\\\OneDrive\\\\Documents\\\\Lumin_recruiter_dashboard\\\\src\\\\components\"/*.tsx 2>nul)",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\mumma\\\\OneDrive\\\\Documents\\\\Lumin_recruiter_dashboard\" -Recurse -Directory)",
       "Bash(Select-Object -First 20)",
-      "Bash(Format-Table FullName)"
+      "Bash(Format-Table FullName)",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('/Users/smumma/Documents/company_dashboard/LuminTrack/uploads/ilabor_data_sample.json'\\)\\); print\\('top keys:', list\\(d.keys\\(\\)\\) if isinstance\\(d,dict\\) else type\\(d\\).__name__\\); print\\('len:', len\\(d.get\\('requisitionViewList', []\\)\\) if isinstance\\(d,dict\\) else len\\(d\\)\\)\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }

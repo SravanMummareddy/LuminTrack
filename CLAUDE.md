@@ -9,20 +9,24 @@ timeline, and recruiter performance. Replaces a manual Excel/Word process.
 **Source of truth for requirements:** `docs/PROJECT_REQUIREMENTS.md`
 **Approved build plan:** `~/.claude/plans/we-have-the-requirements-optimized-balloon.md`
 
-## 🚧 Current work — iLabor requisition import (Phase 4 next)
+## 🚧 Current work — iLabor requisition import (Phase 8b: browser extension is next)
 
 Active build: importing Randstad iLabor requisitions into LuminTrack via a
 browser-extension → JSON-file → admin-upload pipeline, plus related Jobs-page
-enhancements (source sub-tabs, column show/hide + drag-reorder, meaningful
-display IDs).
+enhancements.
 
 **Read first:** [`ILABOR_IMPORT_HANDOFF.md`](./ILABOR_IMPORT_HANDOFF.md) — live
-snapshot, file map, resolved + open decisions, iLabor JSON sample, Phase 4
-detailed plan, new-PC setup steps. The architectural "why" lives in
-[`docs/PLAN_iLabor_import.md`](./docs/PLAN_iLabor_import.md).
+snapshot, file map, resolved decisions, iLabor JSON sample. The architectural
+"why" lives in [`docs/PLAN_iLabor_import.md`](./docs/PLAN_iLabor_import.md).
 
-- **Status:** Phases 0–3 done (recon, schema + migration, Zod validation,
-  Server Actions). Phase 4 (`/jobs/import` wizard) is next.
+- **Status:** Phases 0–7 done **and** the post-Phase-7 polish round shipped
+  (concurrent-import lock, per-job `JOB_IMPORTED` audit + backfill, `/jobs/imports`
+  history page, page-jump input, SNo on candidate/submission lists,
+  `jobSourceLabel` portal fallback). Phase 8b — the browser extension in a
+  separate repo — is the only piece remaining.
+- **Audit follow-ups:** see [`bugs.md`](./bugs.md) "Polish round 2" — a
+  prioritized list of correctness + UX gaps found by a deep-dive audit on
+  2026-05-24. Will be tackled before / alongside the extension.
 - **Process:** phase-by-phase with product-owner confirmation between phases;
   teaching-style narration of meaningful code; additive only — the existing
   dashboard's behavior is unchanged for anyone not exercising the new flow.
@@ -82,7 +86,7 @@ npm run db:studio   # prisma studio
 
 ## Build status
 
-All 7 build phases are complete and verified:
+All 7 original build phases are complete and verified:
 
 - **Phase 1** — Foundation & Auth ✅
 - **Phase 2** — Jobs & org entities ✅
@@ -91,6 +95,20 @@ All 7 build phases are complete and verified:
 - **Phase 5** — Interview rounds ✅
 - **Phase 6** — Timeline / audit UI + Notes ✅
 - **Phase 7** — Dashboard, Reports, Recruiters, global search ✅
+
+iLabor import sub-build (additive — see `ILABOR_IMPORT_HANDOFF.md`):
+
+- **iLabor Phases 0–3** — Recon, schema + migration, validation, server actions ✅
+- **iLabor Phase 4** — `/jobs/import` admin wizard (upload → preview → confirm) ✅
+- **iLabor Phase 5** — Source sub-tabs (`?source=`) + iLabor detail card ✅
+- **iLabor Phase 6** — Column show/hide + drag-reorder on Jobs list (`useColumnPrefs`) ✅
+- **iLabor Phase 7** — Display IDs (`JOB-00123` / `REQ-159263` / `CAND-001` / `SUB-001`) + SNo ✅
+- **iLabor Phase 8a (polish)** — pg advisory lock on import, per-job `JOB_IMPORTED` audit + backfill, `/jobs/imports` history page, page-jump input, source-label portal fallback ✅
+- **iLabor Phase 8b** — Browser extension (separate repo, Manifest V3) ⏳
+
+The tolerant envelope adapter (added in Phase 4 polish) means admins can paste
+raw iLabor network captures directly today — the extension is purely a UX
+upgrade, not a functional gate.
 
 **Post-Phase-7 work (committed to `main`):**
 - List pages (Jobs/Candidates/Submissions/Recruiters) gained clickable column
@@ -115,6 +133,17 @@ All 7 build phases are complete and verified:
   Stored on three new nullable `Activity` columns (`eventAt`, `note`, `reason`;
   migration `20260522030000_status_change_details`) and shown on the activity
   timeline. Reason presets live in `src/lib/labels.ts` as app-level strings.
+- **iLabor bulk import (Phases 4–8a)** — `/jobs/import` admin wizard,
+  `/jobs/imports` history page, source sub-tabs on the Jobs list, read-only
+  iLabor requisition card on job detail, column show/hide + drag-reorder
+  (`useColumnPrefs` hook + localStorage, versioned), display IDs (`JOB-00123` /
+  `REQ-159263` / `CAND-001` / `SUB-001`) backed by `seq Int @unique @default(autoincrement())`
+  on Job / Candidate / Submission (migration `20260524160000_display_sequences`),
+  SNo column on all three lists, Pagination "Go to page N" jump (>7 pages),
+  Postgres advisory lock guarding concurrent admin imports, per-job
+  `JOB_IMPORTED` audit entry (enum migration `20260524180000_job_imported_action`)
+  with one-off backfill script `prisma/backfill-job-imported.ts`, and
+  `jobSourceLabel` portal-name fallback for imported rows.
 
 ## Docs & demo data
 

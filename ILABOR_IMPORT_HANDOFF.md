@@ -9,23 +9,30 @@
 
 ---
 
-## 1. Status snapshot (2026-05-24)
+## 1. Status snapshot (2026-05-24, end-of-day)
 
 | Phase | What it delivers | Status |
 |---|---|---|
-| 0 | iLabor recon — confirm how the grid is fetched | ✅ done — JSON endpoint `showrequisitionslist`, captured field list (§5) |
-| 1 | Prisma schema + migration: `JobPortal` model, 18 new `Job` cols, `REQUISITIONS_IMPORTED` enum | ✅ done — migrated & seeded on Neon dev DB |
-| 2 | File-format contract + Zod row/envelope validation + status mapping | ✅ done |
-| 3 | Server Actions `previewRequisitions` + `importRequisitions` (admin-only, transactional) | ✅ done |
-| 4 | Import UI wizard at `/jobs/import` (upload → preview → confirm) | ⏭ **NEXT** |
-| 5 | Source sub-tabs on Jobs (All / Manual / Randstad / Others) + iLabor detail panel | ⏳ pending |
-| 6 | Column show/hide + drag-reorder on Jobs list (localStorage) | ⏳ pending |
-| 7 | Meaningful display IDs across Jobs / Candidates / Submissions (`JOB-00123`, `REQ-159263`, …) + `SNo` column | ⏳ pending |
-| 8 | Browser extension (separate repo, Manifest V3) | ⏳ pending |
+| 0 | iLabor recon — confirm how the grid is fetched | ✅ JSON endpoint `showrequisitionslist`, field list (§5) |
+| 1 | Prisma schema + migration: `JobPortal` model, 18 new `Job` cols, `REQUISITIONS_IMPORTED` enum | ✅ migrated on Neon |
+| 2 | File-format contract + Zod row/envelope validation + status mapping | ✅ |
+| 3 | Server Actions `previewRequisitions` + `importRequisitions` (admin-only, transactional) | ✅ |
+| 4 | Import UI wizard at `/jobs/import` (upload → preview → confirm). Includes the tolerant adapter that auto-wraps a raw iLabor network capture into the extension envelope | ✅ shipped & verified against a real 306-row file (305 imported, 1 row skipped for missing `customerName`) |
+| 5 | Source sub-tabs on Jobs (`All` / `Manual` / `Randstad iLabor`) + read-only iLabor detail card on `/jobs/[id]` | ✅ (Others tab deferred until a 2nd portal exists) |
+| 6 | Column show/hide + drag-reorder on Jobs list (`useColumnPrefs` + localStorage, versioned) | ✅ |
+| 7 | Meaningful display IDs (`JOB-00123` / `REQ-159263` / `CAND-001` / `SUB-001`) + `S.No` column on Jobs / Candidates / Submissions. Backed by `seq Int @unique @default(autoincrement())` on each model | ✅ |
+| 8a | Polish round: Postgres advisory lock against concurrent imports, per-job `JOB_IMPORTED` audit entry, `/jobs/imports` admin history page, "Last imported" banner on the Randstad tab, page-jump input in `Pagination`, SNo on Candidate + Submission lists, `jobSourceLabel` portal-name fallback, Decimal-serialization fix on the RSC boundary | ✅ |
+| 8b | Browser extension (separate repo, Manifest V3) — intercept `showrequisitionslist`, wrap into the envelope, save / push to LuminTrack | ⏭ **NEXT (new session)** |
 
-**Nothing in the existing dashboard has changed.** All additions are gated behind
-a route (`/jobs/import`) that doesn't exist yet, plus new nullable columns that
-nothing reads. The app behaves identically for anyone not exercising the new flow.
+**Pre-Phase-8b polish backlog:** see `bugs.md` "Polish round 2" — prioritized
+list of correctness + UX gaps found in the 2026-05-24 audit. We may pick those
+off before / alongside the extension.
+
+**Nothing in the existing dashboard's pre-iLabor behavior has changed.** All
+additions are additive: new routes (`/jobs/import`, `/jobs/imports`), new
+nullable columns, an extra audit action, and a column registry that defaults
+back to the original 9 visible columns. Recruiters who never touch the
+Randstad tab see no functional difference.
 
 ---
 
@@ -168,43 +175,36 @@ Confirms the extension can intercept the network response instead of DOM-scrapin
 
 ---
 
-## 6. Phase 4 — what's next, in detail
+## 6. Phase 8b — what's next, in detail
 
-**Goal:** `/jobs/import` wizard so an admin can upload the JSON file and import.
+**Goal:** a Manifest V3 Chromium extension (separate repo) that watches the
+iLabor portal page, intercepts the `showrequisitionslist` JSON response, wraps
+it in the envelope from §5, and gives the user a one-click "Send to
+LuminTrack" / "Download .json" action.
 
-**Two files to create:**
+**Why it's separate:** browser extensions ship through the Chrome Web Store /
+sideload — distinct build, signing, and version cadence from the Next.js app.
+Keeping it in its own repo also avoids cross-contaminating the LuminTrack
+dependency tree.
 
-1. `src/app/(dashboard)/jobs/import/page.tsx` — Server Component shell.
-   - `requireUser()` + `if (user.role !== "ADMIN") notFound()` guard.
-   - Renders the client wizard component below.
+**LuminTrack-side prerequisites:** none. The tolerant adapter in
+`readEnvelope()` (`src/server/actions/ilabor-import.ts`) already accepts raw
+network captures, so admins can run imports today without the extension. The
+extension is purely a UX upgrade.
 
-2. `src/components/jobs/import-requisitions.tsx` — Client Component wizard.
-   Three states managed with `useState` + `useActionState`:
-   - **Step 1 — Upload**: file picker (drag-drop optional). On selection,
-     submit to `previewRequisitions` via `useActionState`.
-   - **Step 2 — Preview**: four summary cards (new / updated / errored /
-     status-warnings), an expandable table of error rows with row index + reason
-     + hint (req id + title), "Confirm import" + "Start over" buttons.
-   - **Step 3 — Result**: success message ("Created X · Updated Y · Skipped Z"),
-     CTA back to `/jobs`.
+**Open extension-side decisions** (defer to that session):
+- Direct API push vs. download-to-file?
+  - Direct push needs a stable auth contract (likely an admin-issued API
+    token) → new endpoint + token table on the LuminTrack side.
+  - Download-to-file works today against `/jobs/import` with zero LuminTrack
+    changes. Recommend starting here.
+- One-time setup or auto-run on every iLabor visit?
+- Multi-tenant (multiple LuminTracks)? Probably not — internal tool.
 
-   The same `File` object is submitted twice — once to preview, once to import.
-   No server-side state, no upload tokens.
-
-**One nav entry to add:** "Import from iLabor" button on the Jobs page header,
-visible to admins only. Lives in whatever component renders that header (likely
-`src/app/(dashboard)/jobs/page.tsx` or a `jobs-toolbar.tsx`).
-
-**Verification:** hand-craft `sample-ilabor.json` (~6 rows: one "Not Filled",
-one duplicate Req ID, one missing `customerName`, one matching an existing
-seeded job). Wizard should:
-- Show `5 new · 1 errored` on preview
-- Successfully import on confirm
-- Re-running same file shows `0 new · 5 updated · 1 errored`
-- Activity timeline shows one `REQUISITIONS_IMPORTED` entry
-
-**Estimated work:** ~30 lines (page) + 250–350 lines (wizard) + ~10 lines
-(toolbar button). One round of `tsc --noEmit` + `npm run dev` smoke test.
+**Pre-Phase-8b polish backlog** lives in `bugs.md` under "Polish round 2 —
+2026-05-24 audit." Most are <30-min fixes (broken `/submissions/{id}` link on
+candidate detail, search not indexing display IDs, KPI hygiene around the 305
+unassigned imported jobs, status-drift badge on imported jobs).
 
 ---
 
