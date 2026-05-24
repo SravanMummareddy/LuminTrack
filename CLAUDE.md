@@ -9,6 +9,24 @@ timeline, and recruiter performance. Replaces a manual Excel/Word process.
 **Source of truth for requirements:** `docs/PROJECT_REQUIREMENTS.md`
 **Approved build plan:** `~/.claude/plans/we-have-the-requirements-optimized-balloon.md`
 
+## 🚧 Current work — iLabor requisition import (Phase 4 next)
+
+Active build: importing Randstad iLabor requisitions into LuminTrack via a
+browser-extension → JSON-file → admin-upload pipeline, plus related Jobs-page
+enhancements (source sub-tabs, column show/hide + drag-reorder, meaningful
+display IDs).
+
+**Read first:** [`ILABOR_IMPORT_HANDOFF.md`](./ILABOR_IMPORT_HANDOFF.md) — live
+snapshot, file map, resolved + open decisions, iLabor JSON sample, Phase 4
+detailed plan, new-PC setup steps. The architectural "why" lives in
+[`docs/PLAN_iLabor_import.md`](./docs/PLAN_iLabor_import.md).
+
+- **Status:** Phases 0–3 done (recon, schema + migration, Zod validation,
+  Server Actions). Phase 4 (`/jobs/import` wizard) is next.
+- **Process:** phase-by-phase with product-owner confirmation between phases;
+  teaching-style narration of meaningful code; additive only — the existing
+  dashboard's behavior is unchanged for anyone not exercising the new flow.
+
 ## Stack (all current majors — verify APIs, don't assume older versions)
 
 - **Next.js 16** (App Router, Turbopack) + React 19.2 + TypeScript

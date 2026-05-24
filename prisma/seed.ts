@@ -56,6 +56,15 @@ async function main() {
     await prisma.vendor.upsert({ where: { name }, update: {}, create: { name } });
   }
 
+  // ── External job portals (sources for imported requisitions) ───────────────
+  // The iLabor import action also upserts this row defensively, so the import
+  // works on a fresh DB even if the seed wasn't run.
+  await prisma.jobPortal.upsert({
+    where: { name: "Randstad iLabor" },
+    update: {},
+    create: { name: "Randstad iLabor", kind: "VMS" },
+  });
+
   console.log("Seed complete.");
   console.log(`  Admin login:     ${adminEmail} / (SEED_ADMIN_PASSWORD)`);
   console.log(`  Recruiter logins: ${recruiters.map((r) => r.email).join(", ")}`);
