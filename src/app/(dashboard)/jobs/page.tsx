@@ -7,11 +7,13 @@ import { JobFilters } from "@/components/jobs/job-filters";
 import { JobsTable } from "@/components/jobs/jobs-table";
 import {
   listJobs,
+  getLastIlaborImport,
   JOB_SORT_KEYS,
   JOB_DEFAULT_SORT,
   type JobListFilters,
   type JobSource,
 } from "@/server/queries/jobs";
+import { formatDateTime } from "@/lib/format";
 import { JobSourceTabs } from "@/components/jobs/job-source-tabs";
 import {
   listClients,
@@ -93,6 +95,7 @@ export default async function JobsPage({
     sources,
     recruiters,
     currentUser,
+    lastImport,
   ] = await Promise.all([
     listJobs(filters),
     listClients(),
@@ -100,7 +103,32 @@ export default async function JobsPage({
     listSisterCompanies(),
     listUsers(),
     getCurrentUser(),
+    // Only fetched (used) on the Randstad tab as admin, but cheap enough to
+    // always run in parallel — it's a single indexed findFirst.
+    getLastIlaborImport(),
   ]);
+
+  const showLastImportBanner =
+    activeSource === "randstad" &&
+    currentUser?.role === "ADMIN" &&
+    lastImport !== null;
+
+  let bannerCounts: { createdCount: number; updatedCount: number } | null = null;
+  if (showLastImportBanner && lastImport.newValue) {
+    try {
+      const parsed = JSON.parse(lastImport.newValue) as {
+        createdCount?: number;
+        updatedCount?: number;
+      };
+      bannerCounts = {
+        createdCount: parsed.createdCount ?? 0,
+        updatedCount: parsed.updatedCount ?? 0,
+      };
+    } catch {
+      // Older audit rows may have a non-JSON newValue — banner still renders
+      // with timestamps only.
+    }
+  }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -131,6 +159,28 @@ export default async function JobsPage({
       </PageHeader>
 
       <JobSourceTabs active={activeSource} searchParams={sp} />
+
+      {showLastImportBanner && lastImport ? (
+        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          Last imported{" "}
+          {bannerCounts ? (
+            <>
+              <strong className="text-slate-800">
+                {bannerCounts.createdCount}
+              </strong>{" "}
+              new ·{" "}
+              <strong className="text-slate-800">
+                {bannerCounts.updatedCount}
+              </strong>{" "}
+              updated ·{" "}
+            </>
+          ) : null}
+          {formatDateTime(lastImport.createdAt)}
+          {lastImport.performedBy
+            ? ` · by ${lastImport.performedBy.fullName}`
+            : ""}
+        </div>
+      ) : null}
 
       <JobFilters
         current={current}

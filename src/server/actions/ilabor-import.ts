@@ -368,8 +368,23 @@ export async function importRequisitions(
   let statusWarningCount = 0;
   let activityId = "";
 
+  try {
   await prisma.$transaction(
     async (tx) => {
+      // 0. Serialize concurrent imports. pg_try_advisory_xact_lock returns
+      //    false if another transaction already holds the lock — we bail
+      //    rather than risk duplicate REQUISITIONS_IMPORTED audit rows.
+      //    The lock auto-releases when the transaction ends.
+      //    Magic key is a constant specific to iLabor imports.
+      const lockRows = await tx.$queryRaw<[{ ok: boolean }]>`
+        SELECT pg_try_advisory_xact_lock(817293744) AS ok
+      `;
+      if (!lockRows[0]?.ok) {
+        throw new Error(
+          "Another import is already in progress. Please try again in a moment.",
+        );
+      }
+
       // 1. Find-or-create the JobPortal row (defensive — seed should already have).
       const portal = await tx.jobPortal.upsert({
         where: { name: ILABOR_PORTAL_NAME },
@@ -434,7 +449,7 @@ export async function importRequisitions(
         if (createPayload._statusUnknown) statusWarningCount += 1;
 
         const isNew = !existingSet.has(String(row.requisitionId));
-        await tx.job.upsert({
+        const upserted = await tx.job.upsert({
           where: {
             portalId_portalRefId: {
               portalId: portal.id,
@@ -453,10 +468,23 @@ export async function importRequisitions(
             clientId,
             vendorId,
           },
+          select: { id: true },
         });
 
-        if (isNew) createdCount += 1;
-        else updatedCount += 1;
+        if (isNew) {
+          createdCount += 1;
+          // Provenance entry on the new job's timeline — distinct from the
+          // bulk REQUISITIONS_IMPORTED summary at the end of the transaction.
+          await logActivity(tx, {
+            entityType: "JOB",
+            action: "JOB_IMPORTED",
+            jobId: upserted.id,
+            description: `Imported from Randstad iLabor (Req ${String(row.requisitionId)})`,
+            performedById: user.id,
+          });
+        } else {
+          updatedCount += 1;
+        }
       }
 
       // 4. One audit entry summarising the batch. Job-less by design — it's a
@@ -480,6 +508,15 @@ export async function importRequisitions(
     },
     { timeout: 60_000 },
   );
+  } catch (err) {
+    // Surface the advisory-lock rejection (or any other in-transaction throw)
+    // as a wizard-friendly error instead of bubbling a 500 to the client.
+    const message =
+      err instanceof Error
+        ? err.message
+        : "Import failed. Please retry; if it persists, contact an admin.";
+    return { status: "error", error: message };
+  }
 
   revalidatePath("/jobs");
 

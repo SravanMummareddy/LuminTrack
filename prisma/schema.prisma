@@ -84,6 +84,7 @@ enum ActivityAction {
   OFFER_RELEASED
   CANDIDATE_JOINED
   REQUISITIONS_IMPORTED
+  JOB_IMPORTED
 }
 
 // ─── Models ──────────────────────────────────────────────────────────────────

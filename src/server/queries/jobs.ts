@@ -103,6 +103,21 @@ export async function listJobs(filters: JobListFilters) {
 
 export type JobListRow = Awaited<ReturnType<typeof listJobs>>["rows"][number];
 
+/**
+ * Most recent bulk-import audit row, for the "Last imported …" banner on the
+ * Randstad tab. Returns null on a fresh DB.
+ *
+ * Reads the existing JSON summary on Activity.newValue (set by importRequisitions)
+ * so the banner can show the counts without re-aggregating jobs.
+ */
+export async function getLastIlaborImport() {
+  return prisma.activity.findFirst({
+    where: { action: "REQUISITIONS_IMPORTED" },
+    orderBy: { createdAt: "desc" },
+    include: { performedBy: { select: { fullName: true } } },
+  });
+}
+
 export function getJobDetail(id: string) {
   return prisma.job.findUnique({
     where: { id },
