@@ -81,7 +81,7 @@ export async function listJobs(filters: JobListFilters) {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
 
-  const rows = await prisma.job.findMany({
+  const raw = await prisma.job.findMany({
     where,
     orderBy,
     skip: (page - 1) * PAGE_SIZE,
@@ -97,6 +97,16 @@ export async function listJobs(filters: JobListFilters) {
       _count: { select: { submissions: true } },
     },
   });
+
+  // Prisma Decimal is not serializable across the Server → Client Component
+  // boundary (RSC requires plain JSON values). Coerce rate fields to plain
+  // numbers here, once, so downstream consumers — including <JobsTable> —
+  // can treat them as primitives.
+  const rows = raw.map(({ vendorRate, candidateRate, ...rest }) => ({
+    ...rest,
+    vendorRate: vendorRate != null ? Number(vendorRate) : null,
+    candidateRate: candidateRate != null ? Number(candidateRate) : null,
+  }));
 
   return { rows, total, page };
 }
