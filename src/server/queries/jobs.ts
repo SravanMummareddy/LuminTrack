@@ -4,6 +4,14 @@ import type { JobStatus } from "@/generated/prisma/enums";
 import { OTHER_SOURCE } from "@/lib/labels";
 import { PAGE_SIZE, type DateRange, type SortDir, type SortState } from "@/lib/filters";
 
+/**
+ * Source sub-tabs on /jobs:
+ *   "manual"   — Job.portalId is null (recruiter-entered)
+ *   "randstad" — linked to the Randstad iLabor JobPortal
+ *   undefined  — all jobs (default)
+ */
+export type JobSource = "manual" | "randstad";
+
 export type JobListFilters = {
   q?: string;
   clientId?: string;
@@ -12,10 +20,13 @@ export type JobListFilters = {
   recruiterId?: string;
   status?: JobStatus;
   location?: string;
+  source?: JobSource;
   createdRange?: DateRange;
   sort?: SortState;
   page?: number;
 };
+
+export const RANDSTAD_PORTAL_NAME = "Randstad iLabor";
 
 /** Columns the Jobs list can be sorted by → their Prisma `orderBy`. */
 const JOB_SORTS: Record<
@@ -52,6 +63,9 @@ export async function listJobs(filters: JobListFilters) {
     where.location = { contains: filters.location, mode: "insensitive" };
   if (filters.recruiterId)
     where.assignments = { some: { recruiterId: filters.recruiterId } };
+  if (filters.source === "manual") where.portalId = null;
+  if (filters.source === "randstad")
+    where.portal = { is: { name: RANDSTAD_PORTAL_NAME } };
   if (filters.createdRange?.gte || filters.createdRange?.lte)
     where.createdAt = filters.createdRange;
 
@@ -76,6 +90,7 @@ export async function listJobs(filters: JobListFilters) {
       client: { select: { name: true } },
       vendor: { select: { name: true } },
       sisterCompanySource: { select: { name: true } },
+      portal: { select: { name: true } },
       assignments: {
         include: { recruiter: { select: { id: true, fullName: true } } },
       },
@@ -95,6 +110,7 @@ export function getJobDetail(id: string) {
       client: true,
       vendor: true,
       sisterCompanySource: true,
+      portal: true,
       createdBy: { select: { fullName: true } },
       assignments: {
         include: { recruiter: { select: { id: true, fullName: true } } },

@@ -120,6 +120,48 @@ export default async function JobDetailPage({
         </form>
       </Card>
 
+      {job.portal ? (
+        <Card title={`${job.portal.name} requisition`}>
+          <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <SummaryItem label="Requisition ID">
+              {job.portalRefId ?? "—"}
+            </SummaryItem>
+            <SummaryItem label="Customer ref">{job.atsId ?? "—"}</SummaryItem>
+            <SummaryItem label="iLabor status">
+              {job.externalStatusRaw ?? "—"}
+            </SummaryItem>
+            <SummaryItem label="Position type">{job.reqType ?? "—"}</SummaryItem>
+            <SummaryItem label="Department">{job.department ?? "—"}</SummaryItem>
+            <SummaryItem label="Positions">{job.positions ?? "—"}</SummaryItem>
+            <SummaryItem label="Duration">{job.durationLabel ?? "—"}</SummaryItem>
+            <SummaryItem label="Projected start">
+              {job.startDate ? formatDate(job.startDate) : "—"}
+            </SummaryItem>
+            <SummaryItem label="Projected end">
+              {job.endDate ? formatDate(job.endDate) : "—"}
+            </SummaryItem>
+            <SummaryItem label="Released">
+              {job.releasedDate ? formatDate(job.releasedDate) : "—"}
+            </SummaryItem>
+            <SummaryItem label="Assigned to (iLabor)">
+              {job.assignedToName ?? "—"}
+            </SummaryItem>
+            <SummaryItem label="Account manager">
+              {job.ownerName ?? "—"}
+            </SummaryItem>
+            <SummaryItem label="iLabor subs">
+              {job.externalSubsCount ?? "—"}
+              {job.externalActiveCount != null
+                ? ` (${job.externalActiveCount} active)`
+                : ""}
+            </SummaryItem>
+            <SummaryItem label="Last imported">
+              {job.lastImportedAt ? formatDate(job.lastImportedAt) : "—"}
+            </SummaryItem>
+          </dl>
+        </Card>
+      ) : null}
+
       <Card title="Job summary">
         <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <SummaryItem label="Client">{job.client.name}</SummaryItem>

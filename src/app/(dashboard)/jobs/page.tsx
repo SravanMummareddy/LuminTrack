@@ -14,7 +14,9 @@ import {
   JOB_SORT_KEYS,
   JOB_DEFAULT_SORT,
   type JobListFilters,
+  type JobSource,
 } from "@/server/queries/jobs";
+import { JobSourceTabs } from "@/components/jobs/job-source-tabs";
 import {
   listClients,
   listVendors,
@@ -43,6 +45,10 @@ function asJobStatus(value: string | undefined): JobStatus | undefined {
     : undefined;
 }
 
+function asJobSource(value: string | undefined): JobSource | undefined {
+  return value === "manual" || value === "randstad" ? value : undefined;
+}
+
 export default async function JobsPage({
   searchParams,
 }: {
@@ -58,10 +64,12 @@ export default async function JobsPage({
     recruiterId: clean(sp.recruiterId),
     status: clean(sp.status),
     location: clean(sp.location),
+    source: clean(sp.source),
     preset: clean(sp.preset),
     from: clean(sp.from),
     to: clean(sp.to),
   };
+  const activeSource = asJobSource(current.source);
 
   const sort = parseSort(
     clean(sp.sort),
@@ -78,6 +86,7 @@ export default async function JobsPage({
     recruiterId: current.recruiterId,
     status: asJobStatus(current.status),
     location: current.location,
+    source: activeSource,
     createdRange: parseDateRange({
       preset: current.preset,
       from: current.from,
@@ -130,6 +139,8 @@ export default async function JobsPage({
           Add job
         </LinkButton>
       </PageHeader>
+
+      <JobSourceTabs active={activeSource} searchParams={sp} />
 
       <JobFilters
         current={current}
