@@ -153,7 +153,7 @@ export default async function JobsPage({
           <p className="text-xs text-slate-500">
             {total} job{total === 1 ? "" : "s"}
           </p>
-          <JobsTable rows={jobs} />
+          <JobsTable rows={jobs} pageOffset={(page - 1) * PAGE_SIZE} />
           <Pagination page={page} totalPages={totalPages} total={total} />
         </div>
       )}

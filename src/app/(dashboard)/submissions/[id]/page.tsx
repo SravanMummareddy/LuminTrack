@@ -16,7 +16,7 @@ import {
   SUBMISSION_STATUS_TONE,
   jobSourceLabel,
 } from "@/lib/labels";
-import { formatDate, formatRate } from "@/lib/format";
+import { formatDate, formatRate, formatSubmissionDisplayId } from "@/lib/format";
 import { toDrivePreviewUrl } from "@/lib/resume";
 
 function SummaryItem({
@@ -90,6 +90,10 @@ export default async function SubmissionDetailPage({
             </Badge>
           </div>
           <p className="mt-1 text-sm text-slate-500">
+            <span className="font-mono text-xs text-slate-400">
+              {formatSubmissionDisplayId(submission)}
+            </span>
+            <span className="mx-1.5 text-slate-300">·</span>
             Submitted to{" "}
             <Link
               href={`/jobs/${job.id}`}

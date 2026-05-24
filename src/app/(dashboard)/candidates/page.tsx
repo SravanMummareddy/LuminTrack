@@ -15,7 +15,11 @@ import {
   type CandidateListFilters,
 } from "@/server/queries/candidates";
 import { parseDateRange, parseSort, parsePage, PAGE_SIZE } from "@/lib/filters";
-import { formatDate, formatExperience } from "@/lib/format";
+import {
+  formatDate,
+  formatExperience,
+  formatCandidateDisplayId,
+} from "@/lib/format";
 
 function clean(value: string | string[] | undefined): string | undefined {
   const single = Array.isArray(value) ? value[0] : value;
@@ -127,6 +131,7 @@ export default async function CandidatesPage({
           <Table>
             <thead className="border-b border-slate-200 bg-slate-50">
               <tr>
+                <Th>ID</Th>
                 <SortableHeader column="name" label="Name" />
                 <SortableHeader column="email" label="Email" />
                 <SortableHeader column="phone" label="Phone" />
@@ -145,6 +150,9 @@ export default async function CandidatesPage({
             <tbody className="divide-y divide-slate-100">
               {candidates.map((c) => (
                 <tr key={c.id} className="hover:bg-slate-50">
+                  <Td label="ID" secondary className="whitespace-nowrap font-mono text-xs">
+                    {formatCandidateDisplayId(c)}
+                  </Td>
                   <Td heading>
                     <span className="flex items-center gap-2">
                       <Link

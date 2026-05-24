@@ -20,7 +20,13 @@ import {
   INTERVIEW_RESULT_TONE,
   jobSourceLabel,
 } from "@/lib/labels";
-import { formatDate, formatDateTime, formatExperience } from "@/lib/format";
+import {
+  formatDate,
+  formatDateTime,
+  formatExperience,
+  formatCandidateDisplayId,
+  formatSubmissionDisplayId,
+} from "@/lib/format";
 
 function DescItem({
   label,
@@ -91,6 +97,10 @@ export default async function CandidateDetailPage({
             </Badge>
           </div>
           <p className="mt-1 text-sm text-slate-500">
+            <span className="font-mono text-xs text-slate-400">
+              {formatCandidateDisplayId(candidate)}
+            </span>
+            <span className="mx-1.5 text-slate-300">·</span>
             {candidate.currentCompany || "Company not set"}
           </p>
         </div>
@@ -194,6 +204,7 @@ export default async function CandidateDetailPage({
           <Table>
             <thead className="border-b border-slate-200 bg-slate-50">
               <tr>
+                <Th>Sub ID</Th>
                 <Th>Job</Th>
                 <Th>Client</Th>
                 <Th>Vendor</Th>
@@ -206,6 +217,9 @@ export default async function CandidateDetailPage({
             <tbody className="divide-y divide-slate-100">
               {submissions.map((s) => (
                 <tr key={s.id} className="hover:bg-slate-50">
+                  <Td label="Sub ID" secondary className="font-mono text-xs">
+                    {formatSubmissionDisplayId(s)}
+                  </Td>
                   <Td label="Job">
                     <Link
                       href={`/submissions/${s.id}`}

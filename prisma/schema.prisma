@@ -169,6 +169,7 @@ model Vendor {
 
 model Job {
   id            String    @id @default(cuid())
+  seq           Int       @unique @default(autoincrement())
   title         String
   location      String?
   vendorRate    Decimal?  @db.Decimal(12, 2)
@@ -245,6 +246,7 @@ model JobAssignment {
 
 model Candidate {
   id                  String   @id @default(cuid())
+  seq                 Int      @unique @default(autoincrement())
   fullName            String
   email               String?
   phone               String?
@@ -291,6 +293,7 @@ model CandidateResume {
 
 model Submission {
   id              String           @id @default(cuid())
+  seq             Int              @unique @default(autoincrement())
   status          SubmissionStatus @default(SUBMITTED)
   candidateRate   Decimal?         @db.Decimal(12, 2)
   resumeBlobUrl   String?

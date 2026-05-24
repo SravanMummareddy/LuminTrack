@@ -20,7 +20,7 @@ import {
   SUBMISSION_STATUS_TONE,
   jobSourceLabel,
 } from "@/lib/labels";
-import { formatDate, formatRate } from "@/lib/format";
+import { formatDate, formatRate, formatJobDisplayId } from "@/lib/format";
 
 function SummaryItem({
   label,
@@ -87,6 +87,10 @@ export default async function JobDetailPage({
             </Badge>
           </div>
           <p className="mt-1 text-sm text-slate-500">
+            <span className="font-mono text-xs text-slate-400">
+              {formatJobDisplayId(job)}
+            </span>
+            <span className="mx-1.5 text-slate-300">·</span>
             {job.client.name} · {job.vendor.name}
           </p>
         </div>

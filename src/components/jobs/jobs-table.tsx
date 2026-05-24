@@ -8,7 +8,7 @@ import { SortableHeader } from "@/components/ui/sortable-header";
 import { MobileSort } from "@/components/ui/mobile-sort";
 import { Badge } from "@/components/ui/badge";
 import { JOB_STATUS_LABEL, JOB_STATUS_TONE, jobSourceLabel } from "@/lib/labels";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatJobDisplayId } from "@/lib/format";
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
 import type { JobListRow } from "@/server/queries/jobs";
 
@@ -28,10 +28,32 @@ type Column = {
   sortDefaultDir?: "asc" | "desc";
   align?: "right";
   defaultVisible: boolean;
-  render: (job: JobListRow) => React.ReactNode;
+  /** Receives the row and its 1-based page-offset row number. */
+  render: (job: JobListRow, rowNumber: number) => React.ReactNode;
 };
 
 const COLUMNS: Column[] = [
+  {
+    key: "sno",
+    label: "S.No",
+    align: "right",
+    defaultVisible: true,
+    render: (_job, n) => (
+      <Td label="S.No" secondary className="text-right tabular-nums">
+        {n}
+      </Td>
+    ),
+  },
+  {
+    key: "jobId",
+    label: "Job ID",
+    defaultVisible: true,
+    render: (job) => (
+      <Td label="Job ID" secondary className="whitespace-nowrap font-mono text-xs">
+        {formatJobDisplayId(job)}
+      </Td>
+    ),
+  },
   {
     key: "title",
     label: "Job title",
@@ -182,13 +204,21 @@ const COLUMNS: Column[] = [
 ];
 
 const STORAGE_KEY = "lumintrack.jobs.columns";
-const STORAGE_VERSION = 1;
+// Bumped to 2 in Phase 7 — added sno + jobId columns. Saved prefs reset once.
+const STORAGE_VERSION = 2;
 const DEFAULTS: ColumnPrefs = {
   visible: COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key),
   order: COLUMNS.map((c) => c.key),
 };
 
-export function JobsTable({ rows }: { rows: JobListRow[] }) {
+export function JobsTable({
+  rows,
+  pageOffset = 0,
+}: {
+  rows: JobListRow[];
+  /** Row count preceding the first row on this page (e.g. (page-1)*pageSize). */
+  pageOffset?: number;
+}) {
   const [prefs, setPrefs, hydrated] = useColumnPrefs(
     STORAGE_KEY,
     STORAGE_VERSION,
@@ -248,10 +278,15 @@ export function JobsTable({ rows }: { rows: JobListRow[] }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {rows.map((job) => (
+          {rows.map((job, idx) => (
             <tr key={job.id} className="hover:bg-slate-50">
               {visibleCols.map((c) => (
-                <RenderCell key={c.key} column={c} job={job} />
+                <RenderCell
+                  key={c.key}
+                  column={c}
+                  job={job}
+                  rowNumber={pageOffset + idx + 1}
+                />
               ))}
             </tr>
           ))}
@@ -262,8 +297,16 @@ export function JobsTable({ rows }: { rows: JobListRow[] }) {
 }
 
 /** Wrapper so we can key by column without making each render function key-aware. */
-function RenderCell({ column, job }: { column: Column; job: JobListRow }) {
-  return <>{column.render(job)}</>;
+function RenderCell({
+  column,
+  job,
+  rowNumber,
+}: {
+  column: Column;
+  job: JobListRow;
+  rowNumber: number;
+}) {
+  return <>{column.render(job, rowNumber)}</>;
 }
 
 // ─── Columns menu (popover) ─────────────────────────────────────────────────

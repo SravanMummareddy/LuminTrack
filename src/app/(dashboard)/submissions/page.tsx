@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
-import { Table, Td, cardLink } from "@/components/ui/table";
+import { Table, Th, Td, cardLink } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { MobileSort } from "@/components/ui/mobile-sort";
 import { Pagination } from "@/components/ui/pagination";
@@ -24,7 +24,7 @@ import {
   SUBMISSION_STATUS_LABEL,
   SUBMISSION_STATUS_TONE,
 } from "@/lib/labels";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatSubmissionDisplayId } from "@/lib/format";
 import type { SubmissionStatus } from "@/generated/prisma/enums";
 
 function clean(value: string | string[] | undefined): string | undefined {
@@ -150,6 +150,7 @@ export default async function SubmissionsPage({
           <Table>
             <thead className="border-b border-slate-200 bg-slate-50">
               <tr>
+                <Th>ID</Th>
                 <SortableHeader column="candidate" label="Candidate" />
                 <SortableHeader column="job" label="Job" />
                 <SortableHeader column="client" label="Client" />
@@ -172,6 +173,9 @@ export default async function SubmissionsPage({
             <tbody className="divide-y divide-slate-100">
               {submissions.map((s) => (
                 <tr key={s.id} className="hover:bg-slate-50">
+                  <Td label="ID" secondary className="whitespace-nowrap font-mono text-xs">
+                    {formatSubmissionDisplayId(s)}
+                  </Td>
                   <Td heading>
                     <Link
                       href={`/submissions/${s.id}`}
