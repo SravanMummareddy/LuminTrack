@@ -1,14 +1,10 @@
-import Link from "next/link";
 import { Plus, Download } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { LinkButton } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/session";
-import { Badge } from "@/components/ui/badge";
-import { Table, Th, Td, cardLink } from "@/components/ui/table";
-import { SortableHeader } from "@/components/ui/sortable-header";
-import { MobileSort } from "@/components/ui/mobile-sort";
 import { Pagination } from "@/components/ui/pagination";
 import { JobFilters } from "@/components/jobs/job-filters";
+import { JobsTable } from "@/components/jobs/jobs-table";
 import {
   listJobs,
   JOB_SORT_KEYS,
@@ -24,13 +20,7 @@ import {
   listUsers,
 } from "@/server/queries/org";
 import { parseDateRange, parseSort, parsePage, PAGE_SIZE } from "@/lib/filters";
-import {
-  JOB_STATUSES,
-  JOB_STATUS_LABEL,
-  JOB_STATUS_TONE,
-  jobSourceLabel,
-} from "@/lib/labels";
-import { formatDate } from "@/lib/format";
+import { JOB_STATUSES } from "@/lib/labels";
 import type { JobStatus } from "@/generated/prisma/enums";
 
 function clean(value: string | string[] | undefined): string | undefined {
@@ -163,78 +153,7 @@ export default async function JobsPage({
           <p className="text-xs text-slate-500">
             {total} job{total === 1 ? "" : "s"}
           </p>
-          <MobileSort
-            options={[
-              { column: "title", label: "Job title" },
-              { column: "client", label: "Client" },
-              { column: "vendor", label: "Vendor" },
-              { column: "source", label: "Source" },
-              { column: "location", label: "Location" },
-              { column: "status", label: "Status" },
-              { column: "subs", label: "Subs", defaultDir: "desc" },
-              { column: "created", label: "Created", defaultDir: "desc" },
-            ]}
-          />
-          <Table>
-            <thead className="border-b border-slate-200 bg-slate-50">
-              <tr>
-                <SortableHeader column="title" label="Job title" />
-                <SortableHeader column="client" label="Client" />
-                <SortableHeader column="vendor" label="Vendor" />
-                <SortableHeader column="source" label="Source" />
-                <SortableHeader column="location" label="Location" />
-                <Th>Recruiters</Th>
-                <SortableHeader column="status" label="Status" />
-                <SortableHeader
-                  column="subs"
-                  label="Subs"
-                  align="right"
-                  defaultDir="desc"
-                />
-                <SortableHeader column="created" label="Created" defaultDir="desc" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {jobs.map((job) => (
-                <tr key={job.id} className="hover:bg-slate-50">
-                  <Td heading>
-                    <Link
-                      href={`/jobs/${job.id}`}
-                      className={`${cardLink} font-medium text-indigo-600 hover:underline`}
-                    >
-                      {job.title}
-                    </Link>
-                  </Td>
-                  <Td label="Client">{job.client.name}</Td>
-                  <Td label="Vendor" secondary>
-                    {job.vendor.name}
-                  </Td>
-                  <Td label="Source" secondary>
-                    {jobSourceLabel(job)}
-                  </Td>
-                  <Td label="Location" secondary>
-                    {job.location || "—"}
-                  </Td>
-                  <Td label="Recruiters" secondary>
-                    {job.assignments.length
-                      ? job.assignments.map((a) => a.recruiter.fullName).join(", ")
-                      : "—"}
-                  </Td>
-                  <Td label="Status">
-                    <Badge tone={JOB_STATUS_TONE[job.status]}>
-                      {JOB_STATUS_LABEL[job.status]}
-                    </Badge>
-                  </Td>
-                  <Td label="Subs" className="text-right tabular-nums">
-                    {job._count.submissions}
-                  </Td>
-                  <Td label="Created" secondary className="whitespace-nowrap">
-                    {formatDate(job.createdAt)}
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
+          <JobsTable rows={jobs} />
           <Pagination page={page} totalPages={totalPages} total={total} />
         </div>
       )}
