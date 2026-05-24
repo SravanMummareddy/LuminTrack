@@ -1,4 +1,5 @@
-import { Plus, Download } from "lucide-react";
+import Link from "next/link";
+import { Plus, Download, History } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { LinkButton } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/session";
@@ -147,10 +148,16 @@ export default async function JobsPage({
     <div className="mx-auto max-w-6xl space-y-5">
       <PageHeader title="Jobs" description="All job requirements and their pipelines.">
         {currentUser?.role === "ADMIN" ? (
-          <LinkButton href="/jobs/import" variant="secondary">
-            <Download className="h-4 w-4" />
-            Import from iLabor
-          </LinkButton>
+          <>
+            <LinkButton href="/jobs/imports" variant="secondary">
+              <History className="h-4 w-4" />
+              Import history
+            </LinkButton>
+            <LinkButton href="/jobs/import" variant="secondary">
+              <Download className="h-4 w-4" />
+              Import from iLabor
+            </LinkButton>
+          </>
         ) : null}
         <LinkButton href="/jobs/new">
           <Plus className="h-4 w-4" />
@@ -179,6 +186,13 @@ export default async function JobsPage({
           {lastImport.performedBy
             ? ` · by ${lastImport.performedBy.fullName}`
             : ""}
+          {" · "}
+          <Link
+            href="/jobs/imports"
+            className="text-indigo-600 hover:underline"
+          >
+            View all
+          </Link>
         </div>
       ) : null}
 

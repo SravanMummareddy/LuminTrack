@@ -118,6 +118,20 @@ export async function getLastIlaborImport() {
   });
 }
 
+/**
+ * Full history of bulk iLabor imports — one row per import run.
+ * Powers the admin-only `/jobs/imports` page. Paginated client-side for now;
+ * if this ever grows past ~hundreds of runs we'd add offset paging.
+ */
+export async function listIlaborImports() {
+  return prisma.activity.findMany({
+    where: { action: "REQUISITIONS_IMPORTED" },
+    orderBy: { createdAt: "desc" },
+    include: { performedBy: { select: { fullName: true } } },
+    take: 200,
+  });
+}
+
 export function getJobDetail(id: string) {
   return prisma.job.findUnique({
     where: { id },
