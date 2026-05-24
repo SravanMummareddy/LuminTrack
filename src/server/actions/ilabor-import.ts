@@ -115,6 +115,24 @@ async function readEnvelope(formData: FormData): Promise<
     return { ok: false, error: "Couldn't read the file — it isn't valid JSON." };
   }
 
+  // Tolerant adapter: if the file looks like a raw iLabor API response
+  // (has requisitionViewList[]), wrap it in the extension envelope so admins
+  // can paste raw network captures directly. The browser extension will emit
+  // the already-wrapped shape once it ships; that path skips this branch.
+  if (
+    parsed &&
+    typeof parsed === "object" &&
+    !("source" in parsed) &&
+    Array.isArray((parsed as { requisitionViewList?: unknown }).requisitionViewList)
+  ) {
+    parsed = {
+      source: "lumintrack-ilabor-extension",
+      version: 1,
+      capturedAt: new Date().toISOString(),
+      rows: (parsed as { requisitionViewList: unknown[] }).requisitionViewList,
+    };
+  }
+
   const result = ilaborFileSchema.safeParse(parsed);
   if (!result.success) {
     // Surface the first envelope-level issue so the user knows it's the wrapper,

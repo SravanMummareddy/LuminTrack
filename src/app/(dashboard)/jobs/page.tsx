@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Download } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { LinkButton } from "@/components/ui/button";
+import { getCurrentUser } from "@/lib/session";
 import { Badge } from "@/components/ui/badge";
 import { Table, Th, Td, cardLink } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
@@ -86,14 +87,21 @@ export default async function JobsPage({
     page: parsePage(clean(sp.page)),
   };
 
-  const [{ rows: jobs, total, page }, clients, vendors, sources, recruiters] =
-    await Promise.all([
-      listJobs(filters),
-      listClients(),
-      listVendors(),
-      listSisterCompanies(),
-      listUsers(),
-    ]);
+  const [
+    { rows: jobs, total, page },
+    clients,
+    vendors,
+    sources,
+    recruiters,
+    currentUser,
+  ] = await Promise.all([
+    listJobs(filters),
+    listClients(),
+    listVendors(),
+    listSisterCompanies(),
+    listUsers(),
+    getCurrentUser(),
+  ]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -111,6 +119,12 @@ export default async function JobsPage({
   return (
     <div className="mx-auto max-w-6xl space-y-5">
       <PageHeader title="Jobs" description="All job requirements and their pipelines.">
+        {currentUser?.role === "ADMIN" ? (
+          <LinkButton href="/jobs/import" variant="secondary">
+            <Download className="h-4 w-4" />
+            Import from iLabor
+          </LinkButton>
+        ) : null}
         <LinkButton href="/jobs/new">
           <Plus className="h-4 w-4" />
           Add job
