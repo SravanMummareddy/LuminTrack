@@ -37,41 +37,49 @@ export function CandidateInterviewsGrouped({
             className="rounded-md border border-slate-200 bg-white"
           >
             <details className="group">
-              <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:[outline-offset:-2px]">
-                <Link
-                  href={`/submissions/${sub.id}`}
-                  className="font-medium text-indigo-600 hover:underline"
-                >
-                  {sub.job.title}
-                </Link>
-                <span className="text-sm text-slate-600">
-                  <span aria-hidden className="mr-2 text-slate-300">
-                    ·
-                  </span>
-                  {sub.job.client.name}
-                </span>
-                <Badge tone={SUBMISSION_STATUS_TONE[sub.status]}>
-                  {SUBMISSION_STATUS_LABEL[sub.status]}
-                </Badge>
-                <div className="flex flex-wrap items-center gap-1">
-                  {shownRounds.map((r) => (
-                    <RoundPip key={r.id} result={r.result} order={r.roundOrder} />
-                  ))}
-                  {overflow > 0 && (
-                    <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-                      +{overflow}
+              <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:[outline-offset:-2px]">
+                <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                  <Link
+                    href={`/submissions/${sub.id}`}
+                    className="max-w-[20rem] truncate font-medium text-indigo-600 hover:underline"
+                  >
+                    {sub.job.title}
+                  </Link>
+                  <span className="text-sm text-slate-600">
+                    <span aria-hidden className="mr-2 text-slate-300">
+                      ·
                     </span>
-                  )}
+                    {sub.job.client.name}
+                  </span>
+                  <Badge tone={SUBMISSION_STATUS_TONE[sub.status]}>
+                    {SUBMISSION_STATUS_LABEL[sub.status]}
+                  </Badge>
                 </div>
-                <span className="ml-auto whitespace-nowrap text-xs text-slate-500">
-                  {lastDate ? formatDate(lastDate) : "—"}
-                </span>
-                <span className="text-xs font-medium text-indigo-600 group-open:hidden">
-                  See details ▾
-                </span>
-                <span className="hidden text-xs font-medium text-indigo-600 group-open:inline">
-                  Hide ▴
-                </span>
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-1">
+                    {shownRounds.map((r) => (
+                      <RoundPip
+                        key={r.id}
+                        result={r.result}
+                        order={r.roundOrder}
+                      />
+                    ))}
+                    {overflow > 0 && (
+                      <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                        +{overflow}
+                      </span>
+                    )}
+                  </div>
+                  <span className="whitespace-nowrap text-xs text-slate-500">
+                    {lastDate ? formatDate(lastDate) : "—"}
+                  </span>
+                  <span className="text-xs font-medium text-indigo-600 group-open:hidden">
+                    See details ▾
+                  </span>
+                  <span className="hidden text-xs font-medium text-indigo-600 group-open:inline">
+                    Hide ▴
+                  </span>
+                </div>
               </summary>
 
               <div className="space-y-3 border-t border-slate-100 px-4 py-3">
