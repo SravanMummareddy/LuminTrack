@@ -108,22 +108,40 @@ const COLUMNS: Column[] = [
   {
     key: "skills",
     label: "Skills",
-    defaultVisible: true,
-    render: (c) => (
-      <Td label="Skills" secondary>
-        {c.skills.length === 0 ? (
-          "—"
-        ) : (
-          <div className="flex max-w-xs flex-wrap gap-1">
-            {c.skills.map((s) => (
-              <Badge key={s} tone="slate">
-                {s}
-              </Badge>
-            ))}
-          </div>
-        )}
-      </Td>
-    ),
+    defaultVisible: false,
+    render: (c) => {
+      // Prefer starred skills when set, else first 3 of the full list. Cap at
+      // 3 chips with a +N affordance so the row stays single-height.
+      const primary =
+        c.featuredSkills.length > 0
+          ? c.featuredSkills
+          : c.skills.slice(0, 3);
+      const shown = primary.slice(0, 3);
+      const overflow = c.skills.filter((s) => !shown.includes(s));
+      return (
+        <Td label="Skills" secondary>
+          {c.skills.length === 0 ? (
+            "—"
+          ) : (
+            <div className="flex flex-wrap items-center gap-1">
+              {shown.map((s) => (
+                <Badge key={s} tone="slate">
+                  {s}
+                </Badge>
+              ))}
+              {overflow.length > 0 && (
+                <span
+                  title={overflow.join(", ")}
+                  className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500"
+                >
+                  +{overflow.length}
+                </span>
+              )}
+            </div>
+          )}
+        </Td>
+      );
+    },
   },
   {
     key: "subs",
@@ -174,7 +192,9 @@ const COLUMNS: Column[] = [
 ];
 
 const STORAGE_KEY = "lumintrack.candidates.columns";
-const STORAGE_VERSION = 1;
+// Bumped to 2 in Round 3.5 — Skills column flipped to hidden-by-default, so
+// existing prefs (which assumed Skills was visible) reset cleanly once.
+const STORAGE_VERSION = 2;
 const DEFAULTS: ColumnPrefs = {
   visible: COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key),
   order: COLUMNS.map((c) => c.key),

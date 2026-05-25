@@ -82,7 +82,9 @@ export async function listCandidates(filters: CandidateListFilters) {
     const total = filtered.length;
     const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
     const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
-    const rows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+    const rows = filtered
+      .slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+      .map(serializeCandidateRow);
     return { rows, total, page };
   }
 
@@ -90,15 +92,28 @@ export async function listCandidates(filters: CandidateListFilters) {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
 
-  const rows = await prisma.candidate.findMany({
+  const raw = await prisma.candidate.findMany({
     where,
     orderBy,
     skip: (page - 1) * PAGE_SIZE,
     take: PAGE_SIZE,
     include: candidateListInclude,
   });
+  const rows = raw.map(serializeCandidateRow);
 
   return { rows, total, page };
+}
+
+// Prisma `Decimal` isn't serializable across the RSC → Client boundary.
+// The list tables are Client Components, so flatten to plain numbers here.
+function serializeCandidateRow<
+  T extends { totalExperienceYears: { toString(): string } | null },
+>(c: T): Omit<T, "totalExperienceYears"> & { totalExperienceYears: number | null } {
+  return {
+    ...c,
+    totalExperienceYears:
+      c.totalExperienceYears == null ? null : Number(c.totalExperienceYears),
+  };
 }
 
 export type CandidateListRow = Awaited<

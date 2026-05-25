@@ -32,6 +32,7 @@ export function Pagination({
   totalPages,
   total,
   paramKey = "page",
+  pageSize = PAGE_SIZE,
 }: {
   page: number;
   totalPages: number;
@@ -42,6 +43,9 @@ export function Pagination({
    * coexist on the same detail page without stomping each other.
    */
   paramKey?: string;
+  /** Rows-per-page used to compute the "Showing X–Y of Z" range. Pass
+   *  SUB_PAGE_SIZE for sub-tables; defaults to the main PAGE_SIZE. */
+  pageSize?: number;
 }) {
   const pathname = usePathname();
   const params = useSearchParams();
@@ -56,8 +60,8 @@ export function Pagination({
     return `${pathname}?${next.toString()}`;
   };
 
-  const from = (page - 1) * PAGE_SIZE + 1;
-  const to = Math.min(total, page * PAGE_SIZE);
+  const from = (page - 1) * pageSize + 1;
+  const to = Math.min(total, page * pageSize);
 
   const cell =
     "inline-flex h-8 min-w-8 items-center justify-center gap-1 rounded-md border px-2 text-sm transition";
@@ -77,7 +81,7 @@ export function Pagination({
       </p>
 
       <div className="flex flex-wrap items-center gap-3">
-        {totalPages > 7 ? (
+        {totalPages > 3 ? (
           <form
             onSubmit={(e) => {
               e.preventDefault();

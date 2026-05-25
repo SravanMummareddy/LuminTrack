@@ -118,8 +118,8 @@ export default async function DashboardPage({
           value={data.activeJobs}
           icon={Briefcase}
           tone="green"
-          hint={`Assigned · ${data.openJobs} open · ${data.onHoldJobs} on hold total`}
-          tooltip="OPEN or ON_HOLD jobs with at least one assigned recruiter. Unowned bulk-imported jobs are excluded. Honors all filters above."
+          hint={`${data.openJobs} open · ${data.onHoldJobs} on hold`}
+          tooltip="Counts only OPEN/ON_HOLD jobs with at least one assigned recruiter. Unowned bulk-imported jobs are excluded. Honors the filters above."
         />
         <StatCard
           label="Total submissions"

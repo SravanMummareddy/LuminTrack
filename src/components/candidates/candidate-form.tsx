@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
+import { Star, Plus, X } from "lucide-react";
 import Link from "next/link";
 import { Field, Input, Textarea } from "@/components/ui/field";
 import { Button, buttonClass } from "@/components/ui/button";
@@ -16,6 +17,7 @@ export type CandidateFormValues = {
   totalExperienceYears: string;
   currentCompany: string;
   skills: string[];
+  featuredSkills: string[];
   linkedinUrl: string;
   notes: string;
   isActive: boolean;
@@ -81,6 +83,34 @@ export function CandidateForm({
   const [fields, setFields] = useState<Fields>(() => initialFields(values));
   // New candidates default to Active; an existing one keeps its saved status.
   const [isActive, setIsActive] = useState(values?.isActive ?? true);
+  // Featured (starred) skills — ≤3, must be a subset of the parsed skills.
+  // Kept in component state so the chip row reacts to skill edits live.
+  const [featured, setFeatured] = useState<string[]>(values?.featuredSkills ?? []);
+  const parsedSkills = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          fields.skills
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+        ),
+      ),
+    [fields.skills],
+  );
+  // Prune any starred skill that's no longer in the parsed list.
+  useEffect(() => {
+    setFeatured((prev) => prev.filter((s) => parsedSkills.includes(s)));
+  }, [parsedSkills]);
+  function toggleFeatured(skill: string) {
+    setFeatured((prev) =>
+      prev.includes(skill)
+        ? prev.filter((s) => s !== skill)
+        : prev.length >= 3
+          ? prev
+          : [...prev, skill],
+    );
+  }
   const set =
     (name: keyof Fields) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -197,6 +227,88 @@ export function CandidateForm({
           placeholder="Java, Spring Boot, AWS"
         />
       </Field>
+
+      {parsedSkills.length > 0 && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-sm font-medium text-slate-700">
+              Featured skills
+            </p>
+            <span className="text-xs tabular-nums text-slate-500">
+              {featured.length} / 3 picked
+            </span>
+          </div>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Pick up to 3 — these show first on the candidate list. Optional.
+          </p>
+
+          {featured.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {featured.map((s) => (
+                <span
+                  key={s}
+                  title={s}
+                  className="inline-flex max-w-[14rem] items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 py-1 pl-2 pr-1 text-xs font-medium text-amber-900"
+                >
+                  <Star className="h-3 w-3 shrink-0 fill-amber-500 text-amber-500" aria-hidden />
+                  <span className="truncate">{s}</span>
+                  <button
+                    type="button"
+                    onClick={() => toggleFeatured(s)}
+                    aria-label={`Remove ${s}`}
+                    className="rounded p-0.5 text-amber-700 hover:bg-amber-100"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {parsedSkills.some((s) => !featured.includes(s)) && (
+            <>
+              <div className="mt-3 flex items-center gap-2">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                  {featured.length === 0 ? "Tap to feature" : "More skills"}
+                </p>
+                <div className="h-px flex-1 bg-slate-200" />
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {parsedSkills
+                  .filter((s) => !featured.includes(s))
+                  .map((s) => {
+                    const disabled = featured.length >= 3;
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => toggleFeatured(s)}
+                        disabled={disabled}
+                        title={s}
+                        className={
+                          "inline-flex max-w-[14rem] items-center gap-1 rounded-md border px-2 py-1 text-xs transition " +
+                          (disabled
+                            ? "cursor-not-allowed border-slate-200 bg-white text-slate-400"
+                            : "border-slate-300 bg-white text-slate-700 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-900")
+                        }
+                      >
+                        <Plus className="h-3 w-3 shrink-0" aria-hidden />
+                        <span className="truncate">{s}</span>
+                      </button>
+                    );
+                  })}
+              </div>
+            </>
+          )}
+
+          {errors.featuredSkills && (
+            <p className="mt-2 text-xs text-red-600">{errors.featuredSkills}</p>
+          )}
+          {featured.map((s) => (
+            <input key={s} type="hidden" name="featuredSkills" value={s} />
+          ))}
+        </div>
+      )}
 
       <Field
         label="LinkedIn URL"

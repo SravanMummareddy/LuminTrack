@@ -2,7 +2,13 @@ import { prisma } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
 import type { SubmissionStatus } from "@/generated/prisma/enums";
 import { OTHER_SOURCE } from "@/lib/labels";
-import { PAGE_SIZE, type DateRange, type SortDir, type SortState } from "@/lib/filters";
+import {
+  PAGE_SIZE,
+  SUB_PAGE_SIZE,
+  type DateRange,
+  type SortDir,
+  type SortState,
+} from "@/lib/filters";
 
 export type SubmissionListFilters = {
   q?: string;
@@ -73,7 +79,7 @@ export async function listSubmissions(filters: SubmissionListFilters) {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
 
-  const rows = await prisma.submission.findMany({
+  const raw = await prisma.submission.findMany({
     where,
     orderBy,
     skip: (page - 1) * PAGE_SIZE,
@@ -92,6 +98,12 @@ export async function listSubmissions(filters: SubmissionListFilters) {
       _count: { select: { interviewRounds: true } },
     },
   });
+  // Prisma `Decimal` isn't serializable across the RSC → Client boundary;
+  // the Submissions table is a Client Component, so flatten the rate.
+  const rows = raw.map((s) => ({
+    ...s,
+    candidateRate: s.candidateRate == null ? null : Number(s.candidateRate),
+  }));
 
   return { rows, total, page };
 }
@@ -159,14 +171,14 @@ export async function getJobSubmissions(
 ) {
   const where = { jobId };
   const total = await prisma.submission.count({ where });
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / SUB_PAGE_SIZE));
   const page = Math.min(Math.max(1, opts.page ?? 1), totalPages);
 
   const rows = await prisma.submission.findMany({
     where,
     orderBy: { submittedAt: "desc" },
-    skip: (page - 1) * PAGE_SIZE,
-    take: PAGE_SIZE,
+    skip: (page - 1) * SUB_PAGE_SIZE,
+    take: SUB_PAGE_SIZE,
     include: {
       candidate: { select: { id: true, fullName: true } },
       submittedBy: { select: { fullName: true } },
@@ -189,14 +201,14 @@ export async function getCandidateSubmissions(
 ) {
   const where = { candidateId };
   const total = await prisma.submission.count({ where });
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / SUB_PAGE_SIZE));
   const page = Math.min(Math.max(1, opts.page ?? 1), totalPages);
 
   const rows = await prisma.submission.findMany({
     where,
     orderBy: { submittedAt: "desc" },
-    skip: (page - 1) * PAGE_SIZE,
-    take: PAGE_SIZE,
+    skip: (page - 1) * SUB_PAGE_SIZE,
+    take: SUB_PAGE_SIZE,
     include: {
       job: {
         select: {

@@ -28,6 +28,8 @@ function readCandidate(formData: FormData) {
     totalExperienceYears: formData.get("totalExperienceYears") ?? "",
     currentCompany: formData.get("currentCompany") ?? "",
     skills: parseSkills(formData.get("skills")),
+    // Featured (≤3) — form sends them as repeated `featuredSkills` entries.
+    featuredSkills: formData.getAll("featuredSkills").map(String).filter(Boolean),
     linkedinUrl: formData.get("linkedinUrl") ?? "",
     notes: formData.get("notes") ?? "",
     isActive: formData.get("isActive") != null,
@@ -45,6 +47,7 @@ function candidateData(d: CandidateInput) {
     totalExperienceYears: d.totalExperienceYears ?? null,
     currentCompany: d.currentCompany ?? null,
     skills: d.skills,
+    featuredSkills: d.featuredSkills,
     linkedinUrl: d.linkedinUrl ?? null,
     notes: d.notes ?? null,
     isActive: d.isActive,
@@ -133,6 +136,7 @@ export async function updateCandidate(
   compare("experience", existing.totalExperienceYears?.toString(), d.totalExperienceYears);
   compare("current company", existing.currentCompany, d.currentCompany);
   compare("skills", existing.skills.join(", "), d.skills.join(", "));
+  compare("featured skills", existing.featuredSkills.join(", "), d.featuredSkills.join(", "));
   compare("LinkedIn", existing.linkedinUrl, d.linkedinUrl);
   compare("notes", existing.notes, d.notes);
   compare("status", existing.isActive, d.isActive);

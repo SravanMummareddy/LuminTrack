@@ -26,6 +26,7 @@ export default async function EditCandidatePage({
     totalExperienceYears: candidate.totalExperienceYears?.toString() ?? "",
     currentCompany: candidate.currentCompany ?? "",
     skills: candidate.skills,
+    featuredSkills: candidate.featuredSkills,
     linkedinUrl: candidate.linkedinUrl ?? "",
     notes: candidate.notes ?? "",
     isActive: candidate.isActive,

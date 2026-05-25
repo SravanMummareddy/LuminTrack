@@ -13,7 +13,7 @@ import { getTimelineFor } from "@/server/queries/timeline";
 import { getNotesFor } from "@/server/queries/notes";
 import { changeJobStatus } from "@/server/actions/jobs";
 import { Pagination } from "@/components/ui/pagination";
-import { PAGE_SIZE, parsePage } from "@/lib/filters";
+import { SUB_PAGE_SIZE as PAGE_SIZE, parsePage } from "@/lib/filters";
 import {
   JOB_STATUSES,
   JOB_STATUS_LABEL,
@@ -366,6 +366,7 @@ export default async function JobDetailPage({
               totalPages={submissionsTotalPages}
               total={submissionsTotal}
               paramKey="subs"
+              pageSize={PAGE_SIZE}
             />
           </div>
         )}

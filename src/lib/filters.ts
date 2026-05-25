@@ -57,6 +57,9 @@ export function parseDateRange(params: {
 
 /** Rows per page across the paginated list views. */
 export const PAGE_SIZE = 10;
+/** Rows per page in sub-tables on detail pages (candidate/job/recruiter).
+ *  Smaller than `PAGE_SIZE` so a long list doesn't dominate the page. */
+export const SUB_PAGE_SIZE = 5;
 
 export type SortDir = "asc" | "desc";
 

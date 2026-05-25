@@ -9,22 +9,19 @@ import { NotesSection } from "@/components/notes/notes-section";
 import { ResumeSection } from "@/components/candidates/resume-section";
 import { getCandidateDetail } from "@/server/queries/candidates";
 import { getCandidateSubmissions } from "@/server/queries/submissions";
-import { getCandidateInterviewRounds } from "@/server/queries/interviews";
+import { getCandidateInterviewsGroupedByJob } from "@/server/queries/interviews";
+import { CandidateInterviewsGrouped } from "@/components/candidates/candidate-interviews-grouped";
 import { getTimelineFor } from "@/server/queries/timeline";
 import { getNotesFor } from "@/server/queries/notes";
 import { Pagination } from "@/components/ui/pagination";
-import { PAGE_SIZE, parsePage } from "@/lib/filters";
+import { SUB_PAGE_SIZE as PAGE_SIZE, parsePage } from "@/lib/filters";
 import {
   SUBMISSION_STATUS_LABEL,
   SUBMISSION_STATUS_TONE,
-  INTERVIEW_TYPE_LABEL,
-  INTERVIEW_RESULT_LABEL,
-  INTERVIEW_RESULT_TONE,
   jobSourceLabel,
 } from "@/lib/labels";
 import {
   formatDate,
-  formatDateTime,
   formatExperience,
   formatCandidateDisplayId,
   formatSubmissionDisplayId,
@@ -94,7 +91,7 @@ export default async function CandidateDetailPage({
   ] = await Promise.all([
     getCandidateDetail(id),
     getCandidateSubmissions(id, { page: subsPage }),
-    getCandidateInterviewRounds(id, { page: intsPage }),
+    getCandidateInterviewsGroupedByJob(id, { page: intsPage }),
     getTimelineFor("CANDIDATE", id),
     getNotesFor("CANDIDATE", id),
   ]);
@@ -198,11 +195,22 @@ export default async function CandidateDetailPage({
             {candidate.skills.length === 0 ? (
               <span className="text-sm text-slate-500">No skills listed</span>
             ) : (
-              candidate.skills.map((s) => (
-                <Badge key={s} tone="indigo">
-                  {s}
-                </Badge>
-              ))
+              // Starred skills lead, with a ★ glyph. Falls back to the natural
+              // skills order when nothing is starred.
+              [
+                ...candidate.featuredSkills,
+                ...candidate.skills.filter(
+                  (s) => !candidate.featuredSkills.includes(s),
+                ),
+              ].map((s) => {
+                const starred = candidate.featuredSkills.includes(s);
+                return (
+                  <Badge key={s} tone={starred ? "amber" : "indigo"}>
+                    {starred ? "★ " : ""}
+                    {s}
+                  </Badge>
+                );
+              })
             )}
           </dd>
         </div>
@@ -284,6 +292,7 @@ export default async function CandidateDetailPage({
               totalPages={submissionsTotalPages}
               total={submissionsTotal}
               paramKey="subs"
+              pageSize={PAGE_SIZE}
             />
           </div>
         )}
@@ -295,51 +304,7 @@ export default async function CandidateDetailPage({
             No interviews recorded for this candidate yet.
           </p>
         ) : (
-          <Table>
-            <thead className="border-b border-slate-200 bg-slate-50">
-              <tr>
-                <Th>Job</Th>
-                <Th>Round</Th>
-                <Th>Type</Th>
-                <Th>Interviewer</Th>
-                <Th>Date &amp; time</Th>
-                <Th>Result</Th>
-                <Th>Feedback</Th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {interviews.map((r) => (
-                <tr key={r.id} className="hover:bg-slate-50">
-                  <Td label="Job">
-                    <Link
-                      href={`/submissions/${r.submission.id}`}
-                      className="font-medium text-indigo-600 hover:underline"
-                    >
-                      {r.submission.job.title}
-                    </Link>
-                  </Td>
-                  <Td label="Round">
-                    Round {r.roundOrder} · {r.roundName}
-                  </Td>
-                  <Td label="Type">{INTERVIEW_TYPE_LABEL[r.interviewType]}</Td>
-                  <Td label="Interviewer">{r.interviewerName || "—"}</Td>
-                  <Td label="Date & time" className="whitespace-nowrap">
-                    {r.scheduledAt ? formatDateTime(r.scheduledAt) : "—"}
-                  </Td>
-                  <Td label="Result">
-                    <Badge tone={INTERVIEW_RESULT_TONE[r.result]}>
-                      {INTERVIEW_RESULT_LABEL[r.result]}
-                    </Badge>
-                  </Td>
-                  <Td label="Feedback">
-                    <span className="block max-w-xs whitespace-pre-wrap">
-                      {r.feedback || "—"}
-                    </span>
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
+          <CandidateInterviewsGrouped rows={interviews} />
         )}
         {interviewsTotal > PAGE_SIZE && (
           <div className="mt-3">
@@ -348,6 +313,7 @@ export default async function CandidateDetailPage({
               totalPages={interviewsTotalPages}
               total={interviewsTotal}
               paramKey="ints"
+              pageSize={PAGE_SIZE}
             />
           </div>
         )}

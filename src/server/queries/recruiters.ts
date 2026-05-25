@@ -4,7 +4,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import type { SubmissionStatus, UserRole } from "@/generated/prisma/enums";
 import { buildSubmissionWhere, type AnalyticsFilters } from "@/lib/analytics";
 import { OTHER_SOURCE } from "@/lib/labels";
-import { PAGE_SIZE, type SortState } from "@/lib/filters";
+import { PAGE_SIZE, SUB_PAGE_SIZE, type SortState } from "@/lib/filters";
 
 /** Client/vendor/source filter for a job — used for assignment counts. */
 function jobOrgWhere(f: AnalyticsFilters): Prisma.JobWhereInput {
@@ -228,12 +228,12 @@ export async function getRecruiterDetail(
     }),
   ]);
 
-  const jobsTotalPages = Math.max(1, Math.ceil(jobsTotal / PAGE_SIZE));
+  const jobsTotalPages = Math.max(1, Math.ceil(jobsTotal / SUB_PAGE_SIZE));
   const jobsPage = Math.min(
     Math.max(1, opts.jobsPage ?? 1),
     jobsTotalPages,
   );
-  const subsTotalPages = Math.max(1, Math.ceil(subsTotal / PAGE_SIZE));
+  const subsTotalPages = Math.max(1, Math.ceil(subsTotal / SUB_PAGE_SIZE));
   const subsPage = Math.min(
     Math.max(1, opts.subsPage ?? 1),
     subsTotalPages,
@@ -243,8 +243,8 @@ export async function getRecruiterDetail(
     prisma.jobAssignment.findMany({
       where: assignmentWhere,
       orderBy: { assignedAt: "desc" },
-      skip: (jobsPage - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
+      skip: (jobsPage - 1) * SUB_PAGE_SIZE,
+      take: SUB_PAGE_SIZE,
       include: {
         job: {
           select: {
@@ -261,8 +261,8 @@ export async function getRecruiterDetail(
     prisma.submission.findMany({
       where: displaySubmissionWhere,
       orderBy: { submittedAt: "desc" },
-      skip: (subsPage - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
+      skip: (subsPage - 1) * SUB_PAGE_SIZE,
+      take: SUB_PAGE_SIZE,
       select: {
         id: true,
         status: true,

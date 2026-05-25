@@ -26,7 +26,7 @@ import {
 } from "@/server/queries/org";
 import { parseAnalyticsParams } from "@/lib/analytics";
 import { Pagination } from "@/components/ui/pagination";
-import { PAGE_SIZE, parsePage } from "@/lib/filters";
+import { SUB_PAGE_SIZE as PAGE_SIZE, parsePage } from "@/lib/filters";
 import {
   JOB_STATUS_LABEL,
   JOB_STATUS_TONE,
@@ -257,6 +257,7 @@ export default async function RecruiterDetailPage({
               totalPages={assignmentsTotalPages}
               total={assignmentsTotal}
               paramKey="jobs"
+              pageSize={PAGE_SIZE}
             />
           </div>
         )}
@@ -331,6 +332,7 @@ export default async function RecruiterDetailPage({
               totalPages={submissionsTotalPages}
               total={submissionsTotal}
               paramKey="rsubs"
+              pageSize={PAGE_SIZE}
             />
           </div>
         )}

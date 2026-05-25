@@ -25,6 +25,7 @@ export const candidateSchema = z
     totalExperienceYears: optionalExperience,
     currentCompany: optionalText,
     skills: z.array(z.string().trim().min(1)).max(60).default([]),
+    featuredSkills: z.array(z.string().trim().min(1)).max(3).default([]),
     linkedinUrl: optionalUrl,
     notes: optionalText,
     isActive: z.boolean(),
@@ -34,6 +35,10 @@ export const candidateSchema = z
     // banner — pinning it to `email` falsely implied the email field itself
     // was the problem when in practice either field can satisfy the rule.
     message: "Enter at least an email address or a phone number.",
+  })
+  .refine((d) => d.featuredSkills.every((s) => d.skills.includes(s)), {
+    message: "Starred skills must come from the Skills list.",
+    path: ["featuredSkills"],
   });
 
 export type CandidateInput = z.infer<typeof candidateSchema>;
