@@ -28,6 +28,7 @@ export type InterviewRoundData = {
   interviewerName: string | null;
   interviewMode: string | null;
   interviewPlatform: string | null;
+  meetingLink: string | null;
   scheduledAt: Date | string | null;
   result: InterviewResult;
   feedback: string | null;
@@ -177,6 +178,21 @@ export function InterviewRoundForm({
             id="interviewerName"
             name="interviewerName"
             defaultValue={round?.interviewerName ?? ""}
+          />
+        </Field>
+
+        <Field
+          label="Meeting link"
+          htmlFor="meetingLink"
+          error={errors.meetingLink}
+        >
+          <Input
+            id="meetingLink"
+            name="meetingLink"
+            type="url"
+            inputMode="url"
+            placeholder="https://…"
+            defaultValue={round?.meetingLink ?? ""}
           />
         </Field>
 

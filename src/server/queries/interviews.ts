@@ -84,6 +84,7 @@ export async function getCandidateInterviewsGroupedByJob(
           interviewType: true,
           interviewMode: true,
           interviewPlatform: true,
+          meetingLink: true,
           interviewerName: true,
           scheduledAt: true,
           result: true,

@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { optionalText, optionalDateTime, emptyToUndefined } from "./common";
+import {
+  optionalText,
+  optionalDateTime,
+  optionalUrl,
+  emptyToUndefined,
+} from "./common";
 import { INTERVIEW_MODES, INTERVIEW_PLATFORMS } from "@/lib/labels";
 
 export const INTERVIEW_TYPE_VALUES = [
@@ -36,6 +41,7 @@ export const interviewRoundSchema = z
       emptyToUndefined,
       z.enum(INTERVIEW_PLATFORMS).optional(),
     ),
+    meetingLink: optionalUrl,
     scheduledAt: optionalDateTime,
     feedback: optionalText,
     notes: optionalText,
