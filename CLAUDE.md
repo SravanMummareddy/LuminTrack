@@ -8,6 +8,8 @@ timeline, and recruiter performance. Replaces a manual Excel/Word process.
 
 **Source of truth for requirements:** `docs/PROJECT_REQUIREMENTS.md`
 **Approved build plan:** `~/.claude/plans/we-have-the-requirements-optimized-balloon.md`
+**Open work / bug backlog:** `bugs.md` (top of file has a grouped
+"Remaining work" summary — start there before grepping the audit sections).
 
 ## 🚧 Current work — iLabor requisition import (Phase 8b: browser extension is next)
 
@@ -58,6 +60,13 @@ snapshot, file map, resolved decisions, iLabor JSON sample. The architectural
   pattern), and the collapsed group row reorganized into a two-cluster
   layout — `Job · Client` on the left, `[status] [pips] date See details`
   on the right — fixing the "stacked at narrow widths" complaint.
+- **Narrow-width hardening (2026-05-25, commits `3683f2f`, `596bd9b`):**
+  the interview-history summary row's two clusters now wrap as *units*
+  at every viewport tested (1280 → 360 px). The `·` separator binds to
+  the client name in a single inline-flex span, and the date + "See
+  details ▾" toggle share a `whitespace-nowrap` span so they never
+  orphan. Pip row tightened to `flex-nowrap` (capped at 5 so width is
+  bounded). Verified with Playwright MCP screenshots.
 - **Process:** phase-by-phase with product-owner confirmation between phases;
   teaching-style narration of meaningful code; additive only — the existing
   dashboard's behavior is unchanged for anyone not exercising the new flow.
