@@ -37,7 +37,7 @@ export function CandidateInterviewsGrouped({
             className="rounded-md border border-slate-200 bg-white"
           >
             <details className="group">
-              <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 hover:bg-slate-50">
+              <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:[outline-offset:-2px]">
                 <Link
                   href={`/submissions/${sub.id}`}
                   className="font-medium text-indigo-600 hover:underline"

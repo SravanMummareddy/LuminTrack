@@ -20,6 +20,9 @@ const sizeClass: Record<Size, string> = {
 export function buttonClass(variant: Variant = "primary", size: Size = "md"): string {
   return cn(
     "inline-flex items-center justify-center gap-1.5 rounded-md border font-medium shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60",
+    // Visible keyboard focus — every Button / LinkButton / anchor that uses
+    // buttonClass() gets the indigo ring. Hover styles remain per-variant.
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2",
     variantClass[variant],
     sizeClass[size],
   );

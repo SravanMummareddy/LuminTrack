@@ -1,25 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { NavLinks } from "@/components/layout/nav-links";
+import { useFocusTrap } from "@/lib/use-focus-trap";
 
 export function MobileNav() {
   const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("keydown", onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [open]);
+  const panelRef = useRef<HTMLElement>(null);
+  // Focus trap + Escape + body-scroll lock + focus return-to-burger come
+  // from the shared hook, which also powers the Dialog component.
+  useFocusTrap(open, panelRef, () => setOpen(false));
 
   return (
     <>
@@ -42,7 +33,12 @@ export function MobileNav() {
       />
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-white shadow-xl transition-transform md:hidden ${
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Navigation menu"
+        tabIndex={-1}
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-white shadow-xl outline-none transition-transform md:hidden ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
