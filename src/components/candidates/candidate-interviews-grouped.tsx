@@ -45,6 +45,9 @@ export function CandidateInterviewsGrouped({
                   {sub.job.title}
                 </Link>
                 <span className="text-sm text-slate-600">
+                  <span aria-hidden className="mr-2 text-slate-300">
+                    ·
+                  </span>
                   {sub.job.client.name}
                 </span>
                 <Badge tone={SUBMISSION_STATUS_TONE[sub.status]}>
@@ -71,48 +74,48 @@ export function CandidateInterviewsGrouped({
                 </span>
               </summary>
 
-              <div className="border-t border-slate-100 px-4 py-3">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto border-t border-slate-100 px-4 py-3">
+                <table className="w-full min-w-[720px] text-sm">
                   <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
                     <tr>
-                      <th className="py-1 pr-3 font-medium">Round</th>
-                      <th className="py-1 pr-3 font-medium">Type</th>
-                      <th className="py-1 pr-3 font-medium">Mode</th>
-                      <th className="py-1 pr-3 font-medium">Interviewer</th>
-                      <th className="py-1 pr-3 font-medium">Scheduled</th>
-                      <th className="py-1 pr-3 font-medium">Result</th>
-                      <th className="py-1 pr-3 font-medium">Feedback</th>
+                      <th className="px-3 py-1 font-medium first:pl-0">Round</th>
+                      <th className="px-3 py-1 font-medium">Type</th>
+                      <th className="px-3 py-1 font-medium">Mode</th>
+                      <th className="px-3 py-1 font-medium">Interviewer</th>
+                      <th className="px-3 py-1 font-medium">Scheduled</th>
+                      <th className="px-3 py-1 font-medium">Result</th>
+                      <th className="px-3 py-1 font-medium last:pr-0">Feedback</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {sub.interviewRounds.map((r) => (
                       <tr key={r.id}>
-                        <td className="py-2 pr-3 align-top whitespace-nowrap text-slate-700">
+                        <td className="px-3 py-2 align-top whitespace-nowrap text-slate-700 first:pl-0">
                           R{r.roundOrder} · {r.roundName}
                         </td>
-                        <td className="py-2 pr-3 align-top text-slate-600">
+                        <td className="px-3 py-2 align-top whitespace-nowrap text-slate-600">
                           {INTERVIEW_TYPE_LABEL[r.interviewType]}
                         </td>
-                        <td className="py-2 pr-3 align-top text-slate-600">
+                        <td className="px-3 py-2 align-top whitespace-nowrap text-slate-600">
                           {r.interviewMode
                             ? r.interviewPlatform
                               ? `${r.interviewMode} · ${r.interviewPlatform}`
                               : r.interviewMode
                             : "—"}
                         </td>
-                        <td className="py-2 pr-3 align-top text-slate-600">
+                        <td className="px-3 py-2 align-top whitespace-nowrap text-slate-600">
                           {r.interviewerName || "—"}
                         </td>
-                        <td className="py-2 pr-3 align-top whitespace-nowrap text-slate-600">
+                        <td className="px-3 py-2 align-top whitespace-nowrap text-slate-600">
                           {r.scheduledAt ? formatDateTime(r.scheduledAt) : "—"}
                         </td>
-                        <td className="py-2 pr-3 align-top">
+                        <td className="px-3 py-2 align-top">
                           <Badge tone={INTERVIEW_RESULT_TONE[r.result]}>
                             {INTERVIEW_RESULT_LABEL[r.result]}
                           </Badge>
                         </td>
-                        <td className="py-2 pr-3 align-top text-slate-600">
-                          <span className="block max-w-md whitespace-pre-wrap">
+                        <td className="px-3 py-2 align-top text-slate-600 last:pr-0">
+                          <span className="block max-w-xs whitespace-pre-wrap">
                             {r.feedback || "—"}
                           </span>
                         </td>
