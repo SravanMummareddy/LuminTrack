@@ -31,10 +31,17 @@ export function Pagination({
   page,
   totalPages,
   total,
+  paramKey = "page",
 }: {
   page: number;
   totalPages: number;
   total: number;
+  /**
+   * URL search-param this paginator writes to. Defaults to "page". Set a
+   * unique key (e.g. "subs", "ints") so multiple paginated sub-tables can
+   * coexist on the same detail page without stomping each other.
+   */
+  paramKey?: string;
 }) {
   const pathname = usePathname();
   const params = useSearchParams();
@@ -45,7 +52,7 @@ export function Pagination({
 
   const hrefFor = (p: number) => {
     const next = new URLSearchParams(params.toString());
-    next.set("page", String(p));
+    next.set(paramKey, String(p));
     return `${pathname}?${next.toString()}`;
   };
 

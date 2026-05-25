@@ -12,6 +12,8 @@ import { getCandidateSubmissions } from "@/server/queries/submissions";
 import { getCandidateInterviewRounds } from "@/server/queries/interviews";
 import { getTimelineFor } from "@/server/queries/timeline";
 import { getNotesFor } from "@/server/queries/notes";
+import { Pagination } from "@/components/ui/pagination";
+import { PAGE_SIZE, parsePage } from "@/lib/filters";
 import {
   SUBMISSION_STATUS_LABEL,
   SUBMISSION_STATUS_TONE,
@@ -62,19 +64,49 @@ function Card({
 
 export default async function CandidateDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const { id } = await params;
-  const [candidate, submissions, interviews, timeline, notes] =
-    await Promise.all([
-      getCandidateDetail(id),
-      getCandidateSubmissions(id),
-      getCandidateInterviewRounds(id),
-      getTimelineFor("CANDIDATE", id),
-      getNotesFor("CANDIDATE", id),
-    ]);
+  const sp = await searchParams;
+  const subsPage = parsePage(
+    Array.isArray(sp.subs) ? sp.subs[0] : sp.subs,
+  );
+  const intsPage = parsePage(
+    Array.isArray(sp.ints) ? sp.ints[0] : sp.ints,
+  );
+  const [
+    candidate,
+    {
+      rows: submissions,
+      total: submissionsTotal,
+      page: submissionsPage,
+    },
+    {
+      rows: interviews,
+      total: interviewsTotal,
+      page: interviewsPage,
+    },
+    timeline,
+    notes,
+  ] = await Promise.all([
+    getCandidateDetail(id),
+    getCandidateSubmissions(id, { page: subsPage }),
+    getCandidateInterviewRounds(id, { page: intsPage }),
+    getTimelineFor("CANDIDATE", id),
+    getNotesFor("CANDIDATE", id),
+  ]);
   if (!candidate) notFound();
+  const submissionsTotalPages = Math.max(
+    1,
+    Math.ceil(submissionsTotal / PAGE_SIZE),
+  );
+  const interviewsTotalPages = Math.max(
+    1,
+    Math.ceil(interviewsTotal / PAGE_SIZE),
+  );
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
@@ -195,8 +227,8 @@ export default async function CandidateDetailPage({
         }))}
       />
 
-      <Card title={`Job submissions (${submissions.length})`}>
-        {submissions.length === 0 ? (
+      <Card title={`Job submissions (${submissionsTotal})`}>
+        {submissionsTotal === 0 ? (
           <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
             This candidate has not been submitted to any jobs yet.
           </p>
@@ -222,7 +254,7 @@ export default async function CandidateDetailPage({
                   </Td>
                   <Td label="Job">
                     <Link
-                      href={`/submissions/${s.id}`}
+                      href={`/jobs/${s.job.id}`}
                       className="font-medium text-indigo-600 hover:underline"
                     >
                       {s.job.title}
@@ -245,10 +277,20 @@ export default async function CandidateDetailPage({
             </tbody>
           </Table>
         )}
+        {submissionsTotal > PAGE_SIZE && (
+          <div className="mt-3">
+            <Pagination
+              page={submissionsPage}
+              totalPages={submissionsTotalPages}
+              total={submissionsTotal}
+              paramKey="subs"
+            />
+          </div>
+        )}
       </Card>
 
-      <Card title={`Interview history (${interviews.length})`}>
-        {interviews.length === 0 ? (
+      <Card title={`Interview history (${interviewsTotal})`}>
+        {interviewsTotal === 0 ? (
           <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
             No interviews recorded for this candidate yet.
           </p>
@@ -298,6 +340,16 @@ export default async function CandidateDetailPage({
               ))}
             </tbody>
           </Table>
+        )}
+        {interviewsTotal > PAGE_SIZE && (
+          <div className="mt-3">
+            <Pagination
+              page={interviewsPage}
+              totalPages={interviewsTotalPages}
+              total={interviewsTotal}
+              paramKey="ints"
+            />
+          </div>
         )}
       </Card>
 

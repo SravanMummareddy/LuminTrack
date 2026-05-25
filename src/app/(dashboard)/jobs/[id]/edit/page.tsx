@@ -25,6 +25,9 @@ export default async function EditJobPage({
   ]);
   if (!job) notFound();
 
+  const toDateInput = (d: Date | null | undefined) =>
+    d ? d.toISOString().slice(0, 10) : "";
+
   const values: JobFormValues = {
     id: job.id,
     title: job.title,
@@ -39,6 +42,13 @@ export default async function EditJobPage({
     description: job.description ?? "",
     notes: job.notes ?? "",
     recruiterIds: job.assignments.map((a) => a.recruiterId),
+    positions: job.positions?.toString() ?? "",
+    reqType: job.reqType ?? "",
+    department: job.department ?? "",
+    durationLabel: job.durationLabel ?? "",
+    atsId: job.atsId ?? "",
+    startDate: toDateInput(job.startDate),
+    endDate: toDateInput(job.endDate),
   };
 
   return (

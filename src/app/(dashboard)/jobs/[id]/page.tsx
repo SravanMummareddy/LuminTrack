@@ -12,6 +12,8 @@ import { getJobSubmissions } from "@/server/queries/submissions";
 import { getTimelineFor } from "@/server/queries/timeline";
 import { getNotesFor } from "@/server/queries/notes";
 import { changeJobStatus } from "@/server/actions/jobs";
+import { Pagination } from "@/components/ui/pagination";
+import { PAGE_SIZE, parsePage } from "@/lib/filters";
 import {
   JOB_STATUSES,
   JOB_STATUS_LABEL,
@@ -20,7 +22,13 @@ import {
   SUBMISSION_STATUS_TONE,
   jobSourceLabel,
 } from "@/lib/labels";
-import { formatDate, formatRate, formatJobDisplayId } from "@/lib/format";
+import {
+  formatDate,
+  formatRate,
+  formatJobDisplayId,
+  formatSubmissionDisplayId,
+} from "@/lib/format";
+import { ilaborStatusToJobStatus } from "@/lib/validation/ilabor-import";
 
 function SummaryItem({
   label,
@@ -56,17 +64,39 @@ function Card({
 
 export default async function JobDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const { id } = await params;
-  const [job, submissions, timeline, notes] = await Promise.all([
+  const sp = await searchParams;
+  const subsPage = parsePage(
+    Array.isArray(sp.subs) ? sp.subs[0] : sp.subs,
+  );
+  const [
+    job,
+    { rows: submissions, total: submissionsTotal, page: submissionsPage },
+    timeline,
+    notes,
+  ] = await Promise.all([
     getJobDetail(id),
-    getJobSubmissions(id),
+    getJobSubmissions(id, { page: subsPage }),
     getTimelineFor("JOB", id),
     getNotesFor("JOB", id),
   ]);
   if (!job) notFound();
+  const submissionsTotalPages = Math.max(
+    1,
+    Math.ceil(submissionsTotal / PAGE_SIZE),
+  );
+
+  // For iLabor-linked jobs: warn when the LuminTrack status has drifted from
+  // what iLabor most recently reported. Catches silent post-import re-imports.
+  const ilaborDrift =
+    job.portal && job.externalStatusRaw
+      ? ilaborStatusToJobStatus(job.externalStatusRaw).status !== job.status
+      : false;
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
@@ -132,7 +162,14 @@ export default async function JobDetailPage({
             </SummaryItem>
             <SummaryItem label="Customer ref">{job.atsId ?? "—"}</SummaryItem>
             <SummaryItem label="iLabor status">
-              {job.externalStatusRaw ?? "—"}
+              <span className="inline-flex items-center gap-1.5">
+                {job.externalStatusRaw ?? "—"}
+                {ilaborDrift ? (
+                  <Badge tone="amber">
+                    Differs from LuminTrack ({JOB_STATUS_LABEL[job.status]})
+                  </Badge>
+                ) : null}
+              </span>
             </SummaryItem>
             <SummaryItem label="Position type">{job.reqType ?? "—"}</SummaryItem>
             <SummaryItem label="Department">{job.department ?? "—"}</SummaryItem>
@@ -179,6 +216,34 @@ export default async function JobDetailPage({
           <SummaryItem label="Created by">{job.createdBy.fullName}</SummaryItem>
           <SummaryItem label="Created">{formatDate(job.createdAt)}</SummaryItem>
           <SummaryItem label="Last updated">{formatDate(job.updatedAt)}</SummaryItem>
+          {/* Optional planning fields — only render the ones the recruiter
+              actually filled in. iLabor jobs already show these in their own
+              card above; this surfaces them for manually-added jobs too. */}
+          {!job.portal && job.positions != null && (
+            <SummaryItem label="Positions">{job.positions}</SummaryItem>
+          )}
+          {!job.portal && job.reqType && (
+            <SummaryItem label="Position type">{job.reqType}</SummaryItem>
+          )}
+          {!job.portal && job.department && (
+            <SummaryItem label="Department">{job.department}</SummaryItem>
+          )}
+          {!job.portal && job.durationLabel && (
+            <SummaryItem label="Duration">{job.durationLabel}</SummaryItem>
+          )}
+          {!job.portal && job.startDate && (
+            <SummaryItem label="Projected start">
+              {formatDate(job.startDate)}
+            </SummaryItem>
+          )}
+          {!job.portal && job.endDate && (
+            <SummaryItem label="Projected end">
+              {formatDate(job.endDate)}
+            </SummaryItem>
+          )}
+          {!job.portal && job.atsId && (
+            <SummaryItem label="Customer ref">{job.atsId}</SummaryItem>
+          )}
         </dl>
 
         <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -221,14 +286,14 @@ export default async function JobDetailPage({
       <section className="rounded-lg border border-slate-200 bg-white p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-slate-700">
-            Submitted candidates ({submissions.length})
+            Submitted candidates ({submissionsTotal})
           </h2>
           <LinkButton href={`/jobs/${job.id}/submissions/new`} size="sm">
             <Plus className="h-4 w-4" />
             Submit candidate
           </LinkButton>
         </div>
-        {submissions.length === 0 ? (
+        {submissionsTotal === 0 ? (
           <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
             No candidates submitted to this job yet.
           </p>
@@ -236,6 +301,7 @@ export default async function JobDetailPage({
           <Table>
             <thead className="border-b border-slate-200 bg-slate-50">
               <tr>
+                <Th>Sub ID</Th>
                 <Th>Candidate</Th>
                 <Th>Submitted by</Th>
                 <Th>Submitted</Th>
@@ -248,6 +314,9 @@ export default async function JobDetailPage({
             <tbody className="divide-y divide-slate-100">
               {submissions.map((s) => (
                 <tr key={s.id} className="hover:bg-slate-50">
+                  <Td label="Sub ID" secondary className="font-mono text-xs">
+                    {formatSubmissionDisplayId(s)}
+                  </Td>
                   <Td label="Candidate">
                     <Link
                       href={`/submissions/${s.id}`}
@@ -289,6 +358,16 @@ export default async function JobDetailPage({
               ))}
             </tbody>
           </Table>
+        )}
+        {submissionsTotal > PAGE_SIZE && (
+          <div className="mt-3">
+            <Pagination
+              page={submissionsPage}
+              totalPages={submissionsTotalPages}
+              total={submissionsTotal}
+              paramKey="subs"
+            />
+          </div>
         )}
       </section>
 
