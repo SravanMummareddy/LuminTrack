@@ -1,11 +1,43 @@
-1. in settings there is no filter option for the avilable fields - mostly care about status
-2. need to add client contacts in setting in setting tab and similarly for vendors - name email and phone and location if possible
-3. source in jobs need not come from a dropdown list of sister companies - so we need to provide option to enter manualy as well, like sister company others, if others is selected we can manually enter the source
-4. also change the name from sister company source to just source.
-5. once candidate is moved from our company how to track it, should we also include active - inactive status for candidates?
-6. submitted date we are not able to update in update status.
-7. by deafult show present date and time in when this happened field - currently it is showing empty.
-8. we need to add one more field in interview round, - video, just phone call, in person interview? - teams, google meet etc - could be dropdown.
+# Remaining work (2026-05-25 sweep)
+
+**Small / no migration** — can ship in one PR each:
+- **§C4** — capture duplicate-submission override reason in audit.
+- **§D4** — interview reschedule audit row (today `scheduledAt` is silently overwritten).
+- **§K1** — mobile column-picker drag-handle tap targets (swap for ↑/↓ buttons <768 px).
+- **§H2** — recently-viewed strip in topbar (last 5 jobs + candidates).
+
+**Medium / migration required:**
+- **§C1** — add `OFFER_ACCEPTED` between `OFFER_RELEASED` and `JOINED`.
+- **§C2** — `Submission.expectedJoinDate` + `actualJoinDate` (today only binary JOINED).
+- **§A2** — `Job.workMode` + `Job.priority` enums (plus nullable `targetCloseDate`, `postingUrl`, `workAuthRequirement`, `skills[]`).
+- **§B1** — `Contact` table tied to Client/Vendor/SisterCompanySource.
+- **§B4** — Candidate status reasons enum (`AVAILABLE | PLACED | NOT_INTERESTED | DO_NOT_CONTACT`).
+- **§D5** — interview time-zone string.
+- **§E2-E4** — candidate tags/labels, last-contact tracking, per-candidate source.
+- **§F3, F4** — recruiter aging report; revenue projection.
+- **§J2** — admin `/audit` global page.
+
+**Large / out of scope for demo polish:**
+- **§G1-G3** — in-app notifications, email digests, Slack/Teams webhooks (XL each).
+- **§J1** — PII export / right-to-be-forgotten (L).
+- **§E1** — resume parsing via Affinda/Sovren/LLM (XL).
+- **§F2** — time-to-fill / time-in-stage metrics (L).
+- **§J3, J4** — admin 2FA, session inspector.
+- **§I4** — dark mode / high contrast.
+
+**Stale items already shipped but listed below as open** (verified 2026-05-25):
+- Original notes #6, #7, #8 ✅; Round 2 §11 (drift badge) ✅; Skills hint ✅.
+
+---
+
+1. ~~in settings there is no filter option for the avilable fields - mostly care about status~~ — partial: per-row Active/Inactive toggles exist; status-based filter on entity pickers is still §B2.
+2. **OPEN** — need to add client contacts in setting in setting tab and similarly for vendors - name email and phone and location if possible. (Tracked as Round 3 §B1.)
+3. ~~source in jobs need not come from a dropdown list of sister companies — manual "Other" option~~ ✅ shipped.
+4. ~~change the name from sister company source to just source.~~ ✅ shipped (audit remaining labels — Round 3 §B3).
+5. **OPEN** — once candidate is moved from our company how to track it, should we also include active - inactive status for candidates? (Active flag exists; richer status reasons tracked as Round 3 §B4.)
+6. ~~submitted date we are not able to update in update status.~~ ✅ addressed — the status form links to `/submissions/[id]/edit` for correcting the original submitted date.
+7. ~~by default show present date and time in when this happened field~~ ✅ shipped — `submission-status-form.tsx` seeds `eventAt` with `nowDateTimeLocal()` on mount.
+8. ~~interview round mode/platform dropdown~~ ✅ shipped — `InterviewRound.interviewMode` / `interviewPlatform` + meeting link (Round 4 #1).
 
 ---
 
@@ -63,9 +95,10 @@ also shipped in the same batch.**
     field**, confusing since phone is also optional-looking. Add a hint above
     both fields. `src/lib/validation/candidate.ts` ~L32 +
     `src/components/candidates/candidate-form.tsx` ~L108. **S**.
-11. **No visual warning when LuminTrack `status` differs from iLabor
-    `externalStatusRaw`.** Recruiters silently miss drift after a re-import.
-    Small amber badge on `/jobs/[id]`. **M**.
+11. ~~**No visual warning when LuminTrack `status` differs from iLabor
+    `externalStatusRaw`.**~~ ✅ shipped — amber "Differs from LuminTrack (X)"
+    badge on `/jobs/[id]` next to the iLabor status row
+    (`jobs/[id]/page.tsx:96-99,167-171`).
 12. **Dialog has no focus trap or focus restoration.** Keyboard / screen-reader
     unfriendly. `src/components/ui/dialog.tsx` ~L38. **M**.
 13. **Mobile topbar search overlaps user avatar** on narrow tablets.
@@ -82,7 +115,7 @@ also shipped in the same batch.**
 - ~~StatCard tooltips clarifying "what filters are applied."~~ ✅
 - ~~"Jobs by source" chart: cap at top-5 + "Other" bucket.~~ ✅
 - ~~Recruiter-detail "Submissions" table needs sortable columns / status filter.~~ ✅ (status pill row; sort still TODO)
-- Skills field: "Separate with commas" hint. `src/components/candidates/candidate-form.tsx`.
+- ~~Skills field: "Separate with commas" hint.~~ ✅ shipped (`candidate-form.tsx:219`).
 - ~~Submission-edit form: `submittedAt` input not marked `required`.~~ ✅
 - ~~Settings user form: a checkbox label missing `htmlFor`.~~ ✅
 - ~~Default recruiter assignment on new jobs: optional but unclear — add help text or make required.~~ ✅ (help text added)
@@ -173,9 +206,11 @@ Echoes user's original notes 1-4 + 5.
 4. 🟡 **No "duplicate submission" override note.** The duplicate-check
    today blocks; sometimes recruiters re-submit because the role rebooted.
    Capture the override reason in the audit. **S**.
-5. 🟡 **Submitted date not editable in "Update status"** (user note #6).
-   Schema already supports it; just add a controlled input to the form.
-   **S**.
+5. ~~**Submitted date not editable in "Update status"** (user note #6).~~
+   ✅ addressed — the status form's helper text now links directly to
+   `/submissions/[id]/edit` for correcting `submittedAt`. Inline editing
+   on the status form intentionally skipped to keep that form focused
+   on the status change itself.
 
 ## D. Interview rounds (your note #8)
 
