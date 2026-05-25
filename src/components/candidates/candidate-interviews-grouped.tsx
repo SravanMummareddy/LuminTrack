@@ -45,8 +45,9 @@ export function CandidateInterviewsGrouped({
                   >
                     {sub.job.title}
                   </Link>
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
                     <span>{sub.job.client.name}</span>
+                    <span aria-hidden className="text-slate-300">·</span>
                     <Badge tone={SUBMISSION_STATUS_TONE[sub.status]}>
                       {SUBMISSION_STATUS_LABEL[sub.status]}
                     </Badge>
