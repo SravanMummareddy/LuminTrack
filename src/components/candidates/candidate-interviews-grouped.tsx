@@ -74,55 +74,64 @@ export function CandidateInterviewsGrouped({
                 </span>
               </summary>
 
-              <div className="overflow-x-auto border-t border-slate-100 px-4 py-3">
-                <table className="w-full min-w-[720px] text-sm">
-                  <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
-                    <tr>
-                      <th className="px-3 py-1 font-medium first:pl-0">Round</th>
-                      <th className="px-3 py-1 font-medium">Type</th>
-                      <th className="px-3 py-1 font-medium">Mode</th>
-                      <th className="px-3 py-1 font-medium">Interviewer</th>
-                      <th className="px-3 py-1 font-medium">Scheduled</th>
-                      <th className="px-3 py-1 font-medium">Result</th>
-                      <th className="px-3 py-1 font-medium last:pr-0">Feedback</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {sub.interviewRounds.map((r) => (
-                      <tr key={r.id}>
-                        <td className="px-3 py-2 align-top whitespace-nowrap text-slate-700 first:pl-0">
-                          R{r.roundOrder} · {r.roundName}
-                        </td>
-                        <td className="px-3 py-2 align-top whitespace-nowrap text-slate-600">
-                          {INTERVIEW_TYPE_LABEL[r.interviewType]}
-                        </td>
-                        <td className="px-3 py-2 align-top whitespace-nowrap text-slate-600">
-                          {r.interviewMode
-                            ? r.interviewPlatform
-                              ? `${r.interviewMode} · ${r.interviewPlatform}`
-                              : r.interviewMode
-                            : "—"}
-                        </td>
-                        <td className="px-3 py-2 align-top whitespace-nowrap text-slate-600">
-                          {r.interviewerName || "—"}
-                        </td>
-                        <td className="px-3 py-2 align-top whitespace-nowrap text-slate-600">
-                          {r.scheduledAt ? formatDateTime(r.scheduledAt) : "—"}
-                        </td>
-                        <td className="px-3 py-2 align-top">
-                          <Badge tone={INTERVIEW_RESULT_TONE[r.result]}>
-                            {INTERVIEW_RESULT_LABEL[r.result]}
-                          </Badge>
-                        </td>
-                        <td className="px-3 py-2 align-top text-slate-600 last:pr-0">
-                          <span className="block max-w-xs whitespace-pre-wrap">
-                            {r.feedback || "—"}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="space-y-3 border-t border-slate-100 px-4 py-3">
+                {sub.interviewRounds.map((r) => (
+                  <div
+                    key={r.id}
+                    className="rounded-md border border-slate-200 bg-slate-50/60 p-3"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-medium text-slate-800">
+                        R{r.roundOrder} · {r.roundName}
+                      </p>
+                      <Badge tone={INTERVIEW_RESULT_TONE[r.result]}>
+                        {INTERVIEW_RESULT_LABEL[r.result]}
+                      </Badge>
+                    </div>
+                    <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <RoundItem label="Type">
+                        {INTERVIEW_TYPE_LABEL[r.interviewType]}
+                      </RoundItem>
+                      <RoundItem label="Mode">
+                        {r.interviewMode
+                          ? r.interviewPlatform
+                            ? `${r.interviewMode} · ${r.interviewPlatform}`
+                            : r.interviewMode
+                          : "—"}
+                      </RoundItem>
+                      <RoundItem label="Interviewer">
+                        {r.interviewerName || "—"}
+                      </RoundItem>
+                      <RoundItem label="Scheduled">
+                        {r.scheduledAt ? formatDateTime(r.scheduledAt) : "—"}
+                      </RoundItem>
+                      <RoundItem label="Meeting link">
+                        {r.meetingLink ? (
+                          <a
+                            href={r.meetingLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="break-all text-indigo-600 hover:underline"
+                          >
+                            Join
+                          </a>
+                        ) : (
+                          "—"
+                        )}
+                      </RoundItem>
+                    </dl>
+                    {r.feedback && (
+                      <div className="mt-3">
+                        <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                          Feedback
+                        </dt>
+                        <dd className="mt-0.5 whitespace-pre-wrap text-sm text-slate-800">
+                          {r.feedback}
+                        </dd>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </details>
           </li>
@@ -169,5 +178,22 @@ function RoundPip({
     >
       <Icon className="h-3 w-3" aria-hidden />R{order}
     </span>
+  );
+}
+
+function RoundItem({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">
+        {label}
+      </dt>
+      <dd className="mt-0.5 text-sm text-slate-800">{children}</dd>
+    </div>
   );
 }
