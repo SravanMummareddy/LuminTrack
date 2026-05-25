@@ -19,7 +19,7 @@ export function Topbar({ name, role }: TopbarProps) {
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 md:gap-4 md:px-6">
       <MobileNav />
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 max-w-xs flex-1 sm:max-w-md">
         <GlobalSearch />
       </div>
       <div className="flex shrink-0 items-center gap-3">

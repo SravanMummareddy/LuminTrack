@@ -206,8 +206,12 @@ function UserForm({
         />
       </Field>
 
-      <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+      <label
+        htmlFor="user-isActive"
+        className="flex items-center gap-2 text-sm font-medium text-slate-700"
+      >
         <input
+          id="user-isActive"
           type="checkbox"
           name="isActive"
           defaultChecked={entity?.isActive ?? true}
