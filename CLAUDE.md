@@ -49,6 +49,15 @@ snapshot, file map, resolved decisions, iLabor JSON sample. The architectural
   `?scope=me|org` Dashboard toggle (defaults to `me` for recruiters,
   `org` for admins) plus a "My work — needs attention" card driven
   by a new `getMyWork(userId)` query.
+- **Post-demo polish shipped 2026-05-25** (commits `3cd010c..ea73c31`):
+  optional `meetingLink` URL on `InterviewRound` (migration
+  `20260525120000_interview_meeting_link`) with form input + "Join"
+  link on round cards and the candidate interview-history sub-table;
+  candidate interview-history switched from a cramped `<table>` to
+  per-round mini-cards (mirrors `interview-rounds-manager.tsx`
+  pattern), and the collapsed group row reorganized into a two-cluster
+  layout — `Job · Client` on the left, `[status] [pips] date See details`
+  on the right — fixing the "stacked at narrow widths" complaint.
 - **Process:** phase-by-phase with product-owner confirmation between phases;
   teaching-style narration of meaningful code; additive only — the existing
   dashboard's behavior is unchanged for anyone not exercising the new flow.
@@ -90,6 +99,24 @@ snapshot, file map, resolved decisions, iLabor JSON sample. The architectural
 - **Validation**: Zod schemas in `src/lib/validation/*`, shared by client form + server action.
 - **Auth**: `getCurrentUser()` / `requireUser()` from `@/lib/session` for the acting user.
 - No hard-deletes of jobs/candidates — retire via status; org entities via `isActive`.
+
+## Agent tooling — Playwright MCP for visual UI work
+
+Claude Code has **no built-in browser**; the agent can only read source
+files. For iterative UI polish (e.g. the candidate interview-history
+layout work on 2026-05-25), enable the official Playwright MCP server
+so the agent can navigate the running dev server, screenshot rendered
+pages, and inspect the DOM:
+
+```
+claude mcp add playwright npx @playwright/mcp@latest
+```
+
+Then restart Claude Code. Tools like `mcp__playwright__browser_navigate`
+and `mcp__playwright__browser_screenshot` become available. Typical
+loop: run `npm run dev`, ask the agent to navigate to the page, take
+a screenshot, then iterate. Without this, UI feedback is "user
+screenshots a page → drops it in `uploads/` → agent reads the image".
 
 ## Commands
 

@@ -380,6 +380,39 @@ finding — every status `Badge` already renders its enum label as text,
 so color is reinforcement, not the only channel. Not a real
 WCAG 1.4.1 failure.
 
+---
+
+# Post-demo polish — 2026-05-25 (round 4)
+
+User-driven fixes after the Tier 1 batch landed. All shipped same day.
+
+1. ✅ **Interview round meeting link** (D3 from Round 3) — nullable
+   `InterviewRound.meetingLink` URL column (migration
+   `20260525120000_interview_meeting_link`), URL input in the round
+   form alongside mode/platform, and a "Join" link surfaced on each
+   round card (target=_blank, rel=noopener). Commit `3cd010c`.
+
+2. ✅ **Candidate interview-history layout overhaul.** The expanded
+   `<details>` view inside each submission group was a cramped table
+   — short header words ("MODE", "INTERVIEWER", "SCHEDULED") collapsed
+   to zero gap on wider viewports; long datetimes wrapped to two
+   lines and starved every other column. Replaced with per-round
+   mini-cards (`<dl>` grid mirroring `interview-rounds-manager.tsx`)
+   plus a "Join" Meeting link slot. Commits `7fb4320`, `6888b81`.
+
+3. ✅ **Collapsed group summary row reflow.** The always-visible
+   header was one flat `flex-wrap` row with six children, which
+   stacked every item onto its own line at narrow widths. Split into
+   two intentional clusters: `Job Title · Client Name` on the left,
+   `[status badge] [round pips] last-date "See details ▾"` on the
+   right. Long titles truncate inside `min-w-0` instead of pushing
+   the right cluster off-screen. Commits `6eb97bc`, `03480e5`,
+   `fe92f32`, `ea73c31`.
+
+**Tooling note added in CLAUDE.md:** for iterative UI work, install the
+official Playwright MCP server (`claude mcp add playwright npx @playwright/mcp@latest`)
+so the agent can screenshot rendered pages instead of guessing from CSS.
+
 **Tier 2 / Tier 3** items (workflow + scale): autosave on forms,
 "Assign to me" inline, undo on terminal status changes, search
 tokenization (ILIKE + AND of tokens), interview reschedule audit,
