@@ -299,24 +299,35 @@ Pure UI, no schema. ~2 hr.
 
 # Round 3.5 follow-ups (2026-05-25 verification pass)
 
-User-flagged after walking through Round 2:
+User-flagged after walking through Round 2 — **all shipped 2026-05-25**:
 
-1. 🟡 **Dashboard "Active jobs" subtitle is too long to read** —
+1. ✅ ~~**Dashboard "Active jobs" subtitle is too long to read** —
    currently `Assigned · X open · Y on hold total`. Move the "Assigned"
-   qualifier into the tooltip; subtitle becomes `X open · Y on hold`.
-   `src/app/(dashboard)/page.tsx`. **S**.
-2. 🟡 **Skills column on `/candidates` blows up row height** when a
-   candidate has many skills. Plan: hide by default in the column picker
-   + cap at 3 chips + `+N` tooltip when shown.
-   `src/components/candidates/candidates-table.tsx`. **S**.
-3. 🟡 **Top-3 "featured" skills on the candidate form.** Add a chip
-   star-picker so the list view's truncated badges show *important*
-   skills, not arbitrary first-three. Needs migration:
-   `Candidate.featuredSkills String[]`. **M**.
-4. 🟡 **Candidate detail interview history is a wall of rounds.**
-   Replace one-row-per-round with grouped-by-job: per-row pips
-   (✓ ✓ ⌛), last-round date, native `<details>` expand for full
-   round breakdown. New query in `src/server/queries/interviews.ts`,
-   new component, swap rendering on `/candidates/[id]`. **M**.
+   qualifier into the tooltip; subtitle becomes `X open · Y on hold`.~~
+2. ✅ ~~**Skills column on `/candidates` blows up row height** when a
+   candidate has many skills. Hide by default in the column picker
+   + cap at 3 chips + `+N` tooltip when shown.~~
+3. ✅ ~~**Top-3 "featured" skills on the candidate form.** Star-picker
+   chip wall (picked at top, pool below with `+` icons) so the list
+   view's truncated badges show *important* skills. Migration
+   `20260525000000_candidate_featured_skills` adds
+   `Candidate.featuredSkills String[]`.~~
+4. ✅ ~~**Candidate detail interview history is a wall of rounds.**
+   Replaced with grouped-by-job rows: per-row pips (✓ ✓ ⌛), last-round
+   date, native `<details>` expand. New `getCandidateInterviewsGroupedByJob`
+   query + `candidate-interviews-grouped.tsx`.~~
+
+Plus, surfaced during implementation:
+
+5. ✅ **Sub-tables paginated at 5 per page** — candidate
+   submissions/interviews, job's submitted candidates, recruiter's
+   assigned jobs/recent subs. New `SUB_PAGE_SIZE = 5` in
+   `src/lib/filters.ts`; `Pagination` gained a `pageSize` prop and
+   the "Go to page N" jump now appears at >3 pages (was >7).
+6. ✅ **Decimal serialization fix** — `listCandidates` and
+   `listSubmissions` now flatten `Decimal` fields
+   (`totalExperienceYears`, `candidateRate`) to plain numbers before
+   returning, so React 19 doesn't throw "Decimal objects are not
+   supported" when the (now Client Component) tables receive them.
 
 Plan file: `~/.claude/plans/yes-lets-go-with-cosmic-clover.md` Phase B.

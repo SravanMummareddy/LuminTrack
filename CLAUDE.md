@@ -31,8 +31,15 @@ snapshot, file map, resolved decisions, iLabor JSON sample. The architectural
   pagination, collapsed timeline, column pickers on Candidates/Submissions
   with shared `ColumnsMenu` + keyboard reorder, plus Round 3 §A1 (manual
   job form parity for 7 iLabor columns) — all in commits 861c90f..e9d5652
-  (2026-05-25). Round 3.5 follow-ups (skills column truncation, featured
-  skills, grouped interview history) tracked at bottom of bugs.md.
+  (2026-05-25). **Round 3.5 also shipped 2026-05-25**: Dashboard "Active
+  jobs" subtitle tightened, Candidates Skills column hidden-by-default +
+  capped at 3 chips with `+N` tooltip, new `Candidate.featuredSkills`
+  star-picker (chip wall) feeding the list-view truncation, candidate
+  detail Interview History replaced with grouped-by-job rows + ✓/✗/⌛
+  pips + `<details>` expand, sub-tables paginate at `SUB_PAGE_SIZE = 5`
+  (with `Pagination` `pageSize` prop + jump input at >3 pages), and
+  `listCandidates`/`listSubmissions` now flatten Prisma `Decimal`
+  fields before returning so the Client-Component tables don't crash.
 - **Process:** phase-by-phase with product-owner confirmation between phases;
   teaching-style narration of meaningful code; additive only — the existing
   dashboard's behavior is unchanged for anyone not exercising the new flow.
