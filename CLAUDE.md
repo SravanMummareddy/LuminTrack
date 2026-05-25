@@ -40,6 +40,15 @@ snapshot, file map, resolved decisions, iLabor JSON sample. The architectural
   (with `Pagination` `pageSize` prop + jump input at >3 pages), and
   `listCandidates`/`listSubmissions` now flatten Prisma `Decimal`
   fields before returning so the Client-Component tables don't crash.
+  **Tier 1 pre-demo fixes shipped 2026-05-25** (commits
+  `1296300..144296a`): org-entity writes (clients/vendors/sources) gated
+  on admin role; `useFocusTrap` hook extracted from `Dialog` and adopted
+  by `MobileNav`; `buttonClass` gains a visible focus-ring; submission
+  status form uses `useTransition` for a pending button; global topbar
+  search supports ↑/↓/Enter keyboard nav with combobox ARIA; new
+  `?scope=me|org` Dashboard toggle (defaults to `me` for recruiters,
+  `org` for admins) plus a "My work — needs attention" card driven
+  by a new `getMyWork(userId)` query.
 - **Process:** phase-by-phase with product-owner confirmation between phases;
   teaching-style narration of meaningful code; additive only — the existing
   dashboard's behavior is unchanged for anyone not exercising the new flow.

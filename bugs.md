@@ -331,3 +331,60 @@ Plus, surfaced during implementation:
    supported" when the (now Client Component) tables receive them.
 
 Plan file: `~/.claude/plans/yes-lets-go-with-cosmic-clover.md` Phase B.
+
+---
+
+# Pre-demo audit (2026-05-25) — Tier 1 fixes
+
+After Round 3.5 shipped, three review agents (engineering / UX /
+recruiter-as-user) read the live code and produced a ranked punch list.
+Tier 1 = demo-blocking. **All four code-level items shipped 2026-05-25**:
+
+1. ✅ **Org-entity writes (clients, vendors, sources) gated on admin
+   role.** `saveSisterCompany` / `saveVendor` / `saveClient` only
+   required `requireUser()` — any recruiter could rename or deactivate
+   shared records used across every job. Now requires
+   `actor.role === "ADMIN"`. Note: org-entity audit logging is
+   intentionally deferred to a later migration — the `Activity` model's
+   FK columns and `EntityType` / `ActivityAction` enums have no org
+   support today.
+
+2. ✅ **A11y polish bundle** — `Button`/`LinkButton` gained a visible
+   `focus-visible:ring-indigo-500` ring via `buttonClass`; the mobile
+   navigation drawer adopted a `useFocusTrap` hook extracted from
+   `Dialog` (focus capture/return, Tab cycle, Escape close,
+   body-scroll lock) and got `role="dialog" aria-modal="true"`; the
+   candidate-detail Interview-History `<summary>` gained a focus outline.
+
+3. ✅ **Submission status form pending state.** Wrapped
+   `changeSubmissionStatus` in `useTransition`; the Update button now
+   disables and relabels "Updating…" mid-flight, killing the
+   double-click → duplicate-audit-row demo risk.
+
+4. ✅ **Global search keyboard navigation.** Added ArrowUp/Down/Enter
+   with wrap-around plus full combobox ARIA (`role="combobox"`,
+   `aria-controls`, `aria-expanded`, `aria-activedescendant`;
+   `role="listbox"` on the dropdown, `role="option"` +
+   `aria-selected` on each row). Active row highlights at `bg-slate-100`.
+
+5. ✅ **"My work" dashboard scope.** Added `?scope=me|org` URL param
+   (default: `me` for recruiters, `org` for admins). When `me`, the
+   dashboard forces `filters.recruiterId` to the acting user, so every
+   existing KPI and chart focuses on their work. A "My work — needs
+   attention" card lists in-flight submissions stale >7 days and
+   interview rounds with WAITING/NEED_ANOTHER_ROUND results. New query
+   `getMyWork(userId)` in `src/server/queries/dashboard.ts`.
+
+**Skipped** (audit over-aggressive): the "color-only badges fail WCAG"
+finding — every status `Badge` already renders its enum label as text,
+so color is reinforcement, not the only channel. Not a real
+WCAG 1.4.1 failure.
+
+**Tier 2 / Tier 3** items (workflow + scale): autosave on forms,
+"Assign to me" inline, undo on terminal status changes, search
+tokenization (ILIKE + AND of tokens), interview reschedule audit,
+bulk operations, "Action needed" panel for stale rows, candidate
+PDF export, empty-state "Clear filters" CTAs, truncation tooltips on
+JobsTable, pagination jump form mobile wrap, org-entity audit logging
+(schema migration). All deferred until real-user input lands after
+the demo.
