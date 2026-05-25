@@ -24,9 +24,15 @@ snapshot, file map, resolved decisions, iLabor JSON sample. The architectural
   history page, page-jump input, SNo on candidate/submission lists,
   `jobSourceLabel` portal fallback). Phase 8b — the browser extension in a
   separate repo — is the only piece remaining.
-- **Audit follow-ups:** see [`bugs.md`](./bugs.md) "Polish round 2" — a
-  prioritized list of correctness + UX gaps found by a deep-dive audit on
-  2026-05-24. Will be tackled before / alongside the extension.
+- **Audit follow-ups:** see [`bugs.md`](./bugs.md) — "Polish round 2"
+  (2026-05-24 audit) is now **mostly shipped**: correctness items 1–6, UX
+  items 8–14, dialog focus trap, error/not-found pages, mobile topbar,
+  dashboard tooltips + Top-5 source bucket, Reports Joined %, sub-table
+  pagination, collapsed timeline, column pickers on Candidates/Submissions
+  with shared `ColumnsMenu` + keyboard reorder, plus Round 3 §A1 (manual
+  job form parity for 7 iLabor columns) — all in commits 861c90f..e9d5652
+  (2026-05-25). Round 3.5 follow-ups (skills column truncation, featured
+  skills, grouped interview history) tracked at bottom of bugs.md.
 - **Process:** phase-by-phase with product-owner confirmation between phases;
   teaching-style narration of meaningful code; additive only — the existing
   dashboard's behavior is unchanged for anyone not exercising the new flow.
@@ -144,6 +150,23 @@ upgrade, not a functional gate.
   `JOB_IMPORTED` audit entry (enum migration `20260524180000_job_imported_action`)
   with one-off backfill script `prisma/backfill-job-imported.ts`, and
   `jobSourceLabel` portal-name fallback for imported rows.
+- **Polish Round 2 (2026-05-25)** — sub-table pagination with namespaced
+  query params (`?subs=` on jobs/candidates, `?ints=` on candidates,
+  `?jobs=`/`?rsubs=`/`?rstatus=` on recruiters) reusing the existing
+  `Pagination` component (now with an optional `paramKey` prop). Activity
+  timeline became a Client Component that collapses to 5 by default and
+  pages 20-at-a-time when expanded >30 entries; `getTimelineFor` capped at
+  200 rows. Column pickers on `/candidates` + `/submissions` driven by a
+  shared `src/components/ui/columns-menu.tsx` (drag-reorder + ↑/↓ keyboard
+  buttons), replacing ~110 lines of duplication in `JobsTable`. Dialog
+  focus trap + return-focus on close. Dashboard StatCard tooltips + Top-5
+  source bucket + em-dash for zero-row recruiters. Reports gained a
+  Joined % column per dimension. Manual job form parity for 7 nullable
+  iLabor columns (positions, reqType, department, durationLabel, atsId,
+  startDate, endDate) under a collapsible "More job details" section.
+  `error.tsx` + `not-found.tsx` for the dashboard segment.
+  Recruiter-detail status pill filter. Settings Admin Tools card.
+  See commits 861c90f..e9d5652.
 
 ## Docs & demo data
 

@@ -9,7 +9,7 @@
 
 ---
 
-## 1. Status snapshot (2026-05-24, end-of-day)
+## 1. Status snapshot (2026-05-25)
 
 | Phase | What it delivers | Status |
 |---|---|---|
@@ -24,9 +24,13 @@
 | 8a | Polish round: Postgres advisory lock against concurrent imports, per-job `JOB_IMPORTED` audit entry, `/jobs/imports` admin history page, "Last imported" banner on the Randstad tab, page-jump input in `Pagination`, SNo on Candidate + Submission lists, `jobSourceLabel` portal-name fallback, Decimal-serialization fix on the RSC boundary | ✅ |
 | 8b | Browser extension (separate repo, Manifest V3) — intercept `showrequisitionslist`, wrap into the envelope, save / push to LuminTrack | ⏭ **NEXT (new session)** |
 
-**Pre-Phase-8b polish backlog:** see `bugs.md` "Polish round 2" — prioritized
-list of correctness + UX gaps found in the 2026-05-24 audit. We may pick those
-off before / alongside the extension.
+**Pre-Phase-8b polish backlog:** `bugs.md` "Polish round 2" (2026-05-24
+audit) is now **mostly closed** as of 2026-05-25 — commits 861c90f..e9d5652
+shipped correctness items 1–6, UX items 8–14, the dialog focus trap, sub-table
+pagination, collapsed timeline, column pickers on Candidates/Submissions, and
+Round 3 §A1 (manual job form parity for 7 iLabor columns). What remains is
+Round 3.5 (skills column truncation, featured skills with migration, grouped
+interview history) and Rounds 3 §B–K — none block 8b.
 
 **Nothing in the existing dashboard's pre-iLabor behavior has changed.** All
 additions are additive: new routes (`/jobs/import`, `/jobs/imports`), new
