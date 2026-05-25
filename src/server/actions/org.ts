@@ -19,11 +19,22 @@ function readContactOrg(formData: FormData) {
   });
 }
 
+/** Clients, vendors, and sister-company sources are shared org records that
+ *  every job references — letting any recruiter rename or deactivate them
+ *  would silently invalidate other people's work. Admin-only for writes. */
+async function requireAdmin(): Promise<FormState | { ok: true }> {
+  const actor = await requireUser();
+  if (actor.role !== "ADMIN")
+    return { error: "Only admins can manage clients, vendors, and sources." };
+  return { ok: true };
+}
+
 export async function saveSisterCompany(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  await requireUser();
+  const gate = await requireAdmin();
+  if ("error" in gate) return gate;
   const id = String(formData.get("id") ?? "").trim();
   const parsed = readContactOrg(formData);
   if (!parsed.success) return { fieldErrors: toFieldErrors(parsed.error) };
@@ -55,7 +66,8 @@ export async function saveVendor(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  await requireUser();
+  const gate = await requireAdmin();
+  if ("error" in gate) return gate;
   const id = String(formData.get("id") ?? "").trim();
   const parsed = readContactOrg(formData);
   if (!parsed.success) return { fieldErrors: toFieldErrors(parsed.error) };
@@ -87,7 +99,8 @@ export async function saveClient(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  await requireUser();
+  const gate = await requireAdmin();
+  if ("error" in gate) return gate;
   const id = String(formData.get("id") ?? "").trim();
   const parsed = clientSchema.safeParse({
     name: formData.get("name") ?? "",
