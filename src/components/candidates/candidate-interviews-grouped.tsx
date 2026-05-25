@@ -41,12 +41,12 @@ export function CandidateInterviewsGrouped({
                 <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
                   <Link
                     href={`/submissions/${sub.id}`}
-                    className="truncate font-medium text-indigo-600 hover:underline"
+                    className="font-medium text-indigo-600 hover:underline"
                   >
                     {sub.job.title}
                   </Link>
-                  <span aria-hidden className="text-slate-300">·</span>
-                  <span className="text-sm text-slate-600">
+                  <span className="inline-flex items-baseline gap-2 text-sm text-slate-600">
+                    <span aria-hidden className="text-slate-300">·</span>
                     {sub.job.client.name}
                   </span>
                 </div>
