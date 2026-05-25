@@ -54,7 +54,7 @@ export function CandidateInterviewsGrouped({
                   <Badge tone={SUBMISSION_STATUS_TONE[sub.status]}>
                     {SUBMISSION_STATUS_LABEL[sub.status]}
                   </Badge>
-                  <div className="flex flex-wrap items-center gap-1">
+                  <div className="flex flex-nowrap items-center gap-1">
                     {shownRounds.map((r) => (
                       <RoundPip
                         key={r.id}
@@ -68,14 +68,16 @@ export function CandidateInterviewsGrouped({
                       </span>
                     )}
                   </div>
-                  <span className="whitespace-nowrap text-xs text-slate-500">
-                    {lastDate ? formatDate(lastDate) : "—"}
-                  </span>
-                  <span className="text-xs font-medium text-indigo-600 group-open:hidden">
-                    See details ▾
-                  </span>
-                  <span className="hidden text-xs font-medium text-indigo-600 group-open:inline">
-                    Hide ▴
+                  <span className="inline-flex items-center gap-3 whitespace-nowrap">
+                    <span className="text-xs text-slate-500">
+                      {lastDate ? formatDate(lastDate) : "—"}
+                    </span>
+                    <span className="text-xs font-medium text-indigo-600 group-open:hidden">
+                      See details ▾
+                    </span>
+                    <span className="hidden text-xs font-medium text-indigo-600 group-open:inline">
+                      Hide ▴
+                    </span>
                   </span>
                 </div>
               </summary>
