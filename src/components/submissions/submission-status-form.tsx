@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Select, Textarea, Input } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
 import { changeSubmissionStatus } from "@/server/actions/submissions";
@@ -42,6 +42,11 @@ export function SubmissionStatusForm({
   const [eventAt, setEventAt] = useState("");
   const [note, setNote] = useState("");
   const [reason, setReason] = useState("");
+  // `changeSubmissionStatus` returns void, so we use a transition to get
+  // a pending flag without changing the action signature. The submit
+  // button disables + relabels mid-flight, killing the double-click risk
+  // that would otherwise let a slow demo network log duplicate audit rows.
+  const [isPending, startTransition] = useTransition();
 
   // Default "when this happened" to now. This must run after mount, not in a
   // useState initializer: the client's local "now" is unknown during SSR, so
@@ -54,7 +59,12 @@ export function SubmissionStatusForm({
   const showReason = selected === "REJECTED" || selected === "ON_HOLD";
 
   return (
-    <form action={changeSubmissionStatus} className="space-y-3">
+    <form
+      action={(formData) =>
+        startTransition(() => changeSubmissionStatus(formData))
+      }
+      className="space-y-3"
+    >
       <input type="hidden" name="id" value={submissionId} />
       <div className="flex flex-wrap items-end gap-2">
         <div className="w-56">
@@ -86,8 +96,8 @@ export function SubmissionStatusForm({
             onChange={(e) => setEventAt(e.target.value)}
           />
         </div>
-        <Button type="submit" variant="secondary">
-          Update
+        <Button type="submit" variant="secondary" disabled={isPending}>
+          {isPending ? "Updating…" : "Update"}
         </Button>
       </div>
       <p className="text-xs text-slate-400">

@@ -22,6 +22,9 @@ export function GlobalSearch() {
     items: [],
   });
   const containerRef = useRef<HTMLDivElement>(null);
+  // Index of the highlighted result for ↑/↓/Enter keyboard navigation.
+  // Reset whenever the query (and therefore the result set) changes.
+  const [activeIndex, setActiveIndex] = useState(0);
 
   const trimmed = query.trim();
 
@@ -69,6 +72,8 @@ export function GlobalSearch() {
   const ready = data.q === trimmed;
   const results = ready ? data.items : [];
   const showDropdown = open && trimmed.length >= 2;
+  const activeId =
+    results.length > 0 ? `gs-opt-${Math.min(activeIndex, results.length - 1)}` : undefined;
 
   return (
     <div ref={containerRef} className="relative w-full max-w-md">
@@ -79,18 +84,43 @@ export function GlobalSearch() {
         onChange={(e) => {
           setQuery(e.target.value);
           setOpen(true);
+          setActiveIndex(0);
         }}
         onFocus={() => setOpen(true)}
         onKeyDown={(e) => {
-          if (e.key === "Escape") setOpen(false);
+          if (e.key === "Escape") {
+            setOpen(false);
+            return;
+          }
+          if (!showDropdown || results.length === 0) return;
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setActiveIndex((i) => (i + 1) % results.length);
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setActiveIndex((i) => (i - 1 + results.length) % results.length);
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            const hit = results[Math.min(activeIndex, results.length - 1)];
+            if (hit) goTo(hit.href);
+          }
         }}
         placeholder="Search candidates, jobs, clients…"
         className={cn(controlClass, "py-1.5 pl-9")}
         aria-label="Global search"
+        role="combobox"
+        aria-expanded={showDropdown}
+        aria-controls="gs-listbox"
+        aria-autocomplete="list"
+        aria-activedescendant={activeId}
       />
 
       {showDropdown && (
-        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-96 overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg">
+        <div
+          id="gs-listbox"
+          role="listbox"
+          className="absolute left-0 right-0 top-full z-20 mt-1 max-h-96 overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg"
+        >
           {!ready ? (
             <p className="px-3 py-3 text-sm text-slate-400">Searching…</p>
           ) : results.length === 0 ? (
@@ -101,9 +131,16 @@ export function GlobalSearch() {
             results.map((r, i) => (
               <button
                 key={`${r.type}-${r.href}-${i}`}
+                id={`gs-opt-${i}`}
                 type="button"
+                role="option"
+                aria-selected={i === activeIndex}
+                onMouseEnter={() => setActiveIndex(i)}
                 onClick={() => goTo(r.href)}
-                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-slate-50"
+                className={cn(
+                  "flex w-full items-center justify-between gap-3 px-3 py-2 text-left",
+                  i === activeIndex ? "bg-slate-100" : "hover:bg-slate-50",
+                )}
               >
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium text-slate-800">
