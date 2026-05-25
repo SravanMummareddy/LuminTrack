@@ -1,4 +1,5 @@
 import { prisma } from "@/server/db";
+import type { Prisma } from "@/generated/prisma/client";
 import type { SearchResult } from "@/lib/search-types";
 
 /**
@@ -9,24 +10,41 @@ import type { SearchResult } from "@/lib/search-types";
 export async function globalSearch(q: string): Promise<SearchResult[]> {
   const like = { contains: q, mode: "insensitive" as const };
 
+  // Pull a seq number out of "CAND-001", "JOB-00123", or a bare number so
+  // typing a display ID finds its row.
+  const trimmed = q.trim();
+  const numericPart = trimmed.replace(/^[A-Za-z]+-?/, "");
+  const parsedSeq = /^\d+$/.test(numericPart) ? Number(numericPart) : null;
+  const upper = trimmed.toUpperCase();
+  const candSeq = upper.startsWith("CAND") || /^\d+$/.test(trimmed) ? parsedSeq : null;
+  const jobSeq = upper.startsWith("JOB") || /^\d+$/.test(trimmed) ? parsedSeq : null;
+
+  const candidateOR: Prisma.CandidateWhereInput["OR"] = [
+    { fullName: like },
+    { email: like },
+    { currentCompany: like },
+    { currentLocation: like },
+    { skills: { has: q } },
+  ];
+  if (candSeq != null) candidateOR.push({ seq: candSeq });
+
+  const jobOR: Prisma.JobWhereInput["OR"] = [
+    { title: like },
+    { location: like },
+    { portalRefId: like },
+  ];
+  if (jobSeq != null) jobOR.push({ seq: jobSeq });
+
   const [candidates, jobs, clients, vendors, sources, users] =
     await Promise.all([
       prisma.candidate.findMany({
-        where: {
-          OR: [
-            { fullName: like },
-            { email: like },
-            { currentCompany: like },
-            { currentLocation: like },
-            { skills: { has: q } },
-          ],
-        },
+        where: { OR: candidateOR },
         take: 6,
         orderBy: { fullName: "asc" },
         select: { id: true, fullName: true, currentCompany: true },
       }),
       prisma.job.findMany({
-        where: { OR: [{ title: like }, { location: like }] },
+        where: { OR: jobOR },
         take: 6,
         orderBy: { createdAt: "desc" },
         select: { id: true, title: true, client: { select: { name: true } } },

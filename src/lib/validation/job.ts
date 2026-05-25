@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { optionalText, optionalNonNegativeNumber } from "./common";
+import {
+  optionalText,
+  optionalNonNegativeNumber,
+  optionalPositiveInt,
+  optionalDateTime,
+} from "./common";
 import { OTHER_SOURCE } from "@/lib/labels";
 
 export const JOB_STATUS_VALUES = [
@@ -26,6 +31,16 @@ export const jobSchema = z
     description: optionalText,
     notes: optionalText,
     recruiterIds: z.array(z.string().min(1)).default([]),
+    // Optional planning fields — recruiters can leave them blank. iLabor
+    // imports already populate the underlying columns; surfacing them on the
+    // manual form means manual jobs reach parity with imported ones.
+    positions: optionalPositiveInt,
+    reqType: optionalText,
+    department: optionalText,
+    durationLabel: optionalText,
+    atsId: optionalText,
+    startDate: optionalDateTime,
+    endDate: optionalDateTime,
   })
   .superRefine((val, ctx) => {
     if (!val.sisterCompanySourceId) {

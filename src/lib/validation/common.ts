@@ -30,6 +30,12 @@ export const optionalNonNegativeNumber = z.preprocess(
   z.coerce.number().nonnegative("Enter 0 or a positive number.").optional(),
 );
 
+/** Optional positive integer — empty allowed, otherwise coerced from a string. */
+export const optionalPositiveInt = z.preprocess(
+  emptyToUndefined,
+  z.coerce.number().int().min(1, "Enter 1 or more.").optional(),
+);
+
 /** Optional datetime — empty allowed, otherwise coerced from a datetime-local string. */
 export const optionalDateTime = z.preprocess(
   emptyToUndefined,

@@ -79,8 +79,13 @@ export async function listRecruiterPerformance(
 ) {
   const orgWhere = jobOrgWhere(filters);
 
-  const assignmentWhere: Prisma.JobAssignmentWhereInput = {};
-  if (Object.keys(orgWhere).length) assignmentWhere.job = orgWhere;
+  // Only count assignments to jobs that are still being worked. Bulk-closing
+  // iLabor reqs would otherwise inflate every recruiter's "Jobs assigned".
+  const activeJobWhere: Prisma.JobWhereInput = {
+    ...orgWhere,
+    status: { in: ["OPEN", "ON_HOLD"] },
+  };
+  const assignmentWhere: Prisma.JobAssignmentWhereInput = { job: activeJobWhere };
   if (filters.dateRange?.gte || filters.dateRange?.lte)
     assignmentWhere.assignedAt = filters.dateRange;
 
@@ -159,6 +164,13 @@ export async function listRecruiterPerformance(
 export async function getRecruiterDetail(
   id: string,
   filters: AnalyticsFilters,
+  opts: {
+    jobsPage?: number;
+    subsPage?: number;
+    /** Optional status filter applied to the displayed submissions table only —
+     *  stats + monthly chart still use ALL submissions in the filter window. */
+    subStatus?: SubmissionStatus;
+  } = {},
 ) {
   const user = await prisma.user.findUnique({
     where: { id },
@@ -184,10 +196,55 @@ export async function getRecruiterDetail(
   if (filters.dateRange?.gte || filters.dateRange?.lte)
     assignmentWhere.assignedAt = filters.dateRange;
 
-  const [assignments, submissions, activity] = await Promise.all([
+  // For stats + the monthly chart we want ALL submissions in the filter
+  // window (not just the page slice), but we only need a tiny projection.
+  // `allSubs` is the bounded full set used for aggregation; `subRows` is the
+  // paginated slice rendered in the table.
+  // The status filter only narrows the displayed submissions table, not the
+  // stats/chart computed off `allSubs`.
+  const displaySubmissionWhere: Prisma.SubmissionWhereInput = opts.subStatus
+    ? { ...submissionWhere, status: opts.subStatus }
+    : submissionWhere;
+
+  const jobsTotalP = prisma.jobAssignment.count({ where: assignmentWhere });
+  const subsTotalP = prisma.submission.count({ where: displaySubmissionWhere });
+
+  const [jobsTotal, subsTotal, allSubs, activity] = await Promise.all([
+    jobsTotalP,
+    subsTotalP,
+    prisma.submission.findMany({
+      where: submissionWhere,
+      select: {
+        status: true,
+        submittedAt: true,
+        _count: { select: { interviewRounds: true } },
+      },
+    }),
+    prisma.activity.findMany({
+      where: { performedById: id },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      include: { performedBy: { select: { fullName: true } } },
+    }),
+  ]);
+
+  const jobsTotalPages = Math.max(1, Math.ceil(jobsTotal / PAGE_SIZE));
+  const jobsPage = Math.min(
+    Math.max(1, opts.jobsPage ?? 1),
+    jobsTotalPages,
+  );
+  const subsTotalPages = Math.max(1, Math.ceil(subsTotal / PAGE_SIZE));
+  const subsPage = Math.min(
+    Math.max(1, opts.subsPage ?? 1),
+    subsTotalPages,
+  );
+
+  const [assignments, submissions] = await Promise.all([
     prisma.jobAssignment.findMany({
       where: assignmentWhere,
       orderBy: { assignedAt: "desc" },
+      skip: (jobsPage - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
       include: {
         job: {
           select: {
@@ -202,8 +259,10 @@ export async function getRecruiterDetail(
       },
     }),
     prisma.submission.findMany({
-      where: submissionWhere,
+      where: displaySubmissionWhere,
       orderBy: { submittedAt: "desc" },
+      skip: (subsPage - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
       select: {
         id: true,
         status: true,
@@ -213,16 +272,10 @@ export async function getRecruiterDetail(
         _count: { select: { interviewRounds: true } },
       },
     }),
-    prisma.activity.findMany({
-      where: { performedById: id },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-      include: { performedBy: { select: { fullName: true } } },
-    }),
   ]);
 
   const stats = tally(
-    submissions.map((s) => ({
+    allSubs.map((s) => ({
       status: s.status,
       interviewRounds: s._count.interviewRounds,
     })),
@@ -235,7 +288,7 @@ export async function getRecruiterDetail(
     const end = startOfMonth(subMonths(now, 4 - i));
     return {
       label: format(start, "MMM"),
-      count: submissions.filter(
+      count: allSubs.filter(
         (s) => s.submittedAt >= start && s.submittedAt < end,
       ).length,
     };
@@ -244,9 +297,13 @@ export async function getRecruiterDetail(
   return {
     user,
     stats,
-    jobsAssigned: assignments.length,
+    jobsAssigned: jobsTotal,
     assignments,
+    assignmentsTotal: jobsTotal,
+    assignmentsPage: jobsPage,
     submissions,
+    submissionsTotal: subsTotal,
+    submissionsPage: subsPage,
     monthly,
     activity,
   };

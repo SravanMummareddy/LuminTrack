@@ -24,6 +24,13 @@ function readJob(formData: FormData) {
     description: formData.get("description") ?? "",
     notes: formData.get("notes") ?? "",
     recruiterIds: formData.getAll("recruiterIds").map(String),
+    positions: formData.get("positions") ?? "",
+    reqType: formData.get("reqType") ?? "",
+    department: formData.get("department") ?? "",
+    durationLabel: formData.get("durationLabel") ?? "",
+    atsId: formData.get("atsId") ?? "",
+    startDate: formData.get("startDate") ?? "",
+    endDate: formData.get("endDate") ?? "",
   });
 }
 
@@ -55,6 +62,13 @@ export async function createJob(
         candidateRate: d.candidateRate ?? null,
         description: d.description ?? null,
         notes: d.notes ?? null,
+        positions: d.positions ?? null,
+        reqType: d.reqType ?? null,
+        department: d.department ?? null,
+        durationLabel: d.durationLabel ?? null,
+        atsId: d.atsId ?? null,
+        startDate: d.startDate ?? null,
+        endDate: d.endDate ?? null,
         createdById: user.id,
         assignments: {
           create: d.recruiterIds.map((recruiterId) => ({
@@ -122,6 +136,21 @@ export async function updateJob(
   compare("candidate rate", existing.candidateRate?.toString(), d.candidateRate);
   compare("description", existing.description, d.description);
   compare("notes", existing.notes, d.notes);
+  compare("positions", existing.positions, d.positions);
+  compare("position type", existing.reqType, d.reqType);
+  compare("department", existing.department, d.department);
+  compare("duration", existing.durationLabel, d.durationLabel);
+  compare("customer ref", existing.atsId, d.atsId);
+  compare(
+    "projected start",
+    existing.startDate?.toISOString(),
+    d.startDate?.toISOString(),
+  );
+  compare(
+    "projected end",
+    existing.endDate?.toISOString(),
+    d.endDate?.toISOString(),
+  );
 
   const currentRecruiters = new Set(existing.assignments.map((a) => a.recruiterId));
   const desiredRecruiters = new Set(d.recruiterIds);
@@ -154,6 +183,13 @@ export async function updateJob(
         candidateRate: d.candidateRate ?? null,
         description: d.description ?? null,
         notes: d.notes ?? null,
+        positions: d.positions ?? null,
+        reqType: d.reqType ?? null,
+        department: d.department ?? null,
+        durationLabel: d.durationLabel ?? null,
+        atsId: d.atsId ?? null,
+        startDate: d.startDate ?? null,
+        endDate: d.endDate ?? null,
       },
     });
 

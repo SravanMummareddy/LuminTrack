@@ -30,8 +30,10 @@ export const candidateSchema = z
     isActive: z.boolean(),
   })
   .refine((d) => Boolean(d.email || d.phone), {
+    // Surface as a form-level error (no path) so it shows in the top-of-form
+    // banner — pinning it to `email` falsely implied the email field itself
+    // was the problem when in practice either field can satisfy the rule.
     message: "Enter at least an email address or a phone number.",
-    path: ["email"],
   });
 
 export type CandidateInput = z.infer<typeof candidateSchema>;

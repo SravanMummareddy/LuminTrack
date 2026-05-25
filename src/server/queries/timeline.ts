@@ -4,6 +4,14 @@ import type { Prisma } from "@/generated/prisma/client";
 export type TimelineEntityType = "JOB" | "CANDIDATE" | "SUBMISSION";
 
 /**
+ * Hard ceiling on how many activity rows a single timeline view will fetch.
+ * The UI collapses to 5 by default and pages by 20 when expanded, so even a
+ * very chatty job (hundreds of status changes + interview events) doesn't
+ * need more than this. Older entries are simply not loaded.
+ */
+const TIMELINE_MAX = 200;
+
+/**
  * Activity for one entity, rolled up with the activity of its descendants:
  * a job/candidate also shows its submissions' and interview rounds' activity;
  * a submission also shows its rounds'. One unified, de-duplicated feed for the
@@ -42,6 +50,7 @@ export async function getTimelineFor(
     where: { OR: or },
     orderBy: { createdAt: "desc" },
     include: { performedBy: { select: { fullName: true } } },
+    take: TIMELINE_MAX,
   });
 }
 

@@ -3,7 +3,11 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/server/db";
 import { verifyPassword } from "@/lib/password";
-import { createSession, destroySession } from "@/lib/session";
+import {
+  createSession,
+  destroySession,
+  getCurrentUser,
+} from "@/lib/session";
 import { loginSchema } from "@/lib/validation/auth";
 
 export type LoginState = { error?: string };
@@ -38,6 +42,13 @@ export async function loginAction(
 }
 
 export async function logoutAction(): Promise<void> {
+  // Guard against unauthenticated POSTs — without this, a forged request
+  // would still clear cookies and bounce to /login (low-stakes, but no
+  // reason to honor it). For genuine sessions, this is the normal logout.
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
   await destroySession();
   redirect("/login");
 }

@@ -117,6 +117,9 @@ export function getSubmissionDetail(id: string) {
       interviewRounds: {
         orderBy: { roundOrder: "asc" },
         include: { updatedBy: { select: { fullName: true } } },
+        // Soft cap — recruiters won't realistically run 50 rounds on one
+        // submission. Avoids unbounded fetch if data ever goes sideways.
+        take: 50,
       },
     },
   });
@@ -150,10 +153,20 @@ export function getSubmissionForEdit(id: string) {
 }
 
 /** Submissions for one job — the submitted-candidates table on the job detail page. */
-export function getJobSubmissions(jobId: string) {
-  return prisma.submission.findMany({
-    where: { jobId },
+export async function getJobSubmissions(
+  jobId: string,
+  opts: { page?: number } = {},
+) {
+  const where = { jobId };
+  const total = await prisma.submission.count({ where });
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const page = Math.min(Math.max(1, opts.page ?? 1), totalPages);
+
+  const rows = await prisma.submission.findMany({
+    where,
     orderBy: { submittedAt: "desc" },
+    skip: (page - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
     include: {
       candidate: { select: { id: true, fullName: true } },
       submittedBy: { select: { fullName: true } },
@@ -161,15 +174,29 @@ export function getJobSubmissions(jobId: string) {
       _count: { select: { interviewRounds: true } },
     },
   });
+
+  return { rows, total, page };
 }
 
-export type JobSubmissionRow = Awaited<ReturnType<typeof getJobSubmissions>>[number];
+export type JobSubmissionRow = Awaited<
+  ReturnType<typeof getJobSubmissions>
+>["rows"][number];
 
 /** Submissions for one candidate — the job-submission history on the candidate detail page. */
-export function getCandidateSubmissions(candidateId: string) {
-  return prisma.submission.findMany({
-    where: { candidateId },
+export async function getCandidateSubmissions(
+  candidateId: string,
+  opts: { page?: number } = {},
+) {
+  const where = { candidateId };
+  const total = await prisma.submission.count({ where });
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const page = Math.min(Math.max(1, opts.page ?? 1), totalPages);
+
+  const rows = await prisma.submission.findMany({
+    where,
     orderBy: { submittedAt: "desc" },
+    skip: (page - 1) * PAGE_SIZE,
+    take: PAGE_SIZE,
     include: {
       job: {
         select: {
@@ -184,11 +211,13 @@ export function getCandidateSubmissions(candidateId: string) {
       submittedBy: { select: { fullName: true } },
     },
   });
+
+  return { rows, total, page };
 }
 
 export type CandidateSubmissionRow = Awaited<
   ReturnType<typeof getCandidateSubmissions>
->[number];
+>["rows"][number];
 
 /** Candidate IDs already submitted to a job — lets the new-submission form flag duplicates. */
 export async function getJobSubmittedCandidateIds(

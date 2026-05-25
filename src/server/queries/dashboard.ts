@@ -24,6 +24,7 @@ export async function getDashboardData(filters: AnalyticsFilters) {
         createdAt: true,
         sisterCompanySource: { select: { name: true } },
         sourceOther: true,
+        _count: { select: { assignments: true } },
       },
     }),
     prisma.submission.findMany({
@@ -62,8 +63,13 @@ export async function getDashboardData(filters: AnalyticsFilters) {
     jobs.filter((j) => j.status === s).length;
   const openJobs = jobStatusCount("OPEN");
   const onHoldJobs = jobStatusCount("ON_HOLD");
-  // "Active" = jobs still being worked: Open + On Hold.
-  const activeJobs = openJobs + onHoldJobs;
+  // "Active" = OPEN/ON_HOLD jobs that have at least one recruiter assigned.
+  // Excludes bulk-imported iLabor reqs no one has picked up yet.
+  const activeJobs = jobs.filter(
+    (j) =>
+      (j.status === "OPEN" || j.status === "ON_HOLD") &&
+      j._count.assignments > 0,
+  ).length;
 
   // Open-job aging — OPEN and ON_HOLD jobs only.
   const agingCounts: Record<string, number> = {};
@@ -104,8 +110,12 @@ export async function getDashboardData(filters: AnalyticsFilters) {
         joined: own.filter((s) => s.status === "JOINED").length,
       };
     })
-    .filter((r) => r.submissions > 0)
-    .sort((a, b) => b.submissions - a.submissions);
+    // Sort by submissions desc, but keep zero-submission recruiters in the
+    // list (alphabetised under the active ones) so new hires don't vanish.
+    .sort((a, b) => {
+      if (b.submissions !== a.submissions) return b.submissions - a.submissions;
+      return a.fullName.localeCompare(b.fullName);
+    });
 
   return {
     totalJobs: jobs.length,
