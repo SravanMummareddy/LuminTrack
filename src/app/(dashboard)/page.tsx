@@ -10,7 +10,8 @@ import {
   CirclePause,
 } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
-import { getDashboardData } from "@/server/queries/dashboard";
+import { getDashboardData, getMyWork } from "@/server/queries/dashboard";
+import { formatDate, formatSubmissionDisplayId } from "@/lib/format";
 import {
   listClients,
   listVendors,
@@ -49,6 +50,97 @@ function Card({
   );
 }
 
+/** Switches the dashboard between the acting user's queue and the org view.
+ *  Preserves all other filter params; only `?scope=` changes. */
+function ScopeToggle({
+  scope,
+  sp,
+}: {
+  scope: "me" | "org";
+  sp: { [key: string]: string | string[] | undefined };
+}) {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(sp)) {
+    if (v === undefined || k === "scope") continue;
+    if (Array.isArray(v)) v.forEach((x) => x && params.append(k, x));
+    else params.set(k, v);
+  }
+  const hrefFor = (next: "me" | "org") => {
+    const copy = new URLSearchParams(params);
+    copy.set("scope", next);
+    return `/?${copy.toString()}`;
+  };
+  const base =
+    "inline-flex items-center rounded-md px-3 py-1.5 text-xs font-medium transition";
+  const on = "bg-indigo-600 text-white";
+  const off = "bg-white text-slate-600 hover:bg-slate-50";
+  return (
+    <div
+      role="tablist"
+      aria-label="Dashboard scope"
+      className="inline-flex rounded-md border border-slate-300 p-0.5"
+    >
+      <Link
+        role="tab"
+        aria-selected={scope === "me"}
+        href={hrefFor("me")}
+        className={`${base} ${scope === "me" ? on : off}`}
+      >
+        My work
+      </Link>
+      <Link
+        role="tab"
+        aria-selected={scope === "org"}
+        href={hrefFor("org")}
+        className={`${base} ${scope === "org" ? on : off}`}
+      >
+        Org-wide
+      </Link>
+    </div>
+  );
+}
+
+function MyWorkList({
+  heading,
+  empty,
+  items,
+}: {
+  heading: string;
+  empty: string;
+  items: { href: string; primary: string; secondary: string }[];
+}) {
+  return (
+    <div>
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {heading}
+      </h3>
+      {items.length === 0 ? (
+        <p className="rounded-md border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-400">
+          {empty}
+        </p>
+      ) : (
+        <ul className="divide-y divide-slate-100 rounded-md border border-slate-200">
+          {items.map((it, i) => (
+            <li key={i}>
+              <Link
+                href={it.href}
+                className="block px-3 py-2 hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:[outline-offset:-2px]"
+              >
+                <span className="block truncate text-sm text-slate-800">
+                  {it.primary}
+                </span>
+                <span className="block truncate text-xs text-slate-400">
+                  {it.secondary}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -56,11 +148,23 @@ export default async function DashboardPage({
 }) {
   const sp = await searchParams;
   const { current, filters } = parseAnalyticsParams(sp);
+  const user = await getCurrentUser();
 
-  const [user, data, clients, vendors, sources, recruiters] = await Promise.all(
+  // Default scope: non-admin recruiters land on "me" so they see their own
+  // queue at standup; admins default to "org". A `?scope=` URL toggle lets
+  // either user flip. When scope === "me" we force `recruiterId` to the
+  // acting user (overrides any explicit recruiter filter from the bar).
+  const scope: "me" | "org" =
+    current.scope ?? (user?.role === "ADMIN" ? "org" : "me");
+  const effectiveFilters =
+    scope === "me" && user ? { ...filters, recruiterId: user.id } : filters;
+
+  const [data, myWork, clients, vendors, sources, recruiters] = await Promise.all(
     [
-      getCurrentUser(),
-      getDashboardData(filters),
+      getDashboardData(effectiveFilters),
+      scope === "me" && user
+        ? getMyWork(user.id)
+        : Promise.resolve({ staleSubmissions: [], pendingRounds: [] }),
       listClients(),
       listVendors(),
       listSisterCompanies(),
@@ -95,13 +199,44 @@ export default async function DashboardPage({
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-900">Dashboard</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Welcome back{user ? `, ${user.fullName}` : ""}. Recruiting overview
-          across the selected filters.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">Dashboard</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Welcome back{user ? `, ${user.fullName}` : ""}.{" "}
+            {scope === "me"
+              ? "Your work — only submissions and jobs you own."
+              : "Org-wide recruiting overview."}
+          </p>
+        </div>
+        <ScopeToggle scope={scope} sp={sp} />
       </div>
+
+      {scope === "me" && (myWork.staleSubmissions.length > 0 ||
+        myWork.pendingRounds.length > 0) && (
+        <Card title="My work — needs attention">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <MyWorkList
+              heading={`Submissions waiting >7 days (${myWork.staleSubmissions.length})`}
+              empty="No stale submissions — nice."
+              items={myWork.staleSubmissions.map((s) => ({
+                href: `/submissions/${s.id}`,
+                primary: `${s.candidate.fullName} → ${s.job.title}`,
+                secondary: `${formatSubmissionDisplayId(s)} · submitted ${formatDate(s.submittedAt)}`,
+              }))}
+            />
+            <MyWorkList
+              heading={`Interview rounds awaiting result (${myWork.pendingRounds.length})`}
+              empty="No rounds waiting on you."
+              items={myWork.pendingRounds.map((r) => ({
+                href: `/submissions/${r.submission.id}`,
+                primary: `${r.submission.candidate.fullName} · R${r.roundOrder}`,
+                secondary: `${r.submission.job.title} · ${r.scheduledAt ? formatDate(r.scheduledAt) : "no date"}`,
+              }))}
+            />
+          </div>
+        </Card>
+      )}
 
       <AnalyticsFilters
         current={current}

@@ -138,3 +138,64 @@ export async function getDashboardData(filters: AnalyticsFilters) {
 }
 
 export type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;
+
+/**
+ * The "My work" panel — two small action lists for the acting recruiter:
+ * stale in-flight submissions and interview rounds that still need a result.
+ * Capped tight (10 each) since the panel is a glanceable to-do, not a
+ * full table. Older items first so the most-stuck rows surface.
+ */
+export async function getMyWork(userId: string) {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000);
+
+  const [staleSubmissions, pendingRounds] = await Promise.all([
+    prisma.submission.findMany({
+      where: {
+        submittedById: userId,
+        // In-flight = not yet in a terminal state. Anything still moving
+        // through the pipeline that's been sitting for more than a week is
+        // worth a nudge.
+        status: {
+          notIn: ["SELECTED", "REJECTED", "ON_HOLD", "OFFER_RELEASED", "JOINED"],
+        },
+        submittedAt: { lte: sevenDaysAgo },
+      },
+      orderBy: { submittedAt: "asc" },
+      take: 10,
+      select: {
+        id: true,
+        seq: true,
+        status: true,
+        submittedAt: true,
+        candidate: { select: { fullName: true } },
+        job: { select: { title: true } },
+      },
+    }),
+    prisma.interviewRound.findMany({
+      where: {
+        updatedById: userId,
+        result: { in: ["WAITING", "NEED_ANOTHER_ROUND"] },
+      },
+      orderBy: { scheduledAt: "asc" },
+      take: 10,
+      select: {
+        id: true,
+        roundOrder: true,
+        scheduledAt: true,
+        result: true,
+        submission: {
+          select: {
+            id: true,
+            seq: true,
+            candidate: { select: { fullName: true } },
+            job: { select: { title: true } },
+          },
+        },
+      },
+    }),
+  ]);
+
+  return { staleSubmissions, pendingRounds };
+}
+
+export type MyWork = Awaited<ReturnType<typeof getMyWork>>;

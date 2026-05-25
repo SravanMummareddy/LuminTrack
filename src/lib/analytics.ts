@@ -127,6 +127,8 @@ export type AnalyticsParamState = {
   sisterCompanySourceId?: string;
   jobStatus?: string;
   submissionStatus?: string;
+  /** "me" focuses the dashboard on the acting user; "org" is org-wide. */
+  scope?: "me" | "org";
 };
 
 /**
@@ -138,6 +140,7 @@ export function parseAnalyticsParams(sp: RawSearchParams): {
   filters: AnalyticsFilters;
   hasFilters: boolean;
 } {
+  const rawScope = firstParam(sp.scope);
   const current: AnalyticsParamState = {
     preset: firstParam(sp.preset),
     from: firstParam(sp.from),
@@ -148,6 +151,7 @@ export function parseAnalyticsParams(sp: RawSearchParams): {
     sisterCompanySourceId: firstParam(sp.sisterCompanySourceId),
     jobStatus: firstParam(sp.jobStatus),
     submissionStatus: firstParam(sp.submissionStatus),
+    scope: rawScope === "me" || rawScope === "org" ? rawScope : undefined,
   };
 
   const jobStatus = (JOB_STATUSES as string[]).includes(current.jobStatus ?? "")
