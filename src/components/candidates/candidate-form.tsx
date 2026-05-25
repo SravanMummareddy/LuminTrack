@@ -249,9 +249,9 @@ export function CandidateForm({
         <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           {state.error}
         </div>
-      ) : state.error ? (
+      ) : state.error || errors.form ? (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-          {state.error}
+          {state.error ?? errors.form}
         </p>
       ) : null}
 

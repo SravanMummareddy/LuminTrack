@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { Download, History } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
 import { cn } from "@/lib/cn";
 import { PageHeader } from "@/components/ui/page-header";
+import { LinkButton } from "@/components/ui/button";
 import {
   listSisterCompanies,
   listClients,
@@ -67,6 +69,27 @@ export default async function SettingsPage({
         title="Settings"
         description="Manage sources, clients, vendors, and app users."
       />
+
+      {isAdmin && (
+        <section className="rounded-lg border border-slate-200 bg-white p-5">
+          <h2 className="mb-1 text-sm font-semibold text-slate-700">
+            Admin tools
+          </h2>
+          <p className="mb-3 text-xs text-slate-500">
+            Bulk iLabor requisition imports and their history.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <LinkButton href="/jobs/import" variant="secondary">
+              <Download className="h-4 w-4" />
+              Import from iLabor
+            </LinkButton>
+            <LinkButton href="/jobs/imports" variant="secondary">
+              <History className="h-4 w-4" />
+              Import history
+            </LinkButton>
+          </div>
+        </section>
+      )}
 
       <div className="flex gap-1 border-b border-slate-200">
         {TABS.map((t) => (

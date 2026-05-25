@@ -24,6 +24,14 @@ export type JobFormValues = {
   description: string;
   notes: string;
   recruiterIds: string[];
+  positions: string;
+  reqType: string;
+  department: string;
+  durationLabel: string;
+  atsId: string;
+  /** YYYY-MM-DD or "" — bound to <input type="date">. */
+  startDate: string;
+  endDate: string;
 };
 
 type JobAction = (prev: FormState, formData: FormData) => Promise<FormState>;
@@ -197,6 +205,109 @@ export function JobForm({
         />
       </Field>
 
+      <details className="rounded-md border border-slate-200 bg-slate-50/40 px-4 py-3">
+        <summary className="cursor-pointer text-sm font-medium text-slate-700">
+          More job details (optional)
+        </summary>
+        <p className="mt-1 text-xs text-slate-500">
+          Mirrors what iLabor stores. Fill what you have — every field is
+          optional.
+        </p>
+        <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field
+            label="Positions"
+            htmlFor="positions"
+            hint="How many openings on this req."
+            error={errors.positions}
+          >
+            <Input
+              id="positions"
+              name="positions"
+              type="number"
+              min="1"
+              step="1"
+              defaultValue={values?.positions ?? ""}
+              placeholder="1"
+            />
+          </Field>
+          <Field
+            label="Position type"
+            htmlFor="reqType"
+            hint="e.g. Contract, Full-time, Contract-to-hire."
+            error={errors.reqType}
+          >
+            <Input
+              id="reqType"
+              name="reqType"
+              defaultValue={values?.reqType ?? ""}
+              placeholder="Contract / Full-time / C2H"
+            />
+          </Field>
+          <Field
+            label="Department"
+            htmlFor="department"
+            error={errors.department}
+          >
+            <Input
+              id="department"
+              name="department"
+              defaultValue={values?.department ?? ""}
+              placeholder="e.g. Engineering, Operations"
+            />
+          </Field>
+          <Field
+            label="Customer ref"
+            htmlFor="atsId"
+            hint="The client's own req ID, if any."
+            error={errors.atsId}
+          >
+            <Input
+              id="atsId"
+              name="atsId"
+              defaultValue={values?.atsId ?? ""}
+              placeholder="e.g. R-12345"
+            />
+          </Field>
+          <Field
+            label="Projected start"
+            htmlFor="startDate"
+            error={errors.startDate}
+          >
+            <Input
+              id="startDate"
+              name="startDate"
+              type="date"
+              defaultValue={values?.startDate ?? ""}
+            />
+          </Field>
+          <Field
+            label="Projected end"
+            htmlFor="endDate"
+            error={errors.endDate}
+          >
+            <Input
+              id="endDate"
+              name="endDate"
+              type="date"
+              defaultValue={values?.endDate ?? ""}
+            />
+          </Field>
+          <Field
+            label="Duration"
+            htmlFor="durationLabel"
+            hint="Free-text fallback when dates are flexible."
+            error={errors.durationLabel}
+          >
+            <Input
+              id="durationLabel"
+              name="durationLabel"
+              defaultValue={values?.durationLabel ?? ""}
+              placeholder="e.g. 6 months extendable"
+            />
+          </Field>
+        </div>
+      </details>
+
       <Field label="Job description" htmlFor="description" error={errors.description}>
         <Textarea
           id="description"
@@ -219,6 +330,9 @@ export function JobForm({
         <span className="block text-sm font-medium text-slate-700">
           Assigned recruiters
         </span>
+        <p className="mt-0.5 text-xs text-slate-500">
+          Optional — you can assign later from the job detail page.
+        </p>
         {recruiters.length === 0 ? (
           <p className="mt-1 text-xs text-slate-500">
             No users yet — add recruiters under Settings.

@@ -119,6 +119,7 @@ export function SubmissionEditForm({
         <Field
           label="Submitted date"
           htmlFor="submittedAt"
+          required
           error={errors.submittedAt}
         >
           <Input
@@ -127,6 +128,7 @@ export function SubmissionEditForm({
             type="datetime-local"
             value={fields.submittedAt}
             onChange={set("submittedAt")}
+            required
           />
         </Field>
 

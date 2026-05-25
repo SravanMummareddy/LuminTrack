@@ -67,31 +67,43 @@ function DimensionTable({ rows }: { rows: ReportsData["byClient"] }) {
           <Th className="text-right">Interviews</Th>
           <Th className="text-right">Selected</Th>
           <Th className="text-right">Joined</Th>
+          <Th className="text-right">Joined %</Th>
         </tr>
       </thead>
       <tbody className="divide-y divide-slate-100">
-        {rows.map((r) => (
-          <tr key={r.name} className="hover:bg-slate-50">
-            <Td label="Name" className="font-medium text-slate-800">
-              {r.name}
-            </Td>
-            <Td label="Jobs" className="text-right tabular-nums">
-              {r.jobs}
-            </Td>
-            <Td label="Submissions" className="text-right tabular-nums">
-              {r.submissions}
-            </Td>
-            <Td label="Interviews" className="text-right tabular-nums">
-              {r.interviews}
-            </Td>
-            <Td label="Selected" className="text-right tabular-nums">
-              {r.selected}
-            </Td>
-            <Td label="Joined" className="text-right tabular-nums">
-              {r.joined}
-            </Td>
-          </tr>
-        ))}
+        {rows.map((r) => {
+          // Per-dimension conversion: joined / submissions. Lets a manager
+          // compare iLabor vs manual sources (or one client vs another)
+          // without doing the math by hand.
+          const conv = r.submissions
+            ? `${Math.round((r.joined / r.submissions) * 100)}%`
+            : "—";
+          return (
+            <tr key={r.name} className="hover:bg-slate-50">
+              <Td label="Name" className="font-medium text-slate-800">
+                {r.name}
+              </Td>
+              <Td label="Jobs" className="text-right tabular-nums">
+                {r.jobs}
+              </Td>
+              <Td label="Submissions" className="text-right tabular-nums">
+                {r.submissions}
+              </Td>
+              <Td label="Interviews" className="text-right tabular-nums">
+                {r.interviews}
+              </Td>
+              <Td label="Selected" className="text-right tabular-nums">
+                {r.selected}
+              </Td>
+              <Td label="Joined" className="text-right tabular-nums">
+                {r.joined}
+              </Td>
+              <Td label="Joined %" className="text-right tabular-nums">
+                {conv}
+              </Td>
+            </tr>
+          );
+        })}
       </tbody>
     </Table>
   );

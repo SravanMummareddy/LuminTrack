@@ -92,7 +92,15 @@ export function SubmissionStatusForm({
       </div>
       <p className="text-xs text-slate-400">
         &ldquo;When this happened&rdquo; defaults to now — adjust it if the
-        change actually happened earlier.
+        change actually happened earlier. To correct the original{" "}
+        <strong>submitted date</strong>, use{" "}
+        <a
+          href={`/submissions/${submissionId}/edit`}
+          className="text-indigo-600 hover:underline"
+        >
+          Edit submission
+        </a>
+        .
       </p>
 
       {showReason && (

@@ -18,6 +18,8 @@ type StatCardProps = {
   icon: LucideIcon;
   tone?: BadgeTone;
   hint?: string;
+  /** Native browser tooltip — explains what this card actually counts. */
+  tooltip?: string;
   href?: string;
 };
 
@@ -28,13 +30,16 @@ export function StatCard({
   icon: Icon,
   tone = "slate",
   hint,
+  tooltip,
   href,
 }: StatCardProps) {
   const body = (
     <div
+      title={tooltip}
       className={cn(
         "flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-4",
         href && "transition hover:border-indigo-300 hover:shadow-sm",
+        tooltip && "cursor-help",
       )}
     >
       <div

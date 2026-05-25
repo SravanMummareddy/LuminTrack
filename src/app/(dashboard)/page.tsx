@@ -80,10 +80,18 @@ export default async function DashboardPage({
     color: TONE_HEX[SUBMISSION_STATUS_TONE[d.status]],
   }));
 
-  const jobsBySourceChart = data.jobsBySource.map((d) => ({
-    label: d.name,
-    value: d.count,
-  }));
+  // Long tail of sources crushes the bar chart — keep the top 5 distinct and
+  // roll the remainder into a single "Other" bar. `data.jobsBySource` is
+  // already sorted desc by count.
+  const TOP_SOURCES = 5;
+  const topSources = data.jobsBySource.slice(0, TOP_SOURCES);
+  const restCount = data.jobsBySource
+    .slice(TOP_SOURCES)
+    .reduce((sum, d) => sum + d.count, 0);
+  const jobsBySourceChart = [
+    ...topSources.map((d) => ({ label: d.name, value: d.count })),
+    ...(restCount > 0 ? [{ label: "Other", value: restCount }] : []),
+  ];
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
@@ -110,49 +118,57 @@ export default async function DashboardPage({
           value={data.activeJobs}
           icon={Briefcase}
           tone="green"
-          hint={`${data.openJobs} open · ${data.onHoldJobs} on hold`}
+          hint={`Assigned · ${data.openJobs} open · ${data.onHoldJobs} on hold total`}
+          tooltip="OPEN or ON_HOLD jobs with at least one assigned recruiter. Unowned bulk-imported jobs are excluded. Honors all filters above."
         />
         <StatCard
           label="Total submissions"
           value={data.totalSubmissions}
           icon={Send}
           tone="indigo"
+          tooltip="All submissions in the filter window, regardless of status."
         />
         <StatCard
           label="Interviews"
           value={data.interviewCount}
           icon={CalendarCheck}
           tone="blue"
+          tooltip="Total interview rounds across all in-window submissions."
         />
         <StatCard
           label="Selected"
           value={data.selected}
           icon={CircleCheck}
           tone="green"
+          tooltip="Submissions whose current status is Selected."
         />
         <StatCard
           label="Offers released"
           value={data.offerReleased}
           icon={FileText}
           tone="indigo"
+          tooltip="Submissions whose current status is Offer Released."
         />
         <StatCard
           label="Joined"
           value={data.joined}
           icon={UserCheck}
           tone="green"
+          tooltip="Submissions whose current status is Joined."
         />
         <StatCard
           label="Rejected"
           value={data.rejected}
           icon={CircleX}
           tone="red"
+          tooltip="Submissions whose current status is Rejected."
         />
         <StatCard
           label="On hold"
           value={data.onHold}
           icon={CirclePause}
           tone="amber"
+          tooltip="Submissions whose current status is On Hold."
         />
       </div>
 
@@ -247,30 +263,42 @@ export default async function DashboardPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {data.recruiterPerf.map((r) => (
-                <tr key={r.id} className="hover:bg-slate-50">
-                  <Td heading>
-                    <Link
-                      href={`/recruiters/${r.id}`}
-                      className={`${cardLink} font-medium text-indigo-600 hover:underline`}
+              {data.recruiterPerf.map((r) => {
+                const dash = (n: number) =>
+                  n === 0 ? <span className="text-slate-300">—</span> : n;
+                return (
+                  <tr key={r.id} className="hover:bg-slate-50">
+                    <Td heading>
+                      <Link
+                        href={`/recruiters/${r.id}`}
+                        className={`${cardLink} font-medium text-indigo-600 hover:underline`}
+                      >
+                        {r.fullName}
+                      </Link>
+                    </Td>
+                    <Td label="Submissions" className="text-right tabular-nums">
+                      {dash(r.submissions)}
+                    </Td>
+                    <Td
+                      label="Interviews"
+                      secondary
+                      className="text-right tabular-nums"
                     >
-                      {r.fullName}
-                    </Link>
-                  </Td>
-                  <Td label="Submissions" className="text-right tabular-nums">
-                    {r.submissions}
-                  </Td>
-                  <Td label="Interviews" secondary className="text-right tabular-nums">
-                    {r.interviews}
-                  </Td>
-                  <Td label="Selected" secondary className="text-right tabular-nums">
-                    {r.selected}
-                  </Td>
-                  <Td label="Joined" className="text-right tabular-nums">
-                    {r.joined}
-                  </Td>
-                </tr>
-              ))}
+                      {dash(r.interviews)}
+                    </Td>
+                    <Td
+                      label="Selected"
+                      secondary
+                      className="text-right tabular-nums"
+                    >
+                      {dash(r.selected)}
+                    </Td>
+                    <Td label="Joined" className="text-right tabular-nums">
+                      {dash(r.joined)}
+                    </Td>
+                  </tr>
+                );
+              })}
             </tbody>
           </Table>
         )}
