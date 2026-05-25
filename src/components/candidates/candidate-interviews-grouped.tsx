@@ -38,22 +38,19 @@ export function CandidateInterviewsGrouped({
           >
             <details className="group">
               <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:[outline-offset:-2px]">
-                <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                <div className="flex min-w-0 flex-col gap-1">
                   <Link
                     href={`/submissions/${sub.id}`}
-                    className="max-w-[20rem] truncate font-medium text-indigo-600 hover:underline"
+                    className="truncate font-medium text-indigo-600 hover:underline"
                   >
                     {sub.job.title}
                   </Link>
-                  <span className="text-sm text-slate-600">
-                    <span aria-hidden className="mr-2 text-slate-300">
-                      ·
-                    </span>
-                    {sub.job.client.name}
-                  </span>
-                  <Badge tone={SUBMISSION_STATUS_TONE[sub.status]}>
-                    {SUBMISSION_STATUS_LABEL[sub.status]}
-                  </Badge>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                    <span>{sub.job.client.name}</span>
+                    <Badge tone={SUBMISSION_STATUS_TONE[sub.status]}>
+                      {SUBMISSION_STATUS_LABEL[sub.status]}
+                    </Badge>
+                  </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="flex flex-wrap items-center gap-1">
