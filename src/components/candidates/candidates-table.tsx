@@ -1,0 +1,282 @@
+"use client";
+
+import Link from "next/link";
+import { Table, Th, Td, cardLink } from "@/components/ui/table";
+import { SortableHeader } from "@/components/ui/sortable-header";
+import { MobileSort } from "@/components/ui/mobile-sort";
+import { Badge } from "@/components/ui/badge";
+import { ColumnsMenu } from "@/components/ui/columns-menu";
+import {
+  formatDate,
+  formatExperience,
+  formatCandidateDisplayId,
+} from "@/lib/format";
+import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
+import type { CandidateListRow } from "@/server/queries/candidates";
+
+type Column = {
+  key: string;
+  label: string;
+  sortKey?: string;
+  sortDefaultDir?: "asc" | "desc";
+  align?: "right";
+  defaultVisible: boolean;
+  render: (row: CandidateListRow, rowNumber: number) => React.ReactNode;
+};
+
+const COLUMNS: Column[] = [
+  {
+    key: "sno",
+    label: "S.No",
+    align: "right",
+    defaultVisible: true,
+    render: (_r, n) => (
+      <Td label="S.No" secondary className="text-right tabular-nums">
+        {n}
+      </Td>
+    ),
+  },
+  {
+    key: "id",
+    label: "ID",
+    defaultVisible: true,
+    render: (c) => (
+      <Td label="ID" secondary className="whitespace-nowrap font-mono text-xs">
+        {formatCandidateDisplayId(c)}
+      </Td>
+    ),
+  },
+  {
+    key: "name",
+    label: "Name",
+    sortKey: "name",
+    defaultVisible: true,
+    render: (c) => (
+      <Td heading>
+        <span className="flex items-center gap-2">
+          <Link
+            href={`/candidates/${c.id}`}
+            className={`${cardLink} font-medium text-indigo-600 hover:underline`}
+          >
+            {c.fullName}
+          </Link>
+          {!c.isActive && <Badge tone="slate">Inactive</Badge>}
+        </span>
+      </Td>
+    ),
+  },
+  {
+    key: "email",
+    label: "Email",
+    sortKey: "email",
+    defaultVisible: true,
+    render: (c) => (
+      <Td label="Email" secondary>
+        {c.email || "—"}
+      </Td>
+    ),
+  },
+  {
+    key: "phone",
+    label: "Phone",
+    sortKey: "phone",
+    defaultVisible: true,
+    render: (c) => (
+      <Td label="Phone" secondary>
+        {c.phone || "—"}
+      </Td>
+    ),
+  },
+  {
+    key: "location",
+    label: "Location",
+    sortKey: "location",
+    defaultVisible: true,
+    render: (c) => <Td label="Location">{c.currentLocation || "—"}</Td>,
+  },
+  {
+    key: "experience",
+    label: "Experience",
+    sortKey: "experience",
+    defaultVisible: true,
+    render: (c) => (
+      <Td label="Experience" className="whitespace-nowrap">
+        {formatExperience(c.totalExperienceYears)}
+      </Td>
+    ),
+  },
+  {
+    key: "skills",
+    label: "Skills",
+    defaultVisible: true,
+    render: (c) => (
+      <Td label="Skills" secondary>
+        {c.skills.length === 0 ? (
+          "—"
+        ) : (
+          <div className="flex max-w-xs flex-wrap gap-1">
+            {c.skills.map((s) => (
+              <Badge key={s} tone="slate">
+                {s}
+              </Badge>
+            ))}
+          </div>
+        )}
+      </Td>
+    ),
+  },
+  {
+    key: "subs",
+    label: "Subs",
+    sortKey: "subs",
+    sortDefaultDir: "desc",
+    align: "right",
+    defaultVisible: true,
+    render: (c) => (
+      <Td label="Subs" className="text-right tabular-nums">
+        {c._count.submissions}
+      </Td>
+    ),
+  },
+  {
+    key: "updated",
+    label: "Updated",
+    sortKey: "updated",
+    sortDefaultDir: "desc",
+    defaultVisible: true,
+    render: (c) => (
+      <Td label="Updated" secondary className="whitespace-nowrap">
+        {formatDate(c.updatedAt)}
+      </Td>
+    ),
+  },
+  // Hidden-by-default extras
+  {
+    key: "workAuthorization",
+    label: "Work auth",
+    defaultVisible: false,
+    render: (c) => (
+      <Td label="Work auth" secondary>
+        {c.workAuthorization || "—"}
+      </Td>
+    ),
+  },
+  {
+    key: "currentCompany",
+    label: "Current company",
+    defaultVisible: false,
+    render: (c) => (
+      <Td label="Current company" secondary>
+        {c.currentCompany || "—"}
+      </Td>
+    ),
+  },
+];
+
+const STORAGE_KEY = "lumintrack.candidates.columns";
+const STORAGE_VERSION = 1;
+const DEFAULTS: ColumnPrefs = {
+  visible: COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key),
+  order: COLUMNS.map((c) => c.key),
+};
+
+export function CandidatesTable({
+  rows,
+  pageOffset = 0,
+}: {
+  rows: CandidateListRow[];
+  pageOffset?: number;
+}) {
+  const [prefs, setPrefs, hydrated] = useColumnPrefs(
+    STORAGE_KEY,
+    STORAGE_VERSION,
+    DEFAULTS,
+  );
+
+  const byKey = new Map(COLUMNS.map((c) => [c.key, c]));
+  const orderedCols = prefs.order
+    .map((k) => byKey.get(k))
+    .filter((c): c is Column => Boolean(c));
+  const visibleCols = orderedCols.filter((c) => prefs.visible.includes(c.key));
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs text-slate-500">
+          {rows.length === 0
+            ? null
+            : `Showing ${visibleCols.length} of ${COLUMNS.length} columns`}
+        </p>
+        <ColumnsMenu
+          columns={orderedCols.map((c) => ({ key: c.key, label: c.label }))}
+          prefs={prefs}
+          onChange={setPrefs}
+          defaults={DEFAULTS}
+          disabled={!hydrated}
+        />
+      </div>
+
+      <MobileSort
+        options={visibleCols
+          .filter((c) => c.sortKey)
+          .map((c) => ({
+            column: c.sortKey!,
+            label: c.label,
+            defaultDir: c.sortDefaultDir,
+          }))}
+      />
+
+      <Table>
+        <thead className="border-b border-slate-200 bg-slate-50">
+          <tr>
+            {visibleCols.map((c) =>
+              c.sortKey ? (
+                <SortableHeader
+                  key={c.key}
+                  column={c.sortKey}
+                  label={c.label}
+                  align={c.align}
+                  defaultDir={c.sortDefaultDir}
+                />
+              ) : (
+                <Th
+                  key={c.key}
+                  className={c.align === "right" ? "text-right" : ""}
+                >
+                  {c.label}
+                </Th>
+              ),
+            )}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {rows.map((row, idx) => (
+            <tr key={row.id} className="hover:bg-slate-50">
+              {visibleCols.map((c) => (
+                <RenderCell
+                  key={c.key}
+                  column={c}
+                  row={row}
+                  rowNumber={pageOffset + idx + 1}
+                />
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+    </div>
+  );
+}
+
+function RenderCell({
+  column,
+  row,
+  rowNumber,
+}: {
+  column: Column;
+  row: CandidateListRow;
+  rowNumber: number;
+}) {
+  return <>{column.render(row, rowNumber)}</>;
+}
+

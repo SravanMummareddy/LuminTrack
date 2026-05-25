@@ -1,11 +1,8 @@
-import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
-import { Badge } from "@/components/ui/badge";
-import { Table, Th, Td, cardLink } from "@/components/ui/table";
-import { SortableHeader } from "@/components/ui/sortable-header";
-import { MobileSort } from "@/components/ui/mobile-sort";
+import { LinkButton } from "@/components/ui/button";
 import { Pagination } from "@/components/ui/pagination";
 import { SubmissionFilters } from "@/components/submissions/submission-filters";
+import { SubmissionsTable } from "@/components/submissions/submissions-table";
 import {
   listSubmissions,
   SUBMISSION_SORT_KEYS,
@@ -19,12 +16,7 @@ import {
   listUsers,
 } from "@/server/queries/org";
 import { parseDateRange, parseSort, parsePage, PAGE_SIZE } from "@/lib/filters";
-import {
-  SUBMISSION_STATUSES,
-  SUBMISSION_STATUS_LABEL,
-  SUBMISSION_STATUS_TONE,
-} from "@/lib/labels";
-import { formatDate, formatSubmissionDisplayId } from "@/lib/format";
+import { SUBMISSION_STATUSES } from "@/lib/labels";
 import type { SubmissionStatus } from "@/generated/prisma/enums";
 
 function clean(value: string | string[] | undefined): string | undefined {
@@ -129,97 +121,21 @@ export default async function SubmissionsPage({
               ? "No submissions match these filters."
               : "No submissions yet. Open a job and submit a candidate to get started."}
           </p>
+          {!hasFilters && (
+            <div className="mt-3 flex justify-center">
+              <LinkButton href="/jobs">Browse jobs</LinkButton>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
           <p className="text-xs text-slate-500">
             {total} submission{total === 1 ? "" : "s"}
           </p>
-          <MobileSort
-            options={[
-              { column: "candidate", label: "Candidate" },
-              { column: "job", label: "Job" },
-              { column: "client", label: "Client" },
-              { column: "vendor", label: "Vendor" },
-              { column: "recruiter", label: "Submitted by" },
-              { column: "status", label: "Status" },
-              { column: "rounds", label: "Rounds", defaultDir: "desc" },
-              { column: "submitted", label: "Submitted", defaultDir: "desc" },
-            ]}
+          <SubmissionsTable
+            rows={submissions}
+            pageOffset={(page - 1) * PAGE_SIZE}
           />
-          <Table>
-            <thead className="border-b border-slate-200 bg-slate-50">
-              <tr>
-                <Th className="text-right">S.No</Th>
-                <Th>ID</Th>
-                <SortableHeader column="candidate" label="Candidate" />
-                <SortableHeader column="job" label="Job" />
-                <SortableHeader column="client" label="Client" />
-                <SortableHeader column="vendor" label="Vendor" />
-                <SortableHeader column="recruiter" label="Submitted by" />
-                <SortableHeader column="status" label="Status" />
-                <SortableHeader
-                  column="rounds"
-                  label="Rounds"
-                  align="right"
-                  defaultDir="desc"
-                />
-                <SortableHeader
-                  column="submitted"
-                  label="Submitted"
-                  defaultDir="desc"
-                />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {submissions.map((s, idx) => (
-                <tr key={s.id} className="hover:bg-slate-50">
-                  <Td label="S.No" secondary className="text-right tabular-nums">
-                    {(page - 1) * PAGE_SIZE + idx + 1}
-                  </Td>
-                  <Td label="ID" secondary className="whitespace-nowrap font-mono text-xs">
-                    {formatSubmissionDisplayId(s)}
-                  </Td>
-                  <Td heading>
-                    <Link
-                      href={`/submissions/${s.id}`}
-                      className={`${cardLink} font-medium text-indigo-600 hover:underline`}
-                    >
-                      {s.candidate.fullName}
-                    </Link>
-                  </Td>
-                  <Td label="Job">
-                    <Link
-                      href={`/jobs/${s.job.id}`}
-                      className="text-slate-700 hover:underline"
-                    >
-                      {s.job.title}
-                    </Link>
-                  </Td>
-                  <Td label="Client" secondary>
-                    {s.job.client.name}
-                  </Td>
-                  <Td label="Vendor" secondary>
-                    {s.job.vendor.name}
-                  </Td>
-                  <Td label="Submitted by" secondary>
-                    {s.submittedBy.fullName}
-                  </Td>
-                  <Td label="Status">
-                    <Badge tone={SUBMISSION_STATUS_TONE[s.status]}>
-                      {SUBMISSION_STATUS_LABEL[s.status]}
-                    </Badge>
-                  </Td>
-                  <Td label="Rounds" className="text-right tabular-nums">
-                    {s._count.interviewRounds}
-                  </Td>
-                  <Td label="Submitted" secondary className="whitespace-nowrap">
-                    {formatDate(s.submittedAt)}
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
           <Pagination page={page} totalPages={totalPages} total={total} />
         </div>
       )}
