@@ -46,6 +46,11 @@ export function ContactsDialog({
   // Reset the inline form when the dialog closes, or when it re-opens for a
   // different parent entity. Tracked via a "previous key" using React's
   // "adjust state during render" pattern (avoids setState-in-effect).
+  //
+  // Note: this render-phase reset is a safety net for the mid-edit-parent-
+  // change case. The primary guard against silent edit loss lives on the
+  // close handler below — closing is the user-driven path, so that's where
+  // we can prompt the user with `confirm()`.
   const currentKey = open ? parentId : null;
   const [prevKey, setPrevKey] = useState<string | null>(currentKey);
   if (prevKey !== currentKey) {
@@ -53,8 +58,21 @@ export function ContactsDialog({
     if (editing !== null) setEditing(null);
   }
 
+  function handleClose() {
+    if (
+      editing !== null &&
+      !window.confirm(
+        "You have unsaved contact changes. Discard them and close?",
+      )
+    ) {
+      return;
+    }
+    setEditing(null);
+    onClose();
+  }
+
   return (
-    <Dialog open={open} onClose={onClose} title={`Contacts · ${parentName}`}>
+    <Dialog open={open} onClose={handleClose} title={`Contacts · ${parentName}`}>
       <div className="space-y-3">
         {contacts.length === 0 ? (
           <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
