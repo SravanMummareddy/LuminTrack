@@ -393,13 +393,29 @@ export async function importRequisitions(
       });
 
       // 2. Pre-query existing portalRefIds so we can classify each row as
-      //    NEW or UPDATE for the audit summary.
+      //    NEW or UPDATE for the audit summary. We also load each existing
+      //    job's current client/vendor names so the per-row loop can emit
+      //    a JOB_UPDATED audit entry when iLabor renames or re-points the
+      //    customer/vendor (otherwise the relationship change is silent —
+      //    §F-D2 from the audit).
       const portalRefIds = valid.map((r) => String(r.requisitionId));
       const existing = await tx.job.findMany({
         where: { portalId: portal.id, portalRefId: { in: portalRefIds } },
-        select: { portalRefId: true },
+        select: {
+          id: true,
+          portalRefId: true,
+          clientId: true,
+          vendorId: true,
+          client: { select: { name: true } },
+          vendor: { select: { name: true } },
+        },
       });
       const existingSet = new Set(existing.map((j) => j.portalRefId));
+      const existingByRefId = new Map(
+        existing
+          .filter((j) => j.portalRefId !== null)
+          .map((j) => [j.portalRefId as string, j] as const),
+      );
 
       // 3. Dedupe-upsert Vendors and Clients so each unique name is touched
       //    exactly once. With ~300 rows this drops ~600 upserts to ~50.
@@ -484,6 +500,29 @@ export async function importRequisitions(
           });
         } else {
           updatedCount += 1;
+          // §F-D2 — if iLabor re-points the customer/vendor (rename, split,
+          // or rebrand), the job's clientId/vendorId silently jumps to the
+          // new row. Emit a JOB_UPDATED audit entry so the relationship
+          // change shows up on the job's timeline.
+          const prior = existingByRefId.get(String(row.requisitionId));
+          if (prior) {
+            const relinks: string[] = [];
+            if (prior.clientId !== clientId)
+              relinks.push(`client "${prior.client.name}" → "${clientName}"`);
+            if (prior.vendorId !== vendorId)
+              relinks.push(`vendor "${prior.vendor.name}" → "${vendorName}"`);
+            if (relinks.length) {
+              await logActivity(tx, {
+                entityType: "JOB",
+                action: "JOB_UPDATED",
+                jobId: upserted.id,
+                description: `Re-linked by iLabor re-import: ${relinks.join(", ")}`,
+                oldValue: `${prior.client.name} / ${prior.vendor.name}`,
+                newValue: `${clientName} / ${vendorName}`,
+                performedById: user.id,
+              });
+            }
+          }
         }
       }
 
