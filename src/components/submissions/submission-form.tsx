@@ -238,8 +238,31 @@ export function SubmissionForm({
         />
       </Field>
 
+      {state.needsConfirm && (
+        <Field
+          label="Duplicate override reason"
+          htmlFor="duplicateReason"
+          hint="Required — captured on the audit trail."
+          error={errors.duplicateReason}
+        >
+          <Input
+            id="duplicateReason"
+            name="duplicateReason"
+            placeholder="e.g. Role rebooted, prior submission cancelled"
+            required
+          />
+        </Field>
+      )}
+
       {state.error && (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p
+          className={
+            "rounded-md px-3 py-2 text-sm " +
+            (state.needsConfirm
+              ? "bg-amber-50 text-amber-800"
+              : "bg-red-50 text-red-700")
+          }
+        >
           {state.error}
         </p>
       )}
@@ -249,7 +272,11 @@ export function SubmissionForm({
           Cancel
         </Link>
         <Button type="submit" disabled={pending}>
-          {pending ? "Submitting…" : "Submit candidate"}
+          {pending
+            ? "Submitting…"
+            : state.needsConfirm
+              ? "Submit anyway"
+              : "Submit candidate"}
         </Button>
       </div>
     </form>

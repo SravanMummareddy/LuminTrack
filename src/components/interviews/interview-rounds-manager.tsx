@@ -102,6 +102,11 @@ export function InterviewRoundsManager({
                 </RoundItem>
                 <RoundItem label="Date & time">
                   {r.scheduledAt ? formatDateTime(r.scheduledAt) : "—"}
+                  {r.scheduledAt && r.scheduledTimezone ? (
+                    <span className="ml-1 text-xs text-slate-500">
+                      ({r.scheduledTimezone})
+                    </span>
+                  ) : null}
                 </RoundItem>
                 <RoundItem label="Meeting link">
                   {r.meetingLink ? (

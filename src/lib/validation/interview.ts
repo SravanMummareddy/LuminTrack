@@ -43,6 +43,9 @@ export const interviewRoundSchema = z
     ),
     meetingLink: optionalUrl,
     scheduledAt: optionalDateTime,
+    // §D5 — IANA timezone name (e.g. "America/New_York"). Free-text by design
+    // so new zones don't need a code release; validated only by length here.
+    scheduledTimezone: optionalText,
     feedback: optionalText,
     notes: optionalText,
   })

@@ -176,6 +176,17 @@ export default async function SubmissionDetailPage({
           </dd>
         </div>
 
+        {submission.duplicateReason && (
+          <div className="mt-5">
+            <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">
+              Duplicate override reason
+            </dt>
+            <dd className="mt-0.5 whitespace-pre-wrap text-sm text-slate-800">
+              {submission.duplicateReason}
+            </dd>
+          </div>
+        )}
+
         {submission.status === "REJECTED" && (
           <div className="mt-5">
             <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">

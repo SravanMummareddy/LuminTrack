@@ -322,7 +322,7 @@ model Candidate {
   // ≤3 starred skills shown first in list views. Subset of `skills` (enforced
   // in Zod, not at the DB level — Postgres can't express subset constraints
   // cheaply). Empty array means "fall back to first 3 of `skills`."
-  featuredSkills      String[]
+  featuredSkills      String[]         @default([])
   linkedinUrl         String?
   resumeBlobUrl       String?
   notes               String?
@@ -332,7 +332,7 @@ model Candidate {
   // §E2 — free-form per-candidate labels (e.g. "Hot prospect", "On vacation").
   // Distinct from `skills`. Lowercased + trimmed by the action layer; UI shows
   // as chips.
-  tags                String[]
+  tags                String[]         @default([])
   // §E3 — last-contact timestamp. Bumped explicitly via a "Mark contacted"
   // action; not auto-bumped on every edit (otherwise it'd just mirror
   // updatedAt and lose meaning).
@@ -383,6 +383,11 @@ model Submission {
   resumeDriveLink String?
   submissionNotes String?
   rejectionReason String?
+  // §C4 — set when the recruiter consciously submits a duplicate
+  // (same candidate already submitted to this job). The DB-level
+  // `@@unique([candidateId, jobId])` constraint was dropped so the
+  // duplicate check now lives in the action and captures this reason.
+  duplicateReason String?
   submittedAt     DateTime         @default(now())
   // Pipeline tail: §C2. Recorded when the candidate accepts the offer and at
   // actual join time respectively. expectedJoinDate is nullable because not
@@ -408,7 +413,7 @@ model Submission {
   noteEntries     Note[]
   activities      Activity[]
 
-  @@unique([candidateId, jobId])
+  @@index([candidateId, jobId])
   @@index([status])
   @@index([jobId])
   @@index([candidateId])
@@ -433,6 +438,10 @@ model InterviewRound {
   meetingLink       String?
   interviewerName String?
   scheduledAt    DateTime?
+  // §D5 — IANA timezone string (e.g. "America/New_York") the interview is
+  // anchored to. `scheduledAt` is UTC; this captures the interviewer's intent
+  // so a Pacific scheduler doesn't ship a London candidate Pacific-local time.
+  scheduledTimezone String?
   result         InterviewResult @default(WAITING)
   feedback       String?
   notes          String?

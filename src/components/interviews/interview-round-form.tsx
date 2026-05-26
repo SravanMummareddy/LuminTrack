@@ -30,6 +30,7 @@ export type InterviewRoundData = {
   interviewPlatform: string | null;
   meetingLink: string | null;
   scheduledAt: Date | string | null;
+  scheduledTimezone: string | null;
   result: InterviewResult;
   feedback: string | null;
   notes: string | null;
@@ -206,6 +207,24 @@ export function InterviewRoundForm({
             name="scheduledAt"
             type="datetime-local"
             defaultValue={toDateTimeLocal(round?.scheduledAt ?? null)}
+          />
+        </Field>
+
+        <Field
+          label="Time zone"
+          htmlFor="scheduledTimezone"
+          hint="IANA name — e.g. America/New_York, Asia/Kolkata, Europe/London."
+          error={errors.scheduledTimezone}
+        >
+          <Input
+            id="scheduledTimezone"
+            name="scheduledTimezone"
+            placeholder={
+              typeof Intl !== "undefined"
+                ? Intl.DateTimeFormat().resolvedOptions().timeZone
+                : "America/New_York"
+            }
+            defaultValue={round?.scheduledTimezone ?? ""}
           />
         </Field>
       </div>
