@@ -100,6 +100,7 @@ export function Pagination({
               Go to
             </label>
             <input
+              suppressHydrationWarning
               id="page-jump"
               type="number"
               min={1}

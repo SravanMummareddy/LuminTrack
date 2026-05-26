@@ -49,7 +49,10 @@ export function FilterBar({
 
   return (
     <div className="space-y-2">
-      <form className="rounded-lg border border-slate-200 bg-white p-4">
+      <form
+        className="rounded-lg border border-slate-200 bg-white p-4"
+        suppressHydrationWarning
+      >
         {sort && <input type="hidden" name="sort" value={sort} />}
         {dir && <input type="hidden" name="dir" value={dir} />}
 
