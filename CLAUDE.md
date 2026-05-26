@@ -10,6 +10,7 @@ timeline, and recruiter performance. Replaces a manual Excel/Word process.
 **Approved build plan:** `~/.claude/plans/we-have-the-requirements-optimized-balloon.md`
 **Open work / bug backlog:** `bugs.md` (top of file has a grouped
 "Remaining work" summary — start there before grepping the audit sections).
+**Future enhancements (large multi-session items):** [`ENHANCEMENTS.md`](./ENHANCEMENTS.md).
 
 ## 🚧 Current work — iLabor requisition import (Phase 8b: browser extension is next)
 
@@ -89,10 +90,17 @@ snapshot, file map, resolved decisions, iLabor JSON sample. The architectural
     start/end dates missing). New admin-only `/audit` route — org-wide
     activity log filterable by action + user, paginated 25/page, linked
     from Settings → Admin tools. No migration.
-- **Large queue (2026-05-26 triage in `bugs.md`):** §F2 → §J1 → iLabor 8b
-  → §J3 → §E1 → §J4, in that order. **§G1-G3 (notifications/digests/
-  Slack-Teams) and §I4 (dark mode) are deferred indefinitely on user
-  direction.** See `bugs.md` for per-item pros/cons + sizing.
+- **§F2 funnel velocity shipped 2026-05-26** (PR #11): `/reports` gained
+  a "Time to fill" card (median + p90 days from `Job.createdAt` to a
+  JOINED submission, overall + by client + by source) and a "Time in
+  stage" table (median + p90 days each submission sits in each
+  non-terminal pipeline status, walked from `SUBMISSION_STATUS_CHANGED`
+  audit rows). No migration. New `median()` / `percentile()` helpers in
+  `src/server/queries/reports.ts`.
+- **Remaining large items moved to [`ENHANCEMENTS.md`](./ENHANCEMENTS.md):**
+  §J1 PII export → iLabor 8b extension → §J3 admin 2FA → §E1 résumé
+  parsing → §J4 session inspector. **§G1-G3 (notifications) and §I4
+  (dark mode) are deferred indefinitely on user direction.**
 - **Process:** phase-by-phase with product-owner confirmation between phases;
   teaching-style narration of meaningful code; additive only — the existing
   dashboard's behavior is unchanged for anyone not exercising the new flow.
