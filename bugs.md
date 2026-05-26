@@ -18,8 +18,12 @@
   in the action) before any "with reason" path can exist.
 
 **Medium / migration required:**
-- **§C1** — add `OFFER_ACCEPTED` between `OFFER_RELEASED` and `JOINED`.
-- **§C2** — `Submission.expectedJoinDate` + `actualJoinDate` (today only binary JOINED).
+- ~~**§C1** — add `OFFER_ACCEPTED` between `OFFER_RELEASED` and `JOINED`.~~
+  ✅ shipped 2026-05-26 (commit `2cc3366`; migration
+  `20260526110000_offer_accepted_join_dates`).
+- ~~**§C2** — `Submission.expectedJoinDate` + `actualJoinDate`.~~
+  ✅ shipped 2026-05-26 in the same commit; the status form
+  conditionally surfaces the matching date input.
 - **§A2** — `Job.workMode` + `Job.priority` enums (plus nullable `targetCloseDate`, `postingUrl`, `workAuthRequirement`, `skills[]`).
 - **§B1** — `Contact` table tied to Client/Vendor/SisterCompanySource.
 - **§B4** — Candidate status reasons enum (`AVAILABLE | PLACED | NOT_INTERESTED | DO_NOT_CONTACT`).
