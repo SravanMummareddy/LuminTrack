@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
+import { Forbidden } from "@/components/ui/forbidden";
 import { Table, Th, Td } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Pagination } from "@/components/ui/pagination";
@@ -22,7 +22,7 @@ export default async function AuditPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const user = await requireUser();
-  if (user.role !== "ADMIN") notFound();
+  if (user.role !== "ADMIN") return <Forbidden />;
 
   const sp = await searchParams;
   const get = (k: string) =>

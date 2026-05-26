@@ -218,7 +218,7 @@ export function JobsTable({
   /** Row count preceding the first row on this page (e.g. (page-1)*pageSize). */
   pageOffset?: number;
 }) {
-  const [prefs, setPrefs, hydrated] = useColumnPrefs(
+  const [prefs, setPrefs] = useColumnPrefs(
     STORAGE_KEY,
     STORAGE_VERSION,
     DEFAULTS,
@@ -243,7 +243,6 @@ export function JobsTable({
           prefs={prefs}
           onChange={setPrefs}
           defaults={DEFAULTS}
-          disabled={!hydrated}
         />
       </div>
 
