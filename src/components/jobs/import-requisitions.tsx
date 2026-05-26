@@ -290,6 +290,8 @@ type DigestRow = {
   customerName: string;
   requisitionStatus: string | null;
   statusUnknown: boolean;
+  statusDiverged?: boolean;
+  existingStatus?: string | null;
 };
 
 function RowsTable({
@@ -332,7 +334,15 @@ function RowsTable({
                       unmapped
                     </span>
                   ) : null}
-                  {updateMode ? (
+                  {updateMode && r.statusDiverged ? (
+                    <span
+                      className="ml-1 inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
+                      title={`iLabor maps this to a different status than LuminTrack's current "${r.existingStatus ?? "—"}". LuminTrack's status is preserved on re-import.`}
+                    >
+                      status diverged · LuminTrack: {r.existingStatus ?? "—"}
+                    </span>
+                  ) : null}
+                  {updateMode && !r.statusDiverged ? (
                     <span className="ml-1 text-[10px] text-slate-400">
                       (existing status preserved)
                     </span>

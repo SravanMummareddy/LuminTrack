@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { Field, Input } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,6 +8,7 @@ import {
   updateCandidateResume,
 } from "@/server/actions/resumes";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
+import { isLikelyDriveUrl, DRIVE_LINK_WARNING } from "@/lib/validation/resume";
 
 export type ResumeData = {
   id: string;
@@ -35,6 +36,8 @@ export function ResumeForm({
   }, [state.ok, onDone]);
 
   const errors = state.fieldErrors ?? {};
+  const [driveLink, setDriveLink] = useState(resume?.driveLink ?? "");
+  const showDriveWarning = !isLikelyDriveUrl(driveLink);
 
   return (
     <form action={formAction} className="space-y-4">
@@ -62,10 +65,14 @@ export function ResumeForm({
           id="driveLink"
           name="driveLink"
           type="url"
-          defaultValue={resume?.driveLink ?? ""}
+          value={driveLink}
+          onChange={(e) => setDriveLink(e.target.value)}
           placeholder="https://drive.google.com/file/d/…"
           required
         />
+        {showDriveWarning && (
+          <p className="mt-1 text-xs text-amber-700">{DRIVE_LINK_WARNING}</p>
+        )}
       </Field>
 
       {state.error && (

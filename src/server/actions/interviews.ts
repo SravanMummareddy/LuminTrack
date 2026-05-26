@@ -179,3 +179,33 @@ export async function updateInterviewRound(
   revalidatePath(`/submissions/${d.submissionId}`);
   return { ok: true };
 }
+
+export async function deleteInterviewRound(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const roundId = String(formData.get("id") ?? "").trim();
+  if (!roundId) return;
+
+  const existing = await prisma.interviewRound.findUnique({
+    where: { id: roundId },
+    select: {
+      id: true,
+      submissionId: true,
+      roundName: true,
+      roundOrder: true,
+    },
+  });
+  if (!existing) return;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.interviewRound.delete({ where: { id: roundId } });
+    await logActivity(tx, {
+      entityType: "SUBMISSION",
+      action: "INTERVIEW_ROUND_DELETED",
+      description: `Round ${existing.roundOrder} · "${existing.roundName}" deleted`,
+      performedById: user.id,
+      submissionId: existing.submissionId,
+    });
+  });
+
+  revalidatePath(`/submissions/${existing.submissionId}`);
+}

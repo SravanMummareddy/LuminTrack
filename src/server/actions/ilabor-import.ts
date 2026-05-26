@@ -47,6 +47,12 @@ export type RowError = {
 
 /** Per-row digest for the preview's new / updated tables. */
 export type RowDigest = {
+  /** True when iLabor's mapped status differs from the existing LuminTrack
+   *  status (only set for "updated" rows — re-imports preserve LuminTrack's
+   *  status, so this warns the operator that the two are out of sync). */
+  statusDiverged?: boolean;
+  /** The existing LuminTrack status, for display alongside the iLabor one. */
+  existingStatus?: string | null;
   rowIndex: number;
   requisitionId: string;
   jobTitle: string;
@@ -290,9 +296,12 @@ export async function previewRequisitions(
           portalId: portal.id,
           portalRefId: { in: portalRefIds },
         },
-        select: { portalRefId: true },
+        select: { portalRefId: true, status: true },
       })
     : [];
+  const existingStatusMap = new Map(
+    existing.map((j) => [j.portalRefId, j.status]),
+  );
   const existingSet = new Set(existing.map((j) => j.portalRefId));
 
   const newRows: RowDigest[] = [];
@@ -312,8 +321,21 @@ export async function previewRequisitions(
     void idxAmongValid;
     const digest = digestOf(row, rowIndex >= 0 ? rowIndex : -1);
     if (digest.statusUnknown) statusWarningCount += 1;
-    if (existingSet.has(String(row.requisitionId))) {
-      updatedRows.push(digest);
+    const reqId = String(row.requisitionId);
+    if (existingSet.has(reqId)) {
+      const existingStatus = existingStatusMap.get(reqId) ?? null;
+      const mapped = ilaborStatusToJobStatus(row.requisitionStatus);
+      // Only flag divergence when the iLabor side mapped cleanly — otherwise
+      // the "unmapped" badge already covers the operator-surprise case.
+      const diverged =
+        !mapped.unknown &&
+        existingStatus !== null &&
+        existingStatus !== mapped.status;
+      updatedRows.push({
+        ...digest,
+        existingStatus,
+        statusDiverged: diverged,
+      });
     } else {
       newRows.push(digest);
     }
