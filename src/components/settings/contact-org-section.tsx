@@ -70,10 +70,12 @@ export function ContactOrgSection({
           {title}{" "}
           <span className="font-normal text-slate-400">({items.length})</span>
         </h2>
-        <Button size="sm" onClick={() => setEditing("new")}>
-          <Plus className="h-4 w-4" />
-          Add {singular}
-        </Button>
+        {isAdmin && (
+          <Button size="sm" onClick={() => setEditing("new")}>
+            <Plus className="h-4 w-4" />
+            Add {singular}
+          </Button>
+        )}
       </div>
 
       {items.length > 0 && (
@@ -133,13 +135,15 @@ export function ContactOrgSection({
                   </button>
                 </Td>
                 <Td className="text-right">
-                  <button
-                    type="button"
-                    onClick={() => setEditing(item)}
-                    className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
-                  >
-                    Edit
-                  </button>
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      onClick={() => setEditing(item)}
+                      className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
+                    >
+                      Edit
+                    </button>
+                  ) : null}
                 </Td>
               </tr>
             ))}

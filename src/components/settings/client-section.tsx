@@ -58,10 +58,12 @@ export function ClientSection({
         <h2 className="text-sm font-semibold text-slate-700">
           Clients <span className="font-normal text-slate-400">({items.length})</span>
         </h2>
-        <Button size="sm" onClick={() => setEditing("new")}>
-          <Plus className="h-4 w-4" />
-          Add client
-        </Button>
+        {isAdmin && (
+          <Button size="sm" onClick={() => setEditing("new")}>
+            <Plus className="h-4 w-4" />
+            Add client
+          </Button>
+        )}
       </div>
 
       {items.length > 0 && (
@@ -119,13 +121,15 @@ export function ClientSection({
                   </button>
                 </Td>
                 <Td className="text-right">
-                  <button
-                    type="button"
-                    onClick={() => setEditing(item)}
-                    className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
-                  >
-                    Edit
-                  </button>
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      onClick={() => setEditing(item)}
+                      className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
+                    >
+                      Edit
+                    </button>
+                  ) : null}
                 </Td>
               </tr>
             ))}
