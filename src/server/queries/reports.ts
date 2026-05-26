@@ -93,8 +93,28 @@ function performanceByDimension(
   );
 }
 
+const REPORTS_PAGE_SIZE = 10;
+
+/** Slice a sorted in-memory list into a `{ rows, total, page, totalPages }`
+ *  shape that matches the rest of the list-query conventions. */
+function paginate<T>(all: T[], page: number) {
+  const total = all.length;
+  const totalPages = Math.max(1, Math.ceil(total / REPORTS_PAGE_SIZE));
+  const p = Math.min(Math.max(1, page), totalPages);
+  const start = (p - 1) * REPORTS_PAGE_SIZE;
+  return {
+    rows: all.slice(start, start + REPORTS_PAGE_SIZE),
+    total,
+    page: p,
+    totalPages,
+  };
+}
+
 /** Everything the Reports / Analytics page (spec §9.11) renders. */
-export async function getReportsData(filters: AnalyticsFilters) {
+export async function getReportsData(
+  filters: AnalyticsFilters,
+  pages: { openJobs?: number; recruiterAging?: number } = {},
+) {
   const [jobs, submissions, recruiters] = await Promise.all([
     prisma.job.findMany({
       where: buildJobWhere(filters),
@@ -477,9 +497,9 @@ export async function getReportsData(filters: AnalyticsFilters) {
     byRecruiter,
     pipeline,
     conversions,
-    openJobs,
+    openJobs: paginate(openJobs, pages.openJobs ?? 1),
     agingBuckets,
-    recruiterAging,
+    recruiterAging: paginate(recruiterAging, pages.recruiterAging ?? 1),
     clientRevenue,
     timeToFill,
     timeInStage,
