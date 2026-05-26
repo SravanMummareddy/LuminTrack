@@ -343,6 +343,10 @@ model InterviewRound {
   // when the mode is VIDEO. Plain strings — see INTERVIEW_MODES in src/lib/labels.ts.
   interviewMode     String?
   interviewPlatform String?
+  // Optional join URL (Zoom / Teams / Meet / phone bridge). Captured here so
+  // recruiters can hand candidates a single click-through instead of digging
+  // through email threads.
+  meetingLink       String?
   interviewerName String?
   scheduledAt    DateTime?
   result         InterviewResult @default(WAITING)

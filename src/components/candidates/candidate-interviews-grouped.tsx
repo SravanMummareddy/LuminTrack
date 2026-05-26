@@ -37,89 +37,109 @@ export function CandidateInterviewsGrouped({
             className="rounded-md border border-slate-200 bg-white"
           >
             <details className="group">
-              <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:[outline-offset:-2px]">
-                <Link
-                  href={`/submissions/${sub.id}`}
-                  className="font-medium text-indigo-600 hover:underline"
-                >
-                  {sub.job.title}
-                </Link>
-                <span className="text-sm text-slate-600">
-                  {sub.job.client.name}
-                </span>
-                <Badge tone={SUBMISSION_STATUS_TONE[sub.status]}>
-                  {SUBMISSION_STATUS_LABEL[sub.status]}
-                </Badge>
-                <div className="flex flex-wrap items-center gap-1">
-                  {shownRounds.map((r) => (
-                    <RoundPip key={r.id} result={r.result} order={r.roundOrder} />
-                  ))}
-                  {overflow > 0 && (
-                    <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-                      +{overflow}
-                    </span>
-                  )}
+              <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:[outline-offset:-2px]">
+                <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <Link
+                    href={`/submissions/${sub.id}`}
+                    className="font-medium text-indigo-600 hover:underline"
+                  >
+                    {sub.job.title}
+                  </Link>
+                  <span className="inline-flex items-baseline gap-2 text-sm text-slate-600">
+                    <span aria-hidden className="text-slate-300">·</span>
+                    {sub.job.client.name}
+                  </span>
                 </div>
-                <span className="ml-auto whitespace-nowrap text-xs text-slate-500">
-                  {lastDate ? formatDate(lastDate) : "—"}
-                </span>
-                <span className="text-xs font-medium text-indigo-600 group-open:hidden">
-                  See details ▾
-                </span>
-                <span className="hidden text-xs font-medium text-indigo-600 group-open:inline">
-                  Hide ▴
-                </span>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Badge tone={SUBMISSION_STATUS_TONE[sub.status]}>
+                    {SUBMISSION_STATUS_LABEL[sub.status]}
+                  </Badge>
+                  <div className="flex flex-nowrap items-center gap-1">
+                    {shownRounds.map((r) => (
+                      <RoundPip
+                        key={r.id}
+                        result={r.result}
+                        order={r.roundOrder}
+                      />
+                    ))}
+                    {overflow > 0 && (
+                      <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                        +{overflow}
+                      </span>
+                    )}
+                  </div>
+                  <span className="inline-flex items-center gap-3 whitespace-nowrap">
+                    <span className="text-xs text-slate-500">
+                      {lastDate ? formatDate(lastDate) : "—"}
+                    </span>
+                    <span className="text-xs font-medium text-indigo-600 group-open:hidden">
+                      See details ▾
+                    </span>
+                    <span className="hidden text-xs font-medium text-indigo-600 group-open:inline">
+                      Hide ▴
+                    </span>
+                  </span>
+                </div>
               </summary>
 
-              <div className="border-t border-slate-100 px-4 py-3">
-                <table className="w-full text-sm">
-                  <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
-                    <tr>
-                      <th className="py-1 pr-3 font-medium">Round</th>
-                      <th className="py-1 pr-3 font-medium">Type</th>
-                      <th className="py-1 pr-3 font-medium">Mode</th>
-                      <th className="py-1 pr-3 font-medium">Interviewer</th>
-                      <th className="py-1 pr-3 font-medium">Scheduled</th>
-                      <th className="py-1 pr-3 font-medium">Result</th>
-                      <th className="py-1 pr-3 font-medium">Feedback</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {sub.interviewRounds.map((r) => (
-                      <tr key={r.id}>
-                        <td className="py-2 pr-3 align-top whitespace-nowrap text-slate-700">
-                          R{r.roundOrder} · {r.roundName}
-                        </td>
-                        <td className="py-2 pr-3 align-top text-slate-600">
-                          {INTERVIEW_TYPE_LABEL[r.interviewType]}
-                        </td>
-                        <td className="py-2 pr-3 align-top text-slate-600">
-                          {r.interviewMode
-                            ? r.interviewPlatform
-                              ? `${r.interviewMode} · ${r.interviewPlatform}`
-                              : r.interviewMode
-                            : "—"}
-                        </td>
-                        <td className="py-2 pr-3 align-top text-slate-600">
-                          {r.interviewerName || "—"}
-                        </td>
-                        <td className="py-2 pr-3 align-top whitespace-nowrap text-slate-600">
-                          {r.scheduledAt ? formatDateTime(r.scheduledAt) : "—"}
-                        </td>
-                        <td className="py-2 pr-3 align-top">
-                          <Badge tone={INTERVIEW_RESULT_TONE[r.result]}>
-                            {INTERVIEW_RESULT_LABEL[r.result]}
-                          </Badge>
-                        </td>
-                        <td className="py-2 pr-3 align-top text-slate-600">
-                          <span className="block max-w-md whitespace-pre-wrap">
-                            {r.feedback || "—"}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="space-y-3 border-t border-slate-100 px-4 py-3">
+                {sub.interviewRounds.map((r) => (
+                  <div
+                    key={r.id}
+                    className="rounded-md border border-slate-200 bg-slate-50/60 p-3"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-medium text-slate-800">
+                        R{r.roundOrder} · {r.roundName}
+                      </p>
+                      <Badge tone={INTERVIEW_RESULT_TONE[r.result]}>
+                        {INTERVIEW_RESULT_LABEL[r.result]}
+                      </Badge>
+                    </div>
+                    <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <RoundItem label="Type">
+                        {INTERVIEW_TYPE_LABEL[r.interviewType]}
+                      </RoundItem>
+                      <RoundItem label="Mode">
+                        {r.interviewMode
+                          ? r.interviewPlatform
+                            ? `${r.interviewMode} · ${r.interviewPlatform}`
+                            : r.interviewMode
+                          : "—"}
+                      </RoundItem>
+                      <RoundItem label="Interviewer">
+                        {r.interviewerName || "—"}
+                      </RoundItem>
+                      <RoundItem label="Scheduled">
+                        {r.scheduledAt ? formatDateTime(r.scheduledAt) : "—"}
+                      </RoundItem>
+                      <RoundItem label="Meeting link">
+                        {r.meetingLink ? (
+                          <a
+                            href={r.meetingLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="break-all text-indigo-600 hover:underline"
+                          >
+                            Join
+                          </a>
+                        ) : (
+                          "—"
+                        )}
+                      </RoundItem>
+                    </dl>
+                    {r.feedback && (
+                      <div className="mt-3">
+                        <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                          Feedback
+                        </dt>
+                        <dd className="mt-0.5 whitespace-pre-wrap text-sm text-slate-800">
+                          {r.feedback}
+                        </dd>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </details>
           </li>
@@ -166,5 +186,22 @@ function RoundPip({
     >
       <Icon className="h-3 w-3" aria-hidden />R{order}
     </span>
+  );
+}
+
+function RoundItem({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">
+        {label}
+      </dt>
+      <dd className="mt-0.5 text-sm text-slate-800">{children}</dd>
+    </div>
   );
 }

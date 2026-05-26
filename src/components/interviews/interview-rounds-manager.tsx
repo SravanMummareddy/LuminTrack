@@ -103,6 +103,20 @@ export function InterviewRoundsManager({
                 <RoundItem label="Date & time">
                   {r.scheduledAt ? formatDateTime(r.scheduledAt) : "—"}
                 </RoundItem>
+                <RoundItem label="Meeting link">
+                  {r.meetingLink ? (
+                    <a
+                      href={r.meetingLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="break-all text-indigo-600 hover:underline"
+                    >
+                      Join
+                    </a>
+                  ) : (
+                    "—"
+                  )}
+                </RoundItem>
                 <RoundItem label="Last updated">
                   {formatDateTime(r.updatedAt)}
                   {r.updatedBy ? ` · ${r.updatedBy.fullName}` : ""}
