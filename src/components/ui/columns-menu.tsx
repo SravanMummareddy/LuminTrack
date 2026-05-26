@@ -94,7 +94,11 @@ export function ColumnsMenu({
       {open ? (
         <div className="absolute right-0 z-20 mt-1 w-72 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
           <div className="mb-1 flex items-center justify-between px-1 py-1 text-xs text-slate-500">
-            <span>Drag, use ↑↓, or toggle to show</span>
+            <span>
+              <span className="hidden sm:inline">Drag, use </span>
+              <span className="sm:hidden">Use </span>
+              ↑↓, or toggle to show
+            </span>
             <button
               type="button"
               onClick={reset}
@@ -126,7 +130,7 @@ export function ColumnsMenu({
                   }
                 >
                   <GripVertical
-                    className="h-4 w-4 shrink-0 cursor-grab text-slate-400"
+                    className="hidden h-4 w-4 shrink-0 cursor-grab text-slate-400 sm:block"
                     aria-hidden
                   />
                   <label className="flex flex-1 cursor-pointer items-center gap-2 select-none">
@@ -143,18 +147,18 @@ export function ColumnsMenu({
                     onClick={() => moveBy(c.key, -1)}
                     disabled={isFirst}
                     aria-label={`Move ${c.label} up`}
-                    className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-30"
+                    className="rounded p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-30 sm:p-1"
                   >
-                    <ArrowUp className="h-3.5 w-3.5" />
+                    <ArrowUp className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
                   </button>
                   <button
                     type="button"
                     onClick={() => moveBy(c.key, 1)}
                     disabled={isLast}
                     aria-label={`Move ${c.label} down`}
-                    className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-30"
+                    className="rounded p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-30 sm:p-1"
                   >
-                    <ArrowDown className="h-3.5 w-3.5" />
+                    <ArrowDown className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
                   </button>
                 </li>
               );
