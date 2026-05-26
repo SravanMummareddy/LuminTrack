@@ -28,7 +28,10 @@
   `targetCloseDate`, `postingUrl`, `workAuthRequirement`, `skills[]`).~~
   ✅ shipped 2026-05-26 (commit `45988b5`; migration
   `20260526120000_job_workmode_priority_extras`).
-- **§B1** — `Contact` table tied to Client/Vendor/SisterCompanySource.
+- ~~**§B1** — `Contact` table tied to Client/Vendor/SisterCompanySource.~~
+  ✅ shipped 2026-05-26 (migration `20260526130000_contact_records`;
+  contacts dialog under each settings tab; CHECK constraint enforces
+  one-parent-per-row; admin-gated writes).
 - **§B4** — Candidate status reasons enum (`AVAILABLE | PLACED | NOT_INTERESTED | DO_NOT_CONTACT`).
 - **§D5** — interview time-zone string.
 - **§E2-E4** — candidate tags/labels, last-contact tracking, per-candidate source.

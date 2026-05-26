@@ -12,6 +12,10 @@ import {
   type StatusFilter,
 } from "@/components/settings/settings-list-filter";
 import { saveClient } from "@/server/actions/org";
+import {
+  ContactsDialog,
+  type ContactRow,
+} from "@/components/settings/contacts-dialog";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
 
 export type ClientRow = {
@@ -23,10 +27,18 @@ export type ClientRow = {
   location: string | null;
   notes: string | null;
   isActive: boolean;
+  contacts: ContactRow[];
 };
 
-export function ClientSection({ items }: { items: ClientRow[] }) {
+export function ClientSection({
+  items,
+  isAdmin,
+}: {
+  items: ClientRow[];
+  isAdmin: boolean;
+}) {
   const [editing, setEditing] = useState<ClientRow | "new" | null>(null);
+  const [contactsOf, setContactsOf] = useState<ClientRow | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
 
@@ -79,6 +91,7 @@ export function ClientSection({ items }: { items: ClientRow[] }) {
               <Th>Email</Th>
               <Th>Location</Th>
               <Th>Status</Th>
+              <Th>Contacts</Th>
               <Th />
             </tr>
           </thead>
@@ -95,6 +108,15 @@ export function ClientSection({ items }: { items: ClientRow[] }) {
                   <Badge tone={item.isActive ? "green" : "slate"}>
                     {item.isActive ? "Active" : "Inactive"}
                   </Badge>
+                </Td>
+                <Td label="Contacts">
+                  <button
+                    type="button"
+                    onClick={() => setContactsOf(item)}
+                    className="text-sm font-medium text-indigo-600 hover:underline"
+                  >
+                    Manage ({item.contacts.length})
+                  </button>
                 </Td>
                 <Td className="text-right">
                   <button
@@ -123,6 +145,16 @@ export function ClientSection({ items }: { items: ClientRow[] }) {
           />
         )}
       </Dialog>
+
+      <ContactsDialog
+        open={contactsOf !== null}
+        onClose={() => setContactsOf(null)}
+        kind="client"
+        parentId={contactsOf?.id ?? ""}
+        parentName={contactsOf?.name ?? ""}
+        contacts={contactsOf?.contacts ?? []}
+        readOnly={!isAdmin}
+      />
     </section>
   );
 }

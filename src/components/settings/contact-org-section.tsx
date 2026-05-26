@@ -11,6 +11,11 @@ import {
   SettingsListFilter,
   type StatusFilter,
 } from "@/components/settings/settings-list-filter";
+import {
+  ContactsDialog,
+  type ContactRow,
+} from "@/components/settings/contacts-dialog";
+import type { ContactKind } from "@/server/actions/contacts";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 
 export type ContactOrg = {
@@ -22,6 +27,7 @@ export type ContactOrg = {
   location: string | null;
   notes: string | null;
   isActive: boolean;
+  contacts: ContactRow[];
 };
 
 type SaveAction = (prev: FormState, formData: FormData) => Promise<FormState>;
@@ -32,13 +38,18 @@ export function ContactOrgSection({
   singular,
   items,
   action,
+  contactKind,
+  isAdmin,
 }: {
   title: string;
   singular: string;
   items: ContactOrg[];
   action: SaveAction;
+  contactKind: ContactKind;
+  isAdmin: boolean;
 }) {
   const [editing, setEditing] = useState<ContactOrg | "new" | null>(null);
+  const [contactsOf, setContactsOf] = useState<ContactOrg | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
 
@@ -93,6 +104,7 @@ export function ContactOrgSection({
               <Th>Phone</Th>
               <Th>Location</Th>
               <Th>Status</Th>
+              <Th>Contacts</Th>
               <Th />
             </tr>
           </thead>
@@ -110,6 +122,15 @@ export function ContactOrgSection({
                   <Badge tone={item.isActive ? "green" : "slate"}>
                     {item.isActive ? "Active" : "Inactive"}
                   </Badge>
+                </Td>
+                <Td label="Contacts">
+                  <button
+                    type="button"
+                    onClick={() => setContactsOf(item)}
+                    className="text-sm font-medium text-indigo-600 hover:underline"
+                  >
+                    Manage ({item.contacts.length})
+                  </button>
                 </Td>
                 <Td className="text-right">
                   <button
@@ -139,6 +160,16 @@ export function ContactOrgSection({
           />
         )}
       </Dialog>
+
+      <ContactsDialog
+        open={contactsOf !== null}
+        onClose={() => setContactsOf(null)}
+        kind={contactKind}
+        parentId={contactsOf?.id ?? ""}
+        parentName={contactsOf?.name ?? ""}
+        contacts={contactsOf?.contacts ?? []}
+        readOnly={!isAdmin}
+      />
     </section>
   );
 }

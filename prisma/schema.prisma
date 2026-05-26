@@ -137,7 +137,8 @@ model SisterCompanySource {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  jobs Job[]
+  jobs     Job[]
+  contacts Contact[]
 }
 
 // External portals/VMSes we mirror requisitions from (Randstad iLabor, etc.).
@@ -166,7 +167,8 @@ model Client {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  jobs Job[]
+  jobs     Job[]
+  contacts Contact[]
 }
 
 model Vendor {
@@ -181,7 +183,34 @@ model Vendor {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  jobs Job[]
+  jobs     Job[]
+  contacts Contact[]
+}
+
+// §B1: per-entity contacts. Each row points at exactly one parent via the
+// three nullable FKs. A CHECK constraint enforces "exactly one set" — see
+// the matching migration. Cascade on parent delete since contacts have no
+// independent meaning.
+model Contact {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  role      String?
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clientId String?
+  client   Client?              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  vendorId String?
+  vendor   Vendor?              @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  sourceId String?
+  source   SisterCompanySource? @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([vendorId])
+  @@index([sourceId])
 }
 
 model Job {
