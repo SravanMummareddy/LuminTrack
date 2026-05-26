@@ -309,13 +309,24 @@ export async function getReportsData(filters: AnalyticsFilters) {
   );
 
   // §F2 — funnel velocity. Single pass over the audit table for every
-  // SUBMISSION_STATUS_CHANGED row belonging to a submission already in the
-  // filtered set. Bounded by `submissionId IN (…)` so the scan is cheap.
+  // status-transition row belonging to a submission already in the filtered
+  // set. Milestone transitions (selected / rejected / offers / joined) are
+  // logged with their own action names (see changeSubmissionStatus) but carry
+  // the same oldValue/newValue labels, so the walk below treats them
+  // uniformly. Bounded by `submissionId IN (…)` so the scan is cheap.
+  const STATUS_TRANSITION_ACTIONS = [
+    "SUBMISSION_STATUS_CHANGED",
+    "CANDIDATE_SELECTED",
+    "CANDIDATE_REJECTED",
+    "OFFER_RELEASED",
+    "OFFER_ACCEPTED",
+    "CANDIDATE_JOINED",
+  ] as const;
   const filteredSubmissionIds = submissions.map((s) => s.id);
   const statusChangeRows = filteredSubmissionIds.length
     ? await prisma.activity.findMany({
         where: {
-          action: "SUBMISSION_STATUS_CHANGED",
+          action: { in: [...STATUS_TRANSITION_ACTIONS] },
           submissionId: { in: filteredSubmissionIds },
         },
         select: {
