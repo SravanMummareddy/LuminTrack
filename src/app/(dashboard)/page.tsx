@@ -16,7 +16,7 @@ import {
   listClients,
   listVendors,
   listSisterCompanies,
-  listUsers,
+  listActiveRecruiterOptions,
 } from "@/server/queries/org";
 import { parseAnalyticsParams, TONE_HEX, AGING_BUCKET_LABEL, AGING_BUCKET_TONE } from "@/lib/analytics";
 import {
@@ -168,7 +168,7 @@ export default async function DashboardPage({
       listClients(),
       listVendors(),
       listSisterCompanies(),
-      listUsers(),
+      listActiveRecruiterOptions(),
     ],
   );
 
