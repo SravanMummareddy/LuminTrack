@@ -310,6 +310,98 @@ export default async function ReportsPage({
           </div>
         )}
       </Card>
+
+      <Card
+        title="Recruiter aging — stale submissions"
+        description="Submissions older than 14 days still in early pipeline stages (Submitted / Resume Picked / Vendor Screening / Client Interview)."
+      >
+        {data.recruiterAging.length === 0 ? (
+          <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
+            No stale submissions — nice work.
+          </p>
+        ) : (
+          <Table>
+            <thead className="border-b border-slate-200 bg-slate-50">
+              <tr>
+                <Th>Submission</Th>
+                <Th>Recruiter</Th>
+                <Th>Candidate</Th>
+                <Th>Job · Client</Th>
+                <Th>Status</Th>
+                <Th className="text-right">Days idle</Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {data.recruiterAging.map((s) => (
+                <tr key={s.submissionId} className="hover:bg-slate-50">
+                  <Td label="Submission">
+                    <Link
+                      href={`/submissions/${s.submissionId}`}
+                      className="font-mono text-xs text-indigo-600 hover:underline"
+                    >
+                      SUB-{String(s.seq).padStart(3, "0")}
+                    </Link>
+                  </Td>
+                  <Td label="Recruiter">{s.recruiter}</Td>
+                  <Td label="Candidate">{s.candidate}</Td>
+                  <Td label="Job · Client">
+                    {s.job}
+                    <span className="ml-1 text-xs text-slate-500">
+                      · {s.client}
+                    </span>
+                  </Td>
+                  <Td label="Status">
+                    {SUBMISSION_STATUS_LABEL[s.status]}
+                  </Td>
+                  <Td label="Days idle" className="text-right tabular-nums">
+                    {s.days}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </Card>
+
+      <Card
+        title="Client revenue projection"
+        description="OPEN + ON_HOLD jobs only. Σ candidateRate × 8h × duration × positions. Duration = startDate→endDate when both are set; otherwise a conservative 90-day default."
+      >
+        {data.clientRevenue.length === 0 ? (
+          <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
+            No open jobs with a candidate rate.
+          </p>
+        ) : (
+          <Table>
+            <thead className="border-b border-slate-200 bg-slate-50">
+              <tr>
+                <Th>Client</Th>
+                <Th className="text-right">Active jobs</Th>
+                <Th className="text-right">Projected revenue</Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {data.clientRevenue.map((r) => (
+                <tr key={r.client} className="hover:bg-slate-50">
+                  <Td label="Client" className="font-medium text-slate-800">
+                    {r.client}
+                  </Td>
+                  <Td label="Active jobs" className="text-right tabular-nums">
+                    {r.jobs}
+                  </Td>
+                  <Td label="Projected revenue" className="text-right tabular-nums">
+                    {r.projected.toLocaleString(undefined, {
+                      style: "currency",
+                      currency: "USD",
+                      maximumFractionDigits: 0,
+                    })}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </Card>
     </div>
   );
 }
