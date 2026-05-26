@@ -213,7 +213,7 @@ export default async function SubmissionDetailPage({
               <a
                 href={submission.resumeDriveLink}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:underline"
               >
                 Open resume in a new tab
