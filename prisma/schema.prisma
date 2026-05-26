@@ -30,6 +30,16 @@ enum JobPriority {
   CRITICAL
 }
 
+// §B4 — coarse engagement state for a candidate. Independent of `isActive`
+// (which is the soft-delete flag). Lets recruiters filter for re-engagement
+// vs. people who've asked not to be contacted.
+enum CandidateStatus {
+  AVAILABLE
+  PLACED
+  NOT_INTERESTED
+  DO_NOT_CONTACT
+}
+
 enum JobStatus {
   OPEN
   ON_HOLD
@@ -85,6 +95,7 @@ enum ActivityAction {
   RECRUITER_UNASSIGNED
   CANDIDATE_CREATED
   CANDIDATE_UPDATED
+  CANDIDATE_CONTACTED
   CANDIDATE_SUBMITTED
   SUBMISSION_STATUS_CHANGED
   SUBMISSION_UPDATED
@@ -316,6 +327,20 @@ model Candidate {
   resumeBlobUrl       String?
   notes               String?
   isActive            Boolean  @default(true)
+  // §B4 — engagement state (separate from `isActive` soft-delete).
+  status              CandidateStatus @default(AVAILABLE)
+  // §E2 — free-form per-candidate labels (e.g. "Hot prospect", "On vacation").
+  // Distinct from `skills`. Lowercased + trimmed by the action layer; UI shows
+  // as chips.
+  tags                String[]
+  // §E3 — last-contact timestamp. Bumped explicitly via a "Mark contacted"
+  // action; not auto-bumped on every edit (otherwise it'd just mirror
+  // updatedAt and lose meaning).
+  lastContactedAt     DateTime?
+  // §E4 — where this candidate originally came from. Free-text by design
+  // (LinkedIn InMail / referral / job-board / inbound / etc.); a fixed enum
+  // here would calcify ahead of real usage data.
+  source              String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -330,6 +355,7 @@ model Candidate {
   @@index([email])
   @@index([phone])
   @@index([fullName])
+  @@index([status])
 }
 
 // A candidate's saved résumés — one candidate keeps many labelled Drive links,

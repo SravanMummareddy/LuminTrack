@@ -5,6 +5,17 @@ import {
   optionalUrl,
   emptyToUndefined,
 } from "./common";
+import { CANDIDATE_STATUSES } from "@/lib/labels";
+
+const CANDIDATE_STATUS_VALUES = CANDIDATE_STATUSES as unknown as readonly [
+  (typeof CANDIDATE_STATUSES)[number],
+  ...(typeof CANDIDATE_STATUSES)[number][],
+];
+
+const optionalDate = z.preprocess(
+  emptyToUndefined,
+  z.coerce.date().optional(),
+);
 
 const optionalExperience = z.preprocess(
   emptyToUndefined,
@@ -29,6 +40,10 @@ export const candidateSchema = z
     linkedinUrl: optionalUrl,
     notes: optionalText,
     isActive: z.boolean(),
+    status: z.enum(CANDIDATE_STATUS_VALUES).default("AVAILABLE"),
+    tags: z.array(z.string().trim().min(1)).max(30).default([]),
+    lastContactedAt: optionalDate,
+    source: optionalText,
   })
   .refine((d) => Boolean(d.email || d.phone), {
     // Surface as a form-level error (no path) so it shows in the top-of-form

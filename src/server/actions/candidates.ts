@@ -18,6 +18,20 @@ function parseSkills(raw: FormDataEntryValue | null): string[] {
   return [...new Set(raw.split(",").map((s) => s.trim()).filter(Boolean))];
 }
 
+// §E2 — tags are stored as a normalized lowercase set so filters can match
+// case-insensitively without per-query LOWER() work.
+function parseTags(raw: FormDataEntryValue | null): string[] {
+  if (typeof raw !== "string") return [];
+  return [
+    ...new Set(
+      raw
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  ];
+}
+
 function readCandidate(formData: FormData) {
   return candidateSchema.safeParse({
     fullName: formData.get("fullName") ?? "",
@@ -33,6 +47,10 @@ function readCandidate(formData: FormData) {
     linkedinUrl: formData.get("linkedinUrl") ?? "",
     notes: formData.get("notes") ?? "",
     isActive: formData.get("isActive") != null,
+    status: formData.get("status") ?? "AVAILABLE",
+    tags: parseTags(formData.get("tags")),
+    lastContactedAt: formData.get("lastContactedAt") ?? "",
+    source: formData.get("source") ?? "",
   });
 }
 
@@ -51,6 +69,10 @@ function candidateData(d: CandidateInput) {
     linkedinUrl: d.linkedinUrl ?? null,
     notes: d.notes ?? null,
     isActive: d.isActive,
+    status: d.status,
+    tags: d.tags,
+    lastContactedAt: d.lastContactedAt ?? null,
+    source: d.source ?? null,
   };
 }
 
@@ -139,7 +161,15 @@ export async function updateCandidate(
   compare("featured skills", existing.featuredSkills.join(", "), d.featuredSkills.join(", "));
   compare("LinkedIn", existing.linkedinUrl, d.linkedinUrl);
   compare("notes", existing.notes, d.notes);
-  compare("status", existing.isActive, d.isActive);
+  compare("active", existing.isActive, d.isActive);
+  compare("engagement status", existing.status, d.status);
+  compare("tags", existing.tags.join(", "), d.tags.join(", "));
+  compare(
+    "last contacted",
+    existing.lastContactedAt?.toISOString() ?? "",
+    d.lastContactedAt?.toISOString() ?? "",
+  );
+  compare("source", existing.source, d.source);
 
   await prisma.$transaction(async (tx) => {
     await tx.candidate.update({
@@ -160,4 +190,29 @@ export async function updateCandidate(
   revalidatePath("/candidates");
   revalidatePath(`/candidates/${candidateId}`);
   redirect(`/candidates/${candidateId}`);
+}
+
+/**
+ * §E3 — bumps `lastContactedAt` to now and logs an audit row. Surfaced as a
+ * one-click "Mark contacted" button on candidate detail; lets recruiters log
+ * a touch without having to open the edit form.
+ */
+export async function markCandidateContacted(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const candidateId = String(formData.get("id") ?? "").trim();
+  if (!candidateId) return;
+  await prisma.$transaction(async (tx) => {
+    await tx.candidate.update({
+      where: { id: candidateId },
+      data: { lastContactedAt: new Date() },
+    });
+    await logActivity(tx, {
+      entityType: "CANDIDATE",
+      action: "CANDIDATE_CONTACTED",
+      description: "Marked contacted",
+      performedById: user.id,
+      candidateId,
+    });
+  });
+  revalidatePath(`/candidates/${candidateId}`);
 }
