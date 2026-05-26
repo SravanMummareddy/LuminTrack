@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { Select, Textarea, Input } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
 import { changeSubmissionStatus } from "@/server/actions/submissions";
@@ -10,6 +10,7 @@ import {
   STATUS_CHANGE_REASONS,
   STATUS_CHANGE_REASON_LABEL,
 } from "@/lib/labels";
+import { EMPTY_FORM_STATE } from "@/lib/form-state";
 import type { SubmissionStatus } from "@/generated/prisma/enums";
 
 const labelClass = "mb-1 block text-xs font-medium text-slate-500";
@@ -44,11 +45,14 @@ export function SubmissionStatusForm({
   const [reason, setReason] = useState("");
   const [expectedJoinDate, setExpectedJoinDate] = useState("");
   const [actualJoinDate, setActualJoinDate] = useState("");
-  // `changeSubmissionStatus` returns void, so we use a transition to get
-  // a pending flag without changing the action signature. The submit
-  // button disables + relabels mid-flight, killing the double-click risk
-  // that would otherwise let a slow demo network log duplicate audit rows.
-  const [isPending, startTransition] = useTransition();
+  // useActionState gives us the pending flag, error surface, and field errors
+  // returned by the Server Action. Double-click protection: the submit
+  // button disables mid-flight, so a slow network can't log duplicate audit
+  // rows.
+  const [state, formAction, isPending] = useActionState(
+    changeSubmissionStatus,
+    EMPTY_FORM_STATE,
+  );
 
   // Default "when this happened" to now. This must run after mount, not in a
   // useState initializer: the client's local "now" is unknown during SSR, so
@@ -63,12 +67,7 @@ export function SubmissionStatusForm({
   const showActualJoin = selected === "JOINED";
 
   return (
-    <form
-      action={(formData) =>
-        startTransition(() => changeSubmissionStatus(formData))
-      }
-      className="space-y-3"
-    >
+    <form action={formAction} className="space-y-3">
       <input type="hidden" name="id" value={submissionId} />
       <div className="flex flex-wrap items-end gap-2">
         <div className="w-56">
@@ -104,6 +103,14 @@ export function SubmissionStatusForm({
           {isPending ? "Updating…" : "Update"}
         </Button>
       </div>
+      {state.error && (
+        <p
+          role="alert"
+          className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700"
+        >
+          {state.error}
+        </p>
+      )}
       <p className="text-xs text-slate-400">
         &ldquo;When this happened&rdquo; defaults to now — adjust it if the
         change actually happened earlier. To correct the original{" "}
