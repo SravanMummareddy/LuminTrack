@@ -29,7 +29,12 @@ export default async function AuditPage({
     Array.isArray(sp[k]) ? (sp[k]?.[0] as string) : (sp[k] as string | undefined);
 
   const page = Math.max(1, Number(get("page") ?? 1) || 1);
-  const actionFilter = get("action");
+  // Validate against the enum so a hand-crafted `?action=` doesn't 500 the
+  // Prisma query. Unknown values fall back to "no filter".
+  const ACTIONS = Object.values(ActivityAction) as string[];
+  const rawAction = get("action");
+  const actionFilter =
+    rawAction && ACTIONS.includes(rawAction) ? rawAction : undefined;
   const userIdFilter = get("user");
 
   const where = {
