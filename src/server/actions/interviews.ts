@@ -21,6 +21,7 @@ function readRound(formData: FormData) {
     interviewPlatform: formData.get("interviewPlatform") ?? "",
     meetingLink: formData.get("meetingLink") ?? "",
     scheduledAt: formData.get("scheduledAt") ?? "",
+    scheduledTimezone: formData.get("scheduledTimezone") ?? "",
     feedback: formData.get("feedback") ?? "",
     notes: formData.get("notes") ?? "",
   });
@@ -67,6 +68,7 @@ export async function createInterviewRound(
           d.interviewMode === "VIDEO" ? (d.interviewPlatform ?? null) : null,
         meetingLink: d.meetingLink ?? null,
         scheduledAt: d.scheduledAt ?? null,
+        scheduledTimezone: d.scheduledTimezone ?? null,
         feedback: d.feedback ?? null,
         notes: d.notes ?? null,
         updatedById: user.id,
@@ -133,6 +135,7 @@ export async function updateInterviewRound(
           d.interviewMode === "VIDEO" ? (d.interviewPlatform ?? null) : null,
         meetingLink: d.meetingLink ?? null,
         scheduledAt: d.scheduledAt ?? null,
+        scheduledTimezone: d.scheduledTimezone ?? null,
         feedback: d.feedback ?? null,
         notes: d.notes ?? null,
         updatedById: user.id,

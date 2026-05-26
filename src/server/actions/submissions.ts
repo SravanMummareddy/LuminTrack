@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { Prisma } from "@/generated/prisma/client";
 import type {
   ActivityAction,
   SubmissionStatus,
@@ -63,6 +62,23 @@ export async function createSubmission(
       fieldErrors: { candidateId: "Select a candidate." },
     };
 
+  // §C4 — duplicate-submission check moved out of the DB to the action so
+  // recruiters can override with a reason (e.g. role was rebooted, prior
+  // submission was cancelled). The DB unique constraint was dropped in
+  // migration `20260526150000_…`. Without `duplicateReason`, the action still
+  // blocks the duplicate just like before.
+  const duplicateReason = String(formData.get("duplicateReason") ?? "").trim();
+  const existing = await prisma.submission.findFirst({
+    where: { candidateId: d.candidateId, jobId: d.jobId },
+    select: { id: true },
+  });
+  if (existing && !duplicateReason) {
+    return {
+      needsConfirm: true,
+      error: `${candidate.fullName} was already submitted to this job. Add a reason to submit again.`,
+    };
+  }
+
   // Resolve a previously-saved résumé up front so a bad pick returns cleanly.
   let pickedResume: { id: string; driveLink: string } | null = null;
   if (d.resumeChoice === "existing" && d.candidateResumeId) {
@@ -80,9 +96,7 @@ export async function createSubmission(
     pickedResume = { id: resume.id, driveLink: resume.driveLink };
   }
 
-  let submissionId: string;
-  try {
-    submissionId = await prisma.$transaction(async (tx) => {
+  const submissionId = await prisma.$transaction(async (tx) => {
       // Settle the résumé: an existing library entry, a new one, or none.
       let candidateResumeId: string | null = null;
       let resumeSnapshot: string | null = null;
@@ -123,32 +137,21 @@ export async function createSubmission(
           // Snapshot the link used so it survives résumé edits/deletes.
           resumeDriveLink: resumeSnapshot,
           submissionNotes: d.submissionNotes ?? null,
+          duplicateReason: existing ? duplicateReason : null,
         },
       });
       await logActivity(tx, {
         entityType: "SUBMISSION",
         action: "CANDIDATE_SUBMITTED",
-        description: `${candidate.fullName} submitted to "${job.title}"`,
+        description: existing
+          ? `${candidate.fullName} re-submitted to "${job.title}" (duplicate override: ${duplicateReason})`
+          : `${candidate.fullName} submitted to "${job.title}"`,
+        note: existing ? duplicateReason : null,
         performedById: user.id,
         submissionId: created.id,
       });
       return created.id;
-    });
-  } catch (e) {
-    // Unique [candidateId, jobId] — spec §12: no duplicate candidate per job.
-    if (
-      e instanceof Prisma.PrismaClientKnownRequestError &&
-      e.code === "P2002"
-    ) {
-      return {
-        error: `${candidate.fullName} has already been submitted to this job.`,
-        fieldErrors: {
-          candidateId: "This candidate is already submitted to this job.",
-        },
-      };
-    }
-    throw e;
-  }
+  });
 
   revalidatePath("/submissions");
   revalidatePath(`/jobs/${d.jobId}`);
