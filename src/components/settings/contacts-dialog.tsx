@@ -43,10 +43,15 @@ export function ContactsDialog({
 }) {
   const [editing, setEditing] = useState<ContactRow | "new" | null>(null);
 
-  // Reset the inline form when the dialog re-opens for a different entity.
-  useEffect(() => {
-    if (!open) setEditing(null);
-  }, [open, parentId]);
+  // Reset the inline form when the dialog closes, or when it re-opens for a
+  // different parent entity. Tracked via a "previous key" using React's
+  // "adjust state during render" pattern (avoids setState-in-effect).
+  const currentKey = open ? parentId : null;
+  const [prevKey, setPrevKey] = useState<string | null>(currentKey);
+  if (prevKey !== currentKey) {
+    setPrevKey(currentKey);
+    if (editing !== null) setEditing(null);
+  }
 
   return (
     <Dialog open={open} onClose={onClose} title={`Contacts · ${parentName}`}>

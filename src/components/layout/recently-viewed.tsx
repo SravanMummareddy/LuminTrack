@@ -62,11 +62,13 @@ export function RecentlyViewedTracker({
 
 export function RecentlyViewedMenu() {
   const [open, setOpen] = useState(false);
-  const [store, setStore] = useState<Store>({ job: [], candidate: [] });
+  // Lazy initializer — `readStore` is SSR-safe (returns empties when window
+  // is absent), so the client picks up real values on first render without
+  // a setState-in-effect hop.
+  const [store, setStore] = useState<Store>(readStore);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setStore(readStore());
     function refresh() {
       setStore(readStore());
     }
