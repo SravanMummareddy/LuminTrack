@@ -85,8 +85,8 @@ export default async function AuditPage({
         description="Org-wide activity across jobs, candidates, submissions, and interview rounds. Admin only."
       />
 
-      <form className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-4">
-        <div>
+      <form className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:flex-row sm:flex-wrap sm:items-end">
+        <div className="sm:w-auto">
           <label
             htmlFor="action"
             className="block text-xs font-medium text-slate-500"
@@ -97,7 +97,7 @@ export default async function AuditPage({
             id="action"
             name="action"
             defaultValue={actionFilter ?? ""}
-            className="mt-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+            className="mt-1 w-full max-w-full truncate rounded-md border border-slate-300 bg-white px-3 py-2 text-sm sm:w-auto"
           >
             <option value="">All actions</option>
             {actions.map((a) => (
@@ -107,7 +107,7 @@ export default async function AuditPage({
             ))}
           </select>
         </div>
-        <div>
+        <div className="sm:w-auto">
           <label
             htmlFor="user"
             className="block text-xs font-medium text-slate-500"
@@ -118,7 +118,7 @@ export default async function AuditPage({
             id="user"
             name="user"
             defaultValue={userIdFilter ?? ""}
-            className="mt-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+            className="mt-1 w-full max-w-full truncate rounded-md border border-slate-300 bg-white px-3 py-2 text-sm sm:w-auto"
           >
             <option value="">All users</option>
             {users.map((u) => (

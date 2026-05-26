@@ -63,7 +63,7 @@ export function ResumeSection({
                     <a
                       href={r.driveLink}
                       target="_blank"
-                      rel="noreferrer"
+                      rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-indigo-600 hover:underline"
                     >
                       Open

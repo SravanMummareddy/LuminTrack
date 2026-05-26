@@ -396,7 +396,7 @@ export default async function JobDetailPage({
                       <a
                         href={s.resumeDriveLink}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noopener noreferrer"
                         className="text-indigo-600 hover:underline"
                       >
                         {s.candidateResume?.label ?? "Resume"}

@@ -184,7 +184,7 @@ export default async function CandidateDetailPage({
               <a
                 href={candidate.linkedinUrl}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-indigo-600 hover:underline"
               >
                 Profile
