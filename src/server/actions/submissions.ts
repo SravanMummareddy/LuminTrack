@@ -298,10 +298,13 @@ export async function updateSubmission(
 /**
  * Manual submission status change from the submission detail page (spec §9.8).
  * Optionally records when the event really happened, a note, and (for Rejected
- * / On Hold) a reason category. Stays `void`-returning — every extra field is
- * optional, so a parse failure just no-ops.
+ * / On Hold) a reason category. Returns a `FormState` so the caller can
+ * surface validation errors instead of silently dropping the click.
  */
-export async function changeSubmissionStatus(formData: FormData): Promise<void> {
+export async function changeSubmissionStatus(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
   const user = await requireUser();
   const parsed = statusChangeSchema.safeParse({
     id: formData.get("id") ?? "",
@@ -312,7 +315,11 @@ export async function changeSubmissionStatus(formData: FormData): Promise<void> 
     expectedJoinDate: formData.get("expectedJoinDate") ?? "",
     actualJoinDate: formData.get("actualJoinDate") ?? "",
   });
-  if (!parsed.success) return;
+  if (!parsed.success)
+    return {
+      error: "Please fix the highlighted fields.",
+      fieldErrors: toFieldErrors(parsed.error),
+    };
   const d = parsed.data;
 
   const submission = await prisma.submission.findUnique({
@@ -322,7 +329,9 @@ export async function changeSubmissionStatus(formData: FormData): Promise<void> 
       job: { select: { title: true } },
     },
   });
-  if (!submission || submission.status === d.status) return;
+  if (!submission) return { error: "This submission no longer exists." };
+  if (submission.status === d.status)
+    return { error: "Status is already set to that value." };
   const next = d.status as SubmissionStatus;
 
   // The reason category only applies to the Rejected / On Hold outcomes.
@@ -381,4 +390,5 @@ export async function changeSubmissionStatus(formData: FormData): Promise<void> 
   revalidatePath(`/submissions/${d.id}`);
   revalidatePath(`/jobs/${submission.jobId}`);
   revalidatePath(`/candidates/${submission.candidateId}`);
+  return { ok: true };
 }
