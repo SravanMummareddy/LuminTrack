@@ -155,6 +155,16 @@ export default async function SubmissionDetailPage({
           <SummaryItem label="Last updated">
             {formatDate(submission.updatedAt)}
           </SummaryItem>
+          {submission.expectedJoinDate ? (
+            <SummaryItem label="Expected join">
+              {formatDate(submission.expectedJoinDate)}
+            </SummaryItem>
+          ) : null}
+          {submission.actualJoinDate ? (
+            <SummaryItem label="Actual join">
+              {formatDate(submission.actualJoinDate)}
+            </SummaryItem>
+          ) : null}
         </dl>
 
         <div className="mt-5">

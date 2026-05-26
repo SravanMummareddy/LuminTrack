@@ -80,6 +80,7 @@ const SUB_LABEL: Record<SubmissionStatus, string> = {
   REJECTED: "Rejected",
   ON_HOLD: "On Hold",
   OFFER_RELEASED: "Offer Released",
+  OFFER_ACCEPTED: "Offer Accepted",
   JOINED: "Joined",
 };
 const JOB_LABEL: Record<JobStatus, string> = {
@@ -738,8 +739,16 @@ async function main() {
         return [...PIPELINE, "SELECTED"];
       case "OFFER_RELEASED":
         return [...PIPELINE, "SELECTED", "OFFER_RELEASED"];
+      case "OFFER_ACCEPTED":
+        return [...PIPELINE, "SELECTED", "OFFER_RELEASED", "OFFER_ACCEPTED"];
       case "JOINED":
-        return [...PIPELINE, "SELECTED", "OFFER_RELEASED", "JOINED"];
+        return [
+          ...PIPELINE,
+          "SELECTED",
+          "OFFER_RELEASED",
+          "OFFER_ACCEPTED",
+          "JOINED",
+        ];
       case "REJECTED":
         return [...PIPELINE.slice(0, randInt(1, 4)), "REJECTED"];
       case "ON_HOLD":
@@ -754,9 +763,11 @@ async function main() {
         ? "CANDIDATE_REJECTED"
         : s === "OFFER_RELEASED"
           ? "OFFER_RELEASED"
-          : s === "JOINED"
-            ? "CANDIDATE_JOINED"
-            : "SUBMISSION_STATUS_CHANGED";
+          : s === "OFFER_ACCEPTED"
+            ? "OFFER_ACCEPTED"
+            : s === "JOINED"
+              ? "CANDIDATE_JOINED"
+              : "SUBMISSION_STATUS_CHANGED";
 
   const usedPairs = new Set<string>();
   const subCountByCandidate = new Map<string, number>();
