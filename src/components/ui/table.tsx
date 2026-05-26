@@ -7,6 +7,24 @@ import { cn } from "@/lib/cn";
  * normal table. Pages keep their existing `<thead>/<tbody>/<tr>` markup — the
  * responsive switch is driven entirely by descendant variants here.
  */
+// CSS scroll-shadow trick (Lea Verou): two white masks attached to the
+// scrolled content (so they slide with it) hide a pair of inner shadows
+// pinned to the viewport. When content extends past the right (or left)
+// edge, the mask slides out of the way and the shadow becomes visible —
+// no JS, indicates scrollability only when there actually is overflow.
+const scrollShadowStyle: React.CSSProperties = {
+  background: [
+    "linear-gradient(to right, #fff 30%, rgba(255,255,255,0))",
+    "linear-gradient(to right, rgba(255,255,255,0), #fff 70%) 100% 0",
+    "radial-gradient(farthest-side at left, rgba(15,23,42,0.14), rgba(15,23,42,0))",
+    "radial-gradient(farthest-side at right, rgba(15,23,42,0.14), rgba(15,23,42,0)) 100% 0",
+  ].join(","),
+  backgroundRepeat: "no-repeat",
+  backgroundColor: "#fff",
+  backgroundSize: "40px 100%, 40px 100%, 14px 100%, 14px 100%",
+  backgroundAttachment: "local, local, scroll, scroll",
+};
+
 export function Table({
   children,
   className,
@@ -15,7 +33,10 @@ export function Table({
   className?: string;
 }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+    <div
+      style={scrollShadowStyle}
+      className="overflow-x-auto rounded-lg border border-slate-200"
+    >
       <table
         className={cn(
           "block w-full text-sm md:table",
