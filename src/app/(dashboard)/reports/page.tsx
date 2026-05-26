@@ -2,6 +2,8 @@ import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Table, Th, Td } from "@/components/ui/table";
+import { CollapsibleTable } from "@/components/reports/collapsible-table";
+import { Pagination } from "@/components/ui/pagination";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
 import { BarChartCard } from "@/components/dashboard/charts";
 import { getReportsData, type ReportsData } from "@/server/queries/reports";
@@ -17,12 +19,15 @@ import {
   AGING_BUCKET_LABEL,
   AGING_BUCKET_TONE,
 } from "@/lib/analytics";
+import { parsePage } from "@/lib/filters";
 import {
   JOB_STATUS_LABEL,
   JOB_STATUS_TONE,
   SUBMISSION_STATUS_LABEL,
   SUBMISSION_STATUS_TONE,
 } from "@/lib/labels";
+
+const REPORTS_PAGE_SIZE = 10;
 
 function Card({
   title,
@@ -48,64 +53,48 @@ function pct(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
-/** A client / vendor / source performance breakdown table. */
-function DimensionTable({ rows }: { rows: ReportsData["byClient"] }) {
-  if (rows.length === 0) {
-    return (
-      <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
-        No data for the selected filters.
-      </p>
-    );
-  }
+const dimensionHead = (
+  <thead className="border-b border-slate-200 bg-slate-50">
+    <tr>
+      <Th>Name</Th>
+      <Th className="text-right">Jobs</Th>
+      <Th className="text-right">Submissions</Th>
+      <Th className="text-right">Interviews</Th>
+      <Th className="text-right">Selected</Th>
+      <Th className="text-right">Joined</Th>
+      <Th className="text-right">Joined %</Th>
+    </tr>
+  </thead>
+);
+
+function dimensionRow(r: ReportsData["byClient"][number]) {
+  const conv = r.submissions
+    ? `${Math.round((r.joined / r.submissions) * 100)}%`
+    : "—";
   return (
-    <Table>
-      <thead className="border-b border-slate-200 bg-slate-50">
-        <tr>
-          <Th>Name</Th>
-          <Th className="text-right">Jobs</Th>
-          <Th className="text-right">Submissions</Th>
-          <Th className="text-right">Interviews</Th>
-          <Th className="text-right">Selected</Th>
-          <Th className="text-right">Joined</Th>
-          <Th className="text-right">Joined %</Th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-slate-100">
-        {rows.map((r) => {
-          // Per-dimension conversion: joined / submissions. Lets a manager
-          // compare iLabor vs manual sources (or one client vs another)
-          // without doing the math by hand.
-          const conv = r.submissions
-            ? `${Math.round((r.joined / r.submissions) * 100)}%`
-            : "—";
-          return (
-            <tr key={r.name} className="hover:bg-slate-50">
-              <Td label="Name" className="font-medium text-slate-800">
-                {r.name}
-              </Td>
-              <Td label="Jobs" className="text-right tabular-nums">
-                {r.jobs}
-              </Td>
-              <Td label="Submissions" className="text-right tabular-nums">
-                {r.submissions}
-              </Td>
-              <Td label="Interviews" className="text-right tabular-nums">
-                {r.interviews}
-              </Td>
-              <Td label="Selected" className="text-right tabular-nums">
-                {r.selected}
-              </Td>
-              <Td label="Joined" className="text-right tabular-nums">
-                {r.joined}
-              </Td>
-              <Td label="Joined %" className="text-right tabular-nums">
-                {conv}
-              </Td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </Table>
+    <tr key={r.name} className="hover:bg-slate-50">
+      <Td label="Name" className="font-medium text-slate-800">
+        {r.name}
+      </Td>
+      <Td label="Jobs" className="text-right tabular-nums">
+        {r.jobs}
+      </Td>
+      <Td label="Submissions" className="text-right tabular-nums">
+        {r.submissions}
+      </Td>
+      <Td label="Interviews" className="text-right tabular-nums">
+        {r.interviews}
+      </Td>
+      <Td label="Selected" className="text-right tabular-nums">
+        {r.selected}
+      </Td>
+      <Td label="Joined" className="text-right tabular-nums">
+        {r.joined}
+      </Td>
+      <Td label="Joined %" className="text-right tabular-nums">
+        {conv}
+      </Td>
+    </tr>
   );
 }
 
@@ -138,9 +127,16 @@ export default async function ReportsPage({
 }) {
   const sp = await searchParams;
   const { current, filters } = parseAnalyticsParams(sp);
+  const ojobsPage = parsePage(Array.isArray(sp.ojobs) ? sp.ojobs[0] : sp.ojobs);
+  const ragingPage = parsePage(
+    Array.isArray(sp.raging) ? sp.raging[0] : sp.raging,
+  );
 
   const [data, clients, vendors, sources, recruiters] = await Promise.all([
-    getReportsData(filters),
+    getReportsData(filters, {
+      openJobs: ojobsPage,
+      recruiterAging: ragingPage,
+    }),
     listClients(),
     listVendors(),
     listSisterCompanies(),
@@ -154,6 +150,28 @@ export default async function ReportsPage({
   }));
 
   const { conversions } = data;
+
+  const recruiterHead = (
+    <thead className="border-b border-slate-200 bg-slate-50">
+      <tr>
+        <Th>Recruiter</Th>
+        <Th className="text-right">Submissions</Th>
+        <Th className="text-right">Interviews</Th>
+        <Th className="text-right">Selected</Th>
+        <Th className="text-right">Joined</Th>
+      </tr>
+    </thead>
+  );
+
+  const revenueHead = (
+    <thead className="border-b border-slate-200 bg-slate-50">
+      <tr>
+        <Th>Client</Th>
+        <Th className="text-right">Active jobs</Th>
+        <Th className="text-right">Projected revenue</Th>
+      </tr>
+    </thead>
+  );
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
@@ -192,61 +210,59 @@ export default async function ReportsPage({
       </Card>
 
       <Card title="Performance by client">
-        <DimensionTable rows={data.byClient} />
+        <CollapsibleTable
+          rows={data.byClient.map(dimensionRow)}
+          head={dimensionHead}
+        />
       </Card>
 
       <Card title="Performance by vendor">
-        <DimensionTable rows={data.byVendor} />
+        <CollapsibleTable
+          rows={data.byVendor.map(dimensionRow)}
+          head={dimensionHead}
+        />
       </Card>
 
       <Card title="Performance by source">
-        <DimensionTable rows={data.bySource} />
+        <CollapsibleTable
+          rows={data.bySource.map(dimensionRow)}
+          head={dimensionHead}
+        />
       </Card>
 
       <Card title="Performance by recruiter">
-        {data.byRecruiter.length === 0 ? (
-          <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
-            No recruiter submissions for the selected filters.
-          </p>
-        ) : (
-          <Table>
-            <thead className="border-b border-slate-200 bg-slate-50">
-              <tr>
-                <Th>Recruiter</Th>
-                <Th className="text-right">Submissions</Th>
-                <Th className="text-right">Interviews</Th>
-                <Th className="text-right">Selected</Th>
-                <Th className="text-right">Joined</Th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {data.byRecruiter.map((r) => (
-                <tr key={r.name} className="hover:bg-slate-50">
-                  <Td label="Recruiter" className="font-medium text-slate-800">
-                    {r.name}
-                  </Td>
-                  <Td label="Submissions" className="text-right tabular-nums">
-                    {r.submissions}
-                  </Td>
-                  <Td label="Interviews" className="text-right tabular-nums">
-                    {r.interviews}
-                  </Td>
-                  <Td label="Selected" className="text-right tabular-nums">
-                    {r.selected}
-                  </Td>
-                  <Td label="Joined" className="text-right tabular-nums">
-                    {r.joined}
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        )}
+        <CollapsibleTable
+          head={recruiterHead}
+          rows={data.byRecruiter.map((r) => (
+            <tr key={r.name} className="hover:bg-slate-50">
+              <Td label="Recruiter" className="font-medium text-slate-800">
+                {r.name}
+              </Td>
+              <Td label="Submissions" className="text-right tabular-nums">
+                {r.submissions}
+              </Td>
+              <Td label="Interviews" className="text-right tabular-nums">
+                {r.interviews}
+              </Td>
+              <Td label="Selected" className="text-right tabular-nums">
+                {r.selected}
+              </Td>
+              <Td label="Joined" className="text-right tabular-nums">
+                {r.joined}
+              </Td>
+            </tr>
+          ))}
+          emptyState={
+            <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
+              No recruiter submissions for the selected filters.
+            </p>
+          }
+        />
       </Card>
 
       <Card
         title="Open-job aging report"
-        description="Open and On Hold jobs by days since creation."
+        description="Open and On Hold jobs by days since creation. Bucket counts reflect every open job; the table below paginates."
       >
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {data.agingBuckets.map((b) => (
@@ -266,8 +282,8 @@ export default async function ReportsPage({
           ))}
         </div>
 
-        {data.openJobs.length > 0 && (
-          <div className="mt-4">
+        {data.openJobs.total > 0 && (
+          <div className="mt-4 space-y-3">
             <Table>
               <thead className="border-b border-slate-200 bg-slate-50">
                 <tr>
@@ -279,7 +295,7 @@ export default async function ReportsPage({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {data.openJobs.map((j) => (
+                {data.openJobs.rows.map((j) => (
                   <tr key={j.id} className="hover:bg-slate-50">
                     <Td label="Job">
                       <Link
@@ -307,6 +323,13 @@ export default async function ReportsPage({
                 ))}
               </tbody>
             </Table>
+            <Pagination
+              page={data.openJobs.page}
+              total={data.openJobs.total}
+              totalPages={data.openJobs.totalPages}
+              paramKey="ojobs"
+              pageSize={REPORTS_PAGE_SIZE}
+            />
           </div>
         )}
       </Card>
@@ -315,51 +338,60 @@ export default async function ReportsPage({
         title="Recruiter aging — stale submissions"
         description="Submissions older than 14 days still in early pipeline stages (Submitted / Resume Picked / Vendor Screening / Client Interview)."
       >
-        {data.recruiterAging.length === 0 ? (
+        {data.recruiterAging.total === 0 ? (
           <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
             No stale submissions — nice work.
           </p>
         ) : (
-          <Table>
-            <thead className="border-b border-slate-200 bg-slate-50">
-              <tr>
-                <Th>Submission</Th>
-                <Th>Recruiter</Th>
-                <Th>Candidate</Th>
-                <Th>Job · Client</Th>
-                <Th>Status</Th>
-                <Th className="text-right">Days idle</Th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {data.recruiterAging.map((s) => (
-                <tr key={s.submissionId} className="hover:bg-slate-50">
-                  <Td label="Submission">
-                    <Link
-                      href={`/submissions/${s.submissionId}`}
-                      className="font-mono text-xs text-indigo-600 hover:underline"
-                    >
-                      SUB-{String(s.seq).padStart(3, "0")}
-                    </Link>
-                  </Td>
-                  <Td label="Recruiter">{s.recruiter}</Td>
-                  <Td label="Candidate">{s.candidate}</Td>
-                  <Td label="Job · Client">
-                    {s.job}
-                    <span className="ml-1 text-xs text-slate-500">
-                      · {s.client}
-                    </span>
-                  </Td>
-                  <Td label="Status">
-                    {SUBMISSION_STATUS_LABEL[s.status]}
-                  </Td>
-                  <Td label="Days idle" className="text-right tabular-nums">
-                    {s.days}
-                  </Td>
+          <div className="space-y-3">
+            <Table>
+              <thead className="border-b border-slate-200 bg-slate-50">
+                <tr>
+                  <Th>Submission</Th>
+                  <Th>Recruiter</Th>
+                  <Th>Candidate</Th>
+                  <Th>Job · Client</Th>
+                  <Th>Status</Th>
+                  <Th className="text-right">Days idle</Th>
                 </tr>
-              ))}
-            </tbody>
-          </Table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {data.recruiterAging.rows.map((s) => (
+                  <tr key={s.submissionId} className="hover:bg-slate-50">
+                    <Td label="Submission">
+                      <Link
+                        href={`/submissions/${s.submissionId}`}
+                        className="font-mono text-xs text-indigo-600 hover:underline"
+                      >
+                        SUB-{String(s.seq).padStart(3, "0")}
+                      </Link>
+                    </Td>
+                    <Td label="Recruiter">{s.recruiter}</Td>
+                    <Td label="Candidate">{s.candidate}</Td>
+                    <Td label="Job · Client">
+                      {s.job}
+                      <span className="ml-1 text-xs text-slate-500">
+                        · {s.client}
+                      </span>
+                    </Td>
+                    <Td label="Status">
+                      {SUBMISSION_STATUS_LABEL[s.status]}
+                    </Td>
+                    <Td label="Days idle" className="text-right tabular-nums">
+                      {s.days}
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+            <Pagination
+              page={data.recruiterAging.page}
+              total={data.recruiterAging.total}
+              totalPages={data.recruiterAging.totalPages}
+              paramKey="raging"
+              pageSize={REPORTS_PAGE_SIZE}
+            />
+          </div>
         )}
       </Card>
 
@@ -367,40 +399,31 @@ export default async function ReportsPage({
         title="Client revenue projection"
         description="OPEN + ON_HOLD jobs only. Σ candidateRate × 8h × duration × positions. Duration = startDate→endDate when both are set; otherwise a conservative 90-day default."
       >
-        {data.clientRevenue.length === 0 ? (
-          <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
-            No open jobs with a candidate rate.
-          </p>
-        ) : (
-          <Table>
-            <thead className="border-b border-slate-200 bg-slate-50">
-              <tr>
-                <Th>Client</Th>
-                <Th className="text-right">Active jobs</Th>
-                <Th className="text-right">Projected revenue</Th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {data.clientRevenue.map((r) => (
-                <tr key={r.client} className="hover:bg-slate-50">
-                  <Td label="Client" className="font-medium text-slate-800">
-                    {r.client}
-                  </Td>
-                  <Td label="Active jobs" className="text-right tabular-nums">
-                    {r.jobs}
-                  </Td>
-                  <Td label="Projected revenue" className="text-right tabular-nums">
-                    {r.projected.toLocaleString(undefined, {
-                      style: "currency",
-                      currency: "USD",
-                      maximumFractionDigits: 0,
-                    })}
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        )}
+        <CollapsibleTable
+          head={revenueHead}
+          rows={data.clientRevenue.map((r) => (
+            <tr key={r.client} className="hover:bg-slate-50">
+              <Td label="Client" className="font-medium text-slate-800">
+                {r.client}
+              </Td>
+              <Td label="Active jobs" className="text-right tabular-nums">
+                {r.jobs}
+              </Td>
+              <Td label="Projected revenue" className="text-right tabular-nums">
+                {r.projected.toLocaleString(undefined, {
+                  style: "currency",
+                  currency: "USD",
+                  maximumFractionDigits: 0,
+                })}
+              </Td>
+            </tr>
+          ))}
+          emptyState={
+            <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
+              No open jobs with a candidate rate.
+            </p>
+          }
+        />
       </Card>
 
       <Card
@@ -511,45 +534,45 @@ function FillDimensionTable({
   title: string;
   rows: ReportsData["timeToFill"]["byClient"];
 }) {
+  const head = (
+    <thead className="border-b border-slate-200 bg-slate-50">
+      <tr>
+        <Th>Name</Th>
+        <Th className="text-right">Filled</Th>
+        <Th className="text-right">Median</Th>
+        <Th className="text-right">p90</Th>
+      </tr>
+    </thead>
+  );
   return (
     <div>
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
         {title}
       </h3>
-      {rows.length === 0 ? (
-        <p className="rounded-md border border-dashed border-slate-300 px-3 py-4 text-center text-xs text-slate-400">
-          No data.
-        </p>
-      ) : (
-        <Table>
-          <thead className="border-b border-slate-200 bg-slate-50">
-            <tr>
-              <Th>Name</Th>
-              <Th className="text-right">Filled</Th>
-              <Th className="text-right">Median</Th>
-              <Th className="text-right">p90</Th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {rows.map((r) => (
-              <tr key={r.name} className="hover:bg-slate-50">
-                <Td label="Name" className="font-medium text-slate-800">
-                  {r.name}
-                </Td>
-                <Td label="Filled" className="text-right tabular-nums">
-                  {r.filled}
-                </Td>
-                <Td label="Median" className="text-right tabular-nums">
-                  {fmtDays(r.median)}
-                </Td>
-                <Td label="p90" className="text-right tabular-nums">
-                  {fmtDays(r.p90)}
-                </Td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-      )}
+      <CollapsibleTable
+        head={head}
+        rows={rows.map((r) => (
+          <tr key={r.name} className="hover:bg-slate-50">
+            <Td label="Name" className="font-medium text-slate-800">
+              {r.name}
+            </Td>
+            <Td label="Filled" className="text-right tabular-nums">
+              {r.filled}
+            </Td>
+            <Td label="Median" className="text-right tabular-nums">
+              {fmtDays(r.median)}
+            </Td>
+            <Td label="p90" className="text-right tabular-nums">
+              {fmtDays(r.p90)}
+            </Td>
+          </tr>
+        ))}
+        emptyState={
+          <p className="rounded-md border border-dashed border-slate-300 px-3 py-4 text-center text-xs text-slate-400">
+            No data.
+          </p>
+        }
+      />
     </div>
   );
 }
