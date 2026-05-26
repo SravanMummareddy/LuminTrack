@@ -68,6 +68,26 @@ export function listUsers() {
   });
 }
 
+/** Active recruiters as `{id, fullName}` for filter dropdowns. Excludes
+ *  admins and inactive users. Dedupes by `fullName` (keeps most-recently-
+ *  updated) so accidental seed duplicates don't double up in the UI. */
+export async function listActiveRecruiterOptions() {
+  const rows = await prisma.user.findMany({
+    where: { isActive: true, role: "RECRUITER" },
+    select: { id: true, fullName: true, updatedAt: true },
+    orderBy: [{ fullName: "asc" }, { updatedAt: "desc" }],
+  });
+  const seen = new Set<string>();
+  const out: { id: string; fullName: string }[] = [];
+  for (const r of rows) {
+    const key = r.fullName.trim().toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ id: r.id, fullName: r.fullName });
+  }
+  return out;
+}
+
 export type OrgListItem = Awaited<ReturnType<typeof listVendors>>[number];
 export type ClientListItem = Awaited<ReturnType<typeof listClients>>[number];
 export type UserListItem = Awaited<ReturnType<typeof listUsers>>[number];

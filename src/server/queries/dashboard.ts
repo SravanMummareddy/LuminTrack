@@ -36,7 +36,7 @@ export async function getDashboardData(filters: AnalyticsFilters) {
       },
     }),
     prisma.user.findMany({
-      where: { isActive: true },
+      where: { isActive: true, role: "RECRUITER" },
       select: { id: true, fullName: true },
       orderBy: { fullName: "asc" },
     }),
@@ -59,17 +59,15 @@ export async function getDashboardData(filters: AnalyticsFilters) {
     (a, b) => b.count - a.count,
   );
 
-  const jobStatusCount = (s: JobStatus) =>
-    jobs.filter((j) => j.status === s).length;
-  const openJobs = jobStatusCount("OPEN");
-  const onHoldJobs = jobStatusCount("ON_HOLD");
   // "Active" = OPEN/ON_HOLD jobs that have at least one recruiter assigned.
   // Excludes bulk-imported iLabor reqs no one has picked up yet.
-  const activeJobs = jobs.filter(
-    (j) =>
-      (j.status === "OPEN" || j.status === "ON_HOLD") &&
-      j._count.assignments > 0,
-  ).length;
+  // `openJobs`/`onHoldJobs` mirror the same assigned-only scope so the
+  // dashboard subtitle ("X open · Y on hold") sums to the headline.
+  const isActive = (j: { status: JobStatus; _count: { assignments: number } }) =>
+    (j.status === "OPEN" || j.status === "ON_HOLD") && j._count.assignments > 0;
+  const activeJobs = jobs.filter(isActive).length;
+  const openJobs = jobs.filter((j) => isActive(j) && j.status === "OPEN").length;
+  const onHoldJobs = jobs.filter((j) => isActive(j) && j.status === "ON_HOLD").length;
 
   // Open-job aging — OPEN and ON_HOLD jobs only.
   const agingCounts: Record<string, number> = {};
