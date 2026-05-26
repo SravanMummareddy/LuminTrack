@@ -35,7 +35,11 @@ export function ColumnsMenu({
   prefs: ColumnPrefs;
   onChange: (next: ColumnPrefs) => void;
   defaults: ColumnPrefs;
-  disabled: boolean;
+  /** Optional. Callers used to pass `!hydrated` here to gate the menu until
+   *  localStorage prefs loaded, but the menu works correctly with the
+   *  default prefs pre-hydration — disabling it just produced a confusing
+   *  "Columns" button that briefly appeared inert on every list render. */
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);

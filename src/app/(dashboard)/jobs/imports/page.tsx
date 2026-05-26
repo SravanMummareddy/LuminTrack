@@ -1,7 +1,7 @@
-import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Download } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
+import { Forbidden } from "@/components/ui/forbidden";
 import { LinkButton } from "@/components/ui/button";
 import { Table, Th, Td } from "@/components/ui/table";
 import { requireUser } from "@/lib/session";
@@ -32,7 +32,7 @@ function parseSummary(raw: string | null): SummaryShape | null {
 
 export default async function ImportsHistoryPage() {
   const user = await requireUser();
-  if (user.role !== "ADMIN") notFound();
+  if (user.role !== "ADMIN") return <Forbidden />;
 
   const imports = await listIlaborImports();
 

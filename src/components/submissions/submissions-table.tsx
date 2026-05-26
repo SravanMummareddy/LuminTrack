@@ -165,7 +165,7 @@ export function SubmissionsTable({
   rows: SubmissionListRow[];
   pageOffset?: number;
 }) {
-  const [prefs, setPrefs, hydrated] = useColumnPrefs(
+  const [prefs, setPrefs] = useColumnPrefs(
     STORAGE_KEY,
     STORAGE_VERSION,
     DEFAULTS,
@@ -190,7 +190,6 @@ export function SubmissionsTable({
           prefs={prefs}
           onChange={setPrefs}
           defaults={DEFAULTS}
-          disabled={!hydrated}
         />
       </div>
 
