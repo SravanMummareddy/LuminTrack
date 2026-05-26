@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { Button, buttonClass } from "@/components/ui/button";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
+import { isLikelyDriveUrl, DRIVE_LINK_WARNING } from "@/lib/validation/resume";
 
 type ResumeOption = { id: string; label: string; driveLink: string };
 
@@ -200,6 +201,9 @@ export function SubmissionEditForm({
               onChange={set("newResumeLink")}
               placeholder="https://drive.google.com/file/d/…"
             />
+            {!isLikelyDriveUrl(fields.newResumeLink) && (
+              <p className="mt-1 text-xs text-amber-700">{DRIVE_LINK_WARNING}</p>
+            )}
           </Field>
         </div>
       )}
