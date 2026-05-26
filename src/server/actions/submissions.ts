@@ -18,6 +18,23 @@ import { toFieldErrors } from "@/lib/validation/common";
 import { SUBMISSION_STATUS_LABEL } from "@/lib/labels";
 import type { FormState } from "@/lib/form-state";
 
+/**
+ * Maps a `(candidateId, jobId)` pair to two signed 32-bit integers, suitable
+ * for `pg_advisory_xact_lock(int, int)`. Collisions across unrelated pairs
+ * are harmless — at worst two unrelated submits serialize briefly. Same-pair
+ * inputs always produce the same key, so concurrent submits to the same
+ * (candidate, job) reliably gate on each other.
+ */
+function hashPair(a: string, b: string): { a: number; b: number } {
+  const hash = (s: string) => {
+    // djb2 — small, deterministic, no crypto dep. Final XOR fits int32.
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i);
+    return h | 0;
+  };
+  return { a: hash(a), b: hash(b) };
+}
+
 function readSubmission(formData: FormData) {
   return submissionSchema.safeParse({
     candidateId: formData.get("candidateId") ?? "",
@@ -68,16 +85,6 @@ export async function createSubmission(
   // migration `20260526150000_…`. Without `duplicateReason`, the action still
   // blocks the duplicate just like before.
   const duplicateReason = String(formData.get("duplicateReason") ?? "").trim();
-  const existing = await prisma.submission.findFirst({
-    where: { candidateId: d.candidateId, jobId: d.jobId },
-    select: { id: true },
-  });
-  if (existing && !duplicateReason) {
-    return {
-      needsConfirm: true,
-      error: `${candidate.fullName} was already submitted to this job. Add a reason to submit again.`,
-    };
-  }
 
   // Resolve a previously-saved résumé up front so a bad pick returns cleanly.
   let pickedResume: { id: string; driveLink: string } | null = null;
@@ -96,7 +103,28 @@ export async function createSubmission(
     pickedResume = { id: resume.id, driveLink: resume.driveLink };
   }
 
-  const submissionId = await prisma.$transaction(async (tx) => {
+  // Two concurrent submits for the same (candidate, job) used to race past
+  // the duplicate check because the findFirst lived outside the transaction.
+  // We now wrap the check + create in one tx, gated by a Postgres advisory
+  // lock keyed on a stable hash of both ids. Same-pair submits serialize;
+  // unrelated pairs still run in parallel. Returns null from the tx when
+  // we need to bail with `needsConfirm` so the caller can show the prompt.
+  type CreateResult =
+    | { kind: "created"; submissionId: string }
+    | { kind: "duplicate" };
+  const lockHash = hashPair(d.candidateId, d.jobId);
+  const result: CreateResult = await prisma.$transaction(async (tx) => {
+      // pg_advisory_xact_lock blocks until acquired and auto-releases at tx
+      // end. Two int4 keys derived from the (candidate, job) pair — see
+      // hashPair() below for the encoding.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockHash.a}::int, ${lockHash.b}::int)`;
+
+      const existing = await tx.submission.findFirst({
+        where: { candidateId: d.candidateId, jobId: d.jobId },
+        select: { id: true },
+      });
+      if (existing && !duplicateReason) return { kind: "duplicate" };
+
       // Settle the résumé: an existing library entry, a new one, or none.
       let candidateResumeId: string | null = null;
       let resumeSnapshot: string | null = null;
@@ -150,8 +178,16 @@ export async function createSubmission(
         performedById: user.id,
         submissionId: created.id,
       });
-      return created.id;
+      return { kind: "created", submissionId: created.id };
   });
+
+  if (result.kind === "duplicate") {
+    return {
+      needsConfirm: true,
+      error: `${candidate.fullName} was already submitted to this job. Add a reason to submit again.`,
+    };
+  }
+  const submissionId = result.submissionId;
 
   revalidatePath("/submissions");
   revalidatePath(`/jobs/${d.jobId}`);
