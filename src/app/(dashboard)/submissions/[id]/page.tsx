@@ -224,6 +224,12 @@ export default async function SubmissionDetailPage({
               <iframe
                 src={resumePreviewUrl}
                 title="Resume preview"
+                // Drive's embedded viewer needs both `allow-scripts` and
+                // `allow-same-origin` to render. Restricting the rest of the
+                // sandbox stops the embed from popping new windows, escaping
+                // to top, or running forms against our origin.
+                sandbox="allow-scripts allow-same-origin"
+                referrerPolicy="no-referrer"
                 className="h-[70vh] w-full rounded-md border border-slate-200 md:h-[600px]"
               />
             ) : (
