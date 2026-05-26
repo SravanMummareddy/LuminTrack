@@ -77,7 +77,7 @@ export async function listCandidates(filters: CandidateListFilters) {
       include: candidateListInclude,
     });
     const filtered = all.filter((c) =>
-      c.skills.some((s) => s.toLowerCase().includes(skill)),
+      (c.skills ?? []).some((s) => s.toLowerCase().includes(skill)),
     );
     const total = filtered.length;
     const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));

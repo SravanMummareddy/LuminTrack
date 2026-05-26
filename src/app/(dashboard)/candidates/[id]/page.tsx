@@ -219,7 +219,7 @@ export default async function CandidateDetailPage({
           </DescItem>
         </dl>
 
-        {candidate.tags.length > 0 && (
+        {(candidate.tags ?? []).length > 0 && (
           <div className="mt-5">
             <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">
               Tags
@@ -239,18 +239,18 @@ export default async function CandidateDetailPage({
             Skills
           </dt>
           <dd className="mt-1.5 flex flex-wrap gap-1.5">
-            {candidate.skills.length === 0 ? (
+            {(candidate.skills ?? []).length === 0 ? (
               <span className="text-sm text-slate-500">No skills listed</span>
             ) : (
               // Starred skills lead, with a ★ glyph. Falls back to the natural
               // skills order when nothing is starred.
               [
-                ...candidate.featuredSkills,
-                ...candidate.skills.filter(
-                  (s) => !candidate.featuredSkills.includes(s),
+                ...(candidate.featuredSkills ?? []),
+                ...(candidate.skills ?? []).filter(
+                  (s) => !(candidate.featuredSkills ?? []).includes(s),
                 ),
               ].map((s) => {
-                const starred = candidate.featuredSkills.includes(s);
+                const starred = (candidate.featuredSkills ?? []).includes(s);
                 return (
                   <Badge key={s} tone={starred ? "amber" : "indigo"}>
                     {starred ? "★ " : ""}
