@@ -7,6 +7,7 @@ import { logActivity } from "@/server/activity";
 import { interviewRoundSchema } from "@/lib/validation/interview";
 import { toFieldErrors } from "@/lib/validation/common";
 import { INTERVIEW_TYPE_LABEL, INTERVIEW_RESULT_LABEL } from "@/lib/labels";
+import { formatDateTime } from "@/lib/format";
 import type { FormState } from "@/lib/form-state";
 
 function readRound(formData: FormData) {
@@ -108,6 +109,16 @@ export async function updateInterviewRound(
   const resultChanged = existing.result !== d.result;
   const feedbackChanged =
     String(existing.feedback ?? "") !== String(d.feedback ?? "");
+  // Compare scheduledAt at minute resolution — `datetime-local` inputs drop
+  // seconds, so a round-trip through the form would otherwise log a no-op
+  // reschedule.
+  const prevSched = existing.scheduledAt
+    ? Math.floor(existing.scheduledAt.getTime() / 60000)
+    : null;
+  const nextSched = d.scheduledAt
+    ? Math.floor(d.scheduledAt.getTime() / 60000)
+    : null;
+  const scheduledChanged = prevSched !== nextSched;
 
   await prisma.$transaction(async (tx) => {
     await tx.interviewRound.update({
@@ -127,6 +138,21 @@ export async function updateInterviewRound(
         updatedById: user.id,
       },
     });
+    if (scheduledChanged) {
+      const from = existing.scheduledAt
+        ? formatDateTime(existing.scheduledAt)
+        : "unscheduled";
+      const to = d.scheduledAt ? formatDateTime(d.scheduledAt) : "unscheduled";
+      await logActivity(tx, {
+        entityType: "INTERVIEW_ROUND",
+        action: "INTERVIEW_RESCHEDULED",
+        description: `Round "${d.roundName}" rescheduled from ${from} to ${to}`,
+        oldValue: from,
+        newValue: to,
+        performedById: user.id,
+        interviewRoundId: roundId,
+      });
+    }
     if (resultChanged)
       await logActivity(tx, {
         entityType: "INTERVIEW_ROUND",

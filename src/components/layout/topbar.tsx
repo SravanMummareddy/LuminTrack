@@ -1,6 +1,7 @@
 import { logoutAction } from "@/server/actions/auth";
 import { GlobalSearch } from "@/components/search/global-search";
 import { MobileNav } from "@/components/layout/mobile-nav";
+import { RecentlyViewedMenu } from "@/components/layout/recently-viewed";
 
 type TopbarProps = {
   name: string;
@@ -23,6 +24,7 @@ export function Topbar({ name, role }: TopbarProps) {
         <GlobalSearch />
       </div>
       <div className="flex shrink-0 items-center gap-3">
+        <RecentlyViewedMenu />
         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700">
           {initials || "?"}
         </div>

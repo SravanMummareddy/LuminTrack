@@ -26,6 +26,7 @@ import {
   formatCandidateDisplayId,
   formatSubmissionDisplayId,
 } from "@/lib/format";
+import { RecentlyViewedTracker } from "@/components/layout/recently-viewed";
 
 function DescItem({
   label,
@@ -107,6 +108,12 @@ export default async function CandidateDetailPage({
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
+      <RecentlyViewedTracker
+        kind="candidate"
+        id={candidate.id}
+        label={candidate.fullName}
+        sub={candidate.email ?? candidate.phone ?? undefined}
+      />
       <Link
         href="/candidates"
         className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"

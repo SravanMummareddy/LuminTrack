@@ -29,6 +29,7 @@ import {
   formatSubmissionDisplayId,
 } from "@/lib/format";
 import { ilaborStatusToJobStatus } from "@/lib/validation/ilabor-import";
+import { RecentlyViewedTracker } from "@/components/layout/recently-viewed";
 
 function SummaryItem({
   label,
@@ -100,6 +101,12 @@ export default async function JobDetailPage({
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
+      <RecentlyViewedTracker
+        kind="job"
+        id={job.id}
+        label={job.title}
+        sub={job.client.name}
+      />
       <Link
         href="/jobs"
         className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"

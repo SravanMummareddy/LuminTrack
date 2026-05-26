@@ -1,10 +1,21 @@
 # Remaining work (2026-05-25 sweep)
 
 **Small / no migration** — can ship in one PR each:
+- ~~**§D4** — interview reschedule audit row.~~ ✅ shipped 2026-05-26
+  (commit `ded8b42`; migration `20260526100000_interview_rescheduled_action`
+  adds `INTERVIEW_RESCHEDULED` and the action handler logs from→to at
+  minute resolution).
+- ~~**§K1** — mobile column-picker drag-handle tap targets.~~ ✅ shipped
+  2026-05-26 (commit `c7599b4`; grip hidden <sm, ↑/↓ buttons get p-2 +
+  h-4 w-4 icons below sm).
+- ~~**§H2** — recently-viewed strip in topbar.~~ ✅ shipped 2026-05-26
+  (commit `90574fb`; client-only localStorage tracker at
+  `lumintrack:recent:v1`, capped at 5 per kind).
 - **§C4** — capture duplicate-submission override reason in audit.
-- **§D4** — interview reschedule audit row (today `scheduledAt` is silently overwritten).
-- **§K1** — mobile column-picker drag-handle tap targets (swap for ↑/↓ buttons <768 px).
-- **§H2** — recently-viewed strip in topbar (last 5 jobs + candidates).
+  **Re-classified: M** — today's `@@unique([candidateId, jobId])`
+  constraint hard-blocks duplicates, so the override flow needs the
+  unique constraint dropped (or replaced with a soft-uniqueness check
+  in the action) before any "with reason" path can exist.
 
 **Medium / migration required:**
 - **§C1** — add `OFFER_ACCEPTED` between `OFFER_RELEASED` and `JOINED`.
