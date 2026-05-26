@@ -177,6 +177,90 @@ export async function getReportsData(filters: AnalyticsFilters) {
     count: openJobs.filter((j) => j.bucket === bucket).length,
   }));
 
+  // §F3 — recruiter aging: submissions older than 14 days that haven't moved
+  // past the early-pipeline stages. Surfaces neglected work the recruiter
+  // owns. "Stale" = submittedAt > 14d and status still SUBMITTED /
+  // RESUME_PICKED / VENDOR_SCREENING_CALL / CLIENT_INTERVIEW.
+  const STALE_DAYS = 14;
+  const STALE_STATUSES: SubmissionStatus[] = [
+    "SUBMITTED",
+    "RESUME_PICKED",
+    "VENDOR_SCREENING_CALL",
+    "CLIENT_INTERVIEW",
+  ];
+  const staleSubs = await prisma.submission.findMany({
+    where: {
+      status: { in: STALE_STATUSES },
+      submittedAt: { lt: new Date(Date.now() - STALE_DAYS * 86400_000) },
+    },
+    select: {
+      id: true,
+      seq: true,
+      status: true,
+      submittedAt: true,
+      submittedBy: { select: { id: true, fullName: true } },
+      candidate: { select: { fullName: true } },
+      job: { select: { title: true, client: { select: { name: true } } } },
+    },
+    orderBy: { submittedAt: "asc" },
+    take: 200,
+  });
+  const recruiterAging = staleSubs.map((s) => ({
+    submissionId: s.id,
+    seq: s.seq,
+    status: s.status,
+    submittedAt: s.submittedAt,
+    days: daysSince(s.submittedAt),
+    recruiter: s.submittedBy.fullName,
+    candidate: s.candidate.fullName,
+    job: s.job.title,
+    client: s.job.client.name,
+  }));
+
+  // §F4 — per-client revenue projection: Σ candidateRate × positions × duration
+  // over OPEN/ON_HOLD jobs. Duration is computed from startDate→endDate when
+  // both are present; otherwise we use a conservative 90-day default so a
+  // missing endDate doesn't zero the whole client out. Positions defaults to 1.
+  const DEFAULT_DURATION_DAYS = 90;
+  const HOURS_PER_DAY = 8;
+  const projJobs = await prisma.job.findMany({
+    where: {
+      status: { in: ["OPEN", "ON_HOLD"] },
+      candidateRate: { not: null },
+    },
+    select: {
+      candidateRate: true,
+      positions: true,
+      startDate: true,
+      endDate: true,
+      client: { select: { name: true } },
+    },
+  });
+  const revMap = new Map<string, { client: string; jobs: number; projected: number }>();
+  for (const j of projJobs) {
+    const rate = Number(j.candidateRate ?? 0);
+    if (!rate) continue;
+    const positions = j.positions && j.positions > 0 ? j.positions : 1;
+    const days =
+      j.startDate && j.endDate
+        ? Math.max(
+            1,
+            Math.round(
+              (j.endDate.getTime() - j.startDate.getTime()) / 86400_000,
+            ),
+          )
+        : DEFAULT_DURATION_DAYS;
+    const projected = rate * HOURS_PER_DAY * days * positions;
+    const key = j.client.name;
+    const entry = revMap.get(key) ?? { client: key, jobs: 0, projected: 0 };
+    entry.jobs += 1;
+    entry.projected += projected;
+    revMap.set(key, entry);
+  }
+  const clientRevenue = [...revMap.values()].sort(
+    (a, b) => b.projected - a.projected,
+  );
+
   return {
     totalJobs: jobs.length,
     byClient,
@@ -187,6 +271,8 @@ export async function getReportsData(filters: AnalyticsFilters) {
     conversions,
     openJobs,
     agingBuckets,
+    recruiterAging,
+    clientRevenue,
   };
 }
 
