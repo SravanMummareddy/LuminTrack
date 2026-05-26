@@ -6,33 +6,32 @@ import { Table } from "@/components/ui/table";
 
 /**
  * Wraps a Reports dimension table so only the top N rows render by default,
- * with a "Show all N" toggle to expand. Top-N keeps the page skim-able when
- * a few months of activity push the row count into the dozens.
+ * with a "Show all N" toggle to expand. Rows are pre-rendered on the server
+ * and passed as ReactNode[] so this Client Component never has to receive a
+ * function prop (which would break the RSC boundary).
  */
-export function CollapsibleTable<T>({
+export function CollapsibleTable({
   rows,
   defaultLimit = 10,
   head,
-  renderRow,
-  rowKey,
   emptyState,
 }: {
-  rows: T[];
+  rows: React.ReactNode[];
   defaultLimit?: number;
   head: React.ReactNode;
-  renderRow: (row: T, index: number) => React.ReactNode;
-  rowKey: (row: T, index: number) => string;
   emptyState?: React.ReactNode;
 }) {
   const [expanded, setExpanded] = useState(false);
 
   if (rows.length === 0) {
     return (
-      emptyState ?? (
-        <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
-          No data for the selected filters.
-        </p>
-      )
+      <>
+        {emptyState ?? (
+          <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
+            No data for the selected filters.
+          </p>
+        )}
+      </>
     );
   }
 
@@ -43,13 +42,7 @@ export function CollapsibleTable<T>({
     <div className="space-y-2">
       <Table>
         {head}
-        <tbody className="divide-y divide-slate-100">
-          {visible.map((row, i) => (
-            <tr key={rowKey(row, i)} className="hover:bg-slate-50">
-              {renderRow(row, i)}
-            </tr>
-          ))}
-        </tbody>
+        <tbody className="divide-y divide-slate-100">{visible}</tbody>
       </Table>
 
       {collapsible && (

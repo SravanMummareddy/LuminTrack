@@ -67,12 +67,12 @@ const dimensionHead = (
   </thead>
 );
 
-function renderDimensionRow(r: ReportsData["byClient"][number]) {
+function dimensionRow(r: ReportsData["byClient"][number]) {
   const conv = r.submissions
     ? `${Math.round((r.joined / r.submissions) * 100)}%`
     : "—";
   return (
-    <>
+    <tr key={r.name} className="hover:bg-slate-50">
       <Td label="Name" className="font-medium text-slate-800">
         {r.name}
       </Td>
@@ -94,7 +94,7 @@ function renderDimensionRow(r: ReportsData["byClient"][number]) {
       <Td label="Joined %" className="text-right tabular-nums">
         {conv}
       </Td>
-    </>
+    </tr>
   );
 }
 
@@ -151,6 +151,28 @@ export default async function ReportsPage({
 
   const { conversions } = data;
 
+  const recruiterHead = (
+    <thead className="border-b border-slate-200 bg-slate-50">
+      <tr>
+        <Th>Recruiter</Th>
+        <Th className="text-right">Submissions</Th>
+        <Th className="text-right">Interviews</Th>
+        <Th className="text-right">Selected</Th>
+        <Th className="text-right">Joined</Th>
+      </tr>
+    </thead>
+  );
+
+  const revenueHead = (
+    <thead className="border-b border-slate-200 bg-slate-50">
+      <tr>
+        <Th>Client</Th>
+        <Th className="text-right">Active jobs</Th>
+        <Th className="text-right">Projected revenue</Th>
+      </tr>
+    </thead>
+  );
+
   return (
     <div className="mx-auto max-w-6xl space-y-5">
       <PageHeader
@@ -189,48 +211,30 @@ export default async function ReportsPage({
 
       <Card title="Performance by client">
         <CollapsibleTable
-          rows={data.byClient}
+          rows={data.byClient.map(dimensionRow)}
           head={dimensionHead}
-          rowKey={(r) => r.name}
-          renderRow={renderDimensionRow}
         />
       </Card>
 
       <Card title="Performance by vendor">
         <CollapsibleTable
-          rows={data.byVendor}
+          rows={data.byVendor.map(dimensionRow)}
           head={dimensionHead}
-          rowKey={(r) => r.name}
-          renderRow={renderDimensionRow}
         />
       </Card>
 
       <Card title="Performance by source">
         <CollapsibleTable
-          rows={data.bySource}
+          rows={data.bySource.map(dimensionRow)}
           head={dimensionHead}
-          rowKey={(r) => r.name}
-          renderRow={renderDimensionRow}
         />
       </Card>
 
       <Card title="Performance by recruiter">
         <CollapsibleTable
-          rows={data.byRecruiter}
-          head={
-            <thead className="border-b border-slate-200 bg-slate-50">
-              <tr>
-                <Th>Recruiter</Th>
-                <Th className="text-right">Submissions</Th>
-                <Th className="text-right">Interviews</Th>
-                <Th className="text-right">Selected</Th>
-                <Th className="text-right">Joined</Th>
-              </tr>
-            </thead>
-          }
-          rowKey={(r) => r.name}
-          renderRow={(r) => (
-            <>
+          head={recruiterHead}
+          rows={data.byRecruiter.map((r) => (
+            <tr key={r.name} className="hover:bg-slate-50">
               <Td label="Recruiter" className="font-medium text-slate-800">
                 {r.name}
               </Td>
@@ -246,8 +250,8 @@ export default async function ReportsPage({
               <Td label="Joined" className="text-right tabular-nums">
                 {r.joined}
               </Td>
-            </>
-          )}
+            </tr>
+          ))}
           emptyState={
             <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
               No recruiter submissions for the selected filters.
@@ -396,19 +400,9 @@ export default async function ReportsPage({
         description="OPEN + ON_HOLD jobs only. Σ candidateRate × 8h × duration × positions. Duration = startDate→endDate when both are set; otherwise a conservative 90-day default."
       >
         <CollapsibleTable
-          rows={data.clientRevenue}
-          head={
-            <thead className="border-b border-slate-200 bg-slate-50">
-              <tr>
-                <Th>Client</Th>
-                <Th className="text-right">Active jobs</Th>
-                <Th className="text-right">Projected revenue</Th>
-              </tr>
-            </thead>
-          }
-          rowKey={(r) => r.client}
-          renderRow={(r) => (
-            <>
+          head={revenueHead}
+          rows={data.clientRevenue.map((r) => (
+            <tr key={r.client} className="hover:bg-slate-50">
               <Td label="Client" className="font-medium text-slate-800">
                 {r.client}
               </Td>
@@ -422,8 +416,8 @@ export default async function ReportsPage({
                   maximumFractionDigits: 0,
                 })}
               </Td>
-            </>
-          )}
+            </tr>
+          ))}
           emptyState={
             <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
               No open jobs with a candidate rate.
@@ -540,27 +534,25 @@ function FillDimensionTable({
   title: string;
   rows: ReportsData["timeToFill"]["byClient"];
 }) {
+  const head = (
+    <thead className="border-b border-slate-200 bg-slate-50">
+      <tr>
+        <Th>Name</Th>
+        <Th className="text-right">Filled</Th>
+        <Th className="text-right">Median</Th>
+        <Th className="text-right">p90</Th>
+      </tr>
+    </thead>
+  );
   return (
     <div>
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
         {title}
       </h3>
       <CollapsibleTable
-        rows={rows}
-        defaultLimit={10}
-        head={
-          <thead className="border-b border-slate-200 bg-slate-50">
-            <tr>
-              <Th>Name</Th>
-              <Th className="text-right">Filled</Th>
-              <Th className="text-right">Median</Th>
-              <Th className="text-right">p90</Th>
-            </tr>
-          </thead>
-        }
-        rowKey={(r) => r.name}
-        renderRow={(r) => (
-          <>
+        head={head}
+        rows={rows.map((r) => (
+          <tr key={r.name} className="hover:bg-slate-50">
             <Td label="Name" className="font-medium text-slate-800">
               {r.name}
             </Td>
@@ -573,8 +565,8 @@ function FillDimensionTable({
             <Td label="p90" className="text-right tabular-nums">
               {fmtDays(r.p90)}
             </Td>
-          </>
-        )}
+          </tr>
+        ))}
         emptyState={
           <p className="rounded-md border border-dashed border-slate-300 px-3 py-4 text-center text-xs text-slate-400">
             No data.
