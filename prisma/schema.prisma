@@ -35,6 +35,7 @@ enum SubmissionStatus {
   REJECTED
   ON_HOLD
   OFFER_RELEASED
+  OFFER_ACCEPTED
   JOINED
 }
 
@@ -83,6 +84,7 @@ enum ActivityAction {
   CANDIDATE_SELECTED
   CANDIDATE_REJECTED
   OFFER_RELEASED
+  OFFER_ACCEPTED
   CANDIDATE_JOINED
   REQUISITIONS_IMPORTED
   JOB_IMPORTED
@@ -307,6 +309,12 @@ model Submission {
   submissionNotes String?
   rejectionReason String?
   submittedAt     DateTime         @default(now())
+  // Pipeline tail: §C2. Recorded when the candidate accepts the offer and at
+  // actual join time respectively. expectedJoinDate is nullable because not
+  // every accepted offer has a confirmed date yet; actualJoinDate is set
+  // when status flips to JOINED.
+  expectedJoinDate DateTime?
+  actualJoinDate   DateTime?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 

@@ -306,6 +306,8 @@ export async function changeSubmissionStatus(formData: FormData): Promise<void> 
     eventAt: formData.get("eventAt") ?? "",
     note: formData.get("note") ?? "",
     reason: formData.get("reason") ?? "",
+    expectedJoinDate: formData.get("expectedJoinDate") ?? "",
+    actualJoinDate: formData.get("actualJoinDate") ?? "",
   });
   if (!parsed.success) return;
   const d = parsed.data;
@@ -332,9 +334,20 @@ export async function changeSubmissionStatus(formData: FormData): Promise<void> 
         ? "CANDIDATE_REJECTED"
         : next === "OFFER_RELEASED"
           ? "OFFER_RELEASED"
-          : next === "JOINED"
-            ? "CANDIDATE_JOINED"
-            : "SUBMISSION_STATUS_CHANGED";
+          : next === "OFFER_ACCEPTED"
+            ? "OFFER_ACCEPTED"
+            : next === "JOINED"
+              ? "CANDIDATE_JOINED"
+              : "SUBMISSION_STATUS_CHANGED";
+
+  // §C2: expected join date attaches to OFFER_ACCEPTED, actual to JOINED.
+  // We ignore either field when the new status doesn't accept it — keeps a
+  // stale value off the row if a recruiter fills it out for the wrong status.
+  const joinDates: { expectedJoinDate?: Date; actualJoinDate?: Date } = {};
+  if (next === "OFFER_ACCEPTED" && d.expectedJoinDate)
+    joinDates.expectedJoinDate = d.expectedJoinDate;
+  if (next === "JOINED" && d.actualJoinDate)
+    joinDates.actualJoinDate = d.actualJoinDate;
 
   await prisma.$transaction(async (tx) => {
     await tx.submission.update({
@@ -344,6 +357,7 @@ export async function changeSubmissionStatus(formData: FormData): Promise<void> 
         // The note now carries the free-text detail the old rejection-reason
         // textarea did, so the detail page's "Rejection reason" block is unchanged.
         ...(next === "REJECTED" ? { rejectionReason: d.note ?? null } : {}),
+        ...joinDates,
       },
     });
     await logActivity(tx, {

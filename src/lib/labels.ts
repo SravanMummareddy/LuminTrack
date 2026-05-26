@@ -42,6 +42,7 @@ export const SUBMISSION_STATUSES: SubmissionStatus[] = [
   "REJECTED",
   "ON_HOLD",
   "OFFER_RELEASED",
+  "OFFER_ACCEPTED",
   "JOINED",
 ];
 
@@ -54,6 +55,7 @@ export const SUBMISSION_STATUS_LABEL: Record<SubmissionStatus, string> = {
   REJECTED: "Rejected",
   ON_HOLD: "On Hold",
   OFFER_RELEASED: "Offer Released",
+  OFFER_ACCEPTED: "Offer Accepted",
   JOINED: "Joined",
 };
 
@@ -66,6 +68,7 @@ export const SUBMISSION_STATUS_TONE: Record<SubmissionStatus, BadgeTone> = {
   REJECTED: "red",
   ON_HOLD: "amber",
   OFFER_RELEASED: "indigo",
+  OFFER_ACCEPTED: "green",
   JOINED: "green",
 };
 
@@ -81,6 +84,7 @@ export const SUBMISSION_PIPELINE: string[] = [
   "Client Interview",
   "Decision",
   "Offer Released",
+  "Offer Accepted",
   "Joined",
 ];
 
@@ -93,7 +97,8 @@ export const SUBMISSION_STAGE_INDEX: Record<SubmissionStatus, number> = {
   REJECTED: 4,
   ON_HOLD: 4,
   OFFER_RELEASED: 5,
-  JOINED: 6,
+  OFFER_ACCEPTED: 6,
+  JOINED: 7,
 };
 
 // ─── Job source ──────────────────────────────────────────────────────────────

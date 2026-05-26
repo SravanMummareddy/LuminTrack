@@ -42,6 +42,8 @@ export function SubmissionStatusForm({
   const [eventAt, setEventAt] = useState("");
   const [note, setNote] = useState("");
   const [reason, setReason] = useState("");
+  const [expectedJoinDate, setExpectedJoinDate] = useState("");
+  const [actualJoinDate, setActualJoinDate] = useState("");
   // `changeSubmissionStatus` returns void, so we use a transition to get
   // a pending flag without changing the action signature. The submit
   // button disables + relabels mid-flight, killing the double-click risk
@@ -57,6 +59,8 @@ export function SubmissionStatusForm({
   }, []);
 
   const showReason = selected === "REJECTED" || selected === "ON_HOLD";
+  const showExpectedJoin = selected === "OFFER_ACCEPTED";
+  const showActualJoin = selected === "JOINED";
 
   return (
     <form
@@ -112,6 +116,36 @@ export function SubmissionStatusForm({
         </a>
         .
       </p>
+
+      {showExpectedJoin && (
+        <div className="w-56">
+          <label htmlFor="expectedJoinDate" className={labelClass}>
+            Expected join date
+          </label>
+          <Input
+            id="expectedJoinDate"
+            name="expectedJoinDate"
+            type="date"
+            value={expectedJoinDate}
+            onChange={(e) => setExpectedJoinDate(e.target.value)}
+          />
+        </div>
+      )}
+
+      {showActualJoin && (
+        <div className="w-56">
+          <label htmlFor="actualJoinDate" className={labelClass}>
+            Actual join date
+          </label>
+          <Input
+            id="actualJoinDate"
+            name="actualJoinDate"
+            type="date"
+            value={actualJoinDate}
+            onChange={(e) => setActualJoinDate(e.target.value)}
+          />
+        </div>
+      )}
 
       {showReason && (
         <div className="w-56">

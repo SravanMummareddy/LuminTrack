@@ -109,6 +109,10 @@ export const statusChangeSchema = z.object({
     emptyToUndefined,
     z.enum(STATUS_CHANGE_REASONS).optional(),
   ),
+  // §C2: captured only when moving to OFFER_ACCEPTED / JOINED. Action ignores
+  // them for any other target status.
+  expectedJoinDate: optionalDateTime,
+  actualJoinDate: optionalDateTime,
 });
 
 export type StatusChangeInput = z.infer<typeof statusChangeSchema>;
