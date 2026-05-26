@@ -47,13 +47,24 @@ export function ContactsDialog({
   // different parent entity. Tracked via a "previous key" using React's
   // "adjust state during render" pattern (avoids setState-in-effect).
   //
-  // Note: this render-phase reset is a safety net for the mid-edit-parent-
-  // change case. The primary guard against silent edit loss lives on the
-  // close handler below — closing is the user-driven path, so that's where
-  // we can prompt the user with `confirm()`.
+  // If the parent key changes mid-edit (e.g. the user opens a different
+  // client's Contacts while a draft is in-flight), prompt before wiping.
+  // On cancel we bail the parent change by calling onClose() — the form
+  // can't stay open against the previous parent from here, so the cleanest
+  // outcome is "close instead of silently swap." On confirm we reset and
+  // let the new parent's dialog render.
   const currentKey = open ? parentId : null;
   const [prevKey, setPrevKey] = useState<string | null>(currentKey);
   if (prevKey !== currentKey) {
+    if (editing !== null && prevKey !== null && currentKey !== null) {
+      const discard = window.confirm(
+        "You have unsaved contact changes. Discard them and switch?",
+      );
+      if (!discard) {
+        onClose();
+        return null;
+      }
+    }
     setPrevKey(currentKey);
     if (editing !== null) setEditing(null);
   }
