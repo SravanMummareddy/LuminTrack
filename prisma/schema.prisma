@@ -321,7 +321,7 @@ model Candidate {
   workAuthorization   String?
   totalExperienceYears Decimal? @db.Decimal(4, 1)
   currentCompany      String?
-  skills              String[]
+  skills              String[]         @default([])
   // ≤3 starred skills shown first in list views. Subset of `skills` (enforced
   // in Zod, not at the DB level — Postgres can't express subset constraints
   // cheaply). Empty array means "fall back to first 3 of `skills`."

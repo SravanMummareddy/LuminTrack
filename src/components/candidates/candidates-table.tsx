@@ -112,15 +112,14 @@ const COLUMNS: Column[] = [
     render: (c) => {
       // Prefer starred skills when set, else first 3 of the full list. Cap at
       // 3 chips with a +N affordance so the row stays single-height.
-      const primary =
-        c.featuredSkills.length > 0
-          ? c.featuredSkills
-          : c.skills.slice(0, 3);
+      const skills = c.skills ?? [];
+      const featured = c.featuredSkills ?? [];
+      const primary = featured.length > 0 ? featured : skills.slice(0, 3);
       const shown = primary.slice(0, 3);
-      const overflow = c.skills.filter((s) => !shown.includes(s));
+      const overflow = skills.filter((s) => !shown.includes(s));
       return (
         <Td label="Skills" secondary>
-          {c.skills.length === 0 ? (
+          {skills.length === 0 ? (
             "—"
           ) : (
             <div className="flex flex-wrap items-center gap-1">

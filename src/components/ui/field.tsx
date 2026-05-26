@@ -32,14 +32,36 @@ export function Field({
   );
 }
 
+// suppressHydrationWarning on form controls: password-manager extensions
+// (NordPass, LastPass, 1Password, Norton) inject `data-np-*` / `data-lastpass-*`
+// attributes onto inputs before React hydrates, which would otherwise log a
+// mismatch warning on every page with a form.
 export function Input({ className, ...props }: React.ComponentProps<"input">) {
-  return <input className={cn(controlClass, className)} {...props} />;
+  return (
+    <input
+      className={cn(controlClass, className)}
+      suppressHydrationWarning
+      {...props}
+    />
+  );
 }
 
 export function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
-  return <textarea className={cn(controlClass, className)} {...props} />;
+  return (
+    <textarea
+      className={cn(controlClass, className)}
+      suppressHydrationWarning
+      {...props}
+    />
+  );
 }
 
 export function Select({ className, ...props }: React.ComponentProps<"select">) {
-  return <select className={cn(controlClass, "bg-white", className)} {...props} />;
+  return (
+    <select
+      className={cn(controlClass, "bg-white", className)}
+      suppressHydrationWarning
+      {...props}
+    />
+  );
 }

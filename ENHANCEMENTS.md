@@ -1,5 +1,19 @@
 # LuminTrack — future enhancements
 
+> **🅿️ Parked 2026-05-26 — revisit after 2-4 weeks of real use.**
+>
+> The medium-bug sweep landed and the app is feature-complete for the
+> recruiting workflow it was built for. None of the items below are
+> needed *today* for a <10-person internal tool: §J1 only matters once
+> EU/CA-resident data lands, §J3 only matters with external admins,
+> §E1 only pays off when candidate volume actually hurts, the iLabor
+> extension is pure convenience over the working copy-paste flow, and
+> §J4 is theatre at this team size. **Deliberate pause, not an
+> oversight** — ship what's built, watch real recruiter friction for a
+> few weeks, then let usage decide the next build. Reopen this file
+> when a specific user pain (or a client/legal ask) points at one of
+> the items below.
+
 Larger work items split out of `bugs.md` after the medium-bug sweep and
 the §F2 funnel-velocity ship on 2026-05-26. None of these are demo
 blockers; each is at least a multi-session build with its own design
