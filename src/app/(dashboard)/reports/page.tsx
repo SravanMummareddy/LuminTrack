@@ -402,6 +402,154 @@ export default async function ReportsPage({
           </Table>
         )}
       </Card>
+
+      <Card
+        title="Time to fill"
+        description="Days from job creation to a JOINED submission. Median + p90 — robust to one stuck job dragging the mean. Dimensions with fewer than 3 fills show — (not enough data)."
+      >
+        {data.timeToFill.overall.filled === 0 ? (
+          <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
+            No filled submissions in the selected range yet.
+          </p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <StatTile
+                label="Filled (overall)"
+                value={String(data.timeToFill.overall.filled)}
+              />
+              <StatTile
+                label="Median days"
+                value={fmtDays(data.timeToFill.overall.median)}
+              />
+              <StatTile
+                label="p90 days"
+                value={fmtDays(data.timeToFill.overall.p90)}
+              />
+            </div>
+
+            <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
+              <FillDimensionTable
+                title="By client"
+                rows={data.timeToFill.byClient}
+              />
+              <FillDimensionTable
+                title="By source"
+                rows={data.timeToFill.bySource}
+              />
+            </div>
+          </>
+        )}
+      </Card>
+
+      <Card
+        title="Time in stage"
+        description="Median + p90 days submissions sit in each pipeline stage before moving. Terminal states (Rejected / On Hold / Joined) excluded. Ongoing counts how many samples are still sitting in that stage right now."
+      >
+        {data.timeInStage.every((r) => r.n === 0) ? (
+          <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
+            No status history for submissions in the selected range.
+          </p>
+        ) : (
+          <Table>
+            <thead className="border-b border-slate-200 bg-slate-50">
+              <tr>
+                <Th>Stage</Th>
+                <Th className="text-right">Samples</Th>
+                <Th className="text-right">Ongoing</Th>
+                <Th className="text-right">Median days</Th>
+                <Th className="text-right">p90 days</Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {data.timeInStage.map((r) => (
+                <tr key={r.status} className="hover:bg-slate-50">
+                  <Td label="Stage" className="font-medium text-slate-800">
+                    {SUBMISSION_STATUS_LABEL[r.status]}
+                  </Td>
+                  <Td label="Samples" className="text-right tabular-nums">
+                    {r.n}
+                  </Td>
+                  <Td label="Ongoing" className="text-right tabular-nums text-slate-500">
+                    {r.ongoing}
+                  </Td>
+                  <Td label="Median days" className="text-right tabular-nums">
+                    {fmtDays(r.median)}
+                  </Td>
+                  <Td label="p90 days" className="text-right tabular-nums">
+                    {fmtDays(r.p90)}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function StatTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-slate-200 p-3 text-center">
+      <div className="text-2xl font-semibold tabular-nums text-slate-900">
+        {value}
+      </div>
+      <div className="mt-1 text-xs text-slate-500">{label}</div>
+    </div>
+  );
+}
+
+function fmtDays(n: number | null): string {
+  return n == null ? "—" : String(n);
+}
+
+function FillDimensionTable({
+  title,
+  rows,
+}: {
+  title: string;
+  rows: ReportsData["timeToFill"]["byClient"];
+}) {
+  return (
+    <div>
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {title}
+      </h3>
+      {rows.length === 0 ? (
+        <p className="rounded-md border border-dashed border-slate-300 px-3 py-4 text-center text-xs text-slate-400">
+          No data.
+        </p>
+      ) : (
+        <Table>
+          <thead className="border-b border-slate-200 bg-slate-50">
+            <tr>
+              <Th>Name</Th>
+              <Th className="text-right">Filled</Th>
+              <Th className="text-right">Median</Th>
+              <Th className="text-right">p90</Th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map((r) => (
+              <tr key={r.name} className="hover:bg-slate-50">
+                <Td label="Name" className="font-medium text-slate-800">
+                  {r.name}
+                </Td>
+                <Td label="Filled" className="text-right tabular-nums">
+                  {r.filled}
+                </Td>
+                <Td label="Median" className="text-right tabular-nums">
+                  {fmtDays(r.median)}
+                </Td>
+                <Td label="p90" className="text-right tabular-nums">
+                  {fmtDays(r.p90)}
+                </Td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      )}
     </div>
   );
 }
