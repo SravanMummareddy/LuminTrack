@@ -22,7 +22,7 @@ import {
   CANDIDATE_STATUS_TONE,
   jobSourceLabel,
 } from "@/lib/labels";
-import { markCandidateContacted } from "@/server/actions/candidates";
+import { MarkContactedButton } from "@/components/candidates/mark-contacted-button";
 import {
   formatDate,
   formatExperience,
@@ -206,15 +206,7 @@ export default async function CandidateDetailPage({
                   ? formatDate(candidate.lastContactedAt)
                   : "—"}
               </span>
-              <form action={markCandidateContacted}>
-                <input type="hidden" name="id" value={candidate.id} />
-                <button
-                  type="submit"
-                  className="text-xs font-medium text-indigo-600 hover:underline"
-                >
-                  Mark contacted
-                </button>
-              </form>
+              <MarkContactedButton candidateId={candidate.id} />
             </div>
           </DescItem>
         </dl>
