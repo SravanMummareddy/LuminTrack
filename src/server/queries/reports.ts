@@ -7,8 +7,49 @@ import {
   daysSince,
   type AnalyticsFilters,
 } from "@/lib/analytics";
-import { SUBMISSION_STATUSES, jobSourceLabel } from "@/lib/labels";
+import {
+  SUBMISSION_STATUSES,
+  SUBMISSION_STATUS_LABEL,
+  jobSourceLabel,
+} from "@/lib/labels";
 import type { SubmissionStatus } from "@/generated/prisma/enums";
+
+// §F2 — funnel-velocity stats. Median + p90 over a small sample of days,
+// computed in-memory (no library; data volumes are < 10k samples). Both
+// return null on an empty array so the UI can render "—".
+function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? Math.round((sorted[mid - 1] + sorted[mid]) / 2)
+    : sorted[mid];
+}
+
+function percentile(values: number[], p: number): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  // Nearest-rank method — matches what most ATS dashboards report.
+  const idx = Math.min(
+    sorted.length - 1,
+    Math.max(0, Math.ceil(p * sorted.length) - 1),
+  );
+  return sorted[idx];
+}
+
+function daysBetween(from: Date, to: Date): number {
+  return Math.max(
+    0,
+    Math.round((to.getTime() - from.getTime()) / 86400_000),
+  );
+}
+
+// Reverse lookup from a human-readable status label (what gets persisted on
+// Activity.oldValue/newValue) back to the enum key. Built once at module
+// load — the map never changes.
+const LABEL_TO_STATUS = new Map<string, SubmissionStatus>(
+  SUBMISSION_STATUSES.map((s) => [SUBMISSION_STATUS_LABEL[s], s]),
+);
 
 type DimensionRow = {
   name: string;
@@ -71,11 +112,17 @@ export async function getReportsData(filters: AnalyticsFilters) {
     prisma.submission.findMany({
       where: buildSubmissionWhere(filters),
       select: {
+        // §F2 — id and submittedAt feed time-to-fill / time-in-stage joins
+        // against the Activity audit. job.createdAt anchors time-to-fill.
+        id: true,
+        submittedAt: true,
+        actualJoinDate: true,
         status: true,
         submittedById: true,
         _count: { select: { interviewRounds: true } },
         job: {
           select: {
+            createdAt: true,
             client: { select: { name: true } },
             vendor: { select: { name: true } },
             sisterCompanySource: { select: { name: true } },
@@ -261,6 +308,156 @@ export async function getReportsData(filters: AnalyticsFilters) {
     (a, b) => b.projected - a.projected,
   );
 
+  // §F2 — funnel velocity. Single pass over the audit table for every
+  // SUBMISSION_STATUS_CHANGED row belonging to a submission already in the
+  // filtered set. Bounded by `submissionId IN (…)` so the scan is cheap.
+  const filteredSubmissionIds = submissions.map((s) => s.id);
+  const statusChangeRows = filteredSubmissionIds.length
+    ? await prisma.activity.findMany({
+        where: {
+          action: "SUBMISSION_STATUS_CHANGED",
+          submissionId: { in: filteredSubmissionIds },
+        },
+        select: {
+          submissionId: true,
+          oldValue: true,
+          newValue: true,
+          eventAt: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
+
+  // Group activity rows by submission. The activity action stores the moment
+  // each transition was recorded; eventAt (if the user supplied "when this
+  // actually happened") wins over createdAt.
+  const rowsBySub = new Map<string, typeof statusChangeRows>();
+  for (const row of statusChangeRows) {
+    if (!row.submissionId) continue;
+    const list = rowsBySub.get(row.submissionId) ?? [];
+    list.push(row);
+    rowsBySub.set(row.submissionId, list);
+  }
+  const rowTime = (r: (typeof statusChangeRows)[number]): Date =>
+    r.eventAt ?? r.createdAt;
+
+  // ── Time-to-fill: only submissions that actually reached JOINED count.
+  type FillSample = { client: string; source: string; days: number };
+  const fillSamples: FillSample[] = [];
+  const JOINED_LABEL = SUBMISSION_STATUS_LABEL.JOINED;
+  for (const s of submissions) {
+    if (s.status !== "JOINED") continue;
+    const events = rowsBySub.get(s.id) ?? [];
+    const joinedEvent = events.find((e) => e.newValue === JOINED_LABEL);
+    // Defensive fallback chain — actualJoinDate first (most accurate per
+    // §C2), then the JOINED audit row, then nothing.
+    const joinedAt: Date | null = s.actualJoinDate ?? (joinedEvent ? rowTime(joinedEvent) : null);
+    if (!joinedAt) continue;
+    fillSamples.push({
+      client: s.job.client.name,
+      source: jobSourceLabel(s.job),
+      days: daysBetween(s.job.createdAt, joinedAt),
+    });
+  }
+
+  const buildFillRow = (name: string, samples: number[]) => ({
+    name,
+    filled: samples.length,
+    median: samples.length >= 3 ? median(samples) : null,
+    p90: samples.length >= 3 ? percentile(samples, 0.9) : null,
+  });
+
+  const groupBy = (
+    samples: FillSample[],
+    key: keyof FillSample,
+  ): Array<ReturnType<typeof buildFillRow>> => {
+    const map = new Map<string, number[]>();
+    for (const s of samples) {
+      const k = String(s[key]);
+      const list = map.get(k) ?? [];
+      list.push(s.days);
+      map.set(k, list);
+    }
+    return [...map.entries()]
+      .map(([name, arr]) => buildFillRow(name, arr))
+      .sort((a, b) => b.filled - a.filled);
+  };
+
+  const allFillDays = fillSamples.map((s) => s.days);
+  const timeToFill = {
+    overall: {
+      filled: allFillDays.length,
+      median: median(allFillDays),
+      p90: percentile(allFillDays, 0.9),
+    },
+    byClient: groupBy(fillSamples, "client"),
+    bySource: groupBy(fillSamples, "source"),
+  };
+
+  // ── Time-in-stage: walk each submission's status history. The implicit
+  // first transition is "submitted at submittedAt" → enters SUBMITTED. Every
+  // pair (prev, next) contributes `next − prev` days to the prev status's
+  // bucket. Submissions still in a stage contribute (now − last) — flagged
+  // separately so callers can subtract them out if the median looks weird.
+  const stageBuckets = new Map<SubmissionStatus, number[]>();
+  const ongoingBuckets = new Map<SubmissionStatus, number[]>();
+  const push = (
+    map: Map<SubmissionStatus, number[]>,
+    key: SubmissionStatus,
+    val: number,
+  ) => {
+    const arr = map.get(key) ?? [];
+    arr.push(val);
+    map.set(key, arr);
+  };
+  const NOW = new Date();
+  for (const s of submissions) {
+    const events = rowsBySub.get(s.id) ?? [];
+    // Synthesise the initial "SUBMITTED entered at submittedAt" event so the
+    // first real transition has something to subtract from.
+    let prevStatus: SubmissionStatus = "SUBMITTED";
+    let prevTime: Date = s.submittedAt;
+    for (const e of events) {
+      const next = e.newValue ? LABEL_TO_STATUS.get(e.newValue) : null;
+      const at = rowTime(e);
+      // Sample goes against the *prev* bucket — that's how long it sat there.
+      push(stageBuckets, prevStatus, daysBetween(prevTime, at));
+      if (next) {
+        prevStatus = next;
+        prevTime = at;
+      }
+    }
+    // Still sitting in the current stage (unless it's terminal).
+    const TERMINAL: SubmissionStatus[] = ["JOINED", "REJECTED", "ON_HOLD"];
+    if (!TERMINAL.includes(prevStatus)) {
+      push(ongoingBuckets, prevStatus, daysBetween(prevTime, NOW));
+    }
+  }
+
+  // Stages we report on — everything except the terminal "decision" branches.
+  const STAGE_ORDER: SubmissionStatus[] = [
+    "SUBMITTED",
+    "RESUME_PICKED",
+    "VENDOR_SCREENING_CALL",
+    "CLIENT_INTERVIEW",
+    "SELECTED",
+    "OFFER_RELEASED",
+    "OFFER_ACCEPTED",
+  ];
+  const timeInStage = STAGE_ORDER.map((status) => {
+    const closed = stageBuckets.get(status) ?? [];
+    const ongoing = ongoingBuckets.get(status) ?? [];
+    const all = [...closed, ...ongoing];
+    return {
+      status,
+      n: all.length,
+      ongoing: ongoing.length,
+      median: median(all),
+      p90: percentile(all, 0.9),
+    };
+  });
+
   return {
     totalJobs: jobs.length,
     byClient,
@@ -273,6 +470,8 @@ export async function getReportsData(filters: AnalyticsFilters) {
     agingBuckets,
     recruiterAging,
     clientRevenue,
+    timeToFill,
+    timeInStage,
   };
 }
 
