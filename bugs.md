@@ -42,96 +42,18 @@
 - ~~**§J2** — admin `/audit` global page.~~ ✅ shipped 2026-05-26 (PR #8;
   new `/audit` route, filterable by action + user, linked from Settings → Admin tools).
 
-**Large items — product-owner triage (2026-05-26).** The recommended
-sequencing below reflects ROI / risk / dependency order. §G1-G3 (in-app
-notifications, email digests, Slack/Teams) and §I4 (dark mode) are
-explicitly **deferred** — not in scope for any planned milestone.
+**Large items moved out — see [`ENHANCEMENTS.md`](./ENHANCEMENTS.md).**
+That file has the ranked queue (§J1 PII export → iLabor 8b extension →
+§J3 admin 2FA → §E1 résumé parsing → §J4 session inspector) with full
+pros / cons / sizing per item. **§G1-G3 (notifications, digests,
+Slack/Teams) and §I4 (dark mode) are deferred indefinitely** on user
+direction.
 
-Active large queue, smallest-blast-radius first:
+Shipped from the large queue:
 
-1. **§F2** — time-to-fill + time-in-stage metrics on `/reports`. **L**.
-   - *What:* Median + p90 of (`Job.createdAt` → first `JOINED` submission)
-     per client/source; avg days each submission sits in each pipeline
-     status, derived from `Activity` rows where action =
-     `SUBMISSION_STATUS_CHANGED`. No migration needed.
-   - *Pros:* Pure analytics, no external deps, audit table already has
-     the transitions. Standard ATS table-stakes — first thing a director
-     asks for.
-   - *Cons:* Pairing each status-change row with the previous one for
-     duration math is fiddly at scale; needs index on
-     `(submissionId, createdAt)` or a materialised view. Outlier-sensitive
-     (use median, not mean). Useless under ~50 closed submissions.
-
-2. **§J1** — PII export / right-to-be-forgotten. **L**.
-   - *What:* Admin workflow for candidate deletion requests. Soft-delete
-     with redaction (`fullName → "Removed candidate"`, contact + LinkedIn
-     nulled, résumé library scrubbed) but `submissions` count preserved
-     for historical accuracy. Optional ZIP export of everything LuminTrack
-     knows about a candidate (GDPR Article 15 / CCPA equivalent).
-   - *Pros:* Legal requirement before any EU/CA client onboards. Cheap
-     insurance — rarely used, important when needed.
-   - *Cons:* Zero daily-workflow win. Easy to get half-done in a way that
-     creates *more* risk than not having it. Per-table decisions about
-     what gets nulled vs. retained.
-
-3. **iLabor Phase 8b** — browser extension (separate repo, Manifest V3).
-   **M** + Chrome Web Store review.
-   - *What:* Extension that sits on the iLabor portal, intercepts the
-     requisition-list XHR, and POSTs the JSON to `/api/import-ilabor`.
-     Removes the manual "paste raw JSON" step in the existing admin
-     `/jobs/import` wizard.
-   - *Pros:* Already unblocked — the tolerant envelope adapter (Phase 4
-     polish) means this is **purely a UX upgrade**, not a backend gate.
-     Removes the only awkward step in a weekly workflow.
-   - *Cons:* Separate repo + Chrome Web Store approval cadence (3-7 days).
-     MV3 CORS/CSP needs `externally_connectable` on LuminTrack. Extension
-     permissions on iLabor domain = real attack-surface increase if the
-     extension is ever compromised; needs a code-signing story.
-
-4. **§J3** — admin 2FA (TOTP). **L**.
-   - *What:* Optional Google-Authenticator-style TOTP for `role = ADMIN`.
-     After password check, prompt for 6-digit code; store the secret
-     encrypted; issue recovery codes at enrolment.
-   - *Pros:* Admins can delete data and see all PII — highest-value
-     target. `otplib`/`speakeasy` give you the crypto; ~150 lines
-     including QR enrolment. Non-admin flow untouched.
-   - *Cons:* Needs an enrolment + recovery-code flow + "I lost my phone"
-     reset path or you'll lock yourself out. Encrypted-at-rest secrets
-     ideally want KMS, at minimum a separate env var. Optional 2FA gets
-     ~30% admin adoption in practice.
-
-5. **§E1** — résumé parsing. **XL**.
-   - *What:* Paste a Drive link / upload a PDF → auto-extract name /
-     email / phone / current company / experience / skills to pre-fill
-     the candidate form. Two routes: vendor (Affinda ~$0.05/résumé,
-     Sovren, RChilli) or LLM-based (Claude/GPT structured output).
-   - *Pros:* Single biggest data-entry win in any ATS — vendors cite
-     60-80% reduction in time-to-first-submission. Even imperfect (70%
-     correct fields) is a net win because the form still lets you edit.
-   - *Cons:* External dependency — Affinda outage degrades candidate-add.
-     Ongoing cost (~$80/mo at 30 candidates/week for Affinda; LLM cheaper
-     but per-token). LuminTrack résumés are Drive links, not owned PDFs —
-     extraction needs the deferred Blob upload from Phase 3 or Drive-API
-     fetch with OAuth (significant plumbing). Confidence UI ("we found 4
-     fields — confirm?") is its own design problem.
-
-6. **§J4** — session inspector. **M-L**.
-   - *What:* Persist sessions in a DB table on login (jti → row), delete
-     on logout; admin page at `/admin/sessions` listing per-user active
-     sessions with IP / UA / lastSeen + a Revoke button.
-   - *Pros:* Real audit value paired with §J3. Lets you force-logout a
-     compromised admin immediately.
-   - *Cons:* Current auth is **stateless JWT-only**. Adding a session
-     table means every authenticated request hits the DB — measurable
-     ~5ms/request latency from Vercel→Neon. Mostly theatre for a <10-user
-     team. May want refresh-tokens at the same time, which doubles scope.
-
-Deferred indefinitely (not in any milestone):
-
-- **§G1-G3** — in-app notifications, email digests, Slack/Teams webhooks
-  (XL each). Skipped on user direction 2026-05-26 — workflow doesn't need
-  push at current team size.
-- **§I4** — dark mode / high contrast. Skipped — not a current priority.
+- ~~**§F2** — time-to-fill + time-in-stage funnel metrics on `/reports`.~~
+  ✅ shipped 2026-05-26 (PR #11; median + p90, no migration, derived
+  from existing `SUBMISSION_STATUS_CHANGED` audit rows).
 
 **Stale items already shipped but listed below as open** (verified 2026-05-25):
 - Original notes #6, #7, #8 ✅; Round 2 §11 (drift badge) ✅; Skills hint ✅.
