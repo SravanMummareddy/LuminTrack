@@ -24,7 +24,10 @@
 - ~~**§C2** — `Submission.expectedJoinDate` + `actualJoinDate`.~~
   ✅ shipped 2026-05-26 in the same commit; the status form
   conditionally surfaces the matching date input.
-- **§A2** — `Job.workMode` + `Job.priority` enums (plus nullable `targetCloseDate`, `postingUrl`, `workAuthRequirement`, `skills[]`).
+- ~~**§A2** — `Job.workMode` + `Job.priority` enums (plus nullable
+  `targetCloseDate`, `postingUrl`, `workAuthRequirement`, `skills[]`).~~
+  ✅ shipped 2026-05-26 (commit `45988b5`; migration
+  `20260526120000_job_workmode_priority_extras`).
 - **§B1** — `Contact` table tied to Client/Vendor/SisterCompanySource.
 - **§B4** — Candidate status reasons enum (`AVAILABLE | PLACED | NOT_INTERESTED | DO_NOT_CONTACT`).
 - **§D5** — interview time-zone string.
