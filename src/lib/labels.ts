@@ -3,6 +3,8 @@ import type {
   SubmissionStatus,
   InterviewType,
   InterviewResult,
+  WorkMode,
+  JobPriority,
 } from "@/generated/prisma/enums";
 
 /** Display order for job statuses across filters, forms, and the pipeline. */
@@ -30,6 +32,32 @@ export const JOB_STATUS_TONE: Record<JobStatus, BadgeTone> = {
   CLOSED: "slate",
   FILLED: "blue",
   CANCELLED: "red",
+};
+
+export const WORK_MODES: WorkMode[] = ["REMOTE", "HYBRID", "ONSITE"];
+export const WORK_MODE_LABEL: Record<WorkMode, string> = {
+  REMOTE: "Remote",
+  HYBRID: "Hybrid",
+  ONSITE: "Onsite",
+};
+
+export const JOB_PRIORITIES: JobPriority[] = [
+  "LOW",
+  "MEDIUM",
+  "HIGH",
+  "CRITICAL",
+];
+export const JOB_PRIORITY_LABEL: Record<JobPriority, string> = {
+  LOW: "Low",
+  MEDIUM: "Medium",
+  HIGH: "High",
+  CRITICAL: "Critical",
+};
+export const JOB_PRIORITY_TONE: Record<JobPriority, BadgeTone> = {
+  LOW: "slate",
+  MEDIUM: "blue",
+  HIGH: "amber",
+  CRITICAL: "red",
 };
 
 /** Display order for submission statuses across filters, forms, and the pipeline. */

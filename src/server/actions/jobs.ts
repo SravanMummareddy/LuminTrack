@@ -10,6 +10,18 @@ import { toFieldErrors } from "@/lib/validation/common";
 import { JOB_STATUS_LABEL, OTHER_SOURCE } from "@/lib/labels";
 import type { FormState } from "@/lib/form-state";
 
+function parseSkillsCsv(raw: unknown): string[] {
+  if (typeof raw !== "string") return [];
+  return [
+    ...new Set(
+      raw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
+  ];
+}
+
 function readJob(formData: FormData) {
   return jobSchema.safeParse({
     title: formData.get("title") ?? "",
@@ -31,6 +43,12 @@ function readJob(formData: FormData) {
     atsId: formData.get("atsId") ?? "",
     startDate: formData.get("startDate") ?? "",
     endDate: formData.get("endDate") ?? "",
+    workMode: formData.get("workMode") ?? "",
+    priority: formData.get("priority") ?? "",
+    targetCloseDate: formData.get("targetCloseDate") ?? "",
+    postingUrl: formData.get("postingUrl") ?? "",
+    workAuthRequirement: formData.get("workAuthRequirement") ?? "",
+    skills: formData.get("skills") ?? "",
   });
 }
 
@@ -69,6 +87,12 @@ export async function createJob(
         atsId: d.atsId ?? null,
         startDate: d.startDate ?? null,
         endDate: d.endDate ?? null,
+        workMode: d.workMode ?? null,
+        priority: d.priority ?? null,
+        targetCloseDate: d.targetCloseDate ?? null,
+        postingUrl: d.postingUrl ?? null,
+        workAuthRequirement: d.workAuthRequirement ?? null,
+        skills: parseSkillsCsv(d.skills),
         createdById: user.id,
         assignments: {
           create: d.recruiterIds.map((recruiterId) => ({
@@ -151,6 +175,17 @@ export async function updateJob(
     existing.endDate?.toISOString(),
     d.endDate?.toISOString(),
   );
+  compare("work mode", existing.workMode, d.workMode);
+  compare("priority", existing.priority, d.priority);
+  compare(
+    "target close date",
+    existing.targetCloseDate?.toISOString(),
+    d.targetCloseDate?.toISOString(),
+  );
+  compare("posting URL", existing.postingUrl, d.postingUrl);
+  compare("work auth", existing.workAuthRequirement, d.workAuthRequirement);
+  const nextSkills = parseSkillsCsv(d.skills);
+  compare("skills", existing.skills.join(", "), nextSkills.join(", "));
 
   const currentRecruiters = new Set(existing.assignments.map((a) => a.recruiterId));
   const desiredRecruiters = new Set(d.recruiterIds);
@@ -190,6 +225,12 @@ export async function updateJob(
         atsId: d.atsId ?? null,
         startDate: d.startDate ?? null,
         endDate: d.endDate ?? null,
+        workMode: d.workMode ?? null,
+        priority: d.priority ?? null,
+        targetCloseDate: d.targetCloseDate ?? null,
+        postingUrl: d.postingUrl ?? null,
+        workAuthRequirement: d.workAuthRequirement ?? null,
+        skills: nextSkills,
       },
     });
 

@@ -49,6 +49,12 @@ export default async function EditJobPage({
     atsId: job.atsId ?? "",
     startDate: toDateInput(job.startDate),
     endDate: toDateInput(job.endDate),
+    workMode: job.workMode ?? "",
+    priority: job.priority ?? "",
+    targetCloseDate: toDateInput(job.targetCloseDate),
+    postingUrl: job.postingUrl ?? "",
+    workAuthRequirement: job.workAuthRequirement ?? "",
+    skills: job.skills.join(", "),
   };
 
   return (

@@ -15,6 +15,14 @@ export const JOB_STATUS_VALUES = [
   "CANCELLED",
 ] as const;
 
+export const WORK_MODE_VALUES = ["REMOTE", "HYBRID", "ONSITE"] as const;
+export const JOB_PRIORITY_VALUES = [
+  "LOW",
+  "MEDIUM",
+  "HIGH",
+  "CRITICAL",
+] as const;
+
 export const jobSchema = z
   .object({
     title: z.string().trim().min(1, "Job title is required.").max(200),
@@ -41,6 +49,21 @@ export const jobSchema = z
     atsId: optionalText,
     startDate: optionalDateTime,
     endDate: optionalDateTime,
+    // §A2: LuminTrack-native planning fields. Enum strings come from a
+    // <select>; the empty string means "not set" and is preprocessed away.
+    workMode: z.preprocess(
+      (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+      z.enum(WORK_MODE_VALUES).optional(),
+    ),
+    priority: z.preprocess(
+      (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+      z.enum(JOB_PRIORITY_VALUES).optional(),
+    ),
+    targetCloseDate: optionalDateTime,
+    postingUrl: optionalText,
+    workAuthRequirement: optionalText,
+    // Comma-separated free text on the form; split + trimmed below.
+    skills: optionalText,
   })
   .superRefine((val, ctx) => {
     if (!val.sisterCompanySourceId) {
