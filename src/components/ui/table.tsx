@@ -38,9 +38,18 @@ export function Table({
  * Apply to the title cell's `<Link>` so the whole mobile card is tappable: the
  * `::before` pseudo-element covers the relative `<tr>`. Removed at `md+`, so the
  * desktop table is unaffected.
+ *
+ * Any other interactive descendant inside the same `<tr>` (e.g. a secondary
+ * `<Link>` in another cell) needs `cardLinkRaise` so it sits above the
+ * `::before` overlay on mobile — otherwise the row-tap eats the click and
+ * routes the user to the title link.
  */
 export const cardLink =
   "before:absolute before:inset-0 before:z-10 before:content-[''] md:before:content-none";
+
+/** Add to a secondary interactive child inside a `cardLink` row to keep it
+ *  clickable on mobile. Pairs with the `cardLink` overlay above. */
+export const cardLinkRaise = "relative z-20";
 
 export function Th({
   children,

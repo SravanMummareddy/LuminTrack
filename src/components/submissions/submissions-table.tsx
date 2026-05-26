@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Table, Th, Td, cardLink } from "@/components/ui/table";
+import { Table, Th, Td, cardLink, cardLinkRaise } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { MobileSort } from "@/components/ui/mobile-sort";
 import { Badge } from "@/components/ui/badge";
@@ -71,7 +71,7 @@ const COLUMNS: Column[] = [
       <Td label="Job">
         <Link
           href={`/jobs/${s.job.id}`}
-          className="text-slate-700 hover:underline"
+          className={`${cardLinkRaise} text-slate-700 hover:underline`}
         >
           {s.job.title}
         </Link>
