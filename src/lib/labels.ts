@@ -5,6 +5,7 @@ import type {
   InterviewResult,
   WorkMode,
   JobPriority,
+  CandidateStatus,
 } from "@/generated/prisma/enums";
 
 /** Display order for job statuses across filters, forms, and the pipeline. */
@@ -58,6 +59,26 @@ export const JOB_PRIORITY_TONE: Record<JobPriority, BadgeTone> = {
   MEDIUM: "blue",
   HIGH: "amber",
   CRITICAL: "red",
+};
+
+// §B4 — candidate engagement state. Independent of `isActive` soft-delete.
+export const CANDIDATE_STATUSES: CandidateStatus[] = [
+  "AVAILABLE",
+  "PLACED",
+  "NOT_INTERESTED",
+  "DO_NOT_CONTACT",
+];
+export const CANDIDATE_STATUS_LABEL: Record<CandidateStatus, string> = {
+  AVAILABLE: "Available",
+  PLACED: "Placed",
+  NOT_INTERESTED: "Not interested",
+  DO_NOT_CONTACT: "Do not contact",
+};
+export const CANDIDATE_STATUS_TONE: Record<CandidateStatus, BadgeTone> = {
+  AVAILABLE: "green",
+  PLACED: "blue",
+  NOT_INTERESTED: "amber",
+  DO_NOT_CONTACT: "red",
 };
 
 /** Display order for submission statuses across filters, forms, and the pipeline. */

@@ -3,9 +3,14 @@
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { Star, Plus, X } from "lucide-react";
 import Link from "next/link";
-import { Field, Input, Textarea } from "@/components/ui/field";
+import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Button, buttonClass } from "@/components/ui/button";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
+import {
+  CANDIDATE_STATUSES,
+  CANDIDATE_STATUS_LABEL,
+} from "@/lib/labels";
+import type { CandidateStatus } from "@/generated/prisma/enums";
 
 export type CandidateFormValues = {
   id: string;
@@ -21,6 +26,10 @@ export type CandidateFormValues = {
   linkedinUrl: string;
   notes: string;
   isActive: boolean;
+  status: CandidateStatus;
+  tags: string[];
+  lastContactedAt: string | null;
+  source: string;
 };
 
 type CandidateAction = (prev: FormState, formData: FormData) => Promise<FormState>;
@@ -36,6 +45,10 @@ type Fields = {
   skills: string;
   linkedinUrl: string;
   notes: string;
+  status: CandidateStatus;
+  tags: string;
+  lastContactedAt: string;
+  source: string;
 };
 
 function initialFields(values?: CandidateFormValues): Fields {
@@ -51,6 +64,10 @@ function initialFields(values?: CandidateFormValues): Fields {
       skills: "",
       linkedinUrl: "",
       notes: "",
+      status: "AVAILABLE",
+      tags: "",
+      lastContactedAt: "",
+      source: "",
     };
   }
   return {
@@ -64,6 +81,10 @@ function initialFields(values?: CandidateFormValues): Fields {
     skills: values.skills.join(", "),
     linkedinUrl: values.linkedinUrl,
     notes: values.notes,
+    status: values.status,
+    tags: values.tags.join(", "),
+    lastContactedAt: values.lastContactedAt ?? "",
+    source: values.source,
   };
 }
 
@@ -333,6 +354,72 @@ export function CandidateForm({
           rows={3}
           value={fields.notes}
           onChange={set("notes")}
+        />
+      </Field>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="Engagement status" htmlFor="status" error={errors.status}>
+          <Select
+            id="status"
+            name="status"
+            value={fields.status}
+            onChange={(e) =>
+              setFields((f) => ({
+                ...f,
+                status: e.target.value as CandidateStatus,
+              }))
+            }
+          >
+            {CANDIDATE_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {CANDIDATE_STATUS_LABEL[s]}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field
+          label="Source"
+          htmlFor="source"
+          hint="Where this candidate came from — LinkedIn InMail, referral, job board, etc."
+          error={errors.source}
+        >
+          <Input
+            id="source"
+            name="source"
+            value={fields.source}
+            onChange={set("source")}
+            placeholder="LinkedIn / referral / job board / inbound"
+          />
+        </Field>
+      </div>
+
+      <Field
+        label="Tags"
+        htmlFor="tags"
+        hint="Free-form labels for filtering (comma-separated). Distinct from skills."
+        error={errors.tags}
+      >
+        <Input
+          id="tags"
+          name="tags"
+          value={fields.tags}
+          onChange={set("tags")}
+          placeholder="hot prospect, open to relocation"
+        />
+      </Field>
+
+      <Field
+        label="Last contacted"
+        htmlFor="lastContactedAt"
+        hint="Set explicitly — not bumped by every edit."
+        error={errors.lastContactedAt}
+      >
+        <Input
+          id="lastContactedAt"
+          name="lastContactedAt"
+          type="datetime-local"
+          value={fields.lastContactedAt}
+          onChange={set("lastContactedAt")}
         />
       </Field>
 

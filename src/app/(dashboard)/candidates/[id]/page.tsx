@@ -18,8 +18,11 @@ import { SUB_PAGE_SIZE as PAGE_SIZE, parsePage } from "@/lib/filters";
 import {
   SUBMISSION_STATUS_LABEL,
   SUBMISSION_STATUS_TONE,
+  CANDIDATE_STATUS_LABEL,
+  CANDIDATE_STATUS_TONE,
   jobSourceLabel,
 } from "@/lib/labels";
+import { markCandidateContacted } from "@/server/actions/candidates";
 import {
   formatDate,
   formatExperience,
@@ -131,6 +134,9 @@ export default async function CandidateDetailPage({
             <Badge tone={candidate.isActive ? "green" : "slate"}>
               {candidate.isActive ? "Active" : "Inactive"}
             </Badge>
+            <Badge tone={CANDIDATE_STATUS_TONE[candidate.status]}>
+              {CANDIDATE_STATUS_LABEL[candidate.status]}
+            </Badge>
           </div>
           <p className="mt-1 text-sm text-slate-500">
             <span className="font-mono text-xs text-slate-400">
@@ -192,7 +198,41 @@ export default async function CandidateDetailPage({
           <DescItem label="Last updated">
             {formatDate(candidate.updatedAt)}
           </DescItem>
+          <DescItem label="Source">{candidate.source || "—"}</DescItem>
+          <DescItem label="Last contacted">
+            <div className="flex flex-wrap items-center gap-2">
+              <span>
+                {candidate.lastContactedAt
+                  ? formatDate(candidate.lastContactedAt)
+                  : "—"}
+              </span>
+              <form action={markCandidateContacted}>
+                <input type="hidden" name="id" value={candidate.id} />
+                <button
+                  type="submit"
+                  className="text-xs font-medium text-indigo-600 hover:underline"
+                >
+                  Mark contacted
+                </button>
+              </form>
+            </div>
+          </DescItem>
         </dl>
+
+        {candidate.tags.length > 0 && (
+          <div className="mt-5">
+            <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">
+              Tags
+            </dt>
+            <dd className="mt-1.5 flex flex-wrap gap-1.5">
+              {candidate.tags.map((t) => (
+                <Badge key={t} tone="slate">
+                  {t}
+                </Badge>
+              ))}
+            </dd>
+          </div>
+        )}
 
         <div className="mt-5">
           <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">

@@ -7,6 +7,13 @@ import {
 import { updateCandidate } from "@/server/actions/candidates";
 import { getCandidateForEdit } from "@/server/queries/candidates";
 
+function toDateTimeLocal(value: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(
+    value.getDate(),
+  )}T${pad(value.getHours())}:${pad(value.getMinutes())}`;
+}
+
 export default async function EditCandidatePage({
   params,
 }: {
@@ -30,6 +37,12 @@ export default async function EditCandidatePage({
     linkedinUrl: candidate.linkedinUrl ?? "",
     notes: candidate.notes ?? "",
     isActive: candidate.isActive,
+    status: candidate.status,
+    tags: candidate.tags,
+    lastContactedAt: candidate.lastContactedAt
+      ? toDateTimeLocal(candidate.lastContactedAt)
+      : "",
+    source: candidate.source ?? "",
   };
 
   return (
