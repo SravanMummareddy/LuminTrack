@@ -46,7 +46,7 @@ export async function createCandidateResume(
     });
     await logActivity(tx, {
       entityType: "CANDIDATE",
-      action: "RESUME_UPDATED",
+      action: "RESUME_ADDED",
       description: `Resume "${created.label}" added`,
       performedById: user.id,
       candidateId: d.candidateId,
@@ -80,6 +80,11 @@ export async function updateCandidateResume(
   if (!existing) return { error: "This résumé no longer exists." };
 
   const linkChanged = existing.driveLink !== d.driveLink;
+  const labelChanged = existing.label !== d.label;
+  const labelPart = labelChanged
+    ? `"${existing.label}" → "${d.label}"`
+    : `"${d.label}"`;
+  const linkPart = linkChanged ? "link changed" : "link unchanged";
 
   await prisma.$transaction(async (tx) => {
     await tx.candidateResume.update({
@@ -89,7 +94,7 @@ export async function updateCandidateResume(
     await logActivity(tx, {
       entityType: "CANDIDATE",
       action: "RESUME_UPDATED",
-      description: `Resume "${d.label}" updated`,
+      description: `Resume ${labelPart} updated · ${linkPart}`,
       oldValue: linkChanged ? existing.driveLink : null,
       newValue: linkChanged ? d.driveLink : null,
       performedById: user.id,
@@ -119,7 +124,7 @@ export async function deleteCandidateResume(formData: FormData): Promise<void> {
     await tx.candidateResume.delete({ where: { id: resumeId } });
     await logActivity(tx, {
       entityType: "CANDIDATE",
-      action: "RESUME_UPDATED",
+      action: "RESUME_DELETED",
       description: `Resume "${existing.label}" removed`,
       performedById: user.id,
       candidateId: existing.candidateId,
