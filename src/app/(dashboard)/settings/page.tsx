@@ -46,10 +46,14 @@ export default async function SettingsPage({
         singular="source"
         items={await listSisterCompanies()}
         action={saveSisterCompany}
+        contactKind="source"
+        isAdmin={isAdmin}
       />
     );
   } else if (tab === "clients") {
-    content = <ClientSection items={await listClients()} />;
+    content = (
+      <ClientSection items={await listClients()} isAdmin={isAdmin} />
+    );
   } else if (tab === "vendors") {
     content = (
       <ContactOrgSection
@@ -57,6 +61,8 @@ export default async function SettingsPage({
         singular="vendor"
         items={await listVendors()}
         action={saveVendor}
+        contactKind="vendor"
+        isAdmin={isAdmin}
       />
     );
   } else {
