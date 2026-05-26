@@ -67,6 +67,32 @@ snapshot, file map, resolved decisions, iLabor JSON sample. The architectural
   details ▾" toggle share a `whitespace-nowrap` span so they never
   orphan. Pip row tightened to `flex-nowrap` (capped at 5 so width is
   bounded). Verified with Playwright MCP screenshots.
+- **Medium-bug sweep shipped 2026-05-26** (PRs #6 / #7 / #8):
+  - **§B4 + §E2 + §E3 + §E4** — `Candidate.status` (CandidateStatus enum:
+    AVAILABLE / PLACED / NOT_INTERESTED / DO_NOT_CONTACT, separate from
+    `isActive`), `tags[]` (lowercased free-form labels), `lastContactedAt`
+    (bumped explicitly via new `markCandidateContacted` action + new
+    `CANDIDATE_CONTACTED` audit), `source` (free-text origin). Migration
+    `20260526140000_candidate_status_tags_contact_source` + companion
+    `20260526145000_restore_array_defaults`. Candidate form gets the four
+    inputs; detail page surfaces status badge + source + last-contacted
+    row + tag chips.
+  - **§D5 + §C4** — `InterviewRound.scheduledTimezone` (IANA string,
+    UTC `scheduledAt` unchanged); dropped `@@unique([candidateId, jobId])`
+    on Submission and replaced the DB block with an action-layer duplicate
+    check that captures `duplicateReason` and a custom audit note when
+    overridden. Migration `20260526150000_interview_tz_and_dup_override`.
+  - **§F3 + §F4 + §J2** — `/reports` gained a "Recruiter aging" table
+    (submissions >14 days still in early pipeline stages) + a "Client
+    revenue projection" table (`Σ candidateRate × 8h × duration ×
+    positions` for OPEN/ON_HOLD jobs, 90-day default duration when
+    start/end dates missing). New admin-only `/audit` route — org-wide
+    activity log filterable by action + user, paginated 25/page, linked
+    from Settings → Admin tools. No migration.
+- **Large queue (2026-05-26 triage in `bugs.md`):** §F2 → §J1 → iLabor 8b
+  → §J3 → §E1 → §J4, in that order. **§G1-G3 (notifications/digests/
+  Slack-Teams) and §I4 (dark mode) are deferred indefinitely on user
+  direction.** See `bugs.md` for per-item pros/cons + sizing.
 - **Process:** phase-by-phase with product-owner confirmation between phases;
   teaching-style narration of meaningful code; additive only — the existing
   dashboard's behavior is unchanged for anyone not exercising the new flow.
