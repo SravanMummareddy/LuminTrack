@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { deleteInterviewRound } from "@/server/actions/interviews";
 import {
   InterviewRoundForm,
   type InterviewRoundData,
@@ -84,13 +85,36 @@ export function InterviewRoundsManager({
                     {INTERVIEW_TYPE_LABEL[r.interviewType]}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setEditing(r)}
-                  className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
-                >
-                  Edit
-                </button>
+                <div className="flex shrink-0 items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setEditing(r)}
+                    className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
+                  >
+                    Edit
+                  </button>
+                  <form
+                    action={deleteInterviewRound}
+                    onSubmit={(e) => {
+                      if (
+                        !confirm(
+                          `Delete round ${r.roundOrder} · "${r.roundName}"? This can't be undone.`,
+                        )
+                      ) {
+                        e.preventDefault();
+                      }
+                    }}
+                  >
+                    <input type="hidden" name="id" value={r.id} />
+                    <button
+                      type="submit"
+                      title="Delete round"
+                      className="text-slate-400 hover:text-red-600"
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden />
+                    </button>
+                  </form>
+                </div>
               </div>
 
               <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
