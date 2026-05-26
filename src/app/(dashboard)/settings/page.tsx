@@ -101,21 +101,31 @@ export default async function SettingsPage({
         </section>
       )}
 
-      <div className="flex gap-1 border-b border-slate-200">
-        {TABS.map((t) => (
-          <Link
-            key={t.key}
-            href={`/settings?tab=${t.key}`}
-            className={cn(
-              "-mb-px border-b-2 px-3 py-2 text-sm font-medium transition",
-              t.key === tab
-                ? "border-indigo-600 text-indigo-700"
-                : "border-transparent text-slate-500 hover:text-slate-800",
-            )}
-          >
-            {t.label}
-          </Link>
-        ))}
+      <div
+        role="tablist"
+        aria-label="Settings sections"
+        className="flex gap-1 border-b border-slate-200"
+      >
+        {TABS.map((t) => {
+          const selected = t.key === tab;
+          return (
+            <Link
+              key={t.key}
+              role="tab"
+              aria-selected={selected}
+              aria-current={selected ? "page" : undefined}
+              href={`/settings?tab=${t.key}`}
+              className={cn(
+                "-mb-px border-b-2 px-3 py-2 text-sm font-medium transition",
+                selected
+                  ? "border-indigo-600 text-indigo-700"
+                  : "border-transparent text-slate-500 hover:text-slate-800",
+              )}
+            >
+              {t.label}
+            </Link>
+          );
+        })}
       </div>
 
       {content}

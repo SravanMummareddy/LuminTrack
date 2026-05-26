@@ -230,6 +230,7 @@ export default async function SubmissionDetailPage({
                 // to top, or running forms against our origin.
                 sandbox="allow-scripts allow-same-origin"
                 referrerPolicy="no-referrer"
+                loading="lazy"
                 className="h-[70vh] w-full rounded-md border border-slate-200 md:h-[600px]"
               />
             ) : (

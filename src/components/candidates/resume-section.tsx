@@ -109,6 +109,7 @@ export function ResumeSection({
                       title={`${r.label} preview`}
                       sandbox="allow-scripts allow-same-origin"
                       referrerPolicy="no-referrer"
+                      loading="lazy"
                       className="mt-3 h-[70vh] w-full rounded-md border border-slate-200 md:h-[600px]"
                     />
                   ) : (
