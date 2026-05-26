@@ -17,6 +17,19 @@ enum UserRole {
   RECRUITER
 }
 
+enum WorkMode {
+  REMOTE
+  HYBRID
+  ONSITE
+}
+
+enum JobPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
 enum JobStatus {
   OPEN
   ON_HOLD
@@ -213,6 +226,13 @@ model Job {
   ownerAltEmail         String?
   reqType               String?
   department            String?
+  // §A2: LuminTrack-native job planning fields (not in iLabor either).
+  workMode              WorkMode?
+  priority              JobPriority?
+  targetCloseDate       DateTime?
+  postingUrl            String?
+  workAuthRequirement   String?
+  skills                String[]             @default([])
   externalStatusRaw     String?
   externalCreatedDate   DateTime?
   lastImportedAt        DateTime?

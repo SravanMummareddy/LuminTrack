@@ -4,7 +4,15 @@ import { useActionState, useState } from "react";
 import Link from "next/link";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { Button, buttonClass } from "@/components/ui/button";
-import { JOB_STATUSES, JOB_STATUS_LABEL, OTHER_SOURCE } from "@/lib/labels";
+import {
+  JOB_STATUSES,
+  JOB_STATUS_LABEL,
+  OTHER_SOURCE,
+  WORK_MODES,
+  WORK_MODE_LABEL,
+  JOB_PRIORITIES,
+  JOB_PRIORITY_LABEL,
+} from "@/lib/labels";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 
 type Option = { id: string; name: string; isActive: boolean };
@@ -32,6 +40,13 @@ export type JobFormValues = {
   /** YYYY-MM-DD or "" — bound to <input type="date">. */
   startDate: string;
   endDate: string;
+  workMode: string;
+  priority: string;
+  targetCloseDate: string;
+  postingUrl: string;
+  workAuthRequirement: string;
+  /** Comma-separated; server-action splits + dedupes. */
+  skills: string;
 };
 
 type JobAction = (prev: FormState, formData: FormData) => Promise<FormState>;
@@ -303,6 +318,87 @@ export function JobForm({
               name="durationLabel"
               defaultValue={values?.durationLabel ?? ""}
               placeholder="e.g. 6 months extendable"
+            />
+          </Field>
+          <Field label="Work mode" htmlFor="workMode" error={errors.workMode}>
+            <Select
+              id="workMode"
+              name="workMode"
+              defaultValue={values?.workMode ?? ""}
+            >
+              <option value="">—</option>
+              {WORK_MODES.map((m) => (
+                <option key={m} value={m}>
+                  {WORK_MODE_LABEL[m]}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Priority" htmlFor="priority" error={errors.priority}>
+            <Select
+              id="priority"
+              name="priority"
+              defaultValue={values?.priority ?? ""}
+            >
+              <option value="">—</option>
+              {JOB_PRIORITIES.map((p) => (
+                <option key={p} value={p}>
+                  {JOB_PRIORITY_LABEL[p]}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field
+            label="Target hire-by date"
+            htmlFor="targetCloseDate"
+            hint="When this req should be closed."
+            error={errors.targetCloseDate}
+          >
+            <Input
+              id="targetCloseDate"
+              name="targetCloseDate"
+              type="date"
+              defaultValue={values?.targetCloseDate ?? ""}
+            />
+          </Field>
+          <Field
+            label="Posting URL"
+            htmlFor="postingUrl"
+            hint="Public job-board / careers page link."
+            error={errors.postingUrl}
+          >
+            <Input
+              id="postingUrl"
+              name="postingUrl"
+              type="url"
+              defaultValue={values?.postingUrl ?? ""}
+              placeholder="https://…"
+            />
+          </Field>
+          <Field
+            label="Work auth requirement"
+            htmlFor="workAuthRequirement"
+            hint="e.g. US Citizen only, No sponsorship."
+            error={errors.workAuthRequirement}
+          >
+            <Input
+              id="workAuthRequirement"
+              name="workAuthRequirement"
+              defaultValue={values?.workAuthRequirement ?? ""}
+              placeholder="US Citizen / GC / No sponsorship"
+            />
+          </Field>
+          <Field
+            label="Skills"
+            htmlFor="skills"
+            hint="Separate skills with commas."
+            error={errors.skills}
+          >
+            <Input
+              id="skills"
+              name="skills"
+              defaultValue={values?.skills ?? ""}
+              placeholder="e.g. React, TypeScript, AWS"
             />
           </Field>
         </div>

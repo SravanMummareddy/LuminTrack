@@ -20,6 +20,9 @@ import {
   JOB_STATUS_TONE,
   SUBMISSION_STATUS_LABEL,
   SUBMISSION_STATUS_TONE,
+  WORK_MODE_LABEL,
+  JOB_PRIORITY_LABEL,
+  JOB_PRIORITY_TONE,
   jobSourceLabel,
 } from "@/lib/labels";
 import {
@@ -250,6 +253,53 @@ export default async function JobDetailPage({
           )}
           {!job.portal && job.atsId && (
             <SummaryItem label="Customer ref">{job.atsId}</SummaryItem>
+          )}
+          {/* §A2 LuminTrack-native planning fields — shown for both manual
+              and iLabor jobs since they're not in the iLabor payload. */}
+          {job.workMode && (
+            <SummaryItem label="Work mode">
+              {WORK_MODE_LABEL[job.workMode]}
+            </SummaryItem>
+          )}
+          {job.priority && (
+            <SummaryItem label="Priority">
+              <Badge tone={JOB_PRIORITY_TONE[job.priority]}>
+                {JOB_PRIORITY_LABEL[job.priority]}
+              </Badge>
+            </SummaryItem>
+          )}
+          {job.targetCloseDate && (
+            <SummaryItem label="Target hire-by">
+              {formatDate(job.targetCloseDate)}
+            </SummaryItem>
+          )}
+          {job.postingUrl && (
+            <SummaryItem label="Posting URL">
+              <a
+                href={job.postingUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="break-all text-indigo-600 hover:underline"
+              >
+                {job.postingUrl}
+              </a>
+            </SummaryItem>
+          )}
+          {job.workAuthRequirement && (
+            <SummaryItem label="Work auth">
+              {job.workAuthRequirement}
+            </SummaryItem>
+          )}
+          {job.skills.length > 0 && (
+            <SummaryItem label="Skills">
+              <div className="flex flex-wrap gap-1">
+                {job.skills.map((s) => (
+                  <Badge key={s} tone="slate">
+                    {s}
+                  </Badge>
+                ))}
+              </div>
+            </SummaryItem>
           )}
         </dl>
 
