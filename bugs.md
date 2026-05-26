@@ -11,11 +11,11 @@
 - ~~**§H2** — recently-viewed strip in topbar.~~ ✅ shipped 2026-05-26
   (commit `90574fb`; client-only localStorage tracker at
   `lumintrack:recent:v1`, capped at 5 per kind).
-- **§C4** — capture duplicate-submission override reason in audit.
-  **Re-classified: M** — today's `@@unique([candidateId, jobId])`
-  constraint hard-blocks duplicates, so the override flow needs the
-  unique constraint dropped (or replaced with a soft-uniqueness check
-  in the action) before any "with reason" path can exist.
+- ~~**§C4** — capture duplicate-submission override reason in audit.~~
+  ✅ shipped 2026-05-26 (PR #7; migration
+  `20260526150000_interview_tz_and_dup_override` drops the unique
+  constraint and adds `Submission.duplicateReason`; the action now
+  soft-checks and prompts for a reason).
 
 **Medium / migration required:**
 - ~~**§C1** — add `OFFER_ACCEPTED` between `OFFER_RELEASED` and `JOINED`.~~
@@ -32,11 +32,15 @@
   ✅ shipped 2026-05-26 (migration `20260526130000_contact_records`;
   contacts dialog under each settings tab; CHECK constraint enforces
   one-parent-per-row; admin-gated writes).
-- **§B4** — Candidate status reasons enum (`AVAILABLE | PLACED | NOT_INTERESTED | DO_NOT_CONTACT`).
-- **§D5** — interview time-zone string.
-- **§E2-E4** — candidate tags/labels, last-contact tracking, per-candidate source.
-- **§F3, F4** — recruiter aging report; revenue projection.
-- **§J2** — admin `/audit` global page.
+- ~~**§B4** — Candidate status reasons enum (`AVAILABLE | PLACED | NOT_INTERESTED | DO_NOT_CONTACT`).~~
+  ✅ shipped 2026-05-26 (PR #6; migration `20260526140000_candidate_status_tags_contact_source`).
+- ~~**§D5** — interview time-zone string.~~ ✅ shipped 2026-05-26 (PR #7).
+- ~~**§E2-E4** — candidate tags/labels, last-contact tracking, per-candidate source.~~
+  ✅ shipped 2026-05-26 (PR #6; includes new `markCandidateContacted` action).
+- ~~**§F3, F4** — recruiter aging report; revenue projection.~~ ✅ shipped
+  2026-05-26 (PR #8; both surface as new tables on `/reports`, no migration).
+- ~~**§J2** — admin `/audit` global page.~~ ✅ shipped 2026-05-26 (PR #8;
+  new `/audit` route, filterable by action + user, linked from Settings → Admin tools).
 
 **Large / out of scope for demo polish:**
 - **§G1-G3** — in-app notifications, email digests, Slack/Teams webhooks (XL each).
