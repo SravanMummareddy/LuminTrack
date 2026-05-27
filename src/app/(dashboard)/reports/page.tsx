@@ -53,7 +53,9 @@ function pct(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
-const dimensionHead = (
+// Fresh JSX per call — reusing the same React element across multiple
+// `<CollapsibleTable>` instances triggers React's key-reconciliation warning.
+const dimensionHead = () => (
   <thead className="border-b border-slate-200 bg-slate-50">
     <tr>
       <Th>Name</Th>
@@ -212,21 +214,21 @@ export default async function ReportsPage({
       <Card title="Performance by client">
         <CollapsibleTable
           rows={data.byClient.map(dimensionRow)}
-          head={dimensionHead}
+          head={dimensionHead()}
         />
       </Card>
 
       <Card title="Performance by vendor">
         <CollapsibleTable
           rows={data.byVendor.map(dimensionRow)}
-          head={dimensionHead}
+          head={dimensionHead()}
         />
       </Card>
 
       <Card title="Performance by source">
         <CollapsibleTable
           rows={data.bySource.map(dimensionRow)}
-          head={dimensionHead}
+          head={dimensionHead()}
         />
       </Card>
 
