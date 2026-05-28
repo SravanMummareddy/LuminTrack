@@ -133,6 +133,30 @@ export function ImportRequisitions() {
           {s.totalRows === 1 ? "" : "s"} in file
         </p>
 
+        {(() => {
+          // Per-row drift banner — surfaces silent ID re-use risk. If the
+          // same Req ID now points at a different title or client, the
+          // upsert would overwrite the existing job's metadata while
+          // keeping the existing submissions/placements attached. The
+          // operator should confirm those are the same logical req.
+          const driftRows = (previewState.updatedRows ?? []).filter(
+            (r) => r.titleDrifted || r.customerDrifted,
+          );
+          if (driftRows.length === 0) return null;
+          return (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+              <strong>{driftRows.length} updated row
+              {driftRows.length === 1 ? " has" : "s have"}</strong>{" "}
+              a different title or client than the existing LuminTrack job
+              with the same Req ID. Review the "title changed" / "client
+              changed" badges in the Updated rows table below before
+              committing — your existing submissions, placements, and notes
+              will stay attached to the same Job IDs even if iLabor has
+              re-used those Req IDs for a different role.
+            </div>
+          );
+        })()}
+
         {errs.length > 0 ? (
           <details className="rounded-lg border border-red-200 bg-red-50" open>
             <summary className="cursor-pointer px-4 py-2 text-sm font-medium text-red-700">
@@ -292,6 +316,10 @@ type DigestRow = {
   statusUnknown: boolean;
   statusDiverged?: boolean;
   existingStatus?: string | null;
+  titleDrifted?: boolean;
+  existingTitle?: string | null;
+  customerDrifted?: boolean;
+  existingCustomer?: string | null;
 };
 
 function RowsTable({
@@ -325,8 +353,28 @@ function RowsTable({
                 <td className="px-3 py-1.5 tabular-nums text-slate-600">
                   {r.requisitionId}
                 </td>
-                <td className="px-3 py-1.5 text-slate-800">{r.jobTitle}</td>
-                <td className="px-3 py-1.5 text-slate-700">{r.customerName}</td>
+                <td className="px-3 py-1.5 text-slate-800">
+                  {r.jobTitle}
+                  {updateMode && r.titleDrifted ? (
+                    <span
+                      className="ml-1 inline-flex items-center rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-800"
+                      title={`Existing LuminTrack title: "${r.existingTitle ?? "—"}". The same Req ID now points at a different role — confirm this is the same requisition before importing.`}
+                    >
+                      title changed
+                    </span>
+                  ) : null}
+                </td>
+                <td className="px-3 py-1.5 text-slate-700">
+                  {r.customerName}
+                  {updateMode && r.customerDrifted ? (
+                    <span
+                      className="ml-1 inline-flex items-center rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-800"
+                      title={`Existing LuminTrack client: "${r.existingCustomer ?? "—"}". The same Req ID now points at a different customer — confirm before importing.`}
+                    >
+                      client changed
+                    </span>
+                  ) : null}
+                </td>
                 <td className="px-3 py-1.5 text-slate-700">
                   {r.requisitionStatus ?? "—"}
                   {r.statusUnknown ? (

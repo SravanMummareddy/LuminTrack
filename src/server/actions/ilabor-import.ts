@@ -53,6 +53,17 @@ export type RowDigest = {
   statusDiverged?: boolean;
   /** The existing LuminTrack status, for display alongside the iLabor one. */
   existingStatus?: string | null;
+  /** True when the existing job's title differs materially from the incoming
+   *  row's title. Possible silent ID re-use by iLabor; the operator should
+   *  confirm before committing. */
+  titleDrifted?: boolean;
+  /** The existing LuminTrack job title, for the side-by-side comparison. */
+  existingTitle?: string | null;
+  /** True when the existing job's client (customer) name differs from the
+   *  incoming row's customer. Same silent-re-use risk as titleDrifted. */
+  customerDrifted?: boolean;
+  /** The existing LuminTrack client name, for side-by-side comparison. */
+  existingCustomer?: string | null;
   rowIndex: number;
   requisitionId: string;
   jobTitle: string;
@@ -302,11 +313,16 @@ export async function previewRequisitions(
           portalId: portal.id,
           portalRefId: { in: portalRefIds },
         },
-        select: { portalRefId: true, status: true },
+        select: {
+          portalRefId: true,
+          status: true,
+          title: true,
+          client: { select: { name: true } },
+        },
       })
     : [];
-  const existingStatusMap = new Map(
-    existing.map((j) => [j.portalRefId, j.status]),
+  const existingByRefIdPreview = new Map(
+    existing.map((j) => [j.portalRefId, j] as const),
   );
   const existingSet = new Set(existing.map((j) => j.portalRefId));
 
@@ -329,7 +345,8 @@ export async function previewRequisitions(
     if (digest.statusUnknown) statusWarningCount += 1;
     const reqId = String(row.requisitionId);
     if (existingSet.has(reqId)) {
-      const existingStatus = existingStatusMap.get(reqId) ?? null;
+      const prior = existingByRefIdPreview.get(reqId) ?? null;
+      const existingStatus = prior?.status ?? null;
       const mapped = ilaborStatusToJobStatus(row.requisitionStatus);
       // Only flag divergence when the iLabor side mapped cleanly — otherwise
       // the "unmapped" badge already covers the operator-surprise case.
@@ -337,10 +354,26 @@ export async function previewRequisitions(
         !mapped.unknown &&
         existingStatus !== null &&
         existingStatus !== mapped.status;
+      // Title / customer drift signals possible silent ID re-use by iLabor —
+      // if the same requisitionId now points at a different role or a
+      // different client, surface it before commit so the operator can confirm.
+      const existingTitle = prior?.title ?? null;
+      const existingCustomer = prior?.client.name ?? null;
+      const titleDrifted =
+        existingTitle !== null &&
+        existingTitle.trim().toLowerCase() !== row.jobTitle.trim().toLowerCase();
+      const customerDrifted =
+        existingCustomer !== null &&
+        existingCustomer.trim().toLowerCase() !==
+          row.customerName.trim().toLowerCase();
       updatedRows.push({
         ...digest,
         existingStatus,
         statusDiverged: diverged,
+        existingTitle,
+        existingCustomer,
+        titleDrifted,
+        customerDrifted,
       });
     } else {
       newRows.push(digest);
@@ -434,6 +467,7 @@ export async function importRequisitions(
           portalRefId: true,
           clientId: true,
           vendorId: true,
+          title: true,
           client: { select: { name: true } },
           vendor: { select: { name: true } },
         },
@@ -534,19 +568,27 @@ export async function importRequisitions(
           // change shows up on the job's timeline.
           const prior = existingByRefId.get(String(row.requisitionId));
           if (prior) {
-            const relinks: string[] = [];
+            // §drift — surface title / client / vendor changes so a silent
+            // ID re-use by iLabor (or a real rename) is visible on the
+            // timeline rather than overwriting unaudited.
+            const diffs: string[] = [];
+            const titleChanged =
+              prior.title.trim().toLowerCase() !==
+              row.jobTitle.trim().toLowerCase();
+            if (titleChanged)
+              diffs.push(`title "${prior.title}" → "${row.jobTitle}"`);
             if (prior.clientId !== clientId)
-              relinks.push(`client "${prior.client.name}" → "${clientName}"`);
+              diffs.push(`client "${prior.client.name}" → "${clientName}"`);
             if (prior.vendorId !== vendorId)
-              relinks.push(`vendor "${prior.vendor.name}" → "${vendorName}"`);
-            if (relinks.length) {
+              diffs.push(`vendor "${prior.vendor.name}" → "${vendorName}"`);
+            if (diffs.length) {
               await logActivity(tx, {
                 entityType: "JOB",
                 action: "JOB_UPDATED",
                 jobId: upserted.id,
-                description: `Re-linked by iLabor re-import: ${relinks.join(", ")}`,
-                oldValue: `${prior.client.name} / ${prior.vendor.name}`,
-                newValue: `${clientName} / ${vendorName}`,
+                description: `iLabor re-import drift: ${diffs.join(", ")}`,
+                oldValue: `${prior.title} | ${prior.client.name} / ${prior.vendor.name}`,
+                newValue: `${row.jobTitle} | ${clientName} / ${vendorName}`,
                 performedById: user.id,
               });
             }
