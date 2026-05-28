@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Download, History, ScrollText } from "lucide-react";
+import { Download, History, ScrollText, FileDown } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
 import { cn } from "@/lib/cn";
 import { PageHeader } from "@/components/ui/page-header";
@@ -96,6 +96,10 @@ export default async function SettingsPage({
             <LinkButton href="/audit" variant="secondary">
               <ScrollText className="h-4 w-4" />
               Audit log
+            </LinkButton>
+            <LinkButton href="/settings/export" variant="secondary">
+              <FileDown className="h-4 w-4" />
+              Export data
             </LinkButton>
           </div>
         </section>

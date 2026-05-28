@@ -40,6 +40,36 @@ enum CandidateStatus {
   DO_NOT_CONTACT
 }
 
+// R4.1 — buckets for the per-candidate document library (beyond résumés).
+// Identity + WORK_AUTH are sensitive by convention — see canViewSensitiveDocs
+// in src/lib/permissions.ts. EDUCATION + EMPLOYMENT are visible to all recruiters.
+enum DocumentCategory {
+  IDENTITY
+  WORK_AUTH
+  EDUCATION
+  EMPLOYMENT
+  OTHER
+}
+
+// R4.2 — Placement lifecycle. ACTIVE = currently on assignment; EXTENDED =
+// at least one PlacementExtension exists and the parent endDate was bumped;
+// ENDED = completed normally; TERMINATED = ended early (incl. JOINED-status
+// revert path, which sets endReason=OTHER + endNote).
+enum PlacementStatus {
+  ACTIVE
+  EXTENDED
+  ENDED
+  TERMINATED
+}
+
+enum PlacementEndReason {
+  COMPLETED
+  TERMINATED_BY_CLIENT
+  RESIGNED
+  PERFORMANCE
+  OTHER
+}
+
 enum JobStatus {
   OPEN
   ON_HOLD
@@ -115,6 +145,15 @@ enum ActivityAction {
   CANDIDATE_JOINED
   REQUISITIONS_IMPORTED
   JOB_IMPORTED
+  CANDIDATE_DOCUMENT_ADDED
+  CANDIDATE_DOCUMENT_UPDATED
+  CANDIDATE_DOCUMENT_REMOVED
+  CANDIDATE_STATUS_CHANGED
+  PLACEMENT_CREATED
+  PLACEMENT_UPDATED
+  PLACEMENT_EXTENDED
+  PLACEMENT_ENDED
+  DATA_EXPORTED
 }
 
 // ─── Models ──────────────────────────────────────────────────────────────────
@@ -129,14 +168,15 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  jobsCreated       Job[]
-  assignments       JobAssignment[]  @relation("AssignmentRecruiter")
-  assignmentsMade   JobAssignment[]  @relation("AssignmentAssignedBy")
-  candidatesCreated Candidate[]
-  submissionsMade   Submission[]
-  interviewUpdates  InterviewRound[]
-  notes             Note[]
-  activities        Activity[]
+  jobsCreated        Job[]
+  assignments        JobAssignment[]  @relation("AssignmentRecruiter")
+  assignmentsMade    JobAssignment[]  @relation("AssignmentAssignedBy")
+  candidatesCreated  Candidate[]
+  submissionsMade    Submission[]
+  interviewUpdates   InterviewRound[]
+  notes              Note[]
+  activities         Activity[]
+  uploadedDocuments  CandidateDocument[]
 }
 
 model SisterCompanySource {
@@ -284,6 +324,7 @@ model Job {
 
   assignments JobAssignment[]
   submissions Submission[]
+  placements  Placement[]
   noteEntries Note[]
   activities  Activity[]
 
@@ -352,6 +393,8 @@ model Candidate {
 
   submissions Submission[]
   resumes     CandidateResume[]
+  documents   CandidateDocument[]
+  placements  Placement[]
   noteEntries Note[]
   activities  Activity[]
 
@@ -375,6 +418,33 @@ model CandidateResume {
   submissions Submission[]
 
   @@index([candidateId])
+}
+
+// R4.1 — per-candidate document vault (passports, work auth, transcripts,
+// offer letters, etc.). One row per document; the file itself lives on Google
+// Drive and we store a labelled share link, matching CandidateResume. Sensitive
+// categories (IDENTITY, WORK_AUTH) are gated on the read path by
+// canViewSensitiveDocs (src/lib/permissions.ts). Cascade is defensive — in
+// practice candidates are soft-deleted (isActive) so this only fires for true
+// admin purges (e.g. seeding cleanup).
+model CandidateDocument {
+  id           String           @id @default(cuid())
+  seq          Int              @unique @default(autoincrement())
+  candidateId  String
+  candidate    Candidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  category     DocumentCategory
+  label        String
+  driveLink    String
+  issuedAt     DateTime?
+  expiresAt    DateTime?
+  notes        String?
+  uploadedById String
+  uploadedBy   User             @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([candidateId, category])
+  @@index([expiresAt])
 }
 
 model Submission {
@@ -413,6 +483,11 @@ model Submission {
   candidateResume   CandidateResume? @relation(fields: [candidateResumeId], references: [id], onDelete: SetNull)
 
   interviewRounds InterviewRound[]
+  // R4.2 — the Placement auto-created when this submission moves to JOINED.
+  placement       Placement?       @relation("PlacementSubmission")
+  // The reverse side of Placement.replacementSubmission — populated when *this*
+  // submission was named as the replacement for a terminated placement.
+  replacementFor  Placement?       @relation("PlacementReplacement")
   noteEntries     Note[]
   activities      Activity[]
 
@@ -423,6 +498,60 @@ model Submission {
   @@index([submittedById])
   @@index([candidateResumeId])
   @@index([submittedAt])
+}
+
+// R4.2 — a candidate working an assignment. Auto-created when a submission's
+// status flips to JOINED (see updateSubmissionStatus). Margin = billRate − payRate.
+// Decimal(12, 2) matches Submission.candidateRate / Job.vendorRate so margin math
+// doesn't truncate. The submission ↔ placement link is 1:1 (submissionId @unique).
+model Placement {
+  id           String          @id @default(cuid())
+  seq          Int             @unique @default(autoincrement())
+  submissionId String          @unique
+  submission   Submission      @relation("PlacementSubmission", fields: [submissionId], references: [id])
+  candidateId  String
+  candidate    Candidate       @relation(fields: [candidateId], references: [id])
+  jobId        String
+  job          Job             @relation(fields: [jobId], references: [id])
+  startDate    DateTime
+  endDate      DateTime?
+  billRate     Decimal         @default(0) @db.Decimal(12, 2)
+  payRate      Decimal         @default(0) @db.Decimal(12, 2)
+  status       PlacementStatus @default(ACTIVE)
+  endReason    PlacementEndReason?
+  endNote      String?
+  // When a placement is ended early and a backfill candidate is identified,
+  // we point at *that* submission (same job). Unique because one submission
+  // can only be the replacement for one placement.
+  replacementSubmissionId String?     @unique
+  replacementSubmission   Submission? @relation("PlacementReplacement", fields: [replacementSubmissionId], references: [id])
+  clientPoNumber       String?
+  invoiceRef           String?
+  onsiteManagerName    String?
+  onsiteManagerEmail   String?
+  extensions           PlacementExtension[]
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  @@index([status, endDate])
+  @@index([candidateId])
+  @@index([jobId])
+}
+
+// R4.2 — one row per extension applied to a Placement. The parent's `endDate`
+// is bumped to the latest extension's endDate; status flips to EXTENDED on first
+// extension. Edit-only (no delete action) per plan — overlap is blocked at the
+// Zod layer.
+model PlacementExtension {
+  id          String    @id @default(cuid())
+  placementId String
+  placement   Placement @relation(fields: [placementId], references: [id], onDelete: Cascade)
+  startDate   DateTime
+  endDate     DateTime
+  note        String?
+  createdAt   DateTime  @default(now())
+
+  @@index([placementId])
 }
 
 model InterviewRound {

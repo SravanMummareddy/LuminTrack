@@ -429,6 +429,78 @@ export default async function ReportsPage({
       </Card>
 
       <Card
+        title="Active placements + projected margin"
+        description="ACTIVE + EXTENDED placements only. Σ (bill − pay) × 8h × remaining-days. Open-ended placements default to a 90-day window. Negative margins surface as red."
+      >
+        {data.placementMargin.totalActive === 0 ? (
+          <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
+            No active placements yet.
+          </p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <StatTile
+                label="Active placements"
+                value={String(data.placementMargin.totalActive)}
+              />
+              <StatTile
+                label="Projected margin"
+                value={data.placementMargin.totalMargin.toLocaleString(undefined, {
+                  style: "currency",
+                  currency: "USD",
+                  maximumFractionDigits: 0,
+                })}
+              />
+              <StatTile
+                label="Negative-margin rows"
+                value={String(data.placementMargin.negativeCount)}
+              />
+            </div>
+            <div className="mt-5">
+              <CollapsibleTable
+                head={
+                  <tr>
+                    <Th>Client</Th>
+                    <Th className="text-right">Active</Th>
+                    <Th className="text-right">Projected margin</Th>
+                    <Th className="text-right">Negative</Th>
+                  </tr>
+                }
+                rows={data.placementMargin.byClient.map((r) => (
+                  <tr key={r.client} className="hover:bg-slate-50">
+                    <Td label="Client" className="font-medium text-slate-800">
+                      {r.client}
+                    </Td>
+                    <Td label="Active" className="text-right tabular-nums">
+                      {r.active}
+                    </Td>
+                    <Td
+                      label="Projected margin"
+                      className={`text-right tabular-nums ${r.margin < 0 ? "text-red-600" : ""}`}
+                    >
+                      {r.margin.toLocaleString(undefined, {
+                        style: "currency",
+                        currency: "USD",
+                        maximumFractionDigits: 0,
+                      })}
+                    </Td>
+                    <Td label="Negative" className="text-right tabular-nums">
+                      {r.negative > 0 ? (
+                        <span className="text-red-600">{r.negative}</span>
+                      ) : (
+                        "—"
+                      )}
+                    </Td>
+                  </tr>
+                ))}
+                emptyState={null}
+              />
+            </div>
+          </>
+        )}
+      </Card>
+
+      <Card
         title="Time to fill"
         description="Days from job creation to a JOINED submission. Median + p90 — robust to one stuck job dragging the mean. Dimensions with fewer than 3 fills show — (not enough data)."
       >

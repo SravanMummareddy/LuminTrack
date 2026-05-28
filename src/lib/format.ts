@@ -43,6 +43,10 @@ export function formatSubmissionDisplayId(s: { seq: number }): string {
   return `SUB-${String(s.seq).padStart(3, "0")}`;
 }
 
+export function formatPlacementDisplayId(p: { seq: number }): string {
+  return `PLC-${String(p.seq).padStart(3, "0")}`;
+}
+
 /** Formats a years-of-experience value (Prisma Decimal or number). */
 export function formatExperience(
   value: { toString(): string } | number | null | undefined,

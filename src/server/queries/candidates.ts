@@ -1,6 +1,8 @@
 import { prisma } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
+import type { UserRole } from "@/generated/prisma/enums";
 import { PAGE_SIZE, type DateRange, type SortDir, type SortState } from "@/lib/filters";
+import { canViewSensitiveDocs } from "@/lib/permissions";
 
 export type CandidateListFilters = {
   q?: string;
@@ -131,6 +133,73 @@ export function getCandidateDetail(id: string) {
       },
     },
   });
+}
+
+/**
+ * Documents for the candidate detail page. Sensitive categories
+ * (Identity, Work Auth) are filtered server-side based on viewer role.
+ * Sorted by expiry asc (expiring-first), nulls last; then by createdAt.
+ */
+export async function getCandidateDocuments(
+  candidateId: string,
+  viewer: { role: UserRole },
+) {
+  const where: Prisma.CandidateDocumentWhereInput = { candidateId };
+  if (!canViewSensitiveDocs(viewer)) {
+    where.category = { in: ["EDUCATION", "EMPLOYMENT"] };
+  }
+  const rows = await prisma.candidateDocument.findMany({
+    where,
+    orderBy: [{ expiresAt: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }],
+    include: { uploadedBy: { select: { fullName: true } } },
+  });
+  return rows;
+}
+
+export type CandidateDocumentRow = Awaited<
+  ReturnType<typeof getCandidateDocuments>
+>[number];
+
+/**
+ * Documents expiring within `withinDays` days (or already expired). Scoped
+ * by viewer role: non-admins can only see EDUCATION + EMPLOYMENT docs (the
+ * sensitive ones never surface here for them).
+ *
+ * Used by the Dashboard "Documents expiring" widget.
+ */
+export async function getExpiringDocuments(
+  viewer: { role: UserRole; id: string },
+  opts: { scope: "me" | "org"; withinDays?: number } = { scope: "org" },
+) {
+  const withinDays = opts.withinDays ?? 30;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() + withinDays);
+
+  const where: Prisma.CandidateDocumentWhereInput = {
+    expiresAt: { not: null, lte: cutoff },
+  };
+  if (!canViewSensitiveDocs(viewer)) {
+    where.category = { in: ["EDUCATION", "EMPLOYMENT"] };
+  }
+  if (opts.scope === "me") {
+    where.candidate = { createdById: viewer.id };
+  }
+
+  const rows = await prisma.candidateDocument.findMany({
+    where,
+    orderBy: { expiresAt: "asc" },
+    take: 50,
+    include: {
+      candidate: { select: { id: true, fullName: true } },
+    },
+  });
+  const now = Date.now();
+  return rows.map((d) => ({
+    ...d,
+    daysUntilExpiry: d.expiresAt
+      ? Math.ceil((d.expiresAt.getTime() - now) / 86_400_000)
+      : null,
+  }));
 }
 
 export function getCandidateForEdit(id: string) {

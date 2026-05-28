@@ -56,8 +56,8 @@ export function BarChartCard({
   const barsGrowRight = orientation === "horizontal";
 
   return (
-    <div style={{ width: "100%", height }}>
-      <ResponsiveContainer>
+    <div style={{ width: "100%", height, minWidth: 0 }}>
+      <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={data}
           layout={barsGrowRight ? "vertical" : "horizontal"}
@@ -110,8 +110,8 @@ export function DonutChartCard({
   const visible = data.filter((d) => d.value > 0);
 
   return (
-    <div style={{ width: "100%", height }}>
-      <ResponsiveContainer>
+    <div style={{ width: "100%", height, minWidth: 0 }}>
+      <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
             data={visible}

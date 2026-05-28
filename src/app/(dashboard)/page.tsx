@@ -11,7 +11,13 @@ import {
 } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
 import { getDashboardData, getMyWork } from "@/server/queries/dashboard";
-import { formatDate, formatSubmissionDisplayId } from "@/lib/format";
+import { getExpiringDocuments } from "@/server/queries/candidates";
+import { getRatesPendingPlacements } from "@/server/queries/placements";
+import {
+  formatDate,
+  formatPlacementDisplayId,
+  formatSubmissionDisplayId,
+} from "@/lib/format";
 import {
   listClients,
   listVendors,
@@ -159,18 +165,33 @@ export default async function DashboardPage({
   const effectiveFilters =
     scope === "me" && user ? { ...filters, recruiterId: user.id } : filters;
 
-  const [data, myWork, clients, vendors, sources, recruiters] = await Promise.all(
-    [
-      getDashboardData(effectiveFilters),
-      scope === "me" && user
-        ? getMyWork(user.id)
-        : Promise.resolve({ staleSubmissions: [], pendingRounds: [] }),
-      listClients(),
-      listVendors(),
-      listSisterCompanies(),
-      listActiveRecruiterOptions(),
-    ],
-  );
+  const [
+    data,
+    myWork,
+    expiringDocs,
+    ratesPendingPlacements,
+    clients,
+    vendors,
+    sources,
+    recruiters,
+  ] = await Promise.all([
+    getDashboardData(effectiveFilters),
+    scope === "me" && user
+      ? getMyWork(user.id)
+      : Promise.resolve({ staleSubmissions: [], pendingRounds: [] }),
+    user
+      ? getExpiringDocuments(user, { scope, withinDays: 30 })
+      : Promise.resolve([]),
+    // Rates-pending only matters to admins (they own the close-out). On the
+    // "me" scope or for recruiters this list is hidden — keeps the card tight.
+    user && user.role === "ADMIN" && scope === "org"
+      ? getRatesPendingPlacements({ limit: 5 })
+      : Promise.resolve([]),
+    listClients(),
+    listVendors(),
+    listSisterCompanies(),
+    listActiveRecruiterOptions(),
+  ]);
 
   const jobsByStatusChart = data.jobsByStatus.map((d) => ({
     label: JOB_STATUS_LABEL[d.status],
@@ -212,31 +233,63 @@ export default async function DashboardPage({
         <ScopeToggle scope={scope} sp={sp} />
       </div>
 
-      {scope === "me" && (myWork.staleSubmissions.length > 0 ||
-        myWork.pendingRounds.length > 0) && (
-        <Card title="My work — needs attention">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      {(scope === "me" &&
+        (myWork.staleSubmissions.length > 0 ||
+          myWork.pendingRounds.length > 0)) ||
+      expiringDocs.length > 0 ||
+      ratesPendingPlacements.length > 0 ? (
+        <Card title="Needs attention">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {scope === "me" && (
+              <>
+                <MyWorkList
+                  heading={`Submissions waiting >7 days (${myWork.staleSubmissions.length})`}
+                  empty="No stale submissions — nice."
+                  items={myWork.staleSubmissions.map((s) => ({
+                    href: `/submissions/${s.id}`,
+                    primary: `${s.candidate.fullName} → ${s.job.title}`,
+                    secondary: `${formatSubmissionDisplayId(s)} · submitted ${formatDate(s.submittedAt)}`,
+                  }))}
+                />
+                <MyWorkList
+                  heading={`Interview rounds awaiting result (${myWork.pendingRounds.length})`}
+                  empty="No rounds waiting on you."
+                  items={myWork.pendingRounds.map((r) => ({
+                    href: `/submissions/${r.submission.id}`,
+                    primary: `${r.submission.candidate.fullName} · R${r.roundOrder}`,
+                    secondary: `${r.submission.job.title} · ${r.scheduledAt ? formatDate(r.scheduledAt) : "no date"}`,
+                  }))}
+                />
+              </>
+            )}
             <MyWorkList
-              heading={`Submissions waiting >7 days (${myWork.staleSubmissions.length})`}
-              empty="No stale submissions — nice."
-              items={myWork.staleSubmissions.map((s) => ({
-                href: `/submissions/${s.id}`,
-                primary: `${s.candidate.fullName} → ${s.job.title}`,
-                secondary: `${formatSubmissionDisplayId(s)} · submitted ${formatDate(s.submittedAt)}`,
-              }))}
+              heading={`Documents expiring (30 days) (${expiringDocs.length})`}
+              empty="No documents expiring in the next 30 days."
+              items={expiringDocs.slice(0, 5).map((d) => {
+                const days = d.daysUntilExpiry ?? 0;
+                const status =
+                  days < 0 ? "Expired" : days < 1 ? "Expires today" : `${days}d left`;
+                return {
+                  href: `/candidates/${d.candidate.id}`,
+                  primary: `${d.candidate.fullName} · ${d.label}`,
+                  secondary: `${d.category.replace("_", " ").toLowerCase()} · ${status}`,
+                };
+              })}
             />
-            <MyWorkList
-              heading={`Interview rounds awaiting result (${myWork.pendingRounds.length})`}
-              empty="No rounds waiting on you."
-              items={myWork.pendingRounds.map((r) => ({
-                href: `/submissions/${r.submission.id}`,
-                primary: `${r.submission.candidate.fullName} · R${r.roundOrder}`,
-                secondary: `${r.submission.job.title} · ${r.scheduledAt ? formatDate(r.scheduledAt) : "no date"}`,
-              }))}
-            />
+            {ratesPendingPlacements.length > 0 && (
+              <MyWorkList
+                heading={`Placements with rates pending (${ratesPendingPlacements.length})`}
+                empty="No placements waiting on rates."
+                items={ratesPendingPlacements.map((p) => ({
+                  href: `/placements/${p.id}`,
+                  primary: `${p.candidate.fullName} · ${p.job.title}`,
+                  secondary: `${formatPlacementDisplayId(p)} · since ${formatDate(p.startDate)}`,
+                }))}
+              />
+            )}
           </div>
         </Card>
-      )}
+      ) : null}
 
       <AnalyticsFilters
         current={current}

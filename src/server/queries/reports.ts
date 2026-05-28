@@ -328,6 +328,56 @@ export async function getReportsData(
     (a, b) => b.projected - a.projected,
   );
 
+  // R4.2 — Active placements + projected margin. For each ACTIVE/EXTENDED
+  // placement, margin = (bill − pay) × HOURS_PER_DAY × remaining-days. Open-
+  // ended placements (no endDate) use the same 90-day fallback as the §F4
+  // client-revenue projection. Negative margins are flagged but counted.
+  const placementsForMargin = await prisma.placement.findMany({
+    where: { status: { in: ["ACTIVE", "EXTENDED"] } },
+    select: {
+      billRate: true,
+      payRate: true,
+      startDate: true,
+      endDate: true,
+      job: { select: { client: { select: { name: true } } } },
+    },
+  });
+  const placementNow = new Date();
+  type MarginRow = {
+    client: string;
+    active: number;
+    margin: number;
+    negative: number;
+  };
+  const marginMap = new Map<string, MarginRow>();
+  let placementMarginTotal = 0;
+  let placementMarginNegative = 0;
+  for (const p of placementsForMargin) {
+    const bill = Number(p.billRate);
+    const pay = Number(p.payRate);
+    const per = bill - pay;
+    const endRef = p.endDate ?? new Date(placementNow.getTime() + DEFAULT_DURATION_DAYS * 86_400_000);
+    const remainingDays = Math.max(
+      0,
+      Math.round((endRef.getTime() - placementNow.getTime()) / 86_400_000),
+    );
+    const projected = per * HOURS_PER_DAY * remainingDays;
+    placementMarginTotal += projected;
+    if (per < 0) placementMarginNegative += 1;
+    const key = p.job.client.name;
+    const entry = marginMap.get(key) ?? { client: key, active: 0, margin: 0, negative: 0 };
+    entry.active += 1;
+    entry.margin += projected;
+    if (per < 0) entry.negative += 1;
+    marginMap.set(key, entry);
+  }
+  const placementMargin = {
+    totalActive: placementsForMargin.length,
+    totalMargin: placementMarginTotal,
+    negativeCount: placementMarginNegative,
+    byClient: [...marginMap.values()].sort((a, b) => b.margin - a.margin),
+  };
+
   // §F2 — funnel velocity. Single pass over the audit table for every
   // status-transition row belonging to a submission already in the filtered
   // set. Milestone transitions (selected / rejected / offers / joined) are
@@ -501,6 +551,7 @@ export async function getReportsData(
     agingBuckets,
     recruiterAging: paginate(recruiterAging, pages.recruiterAging ?? 1),
     clientRevenue,
+    placementMargin,
     timeToFill,
     timeInStage,
   };

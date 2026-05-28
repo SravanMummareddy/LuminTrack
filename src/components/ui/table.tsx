@@ -1,3 +1,4 @@
+import { Children } from "react";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/cn";
 
@@ -49,7 +50,7 @@ export function Table({
           className,
         )}
       >
-        {children}
+        {Children.toArray(children)}
       </table>
     </div>
   );

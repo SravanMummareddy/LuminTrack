@@ -12,7 +12,82 @@ timeline, and recruiter performance. Replaces a manual Excel/Word process.
 "Remaining work" summary — start there before grepping the audit sections).
 **Future enhancements (large multi-session items):** [`ENHANCEMENTS.md`](./ENHANCEMENTS.md).
 
-## 🚧 Current work — iLabor requisition import (Phase 8b: browser extension is next)
+## 🚧 Current work — Round 4 pre-demo (Documents → Placements → Export)
+
+Admin handed over a new pre-demo requirements bundle on 2026-05-28.
+The full plan + UI/UX shape + code-review fixes live in
+`~/.claude/plans/expressive-whistling-hedgehog.md`.
+
+- **R4.1 — Candidate documents library: SHIPPED 2026-05-28.**
+  Per-candidate `CandidateDocument` model (4 categories: Identity,
+  Work Auth, Education, Employment; the first two gated to admin via
+  `src/lib/permissions.ts`), Google-Drive-link storage matching
+  `CandidateResume`, optional issued / expiry dates, expiry color
+  pills (slate / amber / red) and a Deel-style "expiring within 30
+  days" banner. Mounted on `/candidates/[id]` between résumés and
+  submissions; Dashboard "Needs attention" card gained a third sub-
+  section "Documents expiring (30 days)" scoped by `?scope=me|org`.
+  Audit log: `CANDIDATE_DOCUMENT_ADDED / UPDATED / REMOVED` (migration
+  `20260528183656_r4_1_candidate_documents`).
+- **R4.2 — Placements tab: SHIPPED 2026-05-28.**
+  Auto-creates a `Placement` row when a submission status flips to
+  JOINED (`PlacementStatus`: ACTIVE / EXTENDED / ENDED /
+  TERMINATED), with `billRate` / `payRate` `Decimal(12, 2)`,
+  extensions via `PlacementExtension` rows (overlap-blocked by Zod,
+  edit-only), end-of-placement card with reason + optional
+  replacement-submission picker (named relation
+  `"PlacementReplacement"`), and a candidate-lifecycle cascade:
+  Candidate.status auto-flips to PLACED on JOINED and back to
+  AVAILABLE when no other ACTIVE/EXTENDED placements remain (logged
+  via `CANDIDATE_STATUS_CHANGED`). Reverting a JOINED submission
+  marks the placement TERMINATED with a system endNote rather than
+  hard-deleting (no-hard-delete project norm). Concurrent-JOINED
+  race protected by `submissionId @unique` + a P2002 no-op catch.
+  Rate edits gated to admin OR submission's recruiter-of-record
+  (`src/server/actions/placements.ts`); list page masks rates for
+  ineligible viewers. Lifecycle helpers extracted into
+  `src/server/placement-lifecycle.ts` and reused by both
+  submissions.ts and placements.ts. New `/placements` list with
+  sticky summary strip (active count · weekly margin · ending in
+  14d), default ACTIVE filter, ColumnsMenu (Recruiter hidden by
+  default), and `PLC-001` display IDs. Detail page at
+  `/placements/[id]` has a summary grid, details card, extension
+  history mini-cards + inline Extend popover, and an
+  end-of-placement card that only renders when the placement is no
+  longer ACTIVE. Reports gained "Active placements + projected
+  margin" (Σ (bill − pay) × 8h × remaining-days, 90-day fallback
+  for open-ended, amber when < 15%, red when negative). Dashboard
+  "Needs attention" gets a "Placements with rates pending"
+  sub-list (admin + org scope only). Candidate detail shows a
+  "Currently placed" pinned card while ACTIVE and a "Placement
+  history" sub-table for past ones. Backfill via
+  `npx tsx prisma/backfill-placements.ts` (idempotent). Migrations:
+  `20260528193426_placements_and_extensions` (tables + enums) +
+  `20260528193550_placement_audit_actions` (`PLACEMENT_*` and
+  `CANDIDATE_STATUS_CHANGED` enum value adds — split because
+  Postgres can't add enum values and use them in one transactional
+  migration).
+- **R4.3 — Manual data export: SHIPPED 2026-05-28.**
+  Two Route Handlers under `src/app/api/export/`: `full/route.ts`
+  returns a restore-grade JSON dump of every table (User rows have
+  `passwordHash` stripped); `excel/route.ts` builds a multi-sheet
+  `.xlsx` via `exceljs` with two modes — `business` (no PII, no
+  rates, no Identity/Work Auth documents, no résumé Drive links,
+  no activity log) and `full` (admin-only — everything). Shared
+  builders live in `src/server/exporters/` (`build-backup-json.ts`,
+  `build-business-excel.ts`) so the deferred R4.4 cron can reuse
+  them. Admin-only `/settings/export` page has a segmented mode
+  toggle, grouped entity checkboxes (Operational / Reference /
+  Sensitive — Sensitive group hidden in business mode), live
+  pre-flight summary driven by `getBackupPreflight()`, two
+  download buttons (Excel primary, JSON full-mode only), and an
+  Export history table reading the last 20 `DATA_EXPORTED` audit
+  rows. Each export logs `DATA_EXPORTED` with a `mode=…;format=…;
+  entities=…;bytes=…` note. Migration
+  `20260528200000_data_exported_action` adds the enum value.
+- **R4.4 — Scheduled Drive backup: deferred to post-demo.**
+
+## iLabor requisition import (Phase 8b: browser extension is next)
 
 Active build: importing Randstad iLabor requisitions into LuminTrack via a
 browser-extension → JSON-file → admin-upload pipeline, plus related Jobs-page

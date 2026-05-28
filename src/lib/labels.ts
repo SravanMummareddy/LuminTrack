@@ -6,6 +6,8 @@ import type {
   WorkMode,
   JobPriority,
   CandidateStatus,
+  PlacementStatus,
+  PlacementEndReason,
 } from "@/generated/prisma/enums";
 
 /** Display order for job statuses across filters, forms, and the pipeline. */
@@ -292,3 +294,42 @@ export const STATUS_CHANGE_REASON_LABEL: Record<StatusChangeReason, string> = {
   AWAITING_DECISION: "Awaiting decision",
   OTHER: "Other",
 };
+
+// R4.2 — placement lifecycle labels.
+export const PLACEMENT_STATUSES: PlacementStatus[] = [
+  "ACTIVE",
+  "EXTENDED",
+  "ENDED",
+  "TERMINATED",
+];
+export const PLACEMENT_STATUS_LABEL: Record<PlacementStatus, string> = {
+  ACTIVE: "Active",
+  EXTENDED: "Extended",
+  ENDED: "Ended",
+  TERMINATED: "Terminated",
+};
+export const PLACEMENT_STATUS_TONE: Record<PlacementStatus, BadgeTone> = {
+  ACTIVE: "green",
+  EXTENDED: "blue",
+  ENDED: "slate",
+  TERMINATED: "red",
+};
+
+export const PLACEMENT_END_REASONS: PlacementEndReason[] = [
+  "COMPLETED",
+  "TERMINATED_BY_CLIENT",
+  "RESIGNED",
+  "PERFORMANCE",
+  "OTHER",
+];
+export const PLACEMENT_END_REASON_LABEL: Record<PlacementEndReason, string> = {
+  COMPLETED: "Completed",
+  TERMINATED_BY_CLIENT: "Terminated by client",
+  RESIGNED: "Resigned",
+  PERFORMANCE: "Performance",
+  OTHER: "Other",
+};
+
+/** Industry-typical floor for contract-staffing margin. Below this, the Margin %
+ * column renders amber on the Placements list. */
+export const MARGIN_AMBER_THRESHOLD_PCT = 15;

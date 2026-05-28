@@ -216,6 +216,36 @@ same pass.
 
 ---
 
+## Granular IAM (per-candidate ACLs, finance/lead-recruiter roles) · **M**
+
+**Status:** queued. Seam already in place (`src/lib/permissions.ts`).
+
+**What it does**
+
+Extends the binary ADMIN/RECRUITER policy. Three additive moves:
+
+- New roles — `LEAD_RECRUITER`, `FINANCE`, `READ_ONLY`. Each gets a
+  declarative capability list (manage sensitive docs, see rates, see
+  audit, etc.).
+- Per-candidate ACLs — an assigned recruiter can see their assigned
+  candidate's sensitive documents (Identity, Work Auth) even without
+  ADMIN. Lives on a new `CandidateGrant(userId, candidateId, scope)`
+  table.
+- Per-document override — a doc can be flagged `visibleToAll: true`
+  to override its category's sensitivity, or `adminOnly: true` to
+  raise it above the category default.
+
+**Why now (low priority but plumbed):** Round 4.1 added the
+`canViewSensitiveDocs` / `canManageSensitiveDocs` / `isSensitiveCategory`
+helpers as the single point of policy. Extending them is now a
+one-file change; without the seam, the extension would have touched
+every server action and page.
+
+**Sizing:** ~3-5 days. Largely a UI + migration task; the core helper
+shape doesn't change.
+
+---
+
 ## Deferred indefinitely (not in any milestone)
 
 These were explicitly declined on 2026-05-26:

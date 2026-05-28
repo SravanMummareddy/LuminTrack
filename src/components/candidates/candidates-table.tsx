@@ -221,7 +221,7 @@ export function CandidatesTable({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-slate-500" suppressHydrationWarning>
           {rows.length === 0
             ? null
             : `Showing ${visibleCols.length} of ${COLUMNS.length} columns`}

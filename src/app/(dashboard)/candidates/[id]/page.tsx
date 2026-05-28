@@ -7,8 +7,18 @@ import { Table, Th, Td } from "@/components/ui/table";
 import { ActivityTimeline } from "@/components/timeline/activity-timeline";
 import { NotesSection } from "@/components/notes/notes-section";
 import { ResumeSection } from "@/components/candidates/resume-section";
-import { getCandidateDetail } from "@/server/queries/candidates";
+import { DocumentsManager } from "@/components/candidates/documents-manager";
+import {
+  getCandidateDetail,
+  getCandidateDocuments,
+} from "@/server/queries/candidates";
+import { requireUser } from "@/lib/session";
+import { canManageSensitiveDocs } from "@/lib/permissions";
 import { getCandidateSubmissions } from "@/server/queries/submissions";
+import {
+  getActivePlacementForCandidate,
+  getCandidatePlacements,
+} from "@/server/queries/placements";
 import { getCandidateInterviewsGroupedByJob } from "@/server/queries/interviews";
 import { CandidateInterviewsGrouped } from "@/components/candidates/candidate-interviews-grouped";
 import { getTimelineFor } from "@/server/queries/timeline";
@@ -20,6 +30,8 @@ import {
   SUBMISSION_STATUS_TONE,
   CANDIDATE_STATUS_LABEL,
   CANDIDATE_STATUS_TONE,
+  PLACEMENT_STATUS_LABEL,
+  PLACEMENT_STATUS_TONE,
   jobSourceLabel,
 } from "@/lib/labels";
 import { MarkContactedButton } from "@/components/candidates/mark-contacted-button";
@@ -27,6 +39,7 @@ import {
   formatDate,
   formatExperience,
   formatCandidateDisplayId,
+  formatPlacementDisplayId,
   formatSubmissionDisplayId,
 } from "@/lib/format";
 import { RecentlyViewedTracker } from "@/components/layout/recently-viewed";
@@ -78,6 +91,10 @@ export default async function CandidateDetailPage({
   const intsPage = parsePage(
     Array.isArray(sp.ints) ? sp.ints[0] : sp.ints,
   );
+  const placementsPage = parsePage(
+    Array.isArray(sp.placements) ? sp.placements[0] : sp.placements,
+  );
+  const user = await requireUser();
   const [
     candidate,
     {
@@ -92,12 +109,22 @@ export default async function CandidateDetailPage({
     },
     timeline,
     notes,
+    documents,
+    activePlacement,
+    {
+      rows: placements,
+      total: placementsTotal,
+      page: placementsPageNum,
+    },
   ] = await Promise.all([
     getCandidateDetail(id),
     getCandidateSubmissions(id, { page: subsPage }),
     getCandidateInterviewsGroupedByJob(id, { page: intsPage }),
     getTimelineFor("CANDIDATE", id),
     getNotesFor("CANDIDATE", id),
+    getCandidateDocuments(id, user),
+    getActivePlacementForCandidate(id),
+    getCandidatePlacements(id, { page: placementsPage }),
   ]);
   if (!candidate) notFound();
   const submissionsTotalPages = Math.max(
@@ -107,6 +134,10 @@ export default async function CandidateDetailPage({
   const interviewsTotalPages = Math.max(
     1,
     Math.ceil(interviewsTotal / PAGE_SIZE),
+  );
+  const placementsTotalPages = Math.max(
+    1,
+    Math.ceil(placementsTotal / PAGE_SIZE),
   );
 
   return (
@@ -151,6 +182,36 @@ export default async function CandidateDetailPage({
           Edit candidate
         </LinkButton>
       </div>
+
+      {activePlacement && (
+        <section className="rounded-lg border border-indigo-200 bg-indigo-50 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-indigo-700">
+                Currently placed
+              </p>
+              <p className="mt-1 text-sm text-slate-800">
+                <Link
+                  href={`/placements/${activePlacement.id}`}
+                  className="font-medium text-indigo-700 hover:underline"
+                >
+                  {formatPlacementDisplayId(activePlacement)}
+                </Link>{" "}
+                — {activePlacement.job.title} · {activePlacement.job.client.name}
+              </p>
+              <p className="mt-0.5 text-xs text-slate-600">
+                Since {formatDate(activePlacement.startDate)}
+                {activePlacement.endDate
+                  ? ` · through ${formatDate(activePlacement.endDate)}`
+                  : " · open-ended"}
+              </p>
+            </div>
+            <Badge tone={PLACEMENT_STATUS_TONE[activePlacement.status]}>
+              {PLACEMENT_STATUS_LABEL[activePlacement.status]}
+            </Badge>
+          </div>
+        </section>
+      )}
 
       <Card title="Candidate profile">
         <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -274,6 +335,21 @@ export default async function CandidateDetailPage({
         }))}
       />
 
+      <DocumentsManager
+        candidateId={candidate.id}
+        canManageSensitive={canManageSensitiveDocs(user)}
+        documents={documents.map((d) => ({
+          id: d.id,
+          category: d.category,
+          label: d.label,
+          driveLink: d.driveLink,
+          issuedAt: d.issuedAt,
+          expiresAt: d.expiresAt,
+          notes: d.notes,
+          uploadedBy: d.uploadedBy,
+        }))}
+      />
+
       <Card title={`Job submissions (${submissionsTotal})`}>
         {submissionsTotal === 0 ? (
           <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
@@ -336,6 +412,61 @@ export default async function CandidateDetailPage({
           </div>
         )}
       </Card>
+
+      {placementsTotal > 0 && (
+        <Card title={`Placement history (${placementsTotal})`}>
+          <Table>
+            <thead className="border-b border-slate-200 bg-slate-50">
+              <tr>
+                <Th>ID</Th>
+                <Th>Job</Th>
+                <Th>Client</Th>
+                <Th>Start</Th>
+                <Th>End</Th>
+                <Th>Status</Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {placements.map((p) => (
+                <tr key={p.id} className="hover:bg-slate-50">
+                  <Td label="ID" secondary className="font-mono text-xs">
+                    <Link
+                      href={`/placements/${p.id}`}
+                      className="text-indigo-600 hover:underline"
+                    >
+                      {formatPlacementDisplayId(p)}
+                    </Link>
+                  </Td>
+                  <Td label="Job">{p.job.title}</Td>
+                  <Td label="Client">{p.job.client.name}</Td>
+                  <Td label="Start" className="whitespace-nowrap">
+                    {formatDate(p.startDate)}
+                  </Td>
+                  <Td label="End" className="whitespace-nowrap">
+                    {p.endDate ? formatDate(p.endDate) : "—"}
+                  </Td>
+                  <Td label="Status">
+                    <Badge tone={PLACEMENT_STATUS_TONE[p.status]}>
+                      {PLACEMENT_STATUS_LABEL[p.status]}
+                    </Badge>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+          {placementsTotal > PAGE_SIZE && (
+            <div className="mt-3">
+              <Pagination
+                page={placementsPageNum}
+                totalPages={placementsTotalPages}
+                total={placementsTotal}
+                paramKey="placements"
+                pageSize={PAGE_SIZE}
+              />
+            </div>
+          )}
+        </Card>
+      )}
 
       <Card title={`Interview history (${interviewsTotal})`}>
         {interviewsTotal === 0 ? (

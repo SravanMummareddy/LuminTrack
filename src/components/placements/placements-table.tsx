@@ -7,12 +7,15 @@ import { MobileSort } from "@/components/ui/mobile-sort";
 import { Badge } from "@/components/ui/badge";
 import { ColumnsMenu } from "@/components/ui/columns-menu";
 import {
-  SUBMISSION_STATUS_LABEL,
-  SUBMISSION_STATUS_TONE,
+  PLACEMENT_STATUS_LABEL,
+  PLACEMENT_STATUS_TONE,
+  MARGIN_AMBER_THRESHOLD_PCT,
 } from "@/lib/labels";
-import { formatDate, formatSubmissionDisplayId } from "@/lib/format";
+import { formatDate, formatPlacementDisplayId } from "@/lib/format";
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
-import type { SubmissionListRow } from "@/server/queries/submissions";
+import type { PlacementListRow } from "@/server/queries/placements";
+
+type ViewerContext = { userId: string; userRole: string };
 
 type Column = {
   key: string;
@@ -21,8 +24,16 @@ type Column = {
   sortDefaultDir?: "asc" | "desc";
   align?: "right";
   defaultVisible: boolean;
-  render: (row: SubmissionListRow, rowNumber: number) => React.ReactNode;
+  render: (row: PlacementListRow, rowNumber: number, ctx: ViewerContext) => React.ReactNode;
 };
+
+function canSeeRates(row: PlacementListRow, ctx: ViewerContext): boolean {
+  return ctx.userRole === "ADMIN" || row.submission.submittedBy.id === ctx.userId;
+}
+
+function formatMoney(value: number): string {
+  return `$${value.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+}
 
 const COLUMNS: Column[] = [
   {
@@ -40,9 +51,9 @@ const COLUMNS: Column[] = [
     key: "id",
     label: "ID",
     defaultVisible: true,
-    render: (s) => (
+    render: (p) => (
       <Td label="ID" secondary className="whitespace-nowrap font-mono text-xs">
-        {formatSubmissionDisplayId(s)}
+        {formatPlacementDisplayId(p)}
       </Td>
     ),
   },
@@ -51,13 +62,13 @@ const COLUMNS: Column[] = [
     label: "Candidate",
     sortKey: "candidate",
     defaultVisible: true,
-    render: (s) => (
+    render: (p) => (
       <Td heading>
         <Link
-          href={`/submissions/${s.id}`}
+          href={`/placements/${p.id}`}
           className={`${cardLink} font-medium text-indigo-600 hover:underline`}
         >
-          {s.candidate.fullName}
+          {p.candidate.fullName}
         </Link>
       </Td>
     ),
@@ -67,13 +78,13 @@ const COLUMNS: Column[] = [
     label: "Job",
     sortKey: "job",
     defaultVisible: true,
-    render: (s) => (
+    render: (p) => (
       <Td label="Job">
         <Link
-          href={`/jobs/${s.job.id}`}
+          href={`/jobs/${p.job.id}`}
           className={`${cardLinkRaise} text-slate-700 hover:underline`}
         >
-          {s.job.title}
+          {p.job.title}
         </Link>
       </Td>
     ),
@@ -83,87 +94,135 @@ const COLUMNS: Column[] = [
     label: "Client",
     sortKey: "client",
     defaultVisible: true,
-    render: (s) => (
+    render: (p) => (
       <Td label="Client" secondary>
-        {s.job.client.name}
+        {p.job.client.name}
       </Td>
     ),
   },
   {
-    key: "vendor",
-    label: "Vendor",
-    sortKey: "vendor",
+    key: "start",
+    label: "Start",
+    sortKey: "start",
+    sortDefaultDir: "desc",
     defaultVisible: true,
-    render: (s) => (
-      <Td label="Vendor" secondary>
-        {s.job.vendor.name}
+    render: (p) => (
+      <Td label="Start" secondary className="whitespace-nowrap">
+        {formatDate(p.startDate)}
       </Td>
     ),
   },
   {
-    key: "recruiter",
-    label: "Submitted by",
-    sortKey: "recruiter",
+    key: "end",
+    label: "End",
+    sortKey: "end",
+    sortDefaultDir: "asc",
     defaultVisible: true,
-    render: (s) => (
-      <Td label="Submitted by" secondary>
-        {s.submittedBy.fullName}
+    render: (p) => (
+      <Td label="End" secondary className="whitespace-nowrap">
+        {p.endDate ? formatDate(p.endDate) : "—"}
       </Td>
     ),
+  },
+  {
+    key: "bill",
+    label: "Bill",
+    align: "right",
+    defaultVisible: true,
+    render: (p, _n, ctx) => (
+      <Td label="Bill" className="text-right tabular-nums">
+        {canSeeRates(p, ctx) ? formatMoney(p.billRate) : "—"}
+      </Td>
+    ),
+  },
+  {
+    key: "pay",
+    label: "Pay",
+    align: "right",
+    defaultVisible: true,
+    render: (p, _n, ctx) => (
+      <Td label="Pay" className="text-right tabular-nums">
+        {canSeeRates(p, ctx) ? formatMoney(p.payRate) : "—"}
+      </Td>
+    ),
+  },
+  {
+    key: "margin",
+    label: "Margin",
+    align: "right",
+    defaultVisible: true,
+    render: (p, _n, ctx) => {
+      if (!canSeeRates(p, ctx))
+        return (
+          <Td label="Margin" className="text-right tabular-nums">
+            —
+          </Td>
+        );
+      // Rates-pending placements (0/0) get a clear flag instead of $0 margin.
+      const ratesPending = p.billRate === 0 && p.payRate === 0;
+      if (ratesPending)
+        return (
+          <Td label="Margin" className="text-right">
+            <span className="text-xs text-amber-700">⚠ pending</span>
+          </Td>
+        );
+      const pct = p.marginPct ?? 0;
+      const isAmber = pct < MARGIN_AMBER_THRESHOLD_PCT;
+      const isNeg = p.margin < 0;
+      return (
+        <Td label="Margin" className="text-right tabular-nums">
+          <span className={isNeg ? "text-red-600" : isAmber ? "text-amber-700" : ""}>
+            {formatMoney(p.margin)}
+            {p.marginPct !== null && (
+              <span className="ml-1 text-xs text-slate-500">
+                ({p.marginPct.toFixed(0)}%)
+              </span>
+            )}
+          </span>
+        </Td>
+      );
+    },
   },
   {
     key: "status",
     label: "Status",
     sortKey: "status",
     defaultVisible: true,
-    render: (s) => (
+    render: (p) => (
       <Td label="Status">
-        <Badge tone={SUBMISSION_STATUS_TONE[s.status]}>
-          {SUBMISSION_STATUS_LABEL[s.status]}
+        <Badge tone={PLACEMENT_STATUS_TONE[p.status]}>
+          {PLACEMENT_STATUS_LABEL[p.status]}
         </Badge>
       </Td>
     ),
   },
   {
-    key: "rounds",
-    label: "Rounds",
-    sortKey: "rounds",
-    sortDefaultDir: "desc",
-    align: "right",
-    defaultVisible: true,
-    render: (s) => (
-      <Td label="Rounds" className="text-right tabular-nums">
-        {s._count.interviewRounds}
-      </Td>
-    ),
-  },
-  {
-    key: "submitted",
-    label: "Submitted",
-    sortKey: "submitted",
-    sortDefaultDir: "desc",
-    defaultVisible: true,
-    render: (s) => (
-      <Td label="Submitted" secondary className="whitespace-nowrap">
-        {formatDate(s.submittedAt)}
+    key: "recruiter",
+    label: "Recruiter",
+    defaultVisible: false,
+    render: (p) => (
+      <Td label="Recruiter" secondary>
+        {p.submission.submittedBy.fullName}
       </Td>
     ),
   },
 ];
 
-const STORAGE_KEY = "lumintrack.submissions.columns";
+const STORAGE_KEY = "lumintrack.placements.columns";
 const STORAGE_VERSION = 1;
 const DEFAULTS: ColumnPrefs = {
   visible: COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key),
   order: COLUMNS.map((c) => c.key),
 };
 
-export function SubmissionsTable({
+export function PlacementsTable({
   rows,
   pageOffset = 0,
+  viewer,
 }: {
-  rows: SubmissionListRow[];
+  rows: PlacementListRow[];
   pageOffset?: number;
+  viewer: ViewerContext;
 }) {
   const [prefs, setPrefs] = useColumnPrefs(
     STORAGE_KEY,
@@ -235,6 +294,7 @@ export function SubmissionsTable({
                   column={c}
                   row={row}
                   rowNumber={pageOffset + idx + 1}
+                  viewer={viewer}
                 />
               ))}
             </tr>
@@ -249,11 +309,12 @@ function RenderCell({
   column,
   row,
   rowNumber,
+  viewer,
 }: {
   column: Column;
-  row: SubmissionListRow;
+  row: PlacementListRow;
   rowNumber: number;
+  viewer: ViewerContext;
 }) {
-  return <>{column.render(row, rowNumber)}</>;
+  return <>{column.render(row, rowNumber, viewer)}</>;
 }
-

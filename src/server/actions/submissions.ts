@@ -17,6 +17,10 @@ import {
 import { toFieldErrors } from "@/lib/validation/common";
 import { SUBMISSION_STATUS_LABEL } from "@/lib/labels";
 import type { FormState } from "@/lib/form-state";
+import {
+  ensurePlacementOnJoined,
+  terminatePlacementOnRevert,
+} from "@/server/placement-lifecycle";
 
 /**
  * Maps a `(candidateId, jobId)` pair to two signed 32-bit integers, suitable
@@ -361,14 +365,16 @@ export async function changeSubmissionStatus(
   const submission = await prisma.submission.findUnique({
     where: { id: d.id },
     include: {
-      candidate: { select: { fullName: true } },
+      candidate: { select: { id: true, fullName: true, status: true } },
       job: { select: { title: true } },
+      placement: { select: { id: true, status: true } },
     },
   });
   if (!submission) return { error: "This submission no longer exists." };
   if (submission.status === d.status)
     return { error: "Status is already set to that value." };
   const next = d.status as SubmissionStatus;
+  const prev = submission.status;
 
   // The reason category only applies to the Rejected / On Hold outcomes.
   const reason =
@@ -420,6 +426,37 @@ export async function changeSubmissionStatus(
       performedById: user.id,
       submissionId: d.id,
     });
+
+    // R4.2 — placement lifecycle hooks. Same transaction as the status change
+    // so the placement state and the audit row commit together (audit invariant).
+    if (next === "JOINED" && prev !== "JOINED") {
+      await ensurePlacementOnJoined(tx, {
+        submissionId: d.id,
+        candidateId: submission.candidateId,
+        jobId: submission.jobId,
+        candidateRate: submission.candidateRate,
+        candidateFullName: submission.candidate.fullName,
+        jobTitle: submission.job.title,
+        candidateStatus: submission.candidate.status,
+        performedById: user.id,
+        eventAt: d.actualJoinDate ?? d.eventAt ?? null,
+      });
+    } else if (
+      prev === "JOINED" &&
+      next !== "JOINED" &&
+      submission.placement &&
+      (submission.placement.status === "ACTIVE" ||
+        submission.placement.status === "EXTENDED")
+    ) {
+      await terminatePlacementOnRevert(tx, {
+        placementId: submission.placement.id,
+        candidateId: submission.candidateId,
+        candidateFullName: submission.candidate.fullName,
+        candidateStatus: submission.candidate.status,
+        newSubmissionStatus: SUBMISSION_STATUS_LABEL[next],
+        performedById: user.id,
+      });
+    }
   });
 
   revalidatePath("/submissions");
