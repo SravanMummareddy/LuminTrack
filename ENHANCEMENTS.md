@@ -246,6 +246,74 @@ shape doesn't change.
 
 ---
 
+## iLabor re-import — medium/low follow-ups (2026-05-28)
+
+The high-priority silent-corruption guards shipped on `main` (see
+CLAUDE.md commits `962e861..03fede5`). What remains from the
+deep-dive sweep:
+
+### Rate-unit assumption on `c2crate`
+
+Today we treat the iLabor `c2crate` field as $/hr and use it for
+margin math (`vendorRate × 8h × duration`). If iLabor ever sends
+a per-day rate, a per-week rate, or a non-USD value, we'd silently
+overwrite the rate and break the projections. No signal anywhere.
+
+**Action:** confirm with the product owner against iLabor's UI
+that `c2crate` is always $/hr USD. If confirmed, drop a one-line
+comment in `src/lib/validation/ilabor-import.ts` noting the
+assumption. If ever needs to vary, add a per-vendor unit
+override column.
+
+**Sizing:** 5 minutes to ask, 5 minutes to comment. Skip until a
+non-USD vendor onboards.
+
+### Title-cleanup noise on the drift warning
+
+Spelling fixes ("Dev" → "Developer", "Sr." → "Senior") will trip
+the title-drift warning every time, training operators to ignore
+it. If product confirms this happens often, mitigate by:
+
+- Edit-distance threshold — ignore drift when the Levenshtein
+  distance is < 5 characters (or < 20% of length).
+- Or: stop showing the badge but keep the audit-log diff (which
+  is the post-hoc safety net anyway).
+
+**Sizing:** ~2 hours including a `levenshtein` helper.
+
+### `questionStatus` mid-flight change
+
+A recruiter submits to a req under "no screener". The next day
+iLabor attaches a screener (`questionStatus` flips from 0 to 3).
+The existing submission has no answers, so iLabor will likely
+reject it downstream — but LuminTrack gives the recruiter no
+heads-up that the requirements changed.
+
+**Action:** when a re-import flips `ilaborScreenerCode` from
+0/null to a positive value for a job with active submissions,
+emit a per-submission audit row (or surface a banner on the
+submission detail) telling the recruiter to attach screener
+answers.
+
+**Sizing:** ~half a day.
+
+### Race during re-import
+
+A recruiter creating a submission at the exact moment an admin
+re-imports — and the job's vendor/client gets re-linked in that
+window — could observe a flicker (form shows old vendor name
+while DB has new vendorId). Tx isolation makes this benign
+(no data corruption), but visually confusing.
+
+**Mitigation:** none needed at current team size. If/when
+import frequency grows, gate `createSubmission` on the same
+pg advisory lock the import action uses for the job in
+question.
+
+**Sizing:** ~2 hours.
+
+---
+
 ## Round 4 follow-ups (deferred post-demo, 2026-05-28)
 
 Surfaced during the R4 scenario sweep. The two surgical fixes that

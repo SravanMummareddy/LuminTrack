@@ -86,6 +86,93 @@ The full plan + UI/UX shape + code-review fixes live in
   entities=…;bytes=…` note. Migration
   `20260528200000_data_exported_action` adds the enum value.
 - **R4.4 — Scheduled Drive backup: deferred to post-demo.**
+- **Pre-demo polish round (2026-05-28, commits `ae4847f..03fede5`):**
+  surgical fixes surfaced during a scenario sweep + data-driven
+  re-import deep dive.
+  - **Placement reactivation on re-JOINED** (`ae4847f`):
+    `ensurePlacementOnJoined` now finds-then-reactivates a
+    TERMINATED/ENDED placement before falling through to create,
+    logging `PLACEMENT_UPDATED note=reactivated`. Closes the
+    inconsistent-state path where reverting JOINED → re-applying
+    JOINED left the candidate flagged PLACED with zero ACTIVE
+    placements.
+  - **Candidate-status guard** (`ae4847f`): `updateCandidate`
+    blocks manual status edits away from PLACED while an ACTIVE/
+    EXTENDED placement exists. The lifecycle helper owns PLACED ↔
+    AVAILABLE transitions.
+  - **Replaces-pill on placement detail** (`018fc6e`):
+    `getPredecessorPlacement(submissionId)` finds the prior
+    placement that picked this submission as a replacement; the
+    detail page header shows "Replaces PLC-007 (Jane Doe)".
+  - **Expiring-docs banner on placement detail** (`018fc6e`):
+    `getExpiringDocumentsForCandidate` surfaces a candidate's
+    documents expiring within 30 days as an amber banner on the
+    placement page while ACTIVE — compliance signal where it
+    matters, not just hidden on the candidate page.
+  - **Restore-from-backup script** (`a878f00`):
+    `prisma/restore-from-backup.ts`. Dry-run by default; `--confirm`
+    wipes + re-inserts every table from a backup JSON in FK-safe
+    order. User rows get a placeholder password hash and
+    `isActive=false` so login is blocked until reset. Makes the
+    "restore-grade" claim on the JSON dump actually true.
+  - **Streaming Excel export** (`a878f00`, `ef95d13`):
+    `buildBusinessExcel` → `streamBusinessExcel` (returns a Node
+    `Readable` via `ExcelJS.stream.xlsx.WorkbookWriter`); route
+    handler returns `Readable.toWeb(stream)` so large workbooks
+    no longer hold the whole file in memory. `buildBusinessExcelBuffer`
+    kept for the deferred R4.4 cron. Worksheet `views` must go in
+    the `addWorksheet` options bag — the streaming writer rejects
+    `ws.views = ...` as read-only.
+  - **Reports `<thead>` fix** (`3425b90`): `CollapsibleTable` now
+    wraps the `head` row in `<thead>`; bare `<tr>` inside `<table>`
+    was tripping React's hydration warning on `/reports`.
+- **iLabor re-import hardening (2026-05-28, commits
+  `a1aa862..03fede5`):** data-driven gap closure on what else
+  could go wrong on a re-import. See `ENHANCEMENTS.md` "Round 4
+  follow-ups" for the remaining medium/low items.
+  - **3 iLabor signal fields captured** (`a1aa862`, migration
+    `20260528210000_ilabor_signal_fields`): nullable `Job.submitLimit`
+    (always 30 in sample), `Job.ilaborSubmitOpen` (0 = iLabor closed
+    for subs, 1 = accepting; 52/306 rows = 0), `Job.ilaborScreenerCode`
+    (>0 means screener attached; 33/306 rows = 3). Job detail iLabor
+    card now renders Accepting / "Submissions closed at iLabor" pill
+    next to the iLabor subs count, Submission cap row, and a
+    "Screening required" amber badge. "Department" row hidden when
+    the value is "Default" (all 306 sample rows).
+  - **Soft submission gates** (`a1aa862`): `createSubmission`
+    gained two `needsConfirm` paths reusing the duplicate-override
+    pattern — `ilabor_closed` (when `ilaborSubmitOpen === 0`) and
+    `ilabor_cap` (when `max(externalActiveCount, local active
+    count) >= submitLimit`). Override field is `ilaborOverrideReason`;
+    the `CANDIDATE_SUBMITTED` audit note composes from up to two
+    triggers, joined by "; ".
+  - **Preview drift detection** (`962e861`): `RowDigest` gained
+    `titleDrifted` / `customerDrifted` / `existing*` fields; the
+    preview shows red "title changed" / "client changed" badges on
+    updated rows and a top-of-preview red banner with the drifted
+    count. The per-job `JOB_UPDATED` audit row that already fired
+    for client/vendor relinks now also fires on title change, with
+    a unified diff in the description.
+  - **4 re-import guards** (`03fede5`):
+    1. **Intra-batch Req ID dedup** — `validateRows` skips duplicate
+       `requisitionId`s within a single file and emits a per-row
+       "Duplicate requisitionId" error so the dropped row appears
+       in the skipped list.
+    2. **Effective active count** — job detail card shows
+       `max(externalActiveCount, local non-terminal sub count)`
+       instead of iLabor's stale snapshot; amber inline note shows
+       the iLabor value when they diverge.
+    3. **Disappeared-from-iLabor signal** — new `listStaleIlaborJobs`
+       query surfaces portal-linked jobs still OPEN/ON_HOLD whose
+       `lastImportedAt` predates the most recent
+       `REQUISITIONS_IMPORTED` audit row; `/jobs/imports` renders
+       them as an amber "Stale iLabor jobs" section.
+    4. **Case-insensitive Vendor/Client match** — `findFirst({mode:
+       "insensitive"})` → create-if-missing replaces the exact-name
+       upsert. "RANDSTAD" and "Randstad" now reuse the same row;
+       previously the rename created orphan rows. Preview lists
+       net-new vendor/client names so a true rename ("RANDSTAD" →
+       "Randstad Technologies") is visible before commit.
 
 ## iLabor requisition import (Phase 8b: browser extension is next)
 
