@@ -182,7 +182,9 @@ export default async function JobDetailPage({
               </span>
             </SummaryItem>
             <SummaryItem label="Position type">{job.reqType ?? "—"}</SummaryItem>
-            <SummaryItem label="Department">{job.department ?? "—"}</SummaryItem>
+            {job.department && job.department !== "Default" ? (
+              <SummaryItem label="Department">{job.department}</SummaryItem>
+            ) : null}
             <SummaryItem label="Positions">{job.positions ?? "—"}</SummaryItem>
             <SummaryItem label="Duration">{job.durationLabel ?? "—"}</SummaryItem>
             <SummaryItem label="Projected start">
@@ -201,15 +203,45 @@ export default async function JobDetailPage({
               {job.ownerName ?? "—"}
             </SummaryItem>
             <SummaryItem label="iLabor subs">
-              {job.externalSubsCount ?? "—"}
-              {job.externalActiveCount != null
-                ? ` (${job.externalActiveCount} active)`
-                : ""}
+              <span className="inline-flex flex-wrap items-center gap-1.5">
+                <span>
+                  {job.externalSubsCount ?? "—"}
+                  {job.externalActiveCount != null
+                    ? ` (${job.externalActiveCount} active)`
+                    : ""}
+                </span>
+                {job.ilaborSubmitOpen === 1 ? (
+                  <Badge tone="slate">Accepting</Badge>
+                ) : job.ilaborSubmitOpen === 0 ? (
+                  <Badge tone="red">Submissions closed at iLabor</Badge>
+                ) : null}
+              </span>
             </SummaryItem>
+            {job.submitLimit != null ? (
+              <SummaryItem label="Submission cap">
+                {job.submitLimit}
+              </SummaryItem>
+            ) : null}
+            {job.ilaborScreenerCode != null && job.ilaborScreenerCode > 0 ? (
+              <SummaryItem label="Screener">
+                <Badge tone="amber">
+                  Screening required (code {job.ilaborScreenerCode})
+                </Badge>
+              </SummaryItem>
+            ) : null}
             <SummaryItem label="Last imported">
               {job.lastImportedAt ? formatDate(job.lastImportedAt) : "—"}
             </SummaryItem>
           </dl>
+          {/* Forensic line for unknown submitStatus values — preserves the
+              raw int so we can investigate if iLabor ever surfaces 2/3/etc. */}
+          {job.ilaborSubmitOpen != null &&
+          job.ilaborSubmitOpen !== 0 &&
+          job.ilaborSubmitOpen !== 1 ? (
+            <p className="mt-3 text-xs text-slate-400">
+              iLabor submitStatus code: {job.ilaborSubmitOpen}
+            </p>
+          ) : null}
         </Card>
       ) : null}
 

@@ -69,7 +69,14 @@ export async function createSubmission(
   const [job, candidate] = await Promise.all([
     prisma.job.findUnique({
       where: { id: d.jobId },
-      select: { id: true, title: true },
+      select: {
+        id: true,
+        title: true,
+        // iLabor signal fields — drive the cap + "closed for subs" warnings.
+        submitLimit: true,
+        ilaborSubmitOpen: true,
+        externalActiveCount: true,
+      },
     }),
     prisma.candidate.findUnique({
       where: { id: d.candidateId },
@@ -89,6 +96,26 @@ export async function createSubmission(
   // migration `20260526150000_…`. Without `duplicateReason`, the action still
   // blocks the duplicate just like before.
   const duplicateReason = String(formData.get("duplicateReason") ?? "").trim();
+  // iLabor override — same UX shape as the duplicate prompt, separate field
+  // so the audit note can distinguish a cap/closed override from a duplicate
+  // override.
+  const ilaborOverrideReason = String(
+    formData.get("ilaborOverrideReason") ?? "",
+  ).trim();
+
+  // Non-terminal submission statuses — i.e. ones that still count against
+  // an iLabor cap. Excludes JOINED (slot already filled) and REJECTED
+  // (no longer in pipeline). Matches iLabor's own "active" definition.
+  const ACTIVE_STATUSES: SubmissionStatus[] = [
+    "SUBMITTED",
+    "RESUME_PICKED",
+    "VENDOR_SCREENING_CALL",
+    "CLIENT_INTERVIEW",
+    "SELECTED",
+    "ON_HOLD",
+    "OFFER_RELEASED",
+    "OFFER_ACCEPTED",
+  ];
 
   // Resolve a previously-saved résumé up front so a bad pick returns cleanly.
   let pickedResume: { id: string; driveLink: string } | null = null;
@@ -115,7 +142,9 @@ export async function createSubmission(
   // we need to bail with `needsConfirm` so the caller can show the prompt.
   type CreateResult =
     | { kind: "created"; submissionId: string }
-    | { kind: "duplicate" };
+    | { kind: "duplicate" }
+    | { kind: "ilabor_closed" }
+    | { kind: "ilabor_cap"; cap: number; active: number };
   const lockHash = hashPair(d.candidateId, d.jobId);
   const result: CreateResult = await prisma.$transaction(async (tx) => {
       // pg_advisory_xact_lock blocks until acquired and auto-releases at tx
@@ -128,6 +157,35 @@ export async function createSubmission(
         select: { id: true },
       });
       if (existing && !duplicateReason) return { kind: "duplicate" };
+
+      // iLabor "closed for submissions" gate. Fires when iLabor's
+      // submitStatus is 0 — independent of LuminTrack's job status. Override
+      // with a reason; otherwise stop and prompt.
+      if (job.ilaborSubmitOpen === 0 && !ilaborOverrideReason) {
+        return { kind: "ilabor_closed" };
+      }
+
+      // iLabor cap gate. We compute the "effective" active count as the max
+      // of iLabor's last-known active count and our local non-terminal sub
+      // count, so locally-created subs we haven't re-imported don't slip
+      // past the cap. Same lock + same tx means concurrent recruiters can't
+      // race past the cap.
+      if (job.submitLimit !== null && job.submitLimit !== undefined) {
+        const localActive = await tx.submission.count({
+          where: { jobId: d.jobId, status: { in: ACTIVE_STATUSES } },
+        });
+        const effectiveActive = Math.max(
+          job.externalActiveCount ?? 0,
+          localActive,
+        );
+        if (effectiveActive >= job.submitLimit && !ilaborOverrideReason) {
+          return {
+            kind: "ilabor_cap",
+            cap: job.submitLimit,
+            active: effectiveActive,
+          };
+        }
+      }
 
       // Settle the résumé: an existing library entry, a new one, or none.
       let candidateResumeId: string | null = null;
@@ -172,13 +230,23 @@ export async function createSubmission(
           duplicateReason: existing ? duplicateReason : null,
         },
       });
+      // Compose an audit note carrying every override reason that fired,
+      // so the trail later explains why a submission got through despite
+      // the duplicate / closed / cap gates.
+      const notes: string[] = [];
+      if (existing) notes.push(`duplicate:${duplicateReason}`);
+      if (ilaborOverrideReason)
+        notes.push(`ilabor-override:${ilaborOverrideReason}`);
+      const description = existing
+        ? `${candidate.fullName} re-submitted to "${job.title}" (duplicate override: ${duplicateReason})`
+        : ilaborOverrideReason
+          ? `${candidate.fullName} submitted to "${job.title}" (iLabor override: ${ilaborOverrideReason})`
+          : `${candidate.fullName} submitted to "${job.title}"`;
       await logActivity(tx, {
         entityType: "SUBMISSION",
         action: "CANDIDATE_SUBMITTED",
-        description: existing
-          ? `${candidate.fullName} re-submitted to "${job.title}" (duplicate override: ${duplicateReason})`
-          : `${candidate.fullName} submitted to "${job.title}"`,
-        note: existing ? duplicateReason : null,
+        description,
+        note: notes.length ? notes.join("; ") : null,
         performedById: user.id,
         submissionId: created.id,
       });
@@ -189,6 +257,18 @@ export async function createSubmission(
     return {
       needsConfirm: true,
       error: `${candidate.fullName} was already submitted to this job. Add a reason to submit again.`,
+    };
+  }
+  if (result.kind === "ilabor_closed") {
+    return {
+      needsConfirm: true,
+      error: `iLabor has closed submissions on this requisition. Add a reason to submit anyway.`,
+    };
+  }
+  if (result.kind === "ilabor_cap") {
+    return {
+      needsConfirm: true,
+      error: `iLabor's cap of ${result.cap} is reached (${result.active} active). Add a reason to submit past the cap.`,
     };
   }
   const submissionId = result.submissionId;

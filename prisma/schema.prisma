@@ -319,6 +319,9 @@ model Job {
   externalStatusRaw     String?
   externalCreatedDate   DateTime?
   lastImportedAt        DateTime?
+  submitLimit           Int?
+  ilaborSubmitOpen      Int?
+  ilaborScreenerCode    Int?
   createdById           String
   createdBy             User                 @relation(fields: [createdById], references: [id])
 

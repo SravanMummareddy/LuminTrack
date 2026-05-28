@@ -242,21 +242,28 @@ export function SubmissionForm({
         />
       </Field>
 
-      {state.needsConfirm && (
-        <Field
-          label="Duplicate override reason"
-          htmlFor="duplicateReason"
-          hint="Required — captured on the audit trail."
-          error={errors.duplicateReason}
-        >
-          <Input
-            id="duplicateReason"
-            name="duplicateReason"
-            placeholder="e.g. Role rebooted, prior submission cancelled"
-            required
-          />
-        </Field>
-      )}
+      {state.needsConfirm && (() => {
+        // Server returns three distinct prompt messages — duplicate /
+        // iLabor closed / iLabor cap. The textarea name has to match the
+        // field the action reads (duplicateReason vs ilaborOverrideReason)
+        // or the override is silently dropped.
+        const isIlabor = (state.error ?? "").startsWith("iLabor");
+        const fieldName = isIlabor ? "ilaborOverrideReason" : "duplicateReason";
+        const label = isIlabor ? "iLabor override reason" : "Duplicate override reason";
+        const placeholder = isIlabor
+          ? "e.g. Manager approved despite iLabor lockout"
+          : "e.g. Role rebooted, prior submission cancelled";
+        return (
+          <Field
+            label={label}
+            htmlFor={fieldName}
+            hint="Required — captured on the audit trail."
+            error={errors[fieldName]}
+          >
+            <Input id={fieldName} name={fieldName} placeholder={placeholder} required />
+          </Field>
+        );
+      })()}
 
       {state.error && (
         <p

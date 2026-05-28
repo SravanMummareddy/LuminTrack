@@ -206,6 +206,9 @@ function jobCreateFields(row: IlaborRow) {
     externalStatusRaw: row.requisitionStatus ?? null,
     externalCreatedDate: row.createDate ?? null,
     lastImportedAt: new Date(),
+    submitLimit: row.submitLimit ?? null,
+    ilaborSubmitOpen: row.submitStatus ?? null,
+    ilaborScreenerCode: row.questionStatus ?? null,
     _statusUnknown: statusUnknown, // discarded by caller; kept here for type return
   };
 }
@@ -238,6 +241,9 @@ function jobUpdateFields(row: IlaborRow) {
     externalStatusRaw: row.requisitionStatus ?? null,
     externalCreatedDate: row.createDate ?? null,
     lastImportedAt: new Date(),
+    submitLimit: row.submitLimit ?? null,
+    ilaborSubmitOpen: row.submitStatus ?? null,
+    ilaborScreenerCode: row.questionStatus ?? null,
     _statusUnknown: statusUnknown,
   };
 }

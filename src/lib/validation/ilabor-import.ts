@@ -107,6 +107,13 @@ export const ilaborRowSchema = z
     alternateEmail: optionalTrimmedString,
     positionType: optionalTrimmedString,
     department: optionalTrimmedString,
+    // ── iLabor "signal" fields. Captured raw; semantics inferred from data:
+    // submitStatus is a 0/1 flag (closed/open for subs) in the sample.
+    // questionStatus is 0 or a small int (>0 means screener attached).
+    // submitLimit is the per-req max submissions (uniform 30 in sample).
+    submitLimit: optionalInt,
+    submitStatus: optionalInt,
+    questionStatus: optionalInt,
   })
   .passthrough();
 

@@ -172,6 +172,24 @@ snapshot, file map, resolved decisions, iLabor JSON sample. The architectural
   non-terminal pipeline status, walked from `SUBMISSION_STATUS_CHANGED`
   audit rows). No migration. New `median()` / `percentile()` helpers in
   `src/server/queries/reports.ts`.
+- **iLabor signal fields shipped 2026-05-28**: data-driven gap closure
+  after a fill-rate scan over the 306-row sample. New nullable columns
+  on `Job` — `submitLimit` (iLabor's per-req max), `ilaborSubmitOpen`
+  (0 = iLabor closed for subs, 1 = accepting; raw int preserved for
+  unknown values), and `ilaborScreenerCode` (>0 means a screener is
+  attached). iLabor card on `/jobs/[id]` now shows an Accepting /
+  "Submissions closed at iLabor" pill next to the iLabor subs count,
+  a "Submission cap" row, and a "Screening required" amber badge
+  when a screener is attached. The "Department" row is hidden when
+  the value is literally "Default" (all 306 sample rows). `createSubmission`
+  gained two soft warnings reusing the existing duplicate-override
+  pattern: `ilabor_closed` fires when iLabor stopped accepting subs,
+  `ilabor_cap` fires when `max(externalActiveCount, local active
+  count) ≥ submitLimit`. Both override with a reason field
+  (`ilaborOverrideReason`) appended to the `CANDIDATE_SUBMITTED`
+  audit note as `ilabor-override:<reason>`. Manual job form
+  unchanged — these are iLabor system signals. Migration
+  `20260528210000_ilabor_signal_fields`.
 - **Remaining large items moved to [`ENHANCEMENTS.md`](./ENHANCEMENTS.md):**
   §J1 PII export → iLabor 8b extension → §J3 admin 2FA → §E1 résumé
   parsing → §J4 session inspector. **§G1-G3 (notifications) and §I4
