@@ -197,3 +197,41 @@ export async function getMyWork(userId: string) {
 }
 
 export type MyWork = Awaited<ReturnType<typeof getMyWork>>;
+
+/**
+ * "My jobs" mini-list for the Dashboard's scope=me view. Returns the OPEN /
+ * ON_HOLD jobs assigned to the acting recruiter, newest-assigned first, capped
+ * at 5 (matches the other "Needs attention" sub-lists). Display-id sequence
+ * is pulled so the row can format JOB-00123 alongside the title.
+ */
+export async function getMyAssignedJobs(userId: string) {
+  const rows = await prisma.jobAssignment.findMany({
+    where: {
+      recruiterId: userId,
+      job: { status: { in: ["OPEN", "ON_HOLD"] } },
+    },
+    orderBy: { assignedAt: "desc" },
+    take: 5,
+    select: {
+      assignedAt: true,
+      job: {
+        select: {
+          id: true,
+          seq: true,
+          portalRefId: true,
+          title: true,
+          status: true,
+          client: { select: { name: true } },
+          _count: { select: { submissions: true } },
+        },
+      },
+    },
+  });
+  return rows.map((r) => ({
+    assignedAt: r.assignedAt,
+    job: r.job,
+    ageDays: Math.max(0, daysSince(r.assignedAt)),
+  }));
+}
+
+export type MyAssignedJobs = Awaited<ReturnType<typeof getMyAssignedJobs>>;

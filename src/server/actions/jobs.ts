@@ -275,6 +275,86 @@ export async function updateJob(
   redirect(`/jobs/${jobId}`);
 }
 
+/**
+ * Inline recruiter assignment from the Jobs list. Admin-only — matches the
+ * Tier 1 pattern for org-entity writes. Mirrors `updateJob`'s assignment-diff
+ * block: computes toAdd / toRemove against the current set, then writes one
+ * RECRUITER_ASSIGNED per added user and one RECRUITER_UNASSIGNED per removed
+ * user, all inside a single transaction so the JobAssignment rows and the
+ * audit entries commit atomically.
+ */
+export async function assignJobRecruiters(
+  jobId: string,
+  recruiterIds: string[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await requireUser();
+  if (user.role !== "ADMIN")
+    return { ok: false, error: "Only admins can change job assignments." };
+  if (!jobId.trim()) return { ok: false, error: "Missing job reference." };
+
+  // Defensive de-dup: client may send a stale checkbox state where the same
+  // id appears twice. Empty strings are dropped.
+  const desiredIds = Array.from(
+    new Set(recruiterIds.map((id) => String(id ?? "").trim()).filter(Boolean)),
+  );
+
+  const job = await prisma.job.findUnique({
+    where: { id: jobId },
+    include: { assignments: { select: { recruiterId: true } } },
+  });
+  if (!job) return { ok: false, error: "This job no longer exists." };
+
+  const currentSet = new Set(job.assignments.map((a) => a.recruiterId));
+  const desiredSet = new Set(desiredIds);
+  const toAdd = desiredIds.filter((id) => !currentSet.has(id));
+  const toRemove = [...currentSet].filter((id) => !desiredSet.has(id));
+
+  if (toAdd.length === 0 && toRemove.length === 0) {
+    // No-op — don't write a noise audit row.
+    return { ok: true };
+  }
+
+  const affected = [...new Set([...toAdd, ...toRemove])];
+  const affectedUsers = await prisma.user.findMany({
+    where: { id: { in: affected } },
+    select: { id: true, fullName: true },
+  });
+  const recruiterNames = new Map(
+    affectedUsers.map((u) => [u.id, u.fullName] as const),
+  );
+
+  await prisma.$transaction(async (tx) => {
+    if (toRemove.length)
+      await tx.jobAssignment.deleteMany({
+        where: { jobId, recruiterId: { in: toRemove } },
+      });
+    for (const recruiterId of toAdd)
+      await tx.jobAssignment.create({
+        data: { jobId, recruiterId, assignedById: user.id },
+      });
+    for (const recruiterId of toAdd)
+      await logActivity(tx, {
+        entityType: "JOB",
+        action: "RECRUITER_ASSIGNED",
+        description: `${recruiterNames.get(recruiterId) ?? "A recruiter"} assigned to the job`,
+        performedById: user.id,
+        jobId,
+      });
+    for (const recruiterId of toRemove)
+      await logActivity(tx, {
+        entityType: "JOB",
+        action: "RECRUITER_UNASSIGNED",
+        description: `${recruiterNames.get(recruiterId) ?? "A recruiter"} removed from the job`,
+        performedById: user.id,
+        jobId,
+      });
+  });
+
+  revalidatePath("/jobs");
+  revalidatePath(`/jobs/${jobId}`);
+  return { ok: true };
+}
+
 /** Quick status change from the job detail page (covers spec §9.2 "Close job"). */
 export async function changeJobStatus(formData: FormData): Promise<void> {
   const user = await requireUser();

@@ -10,11 +10,16 @@ import {
   CirclePause,
 } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
-import { getDashboardData, getMyWork } from "@/server/queries/dashboard";
+import {
+  getDashboardData,
+  getMyWork,
+  getMyAssignedJobs,
+} from "@/server/queries/dashboard";
 import { getExpiringDocuments } from "@/server/queries/candidates";
 import { getRatesPendingPlacements } from "@/server/queries/placements";
 import {
   formatDate,
+  formatJobDisplayId,
   formatPlacementDisplayId,
   formatSubmissionDisplayId,
 } from "@/lib/format";
@@ -110,10 +115,13 @@ function MyWorkList({
   heading,
   empty,
   items,
+  footer,
 }: {
   heading: string;
   empty: string;
   items: { href: string; primary: string; secondary: string }[];
+  /** Optional "View all" link rendered below the list when items are present. */
+  footer?: { href: string; label: string };
 }) {
   return (
     <div>
@@ -125,23 +133,35 @@ function MyWorkList({
           {empty}
         </p>
       ) : (
-        <ul className="divide-y divide-slate-100 rounded-md border border-slate-200">
-          {items.map((it, i) => (
-            <li key={i}>
+        <>
+          <ul className="divide-y divide-slate-100 rounded-md border border-slate-200">
+            {items.map((it, i) => (
+              <li key={i}>
+                <Link
+                  href={it.href}
+                  className="block px-3 py-2 hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:[outline-offset:-2px]"
+                >
+                  <span className="block truncate text-sm text-slate-800">
+                    {it.primary}
+                  </span>
+                  <span className="block truncate text-xs text-slate-400">
+                    {it.secondary}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          {footer && (
+            <div className="mt-2 text-right text-xs">
               <Link
-                href={it.href}
-                className="block px-3 py-2 hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:[outline-offset:-2px]"
+                href={footer.href}
+                className="text-indigo-600 hover:underline"
               >
-                <span className="block truncate text-sm text-slate-800">
-                  {it.primary}
-                </span>
-                <span className="block truncate text-xs text-slate-400">
-                  {it.secondary}
-                </span>
+                {footer.label}
               </Link>
-            </li>
-          ))}
-        </ul>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -168,6 +188,7 @@ export default async function DashboardPage({
   const [
     data,
     myWork,
+    myAssignedJobs,
     expiringDocs,
     ratesPendingPlacements,
     clients,
@@ -179,6 +200,11 @@ export default async function DashboardPage({
     scope === "me" && user
       ? getMyWork(user.id)
       : Promise.resolve({ staleSubmissions: [], pendingRounds: [] }),
+    // "My jobs" mini-list — only relevant when the recruiter is viewing
+    // their own scope. Admins on scope=org don't see this card.
+    scope === "me" && user
+      ? getMyAssignedJobs(user.id)
+      : Promise.resolve([] as Awaited<ReturnType<typeof getMyAssignedJobs>>),
     user
       ? getExpiringDocuments(user, { scope, withinDays: 30 })
       : Promise.resolve([]),
@@ -235,13 +261,31 @@ export default async function DashboardPage({
 
       {(scope === "me" &&
         (myWork.staleSubmissions.length > 0 ||
-          myWork.pendingRounds.length > 0)) ||
+          myWork.pendingRounds.length > 0 ||
+          myAssignedJobs.length > 0)) ||
       expiringDocs.length > 0 ||
       ratesPendingPlacements.length > 0 ? (
         <Card title="Needs attention">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {scope === "me" && (
               <>
+                <MyWorkList
+                  heading={`My active jobs (${myAssignedJobs.length})`}
+                  empty="No active jobs assigned to you."
+                  footer={
+                    user
+                      ? {
+                          href: `/jobs?recruiterId=${user.id}&status=OPEN`,
+                          label: "View all my jobs →",
+                        }
+                      : undefined
+                  }
+                  items={myAssignedJobs.map((a) => ({
+                    href: `/jobs/${a.job.id}`,
+                    primary: `${formatJobDisplayId(a.job)} · ${a.job.title}`,
+                    secondary: `${a.job.client.name} · ${a.job._count.submissions} sub${a.job._count.submissions === 1 ? "" : "s"} · assigned ${a.ageDays}d ago`,
+                  }))}
+                />
                 <MyWorkList
                   heading={`Submissions waiting >7 days (${myWork.staleSubmissions.length})`}
                   empty="No stale submissions — nice."
