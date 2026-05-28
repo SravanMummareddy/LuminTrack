@@ -487,10 +487,13 @@ async function writeWorkbook(
   for (const entity of args.entities) {
     const spec = await buildSheet(entity, args.mode);
     if (!spec) continue;
-    const ws = wb.addWorksheet(spec.name);
+    // WorksheetWriter rejects `ws.views = ...` (read-only in streaming mode);
+    // freeze-header lives in the addWorksheet options instead.
+    const ws = wb.addWorksheet(spec.name, {
+      views: [{ state: "frozen", ySplit: 1 }],
+    });
     ws.columns = spec.columns;
     ws.getRow(1).font = { bold: true };
-    ws.views = [{ state: "frozen", ySplit: 1 }];
     // .commit() on each row flushes it to disk; .commit() on the worksheet
     // closes the sheet so subsequent sheets can stream independently.
     for (const row of spec.rows) ws.addRow(row).commit();
