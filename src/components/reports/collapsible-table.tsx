@@ -41,7 +41,7 @@ export function CollapsibleTable({
   return (
     <div className="space-y-2">
       <Table>
-        {head}
+        <thead>{head}</thead>
         <tbody className="divide-y divide-slate-100">{visible}</tbody>
       </Table>
 
