@@ -184,6 +184,15 @@ enhancements.
 snapshot, file map, resolved decisions, iLabor JSON sample. The architectural
 "why" lives in [`docs/PLAN_iLabor_import.md`](./docs/PLAN_iLabor_import.md).
 
+> **✅ Fix shipped (2026-05-28) — iLabor import "expired transaction".**
+> The 306-row sample import used to crash with a Prisma "expired
+> transaction" error inside `logActivity`. Root cause was the single
+> 60s interactive `$transaction` wrapping the whole import in
+> `src/server/actions/ilabor-import.ts` — not `logActivity` itself.
+> Now split into a session-scoped `pg_try_advisory_lock` +
+> un-wrapped prep + per-row mini `$transaction(job.upsert + audit)` +
+> un-wrapped summary audit. See `docs/DEVLOG.md` for the full story.
+
 - **Status:** Phases 0–7 done **and** the post-Phase-7 polish round shipped
   (concurrent-import lock, per-job `JOB_IMPORTED` audit + backfill, `/jobs/imports`
   history page, page-jump input, SNo on candidate/submission lists,

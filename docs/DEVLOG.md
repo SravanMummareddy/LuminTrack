@@ -10,6 +10,54 @@ short instead of long.
 
 ---
 
+## 2026-05-28 · iLabor import "expired transaction" — wrong layer was the culprit
+
+**Situation.** The 306-row iLabor sample import started failing on
+the confirm step with:
+> Transaction API error: A query cannot be executed on an expired
+> transaction. The timeout for this transaction was 60000 ms,
+> however 60251 ms passed since the start of the transaction.
+Stack trace pointed inside `logActivity` (`src/server/activity.ts`),
+which made it look like the audit-write helper was broken.
+
+**Diagnosis.** `logActivity` was just the messenger — it was the
+*next* statement Prisma tried to send after the transaction budget
+ran out. The real cause was the shape of `importRequisitions`
+(`src/server/actions/ilabor-import.ts`): one big interactive
+`$transaction(..., { timeout: 60_000 })` wrapping advisory-lock +
+portal upsert + existing-rows query + N×(vendor/client resolve) +
+~300 job upserts + per-row JOB_IMPORTED / JOB_UPDATED audit rows +
+summary audit. That's ~700–900 sequential statements. On Neon's
+serverless driver each round-trip costs tens of ms of network
+latency — the DB does microseconds of work, the wire does the
+rest. 60s budget gone, transaction killed, next insert throws.
+Not a Neon quota issue (storage, connections, egress all fine); a
+pure Prisma interactive-transaction time-budget issue caused by
+network latency.
+
+**Fix.** Restructured into three phases without one long-lived tx:
+(A) session-scoped `pg_try_advisory_lock(817293744)` replacing the
+old `pg_try_advisory_xact_lock`, released in a `finally` block;
+(B) un-wrapped prep — portal upsert, existing-rows query, vendor/
+client resolve loops; (C) per-row mini transaction wrapping the
+`job.upsert` + its `logActivity` (~2–3 statements each, well under
+any timeout). Summary `REQUISITIONS_IMPORTED` audit is a single
+un-wrapped insert after the loop. Removed `{ timeout: 60_000 }`.
+Trade-off: lose cross-row atomicity — a crash mid-import leaves
+earlier rows committed. That's actually better for a 300+ row
+bulk where per-row errors are already collected; partial success
+beats "redo the whole batch."
+
+**Lesson.** When a long-running transaction fails inside a
+helper, the helper is almost never the problem — look at the
+transaction's *shape* (count and latency of round-trips), not the
+last statement it tried. And: cross-row atomicity in a bulk import
+is rarely worth the time-budget cliff it creates. Prefer per-unit
+mini transactions with a separate concurrency lock at the bulk
+grain.
+
+---
+
 ## 2026-05-28 · Data-driven gap closure on iLabor JSON
 
 **Situation.** Pre-demo review of the iLabor adapter. Admin said

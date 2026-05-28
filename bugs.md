@@ -1,5 +1,33 @@
 # Remaining work (2026-05-25 sweep)
 
+**✅ Shipped — iLabor import: expired-transaction crash fix (2026-05-28).**
+Was: running `/jobs/import` confirm against the 306-row sample failed with
+`Transaction API error: A query cannot be executed on an expired
+transaction. The timeout for this transaction was 60000 ms…` thrown
+from `logActivity` (`src/server/activity.ts:27`). Root cause is
+**not** logActivity — it's that `importRequisitions`
+(`src/server/actions/ilabor-import.ts:482-682`) wraps the entire
+import (advisory lock + portal upsert + existing-rows query + N
+vendor/client resolves + ~300 job upserts + per-row JOB_IMPORTED /
+JOB_UPDATED audit rows + summary audit) in a single interactive
+`prisma.$transaction(..., { timeout: 60_000 })`. ~700–900 sequential
+statements on Neon's serverless driver routinely exceed 60s, after
+which the next `logActivity` insert throws "expired transaction".
+**Fix:** restructured `src/server/actions/ilabor-import.ts` into
+(A) session-scoped `pg_try_advisory_lock(817293744)` released in a
+`finally` block (was the transaction-scoped `pg_try_advisory_xact_lock`),
+(B) un-wrapped prep — portal upsert, existing-rows query, vendor +
+client resolve loops, (C) per-row mini `prisma.$transaction(async (tx) => …)`
+wrapping `job.upsert` + the conditional `JOB_IMPORTED` / `JOB_UPDATED`
+audit so the row-write + row-audit invariant is preserved at the
+grain that matters, plus a plain un-wrapped summary
+`REQUISITIONS_IMPORTED` audit after the loop. Dropped the
+`{ timeout: 60_000 }` option. Trade-off (accepted): cross-row
+atomicity gone — a mid-import crash leaves earlier rows committed,
+which is preferable for a 300+ row bulk where per-row errors are
+already collected. Full write-up in `docs/DEVLOG.md` and original
+plan at `~/.claude/plans/invalid-db-activity-create-invocation-in-federated-lynx.md`.
+
 **Small / no migration** — can ship in one PR each:
 - ~~**§D4** — interview reschedule audit row.~~ ✅ shipped 2026-05-26
   (commit `ded8b42`; migration `20260526100000_interview_rescheduled_action`

@@ -478,118 +478,155 @@ export async function importRequisitions(
   let statusWarningCount = 0;
   let activityId = "";
 
+  // Magic key shared with the import — kept identical so a stale
+  // pg_try_advisory_xact_lock holder (from before this refactor) would
+  // collide with us, not silently coexist.
+  const LOCK_KEY = 817293744;
+
+  // Phase A — session-scoped advisory lock. We can't use pg_try_advisory_xact_lock
+  // anymore because we no longer have one long-lived transaction to attach it to;
+  // the bulk loop is split into per-row mini transactions. A session-level lock
+  // gives the same "one admin at a time" guarantee, but we MUST release it in
+  // a finally block — sessions on Neon's pooled endpoint are recycled, but we
+  // don't want to depend on that for correctness.
+  let lockHeld = false;
   try {
-  await prisma.$transaction(
-    async (tx) => {
-      // 0. Serialize concurrent imports. pg_try_advisory_xact_lock returns
-      //    false if another transaction already holds the lock — we bail
-      //    rather than risk duplicate REQUISITIONS_IMPORTED audit rows.
-      //    The lock auto-releases when the transaction ends.
-      //    Magic key is a constant specific to iLabor imports.
-      const lockRows = await tx.$queryRaw<[{ ok: boolean }]>`
-        SELECT pg_try_advisory_xact_lock(817293744) AS ok
-      `;
-      if (!lockRows[0]?.ok) {
+    const lockRows = await prisma.$queryRaw<[{ ok: boolean }]>`
+      SELECT pg_try_advisory_lock(${LOCK_KEY}) AS ok
+    `;
+    if (!lockRows[0]?.ok) {
+      return {
+        status: "error",
+        error: "Another import is already in progress. Please try again in a moment.",
+      };
+    }
+    lockHeld = true;
+
+    // Phase B — prep. Plain (un-wrapped) Prisma calls; each is its own implicit
+    // transaction. The unique-on-name constraint on Vendor/Client (and the
+    // session lock above) still protects against admin-vs-admin races.
+
+    // B.1 Find-or-create the JobPortal row (defensive — seed should already have it).
+    const portal = await prisma.jobPortal.upsert({
+      where: { name: ILABOR_PORTAL_NAME },
+      update: {},
+      create: { name: ILABOR_PORTAL_NAME, kind: "VMS" },
+    });
+
+    // B.2 Pre-query existing portalRefIds so we can classify each row as
+    //     NEW or UPDATE for the audit summary. We also load each existing
+    //     job's current client/vendor names so the per-row loop can emit
+    //     a JOB_UPDATED audit entry when iLabor renames or re-points the
+    //     customer/vendor (otherwise the relationship change is silent —
+    //     §F-D2 from the audit).
+    const portalRefIds = valid.map((r) => String(r.requisitionId));
+    const existing = await prisma.job.findMany({
+      where: { portalId: portal.id, portalRefId: { in: portalRefIds } },
+      select: {
+        id: true,
+        portalRefId: true,
+        clientId: true,
+        vendorId: true,
+        title: true,
+        client: { select: { name: true } },
+        vendor: { select: { name: true } },
+      },
+    });
+    const existingSet = new Set(existing.map((j) => j.portalRefId));
+    const existingByRefId = new Map(
+      existing
+        .filter((j) => j.portalRefId !== null)
+        .map((j) => [j.portalRefId as string, j] as const),
+    );
+
+    // B.3 Match-or-create Vendors and Clients. Case-INSENSITIVE (after trim)
+    //     — without this, "RANDSTAD" today and "Randstad" tomorrow would
+    //     create two Vendor rows, orphaning every job that pointed at the
+    //     original. Postgres has no case-insensitive unique index here, so
+    //     we pre-resolve each name via findFirst({ mode: "insensitive" })
+    //     and only create when no existing row matches. The DB's
+    //     unique-on-name constraint still protects against true races.
+    const vendorNames = Array.from(
+      new Set(
+        valid.map((r) => (r.clientName || ILABOR_DEFAULT_VENDOR).trim()),
+      ),
+    );
+    const vendorIdByName = new Map<string, string>();
+    for (const name of vendorNames) {
+      const found = await prisma.vendor.findFirst({
+        where: { name: { equals: name, mode: "insensitive" } },
+        select: { id: true },
+      });
+      if (found) {
+        vendorIdByName.set(name, found.id);
+      } else {
+        const v = await prisma.vendor.create({ data: { name } });
+        vendorIdByName.set(name, v.id);
+      }
+    }
+
+    const clientNames = Array.from(
+      new Set(valid.map((r) => r.customerName.trim())),
+    );
+    const clientIdByName = new Map<string, string>();
+    for (const name of clientNames) {
+      const found = await prisma.client.findFirst({
+        where: { name: { equals: name, mode: "insensitive" } },
+        select: { id: true },
+      });
+      if (found) {
+        clientIdByName.set(name, found.id);
+      } else {
+        const c = await prisma.client.create({ data: { name } });
+        clientIdByName.set(name, c.id);
+      }
+    }
+
+    // Phase C — per-row upserts. Each row's job.upsert + its audit row
+    // commit together in their own mini transaction (~2–3 statements,
+    // well under the 5s default budget). Cross-row atomicity is NOT
+    // preserved by design — partial success on a 300-row bulk is more
+    // useful than rolling back row 297's failure across the first 296.
+    for (const row of valid) {
+      const vendorName = (row.clientName || ILABOR_DEFAULT_VENDOR).trim();
+      const clientName = row.customerName.trim();
+      const vendorId = vendorIdByName.get(vendorName);
+      const clientId = clientIdByName.get(clientName);
+      if (!vendorId || !clientId) {
+        // Defensive — should be impossible since we just populated the maps.
         throw new Error(
-          "Another import is already in progress. Please try again in a moment.",
+          `Internal: missing org id for vendor="${vendorName}" / client="${clientName}"`,
         );
       }
 
-      // 1. Find-or-create the JobPortal row (defensive — seed should already have).
-      const portal = await tx.jobPortal.upsert({
-        where: { name: ILABOR_PORTAL_NAME },
-        update: {},
-        create: { name: ILABOR_PORTAL_NAME, kind: "VMS" },
-      });
+      const createPayload = jobCreateFields(row);
+      const updatePayload = jobUpdateFields(row);
+      if (createPayload._statusUnknown) statusWarningCount += 1;
 
-      // 2. Pre-query existing portalRefIds so we can classify each row as
-      //    NEW or UPDATE for the audit summary. We also load each existing
-      //    job's current client/vendor names so the per-row loop can emit
-      //    a JOB_UPDATED audit entry when iLabor renames or re-points the
-      //    customer/vendor (otherwise the relationship change is silent —
-      //    §F-D2 from the audit).
-      const portalRefIds = valid.map((r) => String(r.requisitionId));
-      const existing = await tx.job.findMany({
-        where: { portalId: portal.id, portalRefId: { in: portalRefIds } },
-        select: {
-          id: true,
-          portalRefId: true,
-          clientId: true,
-          vendorId: true,
-          title: true,
-          client: { select: { name: true } },
-          vendor: { select: { name: true } },
-        },
-      });
-      const existingSet = new Set(existing.map((j) => j.portalRefId));
-      const existingByRefId = new Map(
-        existing
-          .filter((j) => j.portalRefId !== null)
-          .map((j) => [j.portalRefId as string, j] as const),
-      );
+      const isNew = !existingSet.has(String(row.requisitionId));
+      const prior = existingByRefId.get(String(row.requisitionId));
 
-      // 3. Match-or-create Vendors and Clients. Critically: matching is
-      //    case-INSENSITIVE (after trim) — without this, "RANDSTAD" today
-      //    and "Randstad" tomorrow would create two Vendor rows, orphaning
-      //    every job that pointed at the original. Postgres has no
-      //    case-insensitive unique index here, so we pre-resolve each name
-      //    via a `findFirst({ mode: "insensitive" })` and only create when
-      //    no existing row matches. The DB's unique-on-name constraint
-      //    still protects against true races.
-      const vendorNames = Array.from(
-        new Set(
-          valid.map((r) => (r.clientName || ILABOR_DEFAULT_VENDOR).trim()),
-        ),
-      );
-      const vendorIdByName = new Map<string, string>();
-      for (const name of vendorNames) {
-        const found = await tx.vendor.findFirst({
-          where: { name: { equals: name, mode: "insensitive" } },
-          select: { id: true },
-        });
-        if (found) {
-          vendorIdByName.set(name, found.id);
-        } else {
-          const v = await tx.vendor.create({ data: { name } });
-          vendorIdByName.set(name, v.id);
-        }
+      // Pre-compute the drift diff outside the tx so the tx body stays minimal.
+      const driftDiffs: string[] = [];
+      let priorSnapshot: { title: string; clientName: string; vendorName: string } | null = null;
+      if (!isNew && prior) {
+        priorSnapshot = {
+          title: prior.title,
+          clientName: prior.client.name,
+          vendorName: prior.vendor.name,
+        };
+        const titleChanged =
+          prior.title.trim().toLowerCase() !==
+          row.jobTitle.trim().toLowerCase();
+        if (titleChanged)
+          driftDiffs.push(`title "${prior.title}" → "${row.jobTitle}"`);
+        if (prior.clientId !== clientId)
+          driftDiffs.push(`client "${prior.client.name}" → "${clientName}"`);
+        if (prior.vendorId !== vendorId)
+          driftDiffs.push(`vendor "${prior.vendor.name}" → "${vendorName}"`);
       }
 
-      const clientNames = Array.from(
-        new Set(valid.map((r) => r.customerName.trim())),
-      );
-      const clientIdByName = new Map<string, string>();
-      for (const name of clientNames) {
-        const found = await tx.client.findFirst({
-          where: { name: { equals: name, mode: "insensitive" } },
-          select: { id: true },
-        });
-        if (found) {
-          clientIdByName.set(name, found.id);
-        } else {
-          const c = await tx.client.create({ data: { name } });
-          clientIdByName.set(name, c.id);
-        }
-      }
-
-      // 4. Per-row Job upserts. Client + Vendor ids are pulled from the maps.
-      for (const row of valid) {
-        const vendorName = (row.clientName || ILABOR_DEFAULT_VENDOR).trim();
-        const clientName = row.customerName.trim();
-        const vendorId = vendorIdByName.get(vendorName);
-        const clientId = clientIdByName.get(clientName);
-        if (!vendorId || !clientId) {
-          // Defensive — should be impossible since we just populated the maps.
-          throw new Error(
-            `Internal: missing org id for vendor="${vendorName}" / client="${clientName}"`,
-          );
-        }
-
-        const createPayload = jobCreateFields(row);
-        const updatePayload = jobUpdateFields(row);
-        if (createPayload._statusUnknown) statusWarningCount += 1;
-
-        const isNew = !existingSet.has(String(row.requisitionId));
+      await prisma.$transaction(async (tx) => {
         const upserted = await tx.job.upsert({
           where: {
             portalId_portalRefId: {
@@ -613,9 +650,8 @@ export async function importRequisitions(
         });
 
         if (isNew) {
-          createdCount += 1;
           // Provenance entry on the new job's timeline — distinct from the
-          // bulk REQUISITIONS_IMPORTED summary at the end of the transaction.
+          // bulk REQUISITIONS_IMPORTED summary written after the loop.
           await logActivity(tx, {
             entityType: "JOB",
             action: "JOB_IMPORTED",
@@ -623,71 +659,61 @@ export async function importRequisitions(
             description: `Imported from Randstad iLabor (Req ${String(row.requisitionId)})`,
             performedById: user.id,
           });
-        } else {
-          updatedCount += 1;
-          // §F-D2 — if iLabor re-points the customer/vendor (rename, split,
-          // or rebrand), the job's clientId/vendorId silently jumps to the
-          // new row. Emit a JOB_UPDATED audit entry so the relationship
-          // change shows up on the job's timeline.
-          const prior = existingByRefId.get(String(row.requisitionId));
-          if (prior) {
-            // §drift — surface title / client / vendor changes so a silent
-            // ID re-use by iLabor (or a real rename) is visible on the
-            // timeline rather than overwriting unaudited.
-            const diffs: string[] = [];
-            const titleChanged =
-              prior.title.trim().toLowerCase() !==
-              row.jobTitle.trim().toLowerCase();
-            if (titleChanged)
-              diffs.push(`title "${prior.title}" → "${row.jobTitle}"`);
-            if (prior.clientId !== clientId)
-              diffs.push(`client "${prior.client.name}" → "${clientName}"`);
-            if (prior.vendorId !== vendorId)
-              diffs.push(`vendor "${prior.vendor.name}" → "${vendorName}"`);
-            if (diffs.length) {
-              await logActivity(tx, {
-                entityType: "JOB",
-                action: "JOB_UPDATED",
-                jobId: upserted.id,
-                description: `iLabor re-import drift: ${diffs.join(", ")}`,
-                oldValue: `${prior.title} | ${prior.client.name} / ${prior.vendor.name}`,
-                newValue: `${row.jobTitle} | ${clientName} / ${vendorName}`,
-                performedById: user.id,
-              });
-            }
-          }
+        } else if (priorSnapshot && driftDiffs.length) {
+          // §F-D2 / §drift — surface title / client / vendor changes so a
+          // silent ID re-use by iLabor (or a real rename) is visible on
+          // the timeline rather than overwriting unaudited.
+          await logActivity(tx, {
+            entityType: "JOB",
+            action: "JOB_UPDATED",
+            jobId: upserted.id,
+            description: `iLabor re-import drift: ${driftDiffs.join(", ")}`,
+            oldValue: `${priorSnapshot.title} | ${priorSnapshot.clientName} / ${priorSnapshot.vendorName}`,
+            newValue: `${row.jobTitle} | ${clientName} / ${vendorName}`,
+            performedById: user.id,
+          });
         }
-      }
-
-      // 4. One audit entry summarising the batch. Job-less by design — it's a
-      //    bulk action; the Activity model permits null jobId.
-      const activity = await logActivity(tx, {
-        entityType: "JOB",
-        action: "REQUISITIONS_IMPORTED",
-        description:
-          `Imported ${createdCount} new + ${updatedCount} updated requisitions from Randstad iLabor` +
-          (errors.length ? ` (${errors.length} rows skipped)` : ""),
-        performedById: user.id,
-        newValue: JSON.stringify({
-          createdCount,
-          updatedCount,
-          erroredCount: errors.length,
-          statusWarningCount,
-          capturedAt: envelope.capturedAt,
-        }),
       });
-      activityId = activity.id;
-    },
-    { timeout: 60_000 },
-  );
+
+      if (isNew) createdCount += 1;
+      else updatedCount += 1;
+    }
+
+    // Phase D — summary audit row. Job-less by design (bulk action; the
+    // Activity model permits null jobId). Un-wrapped — a single insert.
+    const activity = await logActivity(prisma, {
+      entityType: "JOB",
+      action: "REQUISITIONS_IMPORTED",
+      description:
+        `Imported ${createdCount} new + ${updatedCount} updated requisitions from Randstad iLabor` +
+        (errors.length ? ` (${errors.length} rows skipped)` : ""),
+      performedById: user.id,
+      newValue: JSON.stringify({
+        createdCount,
+        updatedCount,
+        erroredCount: errors.length,
+        statusWarningCount,
+        capturedAt: envelope.capturedAt,
+      }),
+    });
+    activityId = activity.id;
   } catch (err) {
-    // Surface the advisory-lock rejection (or any other in-transaction throw)
-    // as a wizard-friendly error instead of bubbling a 500 to the client.
+    // Surface any throw as a wizard-friendly error instead of a 500.
     const message =
       err instanceof Error
         ? err.message
         : "Import failed. Please retry; if it persists, contact an admin.";
     return { status: "error", error: message };
+  } finally {
+    if (lockHeld) {
+      // Best-effort release. If this fails the lock will still drop when
+      // the pooled connection is reset, but we always try cleanly first.
+      try {
+        await prisma.$queryRaw`SELECT pg_advisory_unlock(${LOCK_KEY})`;
+      } catch {
+        // Swallow — lock release failures shouldn't mask import success.
+      }
+    }
   }
 
   revalidatePath("/jobs");
