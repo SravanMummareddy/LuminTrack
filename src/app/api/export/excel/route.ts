@@ -1,9 +1,10 @@
+import { Readable } from "node:stream";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/server/db";
 import { logActivity } from "@/server/activity";
 import {
-  buildBusinessExcel,
+  streamBusinessExcel,
   EXCEL_ENTITIES,
   type ExcelEntity,
 } from "@/server/exporters/build-business-excel";
@@ -37,24 +38,29 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const entities = parsed.data.entities as ExcelEntity[];
-  const buf = await buildBusinessExcel({ mode: parsed.data.mode, entities });
   const filename = `lumintrack-${parsed.data.mode}-${new Date().toISOString().slice(0, 10)}.xlsx`;
 
+  // Audit-log eagerly. Bytes are unknown in streaming mode — the trail still
+  // captures who/when/what, just not exact size.
   await prisma.$transaction(async (tx) => {
     await logActivity(tx, {
       entityType: "JOB",
       action: "DATA_EXPORTED",
-      description: `Excel export (${parsed.data.mode}, ${entities.length} sheet${entities.length === 1 ? "" : "s"}, ${Math.round(buf.length / 1024)} KB)`,
-      note: `mode=${parsed.data.mode};format=xlsx;entities=${entities.join(",")};bytes=${buf.length}`,
+      description: `Excel export (${parsed.data.mode}, ${entities.length} sheet${entities.length === 1 ? "" : "s"})`,
+      note: `mode=${parsed.data.mode};format=xlsx;entities=${entities.join(",")};streamed=true`,
       performedById: user.id,
     });
   });
 
-  return new Response(buf as unknown as BodyInit, {
+  const nodeStream = streamBusinessExcel({ mode: parsed.data.mode, entities });
+  // Node Readable → Web ReadableStream so Next.js can pipe it to the client
+  // without buffering. Chunked transfer is implied (no Content-Length).
+  const webStream = Readable.toWeb(nodeStream) as unknown as ReadableStream<Uint8Array>;
+
+  return new Response(webStream, {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="${filename}"`,
-      "Content-Length": String(buf.length),
     },
   });
 }

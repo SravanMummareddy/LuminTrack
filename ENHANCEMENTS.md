@@ -246,6 +246,67 @@ shape doesn't change.
 
 ---
 
+## Round 4 follow-ups (deferred post-demo, 2026-05-28)
+
+Surfaced during the R4 scenario sweep. The two surgical fixes that
+shipped on `main` (placement reactivation on re-JOINED, candidate
+status guard while ACTIVE placement exists) closed the data-integrity
+gaps; the rest are polish + scale items with no urgent driver.
+
+### R4.4 — Scheduled Drive backup (was always post-demo)
+
+- Vercel Cron daily at 02:00 UTC.
+- Google service account + Drive folder ID in env vars
+  (`GOOGLE_SA_JSON`, `BACKUP_DRIVE_FOLDER_ID`).
+- Calls `buildBackupJson()` and `buildBusinessExcelBuffer()` (the
+  in-memory variant kept for non-HTTP callers; the streaming variant
+  is HTTP-only).
+- Retains last 30 days, deletes older snapshots.
+- Logs `DATA_EXPORTED` with `note="daily-cron"`.
+
+**Sizing:** ~3-5 days. Mostly googleapis wiring + cron config.
+
+### Auto-close placements past `endDate`
+
+Today a placement whose `endDate` has passed stays `ACTIVE` until
+someone manually ends it. Reports surface "Ending in 14 days" but
+nothing closes the loop.
+
+- Nightly cron that flips `ACTIVE → ENDED` when
+  `endDate < today AND no future extension covers today`.
+- System endNote: `"auto-closed: end date passed"`.
+- Logs `PLACEMENT_ENDED` with `note="auto-close"`.
+- Runs the same `endOfPlacementCascade` (candidate flips to
+  AVAILABLE when no other ACTIVE placements remain).
+
+**Sizing:** ~half a day once R4.4 cron infrastructure exists.
+
+### Warn when ending one placement with another still active
+
+Minor UX: the End-placement form should tell the recruiter
+"Candidate has another ACTIVE placement (PLC-XXX) — their engagement
+status will remain PLACED." Today the cascade already handles it
+correctly; this is just transparency.
+
+**Sizing:** ~2 hours.
+
+### Expired Work Auth policy (product decision)
+
+Today an expired WORK_AUTH document shows a red "EXPIRED" pill on
+the candidate page and the dashboard widget, but doesn't block new
+submissions. HR / legal needs to decide:
+
+- Hard block? (`createSubmission` refuses if the candidate has an
+  expired WORK_AUTH doc.)
+- Soft warn? (`needsConfirm: true` with a reason field, same
+  pattern as the duplicate-submission override.)
+- No automatic enforcement, just visible signal? (current state)
+
+Not a code task until product weighs in. Capturing here so the
+question isn't lost.
+
+---
+
 ## Deferred indefinitely (not in any milestone)
 
 These were explicitly declined on 2026-05-26:

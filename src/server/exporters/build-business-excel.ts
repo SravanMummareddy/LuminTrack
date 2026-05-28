@@ -7,11 +7,12 @@
  * - `full`       — admin-only. Identical row coverage but PII + rates +
  *                  sensitive doc categories included.
  *
- * Each requested entity becomes one worksheet. Builders return a Buffer
- * (Node, used by the Route Handler) — no streaming because workbooks for a
- * <10-recruiter shop fit comfortably in memory.
+ * Each requested entity becomes one worksheet. Uses exceljs's streaming
+ * `WorkbookWriter` so the workbook is written to the response stream as it's
+ * built — large exports (50k+ rows) no longer hold the whole file in memory.
  */
 import ExcelJS from "exceljs";
+import { PassThrough, Readable } from "node:stream";
 import { prisma } from "@/server/db";
 import { isSensitiveCategory } from "@/lib/permissions";
 
@@ -453,11 +454,33 @@ async function buildSheet(entity: ExcelEntity, mode: ExcelMode): Promise<SheetSp
   }
 }
 
-export async function buildBusinessExcel(args: {
+/**
+ * Streams a workbook through the returned Node Readable. Work runs in the
+ * background — the caller pipes the stream to the HTTP response. Errors
+ * destroy the stream so consumers see a failed download rather than a
+ * truncated-but-OK xlsx. Callers that want the full Buffer (tests,
+ * background jobs) should use `buildBusinessExcelBuffer` instead.
+ */
+export function streamBusinessExcel(args: {
   mode: ExcelMode;
   entities: ExcelEntity[];
-}): Promise<Buffer> {
-  const wb = new ExcelJS.Workbook();
+}): Readable {
+  const pass = new PassThrough();
+  void writeWorkbook(args, pass).catch((err) => pass.destroy(err));
+  return pass;
+}
+
+async function writeWorkbook(
+  args: { mode: ExcelMode; entities: ExcelEntity[] },
+  stream: PassThrough,
+): Promise<void> {
+  // useStyles is required for column widths + bold header to survive
+  // streaming. useSharedStrings keeps cell-string memory bounded.
+  const wb = new ExcelJS.stream.xlsx.WorkbookWriter({
+    stream,
+    useStyles: true,
+    useSharedStrings: true,
+  });
   wb.created = new Date();
   wb.creator = "LuminTrack";
 
@@ -467,11 +490,29 @@ export async function buildBusinessExcel(args: {
     const ws = wb.addWorksheet(spec.name);
     ws.columns = spec.columns;
     ws.getRow(1).font = { bold: true };
-    for (const row of spec.rows) ws.addRow(row);
     ws.views = [{ state: "frozen", ySplit: 1 }];
+    // .commit() on each row flushes it to disk; .commit() on the worksheet
+    // closes the sheet so subsequent sheets can stream independently.
+    for (const row of spec.rows) ws.addRow(row).commit();
+    await ws.commit();
   }
 
-  // exceljs typings say Buffer; cast to Node Buffer for Response use.
-  const buf = await wb.xlsx.writeBuffer();
-  return Buffer.from(buf as ArrayBuffer);
+  await wb.commit();
+}
+
+/**
+ * In-memory variant — kept for callers that need a Buffer (e.g. the deferred
+ * R4.4 cron job that uploads to Drive). The HTTP route handler should use
+ * `streamBusinessExcel` instead.
+ */
+export async function buildBusinessExcelBuffer(args: {
+  mode: ExcelMode;
+  entities: ExcelEntity[];
+}): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  const stream = streamBusinessExcel(args);
+  for await (const chunk of stream) {
+    chunks.push(chunk as Buffer);
+  }
+  return Buffer.concat(chunks);
 }
