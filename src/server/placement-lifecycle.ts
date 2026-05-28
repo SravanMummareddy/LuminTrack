@@ -47,6 +47,41 @@ export async function ensurePlacementOnJoined(
     });
   }
 
+  // Reactivate a pre-existing placement if the submission was previously JOINED
+  // → reverted → re-JOINED. Otherwise the placement would stay TERMINATED while
+  // the candidate is flagged PLACED, leaving the two out of sync. This must
+  // come before the `create` path so we don't trip the `submissionId @unique`.
+  const existing = await tx.placement.findUnique({
+    where: { submissionId: args.submissionId },
+    select: { id: true, seq: true, status: true },
+  });
+  if (existing) {
+    if (existing.status === "ACTIVE" || existing.status === "EXTENDED") {
+      // Already live — concurrent JOINED race, no-op.
+      return { placementId: existing.id };
+    }
+    await tx.placement.update({
+      where: { id: existing.id },
+      data: {
+        status: "ACTIVE",
+        endReason: null,
+        endNote: null,
+        endDate: null,
+      },
+    });
+    await logActivity(tx, {
+      entityType: "SUBMISSION",
+      action: "PLACEMENT_UPDATED",
+      description: `Placement PLC-${String(existing.seq).padStart(3, "0")} reactivated (submission re-JOINED)`,
+      note: "reactivated",
+      performedById: args.performedById,
+      submissionId: args.submissionId,
+      candidateId: args.candidateId,
+      jobId: args.jobId,
+    });
+    return { placementId: existing.id };
+  }
+
   // Auto-create the Placement. Rates seed from the submission's candidateRate;
   // a $0/$0 placement is acceptable and flagged in the UI as "Rates pending."
   const seedRate = args.candidateRate ?? 0;
@@ -75,7 +110,8 @@ export async function ensurePlacementOnJoined(
     return { placementId: placement.id };
   } catch (e) {
     if (isUniqueConstraintError(e)) {
-      // Race: another tab already created the Placement. No-op.
+      // Race: another tab already created the Placement between our findUnique
+      // and create. No-op.
       return { placementId: null };
     }
     throw e;

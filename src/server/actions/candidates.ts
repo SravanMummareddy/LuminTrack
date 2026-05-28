@@ -136,6 +136,25 @@ export async function updateCandidate(
   const existing = await prisma.candidate.findUnique({ where: { id: candidateId } });
   if (!existing) return { error: "This candidate no longer exists." };
 
+  // Guard: don't let a manual status edit clobber PLACED while the candidate
+  // still has an ACTIVE/EXTENDED placement. The lifecycle helper owns PLACED ↔
+  // AVAILABLE transitions; recruiters must end the placement first.
+  if (existing.status === "PLACED" && d.status !== "PLACED") {
+    const activePlacements = await prisma.placement.count({
+      where: {
+        candidateId,
+        status: { in: ["ACTIVE", "EXTENDED"] },
+      },
+    });
+    if (activePlacements > 0) {
+      return {
+        error:
+          "This candidate has an active placement. End the placement first, then change their status.",
+        fieldErrors: { status: "End the active placement first." },
+      };
+    }
+  }
+
   if (formData.get("confirmed") !== "true") {
     const dups = await findCandidateDuplicates({
       email: d.email,
