@@ -148,11 +148,49 @@ export function ImportRequisitions() {
               <strong>{driftRows.length} updated row
               {driftRows.length === 1 ? " has" : "s have"}</strong>{" "}
               a different title or client than the existing LuminTrack job
-              with the same Req ID. Review the "title changed" / "client
-              changed" badges in the Updated rows table below before
+              with the same Req ID. Review the &quot;title changed&quot; /
+              &quot;client changed&quot; badges in the Updated rows table below before
               committing — your existing submissions, placements, and notes
               will stay attached to the same Job IDs even if iLabor has
               re-used those Req IDs for a different role.
+            </div>
+          );
+        })()}
+
+        {(() => {
+          // Net-new Vendor/Client name banner — surfaces likely-rename risk.
+          // Names compared case-insensitively, so "RANDSTAD" vs "Randstad"
+          // is NOT new; only a genuinely different name lands here.
+          const nv = previewState.newVendorNames ?? [];
+          const nc = previewState.newClientNames ?? [];
+          if (nv.length === 0 && nc.length === 0) return null;
+          return (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              <p className="font-medium">
+                This import will create {nv.length} new vendor
+                {nv.length === 1 ? "" : "s"} and {nc.length} new client
+                {nc.length === 1 ? "" : "s"}.
+              </p>
+              {nv.length > 0 ? (
+                <p className="mt-1">
+                  <span className="font-medium">New vendors:</span>{" "}
+                  {nv.slice(0, 10).join(", ")}
+                  {nv.length > 10 ? `, + ${nv.length - 10} more` : ""}
+                </p>
+              ) : null}
+              {nc.length > 0 ? (
+                <p className="mt-0.5">
+                  <span className="font-medium">New clients:</span>{" "}
+                  {nc.slice(0, 10).join(", ")}
+                  {nc.length > 10 ? `, + ${nc.length - 10} more` : ""}
+                </p>
+              ) : null}
+              <p className="mt-1 text-amber-700">
+                If any of these are renames of existing rows, rename the
+                LuminTrack row first (Settings → Clients / Vendors) so jobs
+                stay linked — otherwise the existing jobs will keep pointing
+                at the old name and reports will double-count.
+              </p>
             </div>
           );
         })()}

@@ -142,6 +142,48 @@ export async function listIlaborImports() {
   });
 }
 
+/**
+ * Jobs that were imported from iLabor at some point but did NOT appear in
+ * the most recent import — surfaces silent "disappeared from iLabor"
+ * cases. Only includes jobs that are still OPEN or ON_HOLD in LuminTrack
+ * (closed/filled/cancelled jobs aren't worth flagging — they're already
+ * terminal). Limit to portal-linked jobs (i.e. ones that came from iLabor
+ * in the first place).
+ */
+export async function listStaleIlaborJobs(opts: { limit?: number } = {}) {
+  const limit = opts.limit ?? 50;
+  const lastRun = await prisma.activity.findFirst({
+    where: { action: "REQUISITIONS_IMPORTED" },
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true },
+  });
+  if (!lastRun) return { rows: [], lastImportAt: null as Date | null };
+
+  // A job is "stale" when its last import touched it BEFORE the most recent
+  // bulk-import run. Small clock-skew buffer (60s) avoids false positives
+  // for the run that's actively in flight.
+  const cutoff = new Date(lastRun.createdAt.getTime() - 60_000);
+  const rows = await prisma.job.findMany({
+    where: {
+      portalId: { not: null },
+      status: { in: ["OPEN", "ON_HOLD"] },
+      lastImportedAt: { lt: cutoff },
+    },
+    orderBy: { lastImportedAt: "asc" },
+    take: limit,
+    select: {
+      id: true,
+      seq: true,
+      title: true,
+      portalRefId: true,
+      lastImportedAt: true,
+      externalStatusRaw: true,
+      client: { select: { name: true } },
+    },
+  });
+  return { rows, lastImportAt: lastRun.createdAt };
+}
+
 export function getJobDetail(id: string) {
   return prisma.job.findUnique({
     where: { id },

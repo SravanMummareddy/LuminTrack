@@ -7,6 +7,7 @@ import { Select } from "@/components/ui/field";
 import { Table, Th, Td } from "@/components/ui/table";
 import { ActivityTimeline } from "@/components/timeline/activity-timeline";
 import { NotesSection } from "@/components/notes/notes-section";
+import { prisma } from "@/server/db";
 import { getJobDetail } from "@/server/queries/jobs";
 import { getJobSubmissions } from "@/server/queries/submissions";
 import { getTimelineFor } from "@/server/queries/timeline";
@@ -83,13 +84,41 @@ export default async function JobDetailPage({
     { rows: submissions, total: submissionsTotal, page: submissionsPage },
     timeline,
     notes,
+    // Local non-terminal submission count — what we actually have in the
+    // pipeline right now, vs iLabor's externalActiveCount which is a
+    // snapshot from the last import. The card shows the higher of the
+    // two so a stale iLabor number doesn't mislead recruiters.
+    localActiveCount,
   ] = await Promise.all([
     getJobDetail(id),
     getJobSubmissions(id, { page: subsPage }),
     getTimelineFor("JOB", id),
     getNotesFor("JOB", id),
+    prisma.submission.count({
+      where: {
+        jobId: id,
+        status: {
+          in: [
+            "SUBMITTED",
+            "RESUME_PICKED",
+            "VENDOR_SCREENING_CALL",
+            "CLIENT_INTERVIEW",
+            "SELECTED",
+            "ON_HOLD",
+            "OFFER_RELEASED",
+            "OFFER_ACCEPTED",
+          ],
+        },
+      },
+    }),
   ]);
   if (!job) notFound();
+  const effectiveActiveCount = Math.max(
+    job.externalActiveCount ?? 0,
+    localActiveCount,
+  );
+  const activeCountDiverges =
+    job.externalActiveCount != null && localActiveCount > job.externalActiveCount;
   const submissionsTotalPages = Math.max(
     1,
     Math.ceil(submissionsTotal / PAGE_SIZE),
@@ -206,9 +235,17 @@ export default async function JobDetailPage({
               <span className="inline-flex flex-wrap items-center gap-1.5">
                 <span>
                   {job.externalSubsCount ?? "—"}
-                  {job.externalActiveCount != null
-                    ? ` (${job.externalActiveCount} active)`
-                    : ""}
+                  {" ("}
+                  {effectiveActiveCount} active
+                  {activeCountDiverges ? (
+                    <span
+                      className="ml-1 text-xs text-amber-700"
+                      title={`iLabor's last-imported active count was ${job.externalActiveCount}; LuminTrack has ${localActiveCount} non-terminal submissions in the pipeline. The higher number is shown here.`}
+                    >
+                      (iLabor said {job.externalActiveCount})
+                    </span>
+                  ) : null}
+                  {")"}
                 </span>
                 {job.ilaborSubmitOpen === 1 ? (
                   <Badge tone="slate">Accepting</Badge>

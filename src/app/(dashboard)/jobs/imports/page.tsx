@@ -5,8 +5,8 @@ import { Forbidden } from "@/components/ui/forbidden";
 import { LinkButton } from "@/components/ui/button";
 import { Table, Th, Td } from "@/components/ui/table";
 import { requireUser } from "@/lib/session";
-import { listIlaborImports } from "@/server/queries/jobs";
-import { formatDateTime } from "@/lib/format";
+import { listIlaborImports, listStaleIlaborJobs } from "@/server/queries/jobs";
+import { formatDate, formatDateTime } from "@/lib/format";
 
 /**
  * Bulk-import history. One row per import RUN — i.e. one
@@ -34,7 +34,10 @@ export default async function ImportsHistoryPage() {
   const user = await requireUser();
   if (user.role !== "ADMIN") return <Forbidden />;
 
-  const imports = await listIlaborImports();
+  const [imports, stale] = await Promise.all([
+    listIlaborImports(),
+    listStaleIlaborJobs(),
+  ]);
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
@@ -56,6 +59,43 @@ export default async function ImportsHistoryPage() {
           New import
         </LinkButton>
       </div>
+
+      {stale.rows.length > 0 && stale.lastImportAt ? (
+        <section className="rounded-lg border border-amber-300 bg-amber-50 p-4">
+          <h2 className="text-sm font-semibold text-amber-900">
+            Stale iLabor jobs ({stale.rows.length})
+          </h2>
+          <p className="mt-1 text-xs text-amber-800">
+            These OPEN / On-hold jobs came from iLabor at some point but did
+            <strong> not</strong> appear in the most recent import on{" "}
+            {formatDateTime(stale.lastImportAt)}. Likely either deleted on
+            iLabor&apos;s side, or simply not in the latest capture — review
+            and close manually if no longer being filled.
+          </p>
+          <ul className="mt-3 space-y-1.5 text-sm">
+            {stale.rows.slice(0, 20).map((j) => (
+              <li key={j.id} className="flex flex-wrap items-baseline gap-2">
+                <Link
+                  href={`/jobs/${j.id}`}
+                  className="font-mono text-xs text-amber-900 hover:underline"
+                >
+                  JOB-{String(j.seq).padStart(5, "0")}
+                </Link>
+                <span className="text-amber-900">{j.title}</span>
+                <span className="text-xs text-amber-700">
+                  · {j.client.name} · last seen{" "}
+                  {j.lastImportedAt ? formatDate(j.lastImportedAt) : "—"}
+                </span>
+              </li>
+            ))}
+            {stale.rows.length > 20 ? (
+              <li className="text-xs text-amber-700">
+                + {stale.rows.length - 20} more not shown.
+              </li>
+            ) : null}
+          </ul>
+        </section>
+      ) : null}
 
       {imports.length === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">

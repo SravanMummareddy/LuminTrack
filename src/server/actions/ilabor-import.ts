@@ -87,6 +87,12 @@ export type IlaborImportPreviewState = {
   newRows?: RowDigest[];
   updatedRows?: RowDigest[];
   errorRows?: RowError[];
+  /** Net-new Vendor names (no case-insensitive match in DB). Surfaced so the
+   *  operator can spot a likely-rename like "RANDSTAD" → "Randstad Technologies"
+   *  before committing — otherwise a true rename creates an orphan row. */
+  newVendorNames?: string[];
+  /** Same idea for Client. */
+  newClientNames?: string[];
 };
 
 export type IlaborImportResultState = {
@@ -168,9 +174,26 @@ async function readEnvelope(formData: FormData): Promise<
 function validateRows(rows: unknown[]): { valid: IlaborRow[]; errors: RowError[] } {
   const valid: IlaborRow[] = [];
   const errors: RowError[] = [];
+  // First-occurrence wins. If a captured file contains duplicate
+  // requisitionIds (e.g. concatenated paginated captures, or an iLabor bug),
+  // the upsert loop would otherwise process the same Job twice — second
+  // would silently overwrite the first and could mask the title-drift
+  // warning. We keep the first occurrence as the authoritative one and
+  // emit per-row errors for the rest so they show up in the skipped list.
+  const seenReqIds = new Set<string>();
   rows.forEach((row, rowIndex) => {
     const parsed = ilaborRowSchema.safeParse(row);
     if (parsed.success) {
+      const reqId = String(parsed.data.requisitionId);
+      if (seenReqIds.has(reqId)) {
+        errors.push({
+          rowIndex,
+          reason: `Duplicate requisitionId "${reqId}" — already present earlier in this file. Skipping.`,
+          hint: `${reqId} · ${parsed.data.jobTitle}`,
+        });
+        return;
+      }
+      seenReqIds.add(reqId);
       valid.push(parsed.data);
     } else {
       const first = parsed.error.issues[0];
@@ -380,6 +403,30 @@ export async function previewRequisitions(
     }
   });
 
+  // Net-new Vendor/Client detection: for each unique incoming name, check
+  // for a case-insensitive match in the DB. Names with no match would
+  // create a new row at commit time — surface them so the operator can
+  // spot a likely rename ("RANDSTAD" → "Randstad Technologies") before
+  // it orphans every existing job.
+  const incomingVendorNames = Array.from(
+    new Set(valid.map((r) => (r.clientName || "").trim()).filter(Boolean)),
+  );
+  const incomingClientNames = Array.from(
+    new Set(valid.map((r) => r.customerName.trim()).filter(Boolean)),
+  );
+  const [existingVendors, existingClients] = await Promise.all([
+    prisma.vendor.findMany({ select: { name: true } }),
+    prisma.client.findMany({ select: { name: true } }),
+  ]);
+  const vendorNameLower = new Set(existingVendors.map((v) => v.name.trim().toLowerCase()));
+  const clientNameLower = new Set(existingClients.map((c) => c.name.trim().toLowerCase()));
+  const newVendorNames = incomingVendorNames.filter(
+    (n) => !vendorNameLower.has(n.toLowerCase()),
+  );
+  const newClientNames = incomingClientNames.filter(
+    (n) => !clientNameLower.has(n.toLowerCase()),
+  );
+
   return {
     status: "ready",
     summary: {
@@ -393,6 +440,8 @@ export async function previewRequisitions(
     newRows,
     updatedRows,
     errorRows: errors,
+    newVendorNames,
+    newClientNames,
   };
 }
 
@@ -479,8 +528,14 @@ export async function importRequisitions(
           .map((j) => [j.portalRefId as string, j] as const),
       );
 
-      // 3. Dedupe-upsert Vendors and Clients so each unique name is touched
-      //    exactly once. With ~300 rows this drops ~600 upserts to ~50.
+      // 3. Match-or-create Vendors and Clients. Critically: matching is
+      //    case-INSENSITIVE (after trim) — without this, "RANDSTAD" today
+      //    and "Randstad" tomorrow would create two Vendor rows, orphaning
+      //    every job that pointed at the original. Postgres has no
+      //    case-insensitive unique index here, so we pre-resolve each name
+      //    via a `findFirst({ mode: "insensitive" })` and only create when
+      //    no existing row matches. The DB's unique-on-name constraint
+      //    still protects against true races.
       const vendorNames = Array.from(
         new Set(
           valid.map((r) => (r.clientName || ILABOR_DEFAULT_VENDOR).trim()),
@@ -488,12 +543,16 @@ export async function importRequisitions(
       );
       const vendorIdByName = new Map<string, string>();
       for (const name of vendorNames) {
-        const v = await tx.vendor.upsert({
-          where: { name },
-          update: {},
-          create: { name },
+        const found = await tx.vendor.findFirst({
+          where: { name: { equals: name, mode: "insensitive" } },
+          select: { id: true },
         });
-        vendorIdByName.set(name, v.id);
+        if (found) {
+          vendorIdByName.set(name, found.id);
+        } else {
+          const v = await tx.vendor.create({ data: { name } });
+          vendorIdByName.set(name, v.id);
+        }
       }
 
       const clientNames = Array.from(
@@ -501,12 +560,16 @@ export async function importRequisitions(
       );
       const clientIdByName = new Map<string, string>();
       for (const name of clientNames) {
-        const c = await tx.client.upsert({
-          where: { name },
-          update: {},
-          create: { name },
+        const found = await tx.client.findFirst({
+          where: { name: { equals: name, mode: "insensitive" } },
+          select: { id: true },
         });
-        clientIdByName.set(name, c.id);
+        if (found) {
+          clientIdByName.set(name, found.id);
+        } else {
+          const c = await tx.client.create({ data: { name } });
+          clientIdByName.set(name, c.id);
+        }
       }
 
       // 4. Per-row Job upserts. Client + Vendor ids are pulled from the maps.
