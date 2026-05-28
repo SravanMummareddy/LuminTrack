@@ -153,6 +153,21 @@ export async function getPlacement(id: string) {
   return flattenRates(raw);
 }
 
+/** If this placement's submission was picked as the replacement on a prior
+ *  placement's end-of-placement card, return that prior placement so we can
+ *  surface a "Replaces PLC-007" pill. Returns null when this is not a
+ *  replacement. */
+export async function getPredecessorPlacement(submissionId: string) {
+  return prisma.placement.findFirst({
+    where: { replacementSubmissionId: submissionId },
+    select: {
+      id: true,
+      seq: true,
+      candidate: { select: { fullName: true } },
+    },
+  });
+}
+
 /** Top-strip summary for /placements: active count, total weekly margin,
  *  ending-within-14-days count. Weekly margin assumes 40-hour weeks. */
 export async function getPlacementsSummary() {

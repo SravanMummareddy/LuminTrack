@@ -8,8 +8,10 @@ import { PlacementEditButton } from "@/components/placements/placement-edit-form
 import { PlacementEndButton } from "@/components/placements/placement-end-form";
 import {
   getPlacement,
+  getPredecessorPlacement,
   getReplacementCandidates,
 } from "@/server/queries/placements";
+import { getExpiringDocumentsForCandidate } from "@/server/queries/candidates";
 import { getTimelineFor } from "@/server/queries/timeline";
 import {
   PLACEMENT_STATUS_LABEL,
@@ -81,7 +83,7 @@ export default async function PlacementDetailPage({
   const canExtend =
     placement.status === "ACTIVE" || placement.status === "EXTENDED";
 
-  const [timeline, replacements] = await Promise.all([
+  const [timeline, replacements, predecessor, expiringDocs] = await Promise.all([
     getTimelineFor("CANDIDATE", placement.candidateId),
     canExtend
       ? getReplacementCandidates({
@@ -89,7 +91,21 @@ export default async function PlacementDetailPage({
           excludeSubmissionId: placement.submission.id,
         })
       : Promise.resolve([]),
+    getPredecessorPlacement(placement.submission.id),
+    // Only surface expiring-docs compliance signal while the placement is live.
+    canExtend
+      ? getExpiringDocumentsForCandidate(placement.candidateId, user, {
+          withinDays: 30,
+        })
+      : Promise.resolve([]),
   ]);
+
+  const CATEGORY_LABEL: Record<string, string> = {
+    IDENTITY: "Identity",
+    WORK_AUTH: "Work authorization",
+    EDUCATION: "Education",
+    EMPLOYMENT: "Employment",
+  };
 
   const ratesPending = placement.billRate === 0 && placement.payRate === 0;
   const marginTone =
@@ -127,6 +143,18 @@ export default async function PlacementDetailPage({
             </Link>{" "}
             · {placement.job.client.name}
           </p>
+          {predecessor && (
+            <p className="mt-2 text-xs text-slate-600">
+              Replaces{" "}
+              <Link
+                href={`/placements/${predecessor.id}`}
+                className="font-mono text-indigo-600 hover:underline"
+              >
+                PLC-{String(predecessor.seq).padStart(3, "0")}
+              </Link>{" "}
+              ({predecessor.candidate.fullName})
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Badge tone={PLACEMENT_STATUS_TONE[placement.status]}>
@@ -206,6 +234,37 @@ export default async function PlacementDetailPage({
           </SummaryItem>
         </dl>
       </Card>
+
+      {expiringDocs.length > 0 && (
+        <section className="rounded-lg border border-amber-300 bg-amber-50 p-4">
+          <h2 className="mb-2 text-sm font-semibold text-amber-900">
+            Documents expiring soon
+          </h2>
+          <ul className="space-y-1.5 text-sm text-amber-900">
+            {expiringDocs.map((d) => {
+              const days = d.daysUntilExpiry ?? 0;
+              const tone =
+                days < 0 ? "text-red-700" : days < 15 ? "text-red-700" : "text-amber-800";
+              const suffix =
+                days < 0 ? `EXPIRED ${Math.abs(days)}d ago` : `${days}d left`;
+              return (
+                <li key={d.id} className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium uppercase tracking-wide text-amber-700">
+                    {CATEGORY_LABEL[d.category] ?? d.category}
+                  </span>
+                  <Link
+                    href={`/candidates/${placement.candidate.id}#documents`}
+                    className="text-amber-900 hover:underline"
+                  >
+                    {d.label}
+                  </Link>
+                  <span className={`text-xs font-medium ${tone}`}>{suffix}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       <Card title="Details">
         <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">

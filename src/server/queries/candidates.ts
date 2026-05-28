@@ -202,6 +202,42 @@ export async function getExpiringDocuments(
   }));
 }
 
+/**
+ * Compliance-signal query for the Placement detail page: documents for one
+ * candidate that expire within `withinDays` days (or are already expired).
+ * Sensitive categories are filtered out for non-admins, matching
+ * `getExpiringDocuments`.
+ */
+export async function getExpiringDocumentsForCandidate(
+  candidateId: string,
+  viewer: { role: UserRole },
+  opts: { withinDays?: number } = {},
+) {
+  const withinDays = opts.withinDays ?? 30;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() + withinDays);
+
+  const where: Prisma.CandidateDocumentWhereInput = {
+    candidateId,
+    expiresAt: { not: null, lte: cutoff },
+  };
+  if (!canViewSensitiveDocs(viewer)) {
+    where.category = { in: ["EDUCATION", "EMPLOYMENT"] };
+  }
+
+  const rows = await prisma.candidateDocument.findMany({
+    where,
+    orderBy: { expiresAt: "asc" },
+  });
+  const now = Date.now();
+  return rows.map((d) => ({
+    ...d,
+    daysUntilExpiry: d.expiresAt
+      ? Math.ceil((d.expiresAt.getTime() - now) / 86_400_000)
+      : null,
+  }));
+}
+
 export function getCandidateForEdit(id: string) {
   return prisma.candidate.findUnique({ where: { id } });
 }
