@@ -5,6 +5,8 @@ import {
   buildJobWhere,
   buildSubmissionWhere,
   daysSince,
+  STALE_SUBMISSION_STATUSES,
+  STATUS_TRANSITION_ACTIONS,
   type AnalyticsFilters,
 } from "@/lib/analytics";
 import {
@@ -249,15 +251,9 @@ export async function getReportsData(
   // owns. "Stale" = submittedAt > 14d and status still SUBMITTED /
   // RESUME_PICKED / VENDOR_SCREENING_CALL / CLIENT_INTERVIEW.
   const STALE_DAYS = 14;
-  const STALE_STATUSES: SubmissionStatus[] = [
-    "SUBMITTED",
-    "RESUME_PICKED",
-    "VENDOR_SCREENING_CALL",
-    "CLIENT_INTERVIEW",
-  ];
   const staleSubs = await prisma.submission.findMany({
     where: {
-      status: { in: STALE_STATUSES },
+      status: { in: STALE_SUBMISSION_STATUSES },
       submittedAt: { lt: new Date(Date.now() - STALE_DAYS * 86400_000) },
     },
     select: {
@@ -384,14 +380,6 @@ export async function getReportsData(
   // logged with their own action names (see changeSubmissionStatus) but carry
   // the same oldValue/newValue labels, so the walk below treats them
   // uniformly. Bounded by `submissionId IN (…)` so the scan is cheap.
-  const STATUS_TRANSITION_ACTIONS = [
-    "SUBMISSION_STATUS_CHANGED",
-    "CANDIDATE_SELECTED",
-    "CANDIDATE_REJECTED",
-    "OFFER_RELEASED",
-    "OFFER_ACCEPTED",
-    "CANDIDATE_JOINED",
-  ] as const;
   const filteredSubmissionIds = submissions.map((s) => s.id);
   const statusChangeRows = filteredSubmissionIds.length
     ? await prisma.activity.findMany({

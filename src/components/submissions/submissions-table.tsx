@@ -4,14 +4,11 @@ import Link from "next/link";
 import { Table, Th, Td, cardLink, cardLinkRaise } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { MobileSort } from "@/components/ui/mobile-sort";
-import { Badge } from "@/components/ui/badge";
 import { ColumnsMenu } from "@/components/ui/columns-menu";
-import {
-  SUBMISSION_STATUS_LABEL,
-  SUBMISSION_STATUS_TONE,
-} from "@/lib/labels";
+import { SubmissionStatusCell } from "@/components/submissions/submission-status-cell";
 import { formatDate, formatSubmissionDisplayId } from "@/lib/format";
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
+import { STALE_STAGE_DAYS } from "@/lib/analytics";
 import type { SubmissionListRow } from "@/server/queries/submissions";
 
 type Column = {
@@ -29,7 +26,7 @@ const COLUMNS: Column[] = [
     key: "sno",
     label: "S.No",
     align: "right",
-    defaultVisible: true,
+    defaultVisible: false,
     render: (_r, n) => (
       <Td label="S.No" secondary className="text-right tabular-nums">
         {n}
@@ -117,12 +114,37 @@ const COLUMNS: Column[] = [
     sortKey: "status",
     defaultVisible: true,
     render: (s) => (
-      <Td label="Status">
-        <Badge tone={SUBMISSION_STATUS_TONE[s.status]}>
-          {SUBMISSION_STATUS_LABEL[s.status]}
-        </Badge>
-      </Td>
+      <SubmissionStatusCell submissionId={s.id} status={s.status} />
     ),
+  },
+  {
+    key: "daysInStage",
+    label: "Days in stage",
+    sortKey: "daysInStage",
+    sortDefaultDir: "desc",
+    align: "right",
+    defaultVisible: true,
+    render: (s) => {
+      const stale = s.daysInStage > STALE_STAGE_DAYS;
+      return (
+        <Td
+          label="Days in stage"
+          className={`text-right tabular-nums ${
+            stale ? "font-semibold text-amber-700" : "text-slate-600"
+          }`}
+        >
+          <span
+            title={
+              stale
+                ? `In this stage ${s.daysInStage} days — over the ${STALE_STAGE_DAYS}-day mark`
+                : `In this stage ${s.daysInStage} day${s.daysInStage === 1 ? "" : "s"}`
+            }
+          >
+            {s.daysInStage}d
+          </span>
+        </Td>
+      );
+    },
   },
   {
     key: "rounds",
@@ -152,7 +174,9 @@ const COLUMNS: Column[] = [
 ];
 
 const STORAGE_KEY = "lumintrack.submissions.columns";
-const STORAGE_VERSION = 1;
+// Bumped to 2 for Round 5: adds the Days-in-stage column and drops S.No from
+// the default-visible set, so existing saved prefs should reset to the new defaults.
+const STORAGE_VERSION = 2;
 const DEFAULTS: ColumnPrefs = {
   visible: COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key),
   order: COLUMNS.map((c) => c.key),

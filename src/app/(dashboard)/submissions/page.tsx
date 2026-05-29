@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { LinkButton } from "@/components/ui/button";
 import { Pagination } from "@/components/ui/pagination";
+import { requireUser } from "@/lib/session";
 import { SubmissionFilters } from "@/components/submissions/submission-filters";
 import { SubmissionsTable } from "@/components/submissions/submissions-table";
 import {
@@ -37,7 +39,7 @@ export default async function SubmissionsPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const sp = await searchParams;
+  const [sp, user] = await Promise.all([searchParams, requireUser()]);
 
   const current = {
     q: clean(sp.q),
@@ -50,6 +52,8 @@ export default async function SubmissionsPage({
     from: clean(sp.from),
     to: clean(sp.to),
   };
+
+  const mineStale = clean(sp.mineStale) === "1";
 
   const sort = parseSort(
     clean(sp.sort),
@@ -72,6 +76,8 @@ export default async function SubmissionsPage({
     }),
     sort,
     page: parsePage(clean(sp.page)),
+    mineStale,
+    currentUserId: user.id,
   };
 
   const [
@@ -97,8 +103,20 @@ export default async function SubmissionsPage({
       current.clientId ||
       current.vendorId ||
       current.sisterCompanySourceId ||
-      (current.preset && current.preset !== "all"),
+      (current.preset && current.preset !== "all") ||
+      mineStale,
   );
+
+  // "Mine, stale >7d" toggle. It's a one-click preset that lives alongside (not
+  // inside) the GET filter form, so it preserves the other active params and
+  // resets to page 1. Submitting the main filter form clears it — intended.
+  const toggleParams = new URLSearchParams();
+  for (const [k, v] of Object.entries(current))
+    if (v) toggleParams.set(k, v);
+  if (!mineStale) toggleParams.set("mineStale", "1");
+  const mineStaleHref = `/submissions${
+    toggleParams.toString() ? `?${toggleParams.toString()}` : ""
+  }`;
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
@@ -119,6 +137,26 @@ export default async function SubmissionsPage({
         sources={sources}
         recruiters={recruiters}
       />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Link
+          href={mineStaleHref}
+          aria-pressed={mineStale}
+          className={
+            mineStale
+              ? "inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800"
+              : "inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+          }
+        >
+          Mine, stale &gt;7d
+          {mineStale && <span aria-hidden>✕</span>}
+        </Link>
+        {mineStale && (
+          <span className="text-xs text-slate-400">
+            Your early-pipeline submissions sitting in a stage over 7 days.
+          </span>
+        )}
+      </div>
 
       {total === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">
