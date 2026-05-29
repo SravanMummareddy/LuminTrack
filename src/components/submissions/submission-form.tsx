@@ -6,6 +6,7 @@ import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { Button, buttonClass } from "@/components/ui/button";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 import { isLikelyDriveUrl, DRIVE_LINK_WARNING } from "@/lib/validation/resume";
+import { OVERRIDE_REASONS, OVERRIDE_REASON_LABEL } from "@/lib/labels";
 
 type ResumeOption = { id: string; label: string; driveLink: string };
 type CandidateOption = {
@@ -30,6 +31,9 @@ type Fields = {
   newResumeLabel: string;
   newResumeLink: string;
   submissionNotes: string;
+  // Set only when a gate (duplicate / iLabor) paused the submit.
+  overridePreset: string;
+  overrideNote: string;
 };
 
 const NEW_RESUME = "__new__";
@@ -60,6 +64,8 @@ export function SubmissionForm({
     newResumeLabel: "",
     newResumeLink: "",
     submissionNotes: "",
+    overridePreset: "",
+    overrideNote: "",
   });
   const set =
     (name: keyof Fields) =>
@@ -242,38 +248,70 @@ export function SubmissionForm({
         />
       </Field>
 
-      {state.needsConfirm && (() => {
-        // Server returns three distinct prompt messages — duplicate /
-        // iLabor closed / iLabor cap. The textarea name has to match the
-        // field the action reads (duplicateReason vs ilaborOverrideReason)
-        // or the override is silently dropped.
-        const isIlabor = (state.error ?? "").startsWith("iLabor");
-        const fieldName = isIlabor ? "ilaborOverrideReason" : "duplicateReason";
-        const label = isIlabor ? "iLabor override reason" : "Duplicate override reason";
-        const placeholder = isIlabor
-          ? "e.g. Manager approved despite iLabor lockout"
-          : "e.g. Role rebooted, prior submission cancelled";
+      {state.needsConfirm && state.needsConfirm !== true && (() => {
+        // The gate kind comes typed from the server (no error-string sniffing).
+        // Duplicate overrides and iLabor overrides are recorded under different
+        // audit fields, so the composed reason goes to the matching field name.
+        const gate = state.needsConfirm;
+        const fieldName =
+          gate === "duplicate" ? "duplicateReason" : "ilaborOverrideReason";
+        // Persist the preset code (analyzable) plus an optional note in parens.
+        const composed =
+          fields.overridePreset === ""
+            ? ""
+            : fields.overridePreset +
+              (fields.overrideNote.trim()
+                ? ` (${fields.overrideNote.trim()})`
+                : "");
         return (
-          <Field
-            label={label}
-            htmlFor={fieldName}
-            hint="Required — captured on the audit trail."
-            error={errors[fieldName]}
-          >
-            <Input id={fieldName} name={fieldName} placeholder={placeholder} required />
-          </Field>
+          <div className="space-y-3 rounded-md border border-amber-300 bg-amber-50 p-3">
+            <p className="text-sm text-amber-800">{state.error}</p>
+            {gate === "duplicate" &&
+              state.confirmData?.existingSubmissionId && (
+                <Link
+                  href={`/submissions/${state.confirmData.existingSubmissionId}`}
+                  target="_blank"
+                  className="inline-block text-sm font-medium text-amber-900 underline"
+                >
+                  View the existing submission →
+                </Link>
+              )}
+            <input type="hidden" name={fieldName} value={composed} />
+            <Field label="Reason" htmlFor="overridePreset" required>
+              <Select
+                id="overridePreset"
+                value={fields.overridePreset}
+                onChange={set("overridePreset")}
+                required
+              >
+                <option value="" disabled>
+                  Pick a reason…
+                </option>
+                {OVERRIDE_REASONS.map((r) => (
+                  <option key={r} value={r}>
+                    {OVERRIDE_REASON_LABEL[r]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field
+              label="Note"
+              htmlFor="overrideNote"
+              hint="Optional — captured on the audit trail."
+            >
+              <Textarea
+                id="overrideNote"
+                rows={2}
+                value={fields.overrideNote}
+                onChange={set("overrideNote")}
+              />
+            </Field>
+          </div>
         );
       })()}
 
-      {state.error && (
-        <p
-          className={
-            "rounded-md px-3 py-2 text-sm " +
-            (state.needsConfirm
-              ? "bg-amber-50 text-amber-800"
-              : "bg-red-50 text-red-700")
-          }
-        >
+      {state.error && !state.needsConfirm && (
+        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
           {state.error}
         </p>
       )}

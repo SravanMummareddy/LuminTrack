@@ -142,7 +142,7 @@ export async function createSubmission(
   // we need to bail with `needsConfirm` so the caller can show the prompt.
   type CreateResult =
     | { kind: "created"; submissionId: string }
-    | { kind: "duplicate" }
+    | { kind: "duplicate"; existingId: string }
     | { kind: "ilabor_closed" }
     | { kind: "ilabor_cap"; cap: number; active: number };
   const lockHash = hashPair(d.candidateId, d.jobId);
@@ -156,7 +156,8 @@ export async function createSubmission(
         where: { candidateId: d.candidateId, jobId: d.jobId },
         select: { id: true },
       });
-      if (existing && !duplicateReason) return { kind: "duplicate" };
+      if (existing && !duplicateReason)
+        return { kind: "duplicate", existingId: existing.id };
 
       // iLabor "closed for submissions" gate. Fires when iLabor's
       // submitStatus is 0 — independent of LuminTrack's job status. Override
@@ -255,20 +256,22 @@ export async function createSubmission(
 
   if (result.kind === "duplicate") {
     return {
-      needsConfirm: true,
-      error: `${candidate.fullName} was already submitted to this job. Add a reason to submit again.`,
+      needsConfirm: "duplicate",
+      confirmData: { existingSubmissionId: result.existingId },
+      error: `${candidate.fullName} was already submitted to this job. Pick a reason to submit again.`,
     };
   }
   if (result.kind === "ilabor_closed") {
     return {
-      needsConfirm: true,
-      error: `iLabor has closed submissions on this requisition. Add a reason to submit anyway.`,
+      needsConfirm: "ilabor_closed",
+      error: `iLabor has closed submissions on this requisition. Pick a reason to submit anyway.`,
     };
   }
   if (result.kind === "ilabor_cap") {
     return {
-      needsConfirm: true,
-      error: `iLabor's cap of ${result.cap} is reached (${result.active} active). Add a reason to submit past the cap.`,
+      needsConfirm: "ilabor_cap",
+      confirmData: { cap: result.cap, active: result.active },
+      error: `iLabor's cap of ${result.cap} is reached (${result.active} active). Pick a reason to submit past the cap.`,
     };
   }
   const submissionId = result.submissionId;
