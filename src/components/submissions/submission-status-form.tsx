@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useState } from "react";
 import { Select, Textarea, Input } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import { changeSubmissionStatus } from "@/server/actions/submissions";
 import {
   SUBMISSION_STATUSES,
@@ -53,6 +54,7 @@ export function SubmissionStatusForm({
     changeSubmissionStatus,
     EMPTY_FORM_STATE,
   );
+  const { toast } = useToast();
 
   // Default "when this happened" to now. This must run after mount, not in a
   // useState initializer: the client's local "now" is unknown during SSR, so
@@ -61,6 +63,19 @@ export function SubmissionStatusForm({
     // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only initial value
     setEventAt(nowDateTimeLocal());
   }, []);
+
+  // Confirm the save — this action revalidates instead of redirecting, so the
+  // status change used to land with zero feedback. `state` is a fresh object
+  // per submit, so a second identical change still re-fires the toast.
+  useEffect(() => {
+    if (state.ok && state.toast) {
+      toast({
+        tone: "success",
+        title: state.toast.title,
+        description: state.toast.description,
+      });
+    }
+  }, [state, toast]);
 
   const showReason = selected === "REJECTED" || selected === "ON_HOLD";
   const showExpectedJoin = selected === "OFFER_ACCEPTED";

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ExternalLink, Plus } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
+import { ConfirmSubmit } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { ResumeForm, type ResumeData } from "./resume-form";
 import { deleteCandidateResume } from "@/server/actions/resumes";
@@ -83,22 +84,19 @@ export function ResumeSection({
                     >
                       Edit
                     </button>
-                    <form action={deleteCandidateResume}>
-                      <input type="hidden" name="id" value={r.id} />
-                      <button
-                        type="submit"
-                        onClick={(e) => {
-                          const msg =
-                            r.submissionCount > 0
-                              ? `Delete "${r.label}"? ${r.submissionCount} submission(s) used it — each keeps its own copy of the link.`
-                              : `Delete "${r.label}"?`;
-                          if (!window.confirm(msg)) e.preventDefault();
-                        }}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        Delete
-                      </button>
-                    </form>
+                    <ConfirmSubmit
+                      action={deleteCandidateResume}
+                      fields={{ id: r.id }}
+                      title="Delete resume?"
+                      description={
+                        r.submissionCount > 0
+                          ? `"${r.label}" is used by ${r.submissionCount} submission${r.submissionCount === 1 ? "" : "s"} — each keeps its own copy of the link, so they're unaffected.`
+                          : `"${r.label}" will be removed from this candidate's library.`
+                      }
+                      confirmLabel="Delete resume"
+                      trigger="Delete"
+                      triggerClassName="text-red-600 hover:text-red-800"
+                    />
                   </div>
                 </div>
 

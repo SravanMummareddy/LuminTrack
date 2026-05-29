@@ -32,6 +32,12 @@ export type FormState = {
   needsConfirm?: ConfirmKind;
   /** Extra context for the paused gate (numbers, ids) shown in the prompt. */
   confirmData?: ConfirmData;
+  /**
+   * Optional success message for a toast. Actions that don't redirect (status
+   * change, note add, job status) set this so the client can confirm the save
+   * — the app previously gave no feedback on these silent writes.
+   */
+  toast?: { title: string; description?: string };
 };
 
 export const EMPTY_FORM_STATE: FormState = {};

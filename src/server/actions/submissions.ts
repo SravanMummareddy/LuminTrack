@@ -538,6 +538,9 @@ export async function changeSubmissionStatus(
   if (next === "JOINED" && d.actualJoinDate)
     joinDates.actualJoinDate = d.actualJoinDate;
 
+  // Surfaced in the success toast — set when JOINED creates/reactivates a placement.
+  let placementSeq: number | null = null;
+
   await prisma.$transaction(async (tx) => {
     await tx.submission.update({
       where: { id: d.id },
@@ -565,7 +568,7 @@ export async function changeSubmissionStatus(
     // R4.2 — placement lifecycle hooks. Same transaction as the status change
     // so the placement state and the audit row commit together (audit invariant).
     if (next === "JOINED" && prev !== "JOINED") {
-      await ensurePlacementOnJoined(tx, {
+      const placement = await ensurePlacementOnJoined(tx, {
         submissionId: d.id,
         candidateId: submission.candidateId,
         jobId: submission.jobId,
@@ -576,6 +579,7 @@ export async function changeSubmissionStatus(
         performedById: user.id,
         eventAt: d.actualJoinDate ?? d.eventAt ?? null,
       });
+      placementSeq = placement.placementSeq;
     } else if (
       prev === "JOINED" &&
       next !== "JOINED" &&
@@ -598,5 +602,14 @@ export async function changeSubmissionStatus(
   revalidatePath(`/submissions/${d.id}`);
   revalidatePath(`/jobs/${submission.jobId}`);
   revalidatePath(`/candidates/${submission.candidateId}`);
-  return { ok: true };
+  return {
+    ok: true,
+    toast: {
+      title: `Status updated to ${SUBMISSION_STATUS_LABEL[next]}`,
+      description:
+        placementSeq != null
+          ? `Placement PLC-${String(placementSeq).padStart(3, "0")} created — set its rates next.`
+          : undefined,
+    },
+  };
 }

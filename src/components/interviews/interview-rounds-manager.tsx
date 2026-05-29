@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
+import { ConfirmSubmit } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { deleteInterviewRound } from "@/server/actions/interviews";
@@ -93,27 +94,16 @@ export function InterviewRoundsManager({
                   >
                     Edit
                   </button>
-                  <form
+                  <ConfirmSubmit
                     action={deleteInterviewRound}
-                    onSubmit={(e) => {
-                      if (
-                        !confirm(
-                          `Delete round ${r.roundOrder} · "${r.roundName}"? This can't be undone.`,
-                        )
-                      ) {
-                        e.preventDefault();
-                      }
-                    }}
-                  >
-                    <input type="hidden" name="id" value={r.id} />
-                    <button
-                      type="submit"
-                      title="Delete round"
-                      className="text-slate-400 hover:text-red-600"
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden />
-                    </button>
-                  </form>
+                    fields={{ id: r.id }}
+                    title="Delete interview round?"
+                    description={`Round ${r.roundOrder} · "${r.roundName}" will be deleted. This can't be undone.`}
+                    confirmLabel="Delete round"
+                    trigger={<Trash2 className="h-4 w-4" aria-hidden />}
+                    triggerClassName="text-slate-400 hover:text-red-600"
+                    triggerTitle="Delete round"
+                  />
                 </div>
               </div>
 

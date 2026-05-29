@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useState } from "react";
 import { Plus, Star, Trash2 } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
+import { ConfirmSubmit } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Field, Input } from "@/components/ui/field";
@@ -121,16 +122,16 @@ export function ContactsDialog({
                     >
                       Edit
                     </button>
-                    <form action={deleteContact}>
-                      <input type="hidden" name="id" value={c.id} />
-                      <button
-                        type="submit"
-                        title="Delete contact"
-                        className="text-slate-400 hover:text-red-600"
-                      >
-                        <Trash2 className="h-4 w-4" aria-hidden />
-                      </button>
-                    </form>
+                    <ConfirmSubmit
+                      action={deleteContact}
+                      fields={{ id: c.id }}
+                      title="Delete contact?"
+                      description={`"${c.name}" will be removed from ${parentName}.`}
+                      confirmLabel="Delete contact"
+                      trigger={<Trash2 className="h-4 w-4" aria-hidden />}
+                      triggerClassName="text-slate-400 hover:text-red-600"
+                      triggerTitle="Delete contact"
+                    />
                   </div>
                 )}
               </li>

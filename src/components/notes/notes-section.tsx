@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import { Textarea } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import { createNote } from "@/server/actions/notes";
 import { formatDateTime } from "@/lib/format";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
@@ -35,6 +36,13 @@ export function NotesSection({
     createNote,
     EMPTY_FORM_STATE,
   );
+  const { toast } = useToast();
+
+  // Confirm the save — createNote revalidates rather than redirecting. `state`
+  // is a fresh object per submit, so each added note re-fires the toast.
+  useEffect(() => {
+    if (state.ok) toast({ tone: "success", title: "Note added" });
+  }, [state, toast]);
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5">

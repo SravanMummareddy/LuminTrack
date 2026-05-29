@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { ConfirmSubmit } from "@/components/ui/confirm-dialog";
 import { DocumentForm, type DocumentData } from "./document-form";
 import { deleteCandidateDocument } from "@/server/actions/candidate-documents";
 import type { DocumentCategory } from "@/generated/prisma/enums";
@@ -248,19 +249,15 @@ export function DocumentsManager({
                                 >
                                   Edit
                                 </button>
-                                <form action={deleteCandidateDocument}>
-                                  <input type="hidden" name="id" value={d.id} />
-                                  <button
-                                    type="submit"
-                                    onClick={(e) => {
-                                      if (!window.confirm(`Delete "${d.label}"?`))
-                                        e.preventDefault();
-                                    }}
-                                    className="text-red-600 hover:text-red-800"
-                                  >
-                                    Delete
-                                  </button>
-                                </form>
+                                <ConfirmSubmit
+                                  action={deleteCandidateDocument}
+                                  fields={{ id: d.id }}
+                                  title="Delete document?"
+                                  description={`"${d.label}" will be removed from this candidate.`}
+                                  confirmLabel="Delete document"
+                                  trigger="Delete"
+                                  triggerClassName="text-red-600 hover:text-red-800"
+                                />
                               </div>
                             </li>
                           );
