@@ -12,6 +12,35 @@ timeline, and recruiter performance. Replaces a manual Excel/Word process.
 "Remaining work" summary — start there before grepping the audit sections).
 **Future enhancements (large multi-session items):** [`ENHANCEMENTS.md`](./ENHANCEMENTS.md).
 
+## 🚧 Current work — Round 5: Submission & workflow UX overhaul (IN PROGRESS)
+
+Owner asked (2026-05-29) for a deep rework of the submission experience.
+A 5-persona UX/product audit (recruiter, admin, UX, PM, QA) all converged on
+the same problems. Full plan + decisions + phased build in
+[`docs/PLAN_submission_workflow_overhaul.md`](./docs/PLAN_submission_workflow_overhaul.md)
+(working copy: `~/.claude/plans/i-got-a-initial-cozy-sloth.md`).
+
+**Owner decisions:** (1) submissions **gated by assignment with self-claim**
+("Claim this job" → submit; admins submit/assign freely); (2) **three submit
+entry points** sharing one form (job page + candidate page + global
+`/submissions` "New submission"); (3) override + status reasons become a
+**preset list + optional note**; (4) all four areas in scope (submission flow,
+assignment, columns/density, confirmations/feedback).
+
+**Top problems found:** no toast/success feedback anywhere (silent saves,
+incl. the JOINED→placement cascade); submissions only startable from a job
+page; assignment is decorative (`createSubmission` never reads `JobAssignment`);
+override gates are toothless/brittle (`error.startsWith("iLabor")` field sniff);
+no inline list editing; submissions list lacks days-in-stage / "mine stale >7d";
+résumé silently wiped on candidate switch; native `window.confirm` in 4 delete
+paths; `submittedById` un-correctable.
+
+**Phases:** 1 — toast primitive + typed gate kinds (foundational); 2 —
+assignment gate + self-claim + 3 entry points; 3 — wire toasts + branded
+confirm dialogs; 4 — submissions-list upgrades; 5 — polish. Reasons are
+`labels.ts` string sets, so the only possible migration is one optional
+`Activity.isOverride` boolean.
+
 ## 🚧 Current work — Round 4 pre-demo (Documents → Placements → Export)
 
 Admin handed over a new pre-demo requirements bundle on 2026-05-28.

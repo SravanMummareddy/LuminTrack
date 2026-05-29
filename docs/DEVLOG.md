@@ -10,6 +10,28 @@ short instead of long.
 
 ---
 
+## 2026-05-29 · seed-demo crashed on wipe — delete order ignored later FK tables
+
+**Situation.** `npx tsx prisma/seed-demo.ts` failed mid-wipe with
+`Foreign key constraint violated: Placement_submissionId_fkey` (P2003) at
+`prisma.submission.deleteMany()`.
+
+**Diagnosis.** `seed-demo.ts` predates R4.2 (Placements). Its wipe block
+deleted `submission` before `placement` / `placementExtension`, but a
+`Placement` row holds an FK to `Submission`, so Postgres refused the delete.
+`candidateDocument` (R4.1) was also never wiped. The script had silently
+rotted as new models landed without anyone re-running the full wipe.
+
+**Fix.** Added `placementExtension` → `placement` deletes before `submission`,
+and `candidateDocument` before `candidateResume`, restoring FK-safe order.
+
+**Lesson.** A destructive teardown ordered by hand is a maintenance liability —
+every new model with an inbound FK must be threaded into it. When it breaks,
+fix the *order*, don't reach for `CASCADE`/raw SQL: the explicit list is the
+documentation of the dependency graph.
+
+---
+
 ## 2026-05-28 · iLabor import "expired transaction" — wrong layer was the culprit
 
 **Situation.** The 306-row iLabor sample import started failing on
