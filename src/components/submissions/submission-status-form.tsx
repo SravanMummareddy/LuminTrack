@@ -68,6 +68,11 @@ export function SubmissionStatusForm({
   // Confirm the save — this action revalidates instead of redirecting, so the
   // status change used to land with zero feedback. `state` is a fresh object
   // per submit, so a second identical change still re-fires the toast.
+  //
+  // This form is intentionally NOT remounted via `key={status}` on save: that
+  // unmounted the instance before this effect could run, eating the toast. So
+  // on success we reset the change-specific fields here, the way the remount
+  // used to. `selected` already equals the saved status (the user picked it).
   useEffect(() => {
     if (state.ok && state.toast) {
       toast({
@@ -75,6 +80,13 @@ export function SubmissionStatusForm({
         title: state.toast.title,
         description: state.toast.description,
       });
+      /* eslint-disable react-hooks/set-state-in-effect */
+      setNote("");
+      setReason("");
+      setExpectedJoinDate("");
+      setActualJoinDate("");
+      setEventAt(nowDateTimeLocal());
+      /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, [state, toast]);
 
