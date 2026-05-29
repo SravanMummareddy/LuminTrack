@@ -352,6 +352,96 @@ fix is `O(1)` and the rule is encoded in one place.
 
 ---
 
+## 2026-05-28 · Re-imports were silently overwriting work — fix at the diff, not the schema
+
+**Situation.** Recruiters were nervous about re-uploading the iLabor
+JSON. The fear: "I edited a job last week — what happens to my work
+on the next import?" The honest answer was uncomfortable: every
+iLabor-mapped column was overwritten unconditionally on every
+re-import, and only `title` / `client` / `vendor` drift was logged.
+Rate / end-date / positions / owner — silently clobbered.
+
+**Diagnosis.** Two separable issues. (1) **Unnecessary writes** —
+the importer reissued the same `job.upsert` even when iLabor's payload
+matched what we already had. Wasted writes, bumped `updatedAt` for
+nothing. (2) **Opaque writes** — when something *did* change, the
+operator had no trail of what. The temptation was to add a
+`manualOverride` flag column per field (heavy schema change; hard to
+get right). The simpler reframe: *don't prevent overwrites — make
+them transparent.*
+
+**Fix.** Per row, compute `diffJobFields(prior, next)` against an
+expanded `select` over all 21 iLabor-owned columns (date-safe via
+`Date.getTime()`; decimal-safe via `Number(x.toString()).toFixed(2)`).
+Three branches: no diff → bump `lastImportedAt` only and increment
+`unchangedCount`; diff → write only changed fields + one
+`JOB_UPDATED` audit row whose `description` lists every old → new
+pair. To make the per-row audits discoverable, pre-create the
+`REQUISITIONS_IMPORTED` summary row *before* the loop so its id
+exists; stamp every per-row audit with
+`note = "importRunId:<id>"`. Free correlation key, zero schema
+change. UI surfaces: 5-card preview summary (Unchanged added);
+`/jobs/imports/[activityId]` drill-down listing every changed job
+with its diff bullets; `/api/jobs/imports/[id]/changelog?format=txt|csv`
+download (admin-only, logs `DATA_EXPORTED`). `/audit` page extracts
+`importRunId:` from `Activity.note` to render a linkback.
+
+**Lesson.** *Don't prevent the bad thing — make it visible.* A flag
+column per field would have been weeks of work and a maintenance
+trap. A diff helper + a free correlation key in an existing
+nullable column gave us prevention's downstream benefit (operator
+trust) at a fraction of the cost. The schema isn't always the right
+place to encode policy; audit log + good UX often is. Also:
+**preview parity matters.** Shipping the diff path on commit but
+leaving preview showing the old binary "Updated" was the moment
+operators noticed — "I see Unchanged after confirm but not in
+preview." If a feature is about transparency, it has to be
+transparent at every step.
+
+---
+
+## 2026-05-28 · Sources and Portals diverged — generic mirror beat the special case
+
+**Situation.** Recruiter asked: "I'm importing from Randstad iLabor —
+why isn't Randstad listed as a Source under Settings → Sources?"
+LuminTrack has two models that look similar but mean different
+things: `JobPortal` (the system data flowed *in* from) and
+`SisterCompanySource` (the recruiter-attributed origin used for
+reporting on `/reports`). The importer touched `JobPortal` but never
+set `Job.sisterCompanySourceId`, so iLabor jobs showed up as "—" in
+source breakdowns.
+
+**Diagnosis.** The first instinct — hardcode an upsert of a
+`SisterCompanySource` named "Randstad" inside the iLabor importer —
+fails the "what about the next portal?" test. CWS, Beeline, future
+VMS integrations would all need their own special case. The right
+shape was a **convention**, not a code path: every JobPortal gets a
+mirrored Source with the same name. One helper, called next to every
+JobPortal upsert.
+
+**Fix.** `src/server/portals.ts` ships `ensureSourceForPortal(db,
+portalName)` — case-stable upsert on `SisterCompanySource.name`,
+returns the id. Called from `seed.ts` (after the iLabor JobPortal
+upsert) and from the importer's Phase B.1 (after `prisma.jobPortal.
+upsert`). Set on the **create** path only of `job.upsert` so admin
+re-tags survive re-imports. A one-shot `prisma/backfill-portal-
+sources.ts` iterates every existing JobPortal, ensures its mirror,
+and `updateMany`s the dangling 305 jobs. Preview UI gained a Source
+banner — slate "(existing)" or amber "(will be created)" — so the
+admin sees which Source the run will attribute to *before*
+confirming.
+
+**Lesson.** *Convention beats special case when the model is going
+to grow.* The hardcoded "Randstad" branch would have looked fine
+in review and silently rotted with every new portal. A two-line
+helper called from the canonical upsert site encodes the rule
+once and pays forward indefinitely. Also: **show the attribution
+in preview.** Mutations that decide invisible things make
+operators distrust the system. Show the decision before the
+commit button.
+
+---
+
 ## Recommended use
 
 - **Before an interview:** scan the entries' titles and pick 2–3
