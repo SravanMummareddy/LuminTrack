@@ -54,6 +54,7 @@ export default async function AuditPage({
         id: true,
         action: true,
         description: true,
+        note: true,
         createdAt: true,
         performedBy: { select: { id: true, fullName: true } },
         jobId: true,
@@ -170,7 +171,20 @@ export default async function AuditPage({
                   <Td label="Action">
                     <Badge tone="indigo">{r.action}</Badge>
                   </Td>
-                  <Td label="Description">{r.description}</Td>
+                  <Td label="Description">
+                    {r.description}
+                    {r.note && r.note.startsWith("importRunId:") ? (
+                      <>
+                        {" "}
+                        <Link
+                          href={`/jobs/imports/${r.note.slice("importRunId:".length)}`}
+                          className="text-xs text-indigo-600 hover:underline"
+                        >
+                          (open import run)
+                        </Link>
+                      </>
+                    ) : null}
+                  </Td>
                   <Td label="By">{r.performedBy.fullName}</Td>
                   <Td label="Entity">
                     {href ? (

@@ -16,6 +16,7 @@ import { formatDate, formatDateTime } from "@/lib/format";
 type SummaryShape = {
   createdCount?: number;
   updatedCount?: number;
+  unchangedCount?: number;
   erroredCount?: number;
   statusWarningCount?: number;
   capturedAt?: string;
@@ -115,6 +116,7 @@ export default async function ImportsHistoryPage() {
                 <Th>By</Th>
                 <Th className="text-right">New</Th>
                 <Th className="text-right">Updated</Th>
+                <Th className="text-right">Unchanged</Th>
                 <Th className="text-right">Skipped</Th>
                 <Th className="text-right">Status warnings</Th>
                 <Th>Captured at</Th>
@@ -126,7 +128,12 @@ export default async function ImportsHistoryPage() {
                 return (
                   <tr key={row.id} className="hover:bg-slate-50">
                     <Td label="When" className="whitespace-nowrap">
-                      {formatDateTime(row.createdAt)}
+                      <Link
+                        href={`/jobs/imports/${row.id}`}
+                        className="text-slate-700 hover:text-slate-900 hover:underline"
+                      >
+                        {formatDateTime(row.createdAt)}
+                      </Link>
                     </Td>
                     <Td label="By">{row.performedBy?.fullName ?? "—"}</Td>
                     <Td label="New" className="text-right tabular-nums">
@@ -134,6 +141,9 @@ export default async function ImportsHistoryPage() {
                     </Td>
                     <Td label="Updated" className="text-right tabular-nums">
                       {s?.updatedCount ?? "—"}
+                    </Td>
+                    <Td label="Unchanged" className="text-right tabular-nums">
+                      {s?.unchangedCount ?? "—"}
                     </Td>
                     <Td label="Skipped" className="text-right tabular-nums">
                       {s?.erroredCount ?? "—"}

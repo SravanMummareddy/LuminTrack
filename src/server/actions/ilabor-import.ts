@@ -80,7 +80,11 @@ export type IlaborImportPreviewState = {
   summary?: {
     totalRows: number;
     newCount: number;
+    /** Existing rows where at least one iLabor-owned field will change. */
     updatedCount: number;
+    /** Existing rows where every iLabor-owned field matches our stored
+     *  value — committing will only bump `lastImportedAt`, no audit row. */
+    unchangedCount: number;
     erroredCount: number;
     statusWarningCount: number;
     capturedAt: string;
@@ -107,9 +111,12 @@ export type IlaborImportResultState = {
   result?: {
     createdCount: number;
     updatedCount: number;
+    /** Rows iLabor sent that exactly matched our stored values — no
+     *  per-field write, no JOB_UPDATED audit, just a `lastImportedAt` bump. */
+    unchangedCount: number;
     erroredCount: number;
     statusWarningCount: number;
-    /** Activity row id, for linking to the timeline if we ever surface it. */
+    /** Activity row id, for linking to the timeline / drill-down. */
     activityId: string;
   };
 };
@@ -297,6 +304,110 @@ function withoutInternal<T extends { _statusUnknown: boolean }>(
   return rest;
 }
 
+// ─── Field-level diff (re-import → per-field change detection) ─────────────
+
+/**
+ * Human labels for every iLabor-owned Job column the importer touches on the
+ * update path. Used both to compare prior-vs-incoming and to render readable
+ * diff strings for the JOB_UPDATED audit row. `client` and `vendor` are
+ * tracked separately in the per-row branch because they're FK fields, not
+ * Job columns directly.
+ */
+const DIFFABLE_FIELDS = {
+  title: "title",
+  location: "location",
+  vendorRate: "vendor rate",
+  atsId: "ATS id",
+  startDate: "start date",
+  endDate: "end date",
+  durationLabel: "duration",
+  positions: "positions",
+  externalSubsCount: "iLabor subs count",
+  externalActiveCount: "iLabor active count",
+  releasedDate: "released date",
+  assignedToName: "assigned to",
+  ownerName: "owner",
+  ownerAltEmail: "owner alt email",
+  reqType: "req type",
+  department: "department",
+  externalStatusRaw: "iLabor status",
+  externalCreatedDate: "iLabor created date",
+  submitLimit: "submission cap",
+  ilaborSubmitOpen: "iLabor submit flag",
+  ilaborScreenerCode: "iLabor screener code",
+} as const;
+
+type DiffKey = keyof typeof DIFFABLE_FIELDS;
+
+const DATE_KEYS: ReadonlySet<DiffKey> = new Set([
+  "startDate",
+  "endDate",
+  "releasedDate",
+  "externalCreatedDate",
+]);
+const DECIMAL_KEYS: ReadonlySet<DiffKey> = new Set(["vendorRate"]);
+
+function fieldEq(key: DiffKey, a: unknown, b: unknown): boolean {
+  if (a == null && b == null) return true;
+  if (a == null || b == null) return false;
+  if (DATE_KEYS.has(key)) {
+    const aT = a instanceof Date ? a.getTime() : new Date(String(a)).getTime();
+    const bT = b instanceof Date ? b.getTime() : new Date(String(b)).getTime();
+    return aT === bT;
+  }
+  if (DECIMAL_KEYS.has(key)) {
+    return Number(a.toString()).toFixed(2) === Number(b.toString()).toFixed(2);
+  }
+  return a === b;
+}
+
+function fmtField(key: DiffKey, v: unknown): string {
+  if (v == null) return "—";
+  if (DATE_KEYS.has(key)) {
+    const d = v instanceof Date ? v : new Date(String(v));
+    return d.toISOString().slice(0, 10);
+  }
+  if (DECIMAL_KEYS.has(key)) {
+    return `$${Number(v.toString()).toFixed(2)}`;
+  }
+  if (typeof v === "string") return `"${v}"`;
+  return String(v);
+}
+
+function serializeForAudit(obj: Record<string, unknown>): string {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v == null) out[k] = null;
+    else if (v instanceof Date) out[k] = v.toISOString();
+    else if (typeof v === "object") out[k] = v.toString();
+    else out[k] = v;
+  }
+  return JSON.stringify(out);
+}
+
+/**
+ * Compare an existing Job's iLabor-owned columns to the incoming update
+ * payload. Returns the subset of fields that actually changed plus a list
+ * of human-readable diff strings. `lastImportedAt` is the heartbeat field
+ * and is intentionally not included.
+ */
+function diffJobFields(
+  prior: Record<DiffKey, unknown>,
+  next: Record<DiffKey, unknown>,
+): { changed: Partial<Record<DiffKey, unknown>>; diffs: string[] } {
+  const changed: Partial<Record<DiffKey, unknown>> = {};
+  const diffs: string[] = [];
+  for (const key of Object.keys(DIFFABLE_FIELDS) as DiffKey[]) {
+    const p = prior[key];
+    const n = next[key];
+    if (!fieldEq(key, p, n)) {
+      changed[key] = n;
+      diffs.push(`${DIFFABLE_FIELDS[key]} ${fmtField(key, p)} → ${fmtField(key, n)}`);
+    }
+  }
+  return { changed, diffs };
+}
+
 function digestOf(row: IlaborRow, rowIndex: number): RowDigest {
   const { unknown } = ilaborStatusToJobStatus(row.requisitionStatus);
   return {
@@ -346,7 +457,32 @@ export async function previewRequisitions(
           portalRefId: true,
           status: true,
           title: true,
+          clientId: true,
+          vendorId: true,
           client: { select: { name: true } },
+          vendor: { select: { name: true } },
+          // Diffable iLabor-owned columns so the preview can classify
+          // updated-vs-unchanged the same way the importer will at commit.
+          location: true,
+          vendorRate: true,
+          atsId: true,
+          startDate: true,
+          endDate: true,
+          durationLabel: true,
+          positions: true,
+          externalSubsCount: true,
+          externalActiveCount: true,
+          releasedDate: true,
+          assignedToName: true,
+          ownerName: true,
+          ownerAltEmail: true,
+          reqType: true,
+          department: true,
+          externalStatusRaw: true,
+          externalCreatedDate: true,
+          submitLimit: true,
+          ilaborSubmitOpen: true,
+          ilaborScreenerCode: true,
         },
       })
     : [];
@@ -357,6 +493,7 @@ export async function previewRequisitions(
 
   const newRows: RowDigest[] = [];
   const updatedRows: RowDigest[] = [];
+  let unchangedCount = 0;
   let statusWarningCount = 0;
 
   valid.forEach((row, idxAmongValid) => {
@@ -395,15 +532,44 @@ export async function previewRequisitions(
         existingCustomer !== null &&
         existingCustomer.trim().toLowerCase() !==
           row.customerName.trim().toLowerCase();
-      updatedRows.push({
-        ...digest,
-        existingStatus,
-        statusDiverged: diverged,
-        existingTitle,
-        existingCustomer,
-        titleDrifted,
-        customerDrifted,
-      });
+
+      // Same diff the importer will run at commit time — split this row
+      // into the updated vs. unchanged bucket so the preview summary
+      // matches the post-commit result.
+      let hasChanges = true;
+      if (prior) {
+        const nextForDiff = withoutInternal(jobUpdateFields(row)) as unknown as Record<
+          DiffKey,
+          unknown
+        >;
+        const priorForDiff = prior as unknown as Record<DiffKey, unknown>;
+        const { diffs } = diffJobFields(priorForDiff, nextForDiff);
+        const priorVendorName = prior.vendor?.name ?? null;
+        const priorClientName = prior.client?.name ?? null;
+        const incomingVendor = (row.clientName || ILABOR_DEFAULT_VENDOR).trim();
+        const incomingClient = row.customerName.trim();
+        const vendorChanged =
+          (priorVendorName ?? "").trim().toLowerCase() !==
+          incomingVendor.toLowerCase();
+        const clientChanged =
+          (priorClientName ?? "").trim().toLowerCase() !==
+          incomingClient.toLowerCase();
+        hasChanges = diffs.length > 0 || vendorChanged || clientChanged;
+      }
+
+      if (hasChanges) {
+        updatedRows.push({
+          ...digest,
+          existingStatus,
+          statusDiverged: diverged,
+          existingTitle,
+          existingCustomer,
+          titleDrifted,
+          customerDrifted,
+        });
+      } else {
+        unchangedCount += 1;
+      }
     } else {
       newRows.push(digest);
     }
@@ -454,6 +620,7 @@ export async function previewRequisitions(
       totalRows: envelope.rows.length,
       newCount: newRows.length,
       updatedCount: updatedRows.length,
+      unchangedCount,
       erroredCount: errors.length,
       statusWarningCount,
       capturedAt: envelope.capturedAt,
@@ -497,6 +664,7 @@ export async function importRequisitions(
 
   let createdCount = 0;
   let updatedCount = 0;
+  let unchangedCount = 0;
   let statusWarningCount = 0;
   let activityId = "";
 
@@ -528,6 +696,31 @@ export async function importRequisitions(
     // transaction. The unique-on-name constraint on Vendor/Client (and the
     // session lock above) still protects against admin-vs-admin races.
 
+    // B.0 Pre-create the summary REQUISITIONS_IMPORTED Activity row so every
+    //     per-row JOB_IMPORTED / JOB_UPDATED audit written inside the loop
+    //     can stamp `note: "importRunId:<id>"`. The drill-down page and the
+    //     downloadable change log group entries by this id. Counts here are
+    //     placeholders — the row is updated at the end of Phase D with the
+    //     final summary. If the run crashes mid-way the placeholder row
+    //     stays in /jobs/imports as "iLabor import in progress…" — useful
+    //     signal that something didn't finish.
+    const runStartedAt = new Date();
+    const summaryRow = await prisma.activity.create({
+      data: {
+        entityType: "JOB",
+        action: "REQUISITIONS_IMPORTED",
+        description: "iLabor import in progress…",
+        performedById: user.id,
+        newValue: JSON.stringify({
+          capturedAt: envelope.capturedAt,
+          runStartedAt: runStartedAt.toISOString(),
+        }),
+      },
+    });
+    const importRunId = summaryRow.id;
+    activityId = importRunId;
+    const runNote = `importRunId:${importRunId}`;
+
     // B.1 Find-or-create the JobPortal row (defensive — seed should already have it).
     const portal = await prisma.jobPortal.upsert({
       where: { name: ILABOR_PORTAL_NAME },
@@ -557,6 +750,29 @@ export async function importRequisitions(
         title: true,
         client: { select: { name: true } },
         vendor: { select: { name: true } },
+        // Diffable iLabor-owned columns — loaded so the per-row branch can
+        // compute a no-write vs. partial-update vs. full-update decision
+        // without an extra round trip.
+        location: true,
+        vendorRate: true,
+        atsId: true,
+        startDate: true,
+        endDate: true,
+        durationLabel: true,
+        positions: true,
+        externalSubsCount: true,
+        externalActiveCount: true,
+        releasedDate: true,
+        assignedToName: true,
+        ownerName: true,
+        ownerAltEmail: true,
+        reqType: true,
+        department: true,
+        externalStatusRaw: true,
+        externalCreatedDate: true,
+        submitLimit: true,
+        ilaborSubmitOpen: true,
+        ilaborScreenerCode: true,
       },
     });
     const existingSet = new Set(existing.map((j) => j.portalRefId));
@@ -627,104 +843,143 @@ export async function importRequisitions(
       }
 
       const createPayload = jobCreateFields(row);
-      const updatePayload = jobUpdateFields(row);
+      const updatePayload = withoutInternal(jobUpdateFields(row));
       if (createPayload._statusUnknown) statusWarningCount += 1;
 
       const isNew = !existingSet.has(String(row.requisitionId));
       const prior = existingByRefId.get(String(row.requisitionId));
 
-      // Pre-compute the drift diff outside the tx so the tx body stays minimal.
-      const driftDiffs: string[] = [];
-      let priorSnapshot: { title: string; clientName: string; vendorName: string } | null = null;
-      if (!isNew && prior) {
-        priorSnapshot = {
-          title: prior.title,
-          clientName: prior.client.name,
-          vendorName: prior.vendor.name,
-        };
-        const titleChanged =
-          prior.title.trim().toLowerCase() !==
-          row.jobTitle.trim().toLowerCase();
-        if (titleChanged)
-          driftDiffs.push(`title "${prior.title}" → "${row.jobTitle}"`);
-        if (prior.clientId !== clientId)
-          driftDiffs.push(`client "${prior.client.name}" → "${clientName}"`);
-        if (prior.vendorId !== vendorId)
-          driftDiffs.push(`vendor "${prior.vendor.name}" → "${vendorName}"`);
-      }
-
-      await prisma.$transaction(async (tx) => {
-        const upserted = await tx.job.upsert({
-          where: {
-            portalId_portalRefId: {
+      if (isNew) {
+        // CREATE path — unchanged from before, plus importRunId stamp on
+        // the per-job audit so the drill-down + downloadable log can find
+        // new jobs from this run.
+        await prisma.$transaction(async (tx) => {
+          const upserted = await tx.job.create({
+            data: {
+              ...withoutInternal(createPayload),
               portalId: portal.id,
-              portalRefId: String(row.requisitionId),
+              sisterCompanySourceId: sourceId,
+              clientId,
+              vendorId,
+              createdById: user.id,
             },
-          },
-          create: {
-            ...withoutInternal(createPayload),
-            portalId: portal.id,
-            sisterCompanySourceId: sourceId,
-            clientId,
-            vendorId,
-            createdById: user.id,
-          },
-          update: {
-            ...withoutInternal(updatePayload),
-            clientId,
-            vendorId,
-          },
-          select: { id: true },
-        });
-
-        if (isNew) {
-          // Provenance entry on the new job's timeline — distinct from the
-          // bulk REQUISITIONS_IMPORTED summary written after the loop.
+            select: { id: true },
+          });
           await logActivity(tx, {
             entityType: "JOB",
             action: "JOB_IMPORTED",
             jobId: upserted.id,
             description: `Imported from Randstad iLabor (Req ${String(row.requisitionId)})`,
+            note: runNote,
             performedById: user.id,
           });
-        } else if (priorSnapshot && driftDiffs.length) {
-          // §F-D2 / §drift — surface title / client / vendor changes so a
-          // silent ID re-use by iLabor (or a real rename) is visible on
-          // the timeline rather than overwriting unaudited.
-          await logActivity(tx, {
-            entityType: "JOB",
-            action: "JOB_UPDATED",
-            jobId: upserted.id,
-            description: `iLabor re-import drift: ${driftDiffs.join(", ")}`,
-            oldValue: `${priorSnapshot.title} | ${priorSnapshot.clientName} / ${priorSnapshot.vendorName}`,
-            newValue: `${row.jobTitle} | ${clientName} / ${vendorName}`,
-            performedById: user.id,
-          });
-        }
-      });
+        });
+        createdCount += 1;
+        continue;
+      }
 
-      if (isNew) createdCount += 1;
-      else updatedCount += 1;
+      // UPDATE path — diff fields first; skip the write entirely when
+      // nothing changed except the heartbeat.
+      if (!prior) {
+        // Defensive — existingSet says yes but the map miss. Shouldn't happen.
+        throw new Error(`Internal: prior snapshot missing for req ${row.requisitionId}`);
+      }
+
+      const priorForDiff = prior as unknown as Record<DiffKey, unknown>;
+      const nextForDiff = updatePayload as unknown as Record<DiffKey, unknown>;
+      const { changed, diffs } = diffJobFields(priorForDiff, nextForDiff);
+
+      const clientChanged = prior.clientId !== clientId;
+      const vendorChanged = prior.vendorId !== vendorId;
+      if (clientChanged) {
+        diffs.push(`client "${prior.client.name}" → "${clientName}"`);
+      }
+      if (vendorChanged) {
+        diffs.push(`vendor "${prior.vendor.name}" → "${vendorName}"`);
+      }
+      const totalChanges =
+        Object.keys(changed).length + (clientChanged ? 1 : 0) + (vendorChanged ? 1 : 0);
+
+      if (totalChanges === 0) {
+        // No-op except heartbeat. Single-column UPDATE, no audit row.
+        // lastImportedAt MUST still bump or listStaleIlaborJobs would
+        // false-positive every unchanged row on the next run.
+        await prisma.job.update({
+          where: { id: prior.id },
+          data: { lastImportedAt: new Date() },
+        });
+        unchangedCount += 1;
+        continue;
+      }
+
+      const priorSubset: Record<string, unknown> = {};
+      for (const k of Object.keys(changed)) {
+        priorSubset[k] = (prior as unknown as Record<string, unknown>)[k];
+      }
+      if (clientChanged) priorSubset.clientName = prior.client.name;
+      if (vendorChanged) priorSubset.vendorName = prior.vendor.name;
+
+      const nextSubset: Record<string, unknown> = { ...changed };
+      if (clientChanged) nextSubset.clientName = clientName;
+      if (vendorChanged) nextSubset.vendorName = vendorName;
+
+      // Build the typed update payload by picking the changed keys out of
+      // the fully-typed updatePayload (rather than from the loosely-typed
+      // diff result). Keeps Prisma's input types intact.
+      const updateData: Partial<typeof updatePayload> = {};
+      for (const k of Object.keys(changed) as DiffKey[]) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (updateData as any)[k] = (updatePayload as Record<string, unknown>)[k];
+      }
+      await prisma.$transaction(async (tx) => {
+        await tx.job.update({
+          where: { id: prior.id },
+          data: {
+            ...updateData,
+            ...(clientChanged ? { clientId } : {}),
+            ...(vendorChanged ? { vendorId } : {}),
+            lastImportedAt: new Date(),
+          },
+        });
+        await logActivity(tx, {
+          entityType: "JOB",
+          action: "JOB_UPDATED",
+          jobId: prior.id,
+          description: `iLabor re-import: ${diffs.join("; ")}`,
+          oldValue: serializeForAudit(priorSubset),
+          newValue: serializeForAudit(nextSubset),
+          note: runNote,
+          performedById: user.id,
+        });
+      });
+      updatedCount += 1;
     }
 
-    // Phase D — summary audit row. Job-less by design (bulk action; the
-    // Activity model permits null jobId). Un-wrapped — a single insert.
-    const activity = await logActivity(prisma, {
-      entityType: "JOB",
-      action: "REQUISITIONS_IMPORTED",
-      description:
-        `Imported ${createdCount} new + ${updatedCount} updated requisitions from Randstad iLabor` +
-        (errors.length ? ` (${errors.length} rows skipped)` : ""),
-      performedById: user.id,
-      newValue: JSON.stringify({
-        createdCount,
-        updatedCount,
-        erroredCount: errors.length,
-        statusWarningCount,
-        capturedAt: envelope.capturedAt,
-      }),
+    // Phase D — finalize the summary row pre-created in Phase B.0.
+    const summaryNote =
+      [
+        errors.length ? `${errors.length} rows skipped` : null,
+        unchangedCount > 0 ? `${unchangedCount} unchanged` : null,
+      ]
+        .filter(Boolean)
+        .join("; ");
+    await prisma.activity.update({
+      where: { id: importRunId },
+      data: {
+        description:
+          `Imported ${createdCount} new + ${updatedCount} updated requisitions from Randstad iLabor` +
+          (summaryNote ? ` (${summaryNote})` : ""),
+        newValue: JSON.stringify({
+          createdCount,
+          updatedCount,
+          unchangedCount,
+          erroredCount: errors.length,
+          statusWarningCount,
+          capturedAt: envelope.capturedAt,
+          runStartedAt: runStartedAt.toISOString(),
+        }),
+      },
     });
-    activityId = activity.id;
   } catch (err) {
     // Surface any throw as a wizard-friendly error instead of a 500.
     const message =
@@ -751,6 +1006,7 @@ export async function importRequisitions(
     result: {
       createdCount,
       updatedCount,
+      unchangedCount,
       erroredCount: errors.length,
       statusWarningCount,
       activityId,

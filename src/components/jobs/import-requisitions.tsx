@@ -67,7 +67,8 @@ export function ImportRequisitions() {
         </div>
         <p className="text-sm text-slate-700">
           Created <strong>{r.createdCount}</strong> · Updated{" "}
-          <strong>{r.updatedCount}</strong>
+          <strong>{r.updatedCount}</strong> · Unchanged{" "}
+          <strong>{r.unchangedCount}</strong>
           {r.erroredCount > 0 ? (
             <>
               {" "}
@@ -80,6 +81,16 @@ export function ImportRequisitions() {
               · Unmapped statuses: <strong>{r.statusWarningCount}</strong>
             </>
           ) : null}
+        </p>
+        <p className="text-xs text-emerald-700">
+          See exactly what changed —{" "}
+          <Link
+            href={`/jobs/imports/${r.activityId}`}
+            className="underline hover:no-underline"
+          >
+            open the change log for this run
+          </Link>
+          .
         </p>
         <div className="flex gap-2">
           <Link
@@ -116,9 +127,15 @@ export function ImportRequisitions() {
         }}
         className="space-y-5"
       >
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
           <SummaryCard label="New" value={s.newCount} tone="emerald" />
           <SummaryCard label="Updated" value={s.updatedCount} tone="indigo" />
+          <SummaryCard
+            label="Unchanged"
+            value={s.unchangedCount}
+            tone="slate"
+            hint="No field changed"
+          />
           <SummaryCard label="Errored" value={s.erroredCount} tone="red" />
           <SummaryCard
             label="Unmapped status"
@@ -350,6 +367,7 @@ const TONE_CLASSES = {
   indigo: "border-indigo-200 bg-indigo-50 text-indigo-700",
   red: "border-red-200 bg-red-50 text-red-700",
   amber: "border-amber-200 bg-amber-50 text-amber-700",
+  slate: "border-slate-200 bg-slate-50 text-slate-700",
 } as const;
 
 function SummaryCard({
