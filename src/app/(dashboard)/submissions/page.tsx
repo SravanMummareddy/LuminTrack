@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { LinkButton } from "@/components/ui/button";
 import { Pagination } from "@/components/ui/pagination";
@@ -103,8 +104,13 @@ export default async function SubmissionsPage({
     <div className="mx-auto max-w-6xl space-y-5">
       <PageHeader
         title="Submissions"
-        description="Every candidate submitted to a job. Create new submissions from a job page."
-      />
+        description="Every candidate submitted to a job."
+      >
+        <LinkButton href="/submissions/new">
+          <Plus className="h-4 w-4" />
+          New submission
+        </LinkButton>
+      </PageHeader>
 
       <SubmissionFilters
         current={current}
@@ -119,11 +125,14 @@ export default async function SubmissionsPage({
           <p className="text-sm text-slate-500">
             {hasFilters
               ? "No submissions match these filters."
-              : "No submissions yet. Open a job and submit a candidate to get started."}
+              : "No submissions yet. Create the first one to get started."}
           </p>
           {!hasFilters && (
             <div className="mt-3 flex justify-center">
-              <LinkButton href="/jobs">Browse jobs</LinkButton>
+              <LinkButton href="/submissions/new">
+                <Plus className="h-4 w-4" />
+                New submission
+              </LinkButton>
             </div>
           )}
         </div>

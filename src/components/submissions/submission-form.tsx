@@ -12,10 +12,26 @@ type ResumeOption = { id: string; label: string; driveLink: string };
 type CandidateOption = {
   id: string;
   fullName: string;
-  alreadySubmitted: boolean;
+  alreadySubmitted?: boolean;
   resumes: ResumeOption[];
 };
+type JobOption = {
+  id: string;
+  title: string;
+  displayId: string;
+  clientName: string | null;
+  candidateRate: string;
+};
 type Recruiter = { id: string; fullName: string; isActive: boolean };
+
+/**
+ * One form, three entry points (Round 5). `mode` decides which of the two
+ * anchor fields (candidate / job) is fixed:
+ *   - "job-locked"       — from /jobs/[id]: job fixed, pick a candidate.
+ *   - "candidate-locked" — from /candidates/[id]: candidate fixed, pick a job.
+ *   - "open"             — from /submissions: pick both.
+ */
+type Mode = "job-locked" | "candidate-locked" | "open";
 
 type SubmissionAction = (
   prev: FormState,
@@ -24,6 +40,7 @@ type SubmissionAction = (
 
 type Fields = {
   candidateId: string;
+  jobId: string;
   submittedById: string;
   candidateRate: string;
   // "" = no résumé, "__new__" = add a new one, otherwise a saved résumé id.
@@ -40,24 +57,37 @@ const NEW_RESUME = "__new__";
 
 export function SubmissionForm({
   action,
-  jobId,
-  candidates,
+  mode,
+  job,
+  candidate,
+  jobOptions = [],
+  candidates = [],
   recruiters,
   defaultRecruiterId,
   defaultCandidateRate,
+  cancelHref,
 }: {
   action: SubmissionAction;
-  jobId: string;
-  candidates: CandidateOption[];
+  mode: Mode;
+  /** The fixed job — required when mode === "job-locked". */
+  job?: { id: string; title: string };
+  /** The fixed candidate — required when mode === "candidate-locked". */
+  candidate?: { id: string; fullName: string; resumes: ResumeOption[] };
+  /** Job picker options — used when mode is "candidate-locked" or "open". */
+  jobOptions?: JobOption[];
+  /** Candidate picker options — used when mode is "job-locked" or "open". */
+  candidates?: CandidateOption[];
   recruiters: Recruiter[];
   defaultRecruiterId: string;
   defaultCandidateRate: string;
+  cancelHref: string;
 }) {
   const [state, formAction, pending] = useActionState(action, EMPTY_FORM_STATE);
-  // Inputs are controlled — a duplicate-submission error returns without
-  // redirecting, and React 19 would otherwise reset the uncontrolled fields.
+  // Inputs are controlled — a gate (duplicate / not-assigned / iLabor) returns
+  // without redirecting, and React 19 would otherwise reset uncontrolled fields.
   const [fields, setFields] = useState<Fields>({
-    candidateId: "",
+    candidateId: candidate?.id ?? "",
+    jobId: job?.id ?? "",
     submittedById: defaultRecruiterId,
     candidateRate: defaultCandidateRate,
     resumeSelection: "",
@@ -67,6 +97,10 @@ export function SubmissionForm({
     overridePreset: "",
     overrideNote: "",
   });
+  // Surfaced after a candidate switch clears a résumé pick, so the wipe isn't
+  // silent (it used to vanish a freshly-typed Drive link with no warning).
+  const [resumeCleared, setResumeCleared] = useState(false);
+
   const set =
     (name: keyof Fields) =>
     (
@@ -76,19 +110,45 @@ export function SubmissionForm({
     ) =>
       setFields((f) => ({ ...f, [name]: e.target.value }));
 
-  // Switching candidate clears the résumé pick — a résumé belongs to one candidate.
+  // Switching candidate clears the résumé pick — a résumé belongs to one
+  // candidate. Warn if there was anything to lose rather than wiping silently.
   const onCandidateChange = (e: React.ChangeEvent<HTMLSelectElement>) =>
+    setFields((f) => {
+      const hadResume =
+        f.resumeSelection !== "" ||
+        f.newResumeLabel.trim() !== "" ||
+        f.newResumeLink.trim() !== "";
+      setResumeCleared(hadResume);
+      return {
+        ...f,
+        candidateId: e.target.value,
+        resumeSelection: "",
+        newResumeLabel: "",
+        newResumeLink: "",
+      };
+    });
+
+  // Picking a job in candidate-locked / open mode seeds the rate default from
+  // that job (only when the recruiter hasn't already typed one).
+  const onJobChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const nextJobId = e.target.value;
+    const picked = jobOptions.find((j) => j.id === nextJobId);
     setFields((f) => ({
       ...f,
-      candidateId: e.target.value,
-      resumeSelection: "",
-      newResumeLabel: "",
-      newResumeLink: "",
+      jobId: nextJobId,
+      candidateRate: f.candidateRate === "" ? (picked?.candidateRate ?? "") : f.candidateRate,
     }));
+  };
 
   const errors = state.fieldErrors ?? {};
-  const resumes =
-    candidates.find((c) => c.id === fields.candidateId)?.resumes ?? [];
+
+  // The candidate whose résumés the picker offers — the fixed one in
+  // candidate-locked mode, otherwise whichever is selected.
+  const activeCandidate =
+    mode === "candidate-locked"
+      ? candidate
+      : candidates.find((c) => c.id === fields.candidateId);
+  const resumes = activeCandidate?.resumes ?? [];
   const resumeChoice =
     fields.resumeSelection === ""
       ? "none"
@@ -96,9 +156,18 @@ export function SubmissionForm({
         ? "new"
         : "existing";
 
+  // The effective ids the action receives, accounting for the locked anchors.
+  const effectiveJobId = mode === "job-locked" ? (job?.id ?? "") : fields.jobId;
+  const effectiveCandidateId =
+    mode === "candidate-locked" ? (candidate?.id ?? "") : fields.candidateId;
+
+  const gate = state.needsConfirm;
+  const isGate = gate !== undefined && gate !== true;
+
   return (
     <form action={formAction} className="space-y-5">
-      <input type="hidden" name="jobId" value={jobId} />
+      <input type="hidden" name="jobId" value={effectiveJobId} />
+      <input type="hidden" name="candidateId" value={effectiveCandidateId} />
       <input type="hidden" name="resumeChoice" value={resumeChoice} />
       <input
         type="hidden"
@@ -106,32 +175,78 @@ export function SubmissionForm({
         value={resumeChoice === "existing" ? fields.resumeSelection : ""}
       />
 
-      <Field
-        label="Candidate"
-        htmlFor="candidateId"
-        required
-        error={errors.candidateId}
-        hint="Candidates already submitted to this job cannot be picked again."
-      >
-        <Select
-          id="candidateId"
-          name="candidateId"
-          value={fields.candidateId}
-          onChange={onCandidateChange}
+      {/* Job — fixed in job-locked mode, a picker otherwise. */}
+      {mode === "job-locked" ? (
+        <Field label="Job">
+          <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+            {job?.title}
+          </p>
+        </Field>
+      ) : (
+        <Field
+          label="Job"
+          htmlFor="jobId"
           required
+          error={errors.jobId}
+          hint="Only jobs still open for submissions are listed."
         >
-          <option value="" disabled>
-            Select a candidate…
-          </option>
-          {candidates.map((c) => (
-            <option key={c.id} value={c.id} disabled={c.alreadySubmitted}>
-              {c.alreadySubmitted
-                ? `${c.fullName} (already submitted)`
-                : c.fullName}
+          <Select
+            id="jobId"
+            value={fields.jobId}
+            onChange={onJobChange}
+            required
+          >
+            <option value="" disabled>
+              Select a job…
             </option>
-          ))}
-        </Select>
-      </Field>
+            {jobOptions.map((j) => (
+              <option key={j.id} value={j.id}>
+                {j.title}
+                {j.clientName ? ` — ${j.clientName}` : ""} ({j.displayId})
+              </option>
+            ))}
+          </Select>
+        </Field>
+      )}
+
+      {/* Candidate — fixed in candidate-locked mode, a picker otherwise. */}
+      {mode === "candidate-locked" ? (
+        <Field label="Candidate">
+          <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+            {candidate?.fullName}
+          </p>
+        </Field>
+      ) : (
+        <Field
+          label="Candidate"
+          htmlFor="candidateId"
+          required
+          error={errors.candidateId}
+          hint={
+            mode === "job-locked"
+              ? "Candidates already submitted to this job cannot be picked again."
+              : undefined
+          }
+        >
+          <Select
+            id="candidateId"
+            value={fields.candidateId}
+            onChange={onCandidateChange}
+            required
+          >
+            <option value="" disabled>
+              Select a candidate…
+            </option>
+            {candidates.map((c) => (
+              <option key={c.id} value={c.id} disabled={c.alreadySubmitted}>
+                {c.alreadySubmitted
+                  ? `${c.fullName} (already submitted)`
+                  : c.fullName}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field
@@ -184,8 +299,11 @@ export function SubmissionForm({
         <Select
           id="resumeSelection"
           value={fields.resumeSelection}
-          onChange={set("resumeSelection")}
-          disabled={!fields.candidateId}
+          onChange={(e) => {
+            setResumeCleared(false);
+            set("resumeSelection")(e);
+          }}
+          disabled={!effectiveCandidateId}
         >
           <option value="">No resume</option>
           {resumes.map((r) => (
@@ -195,6 +313,12 @@ export function SubmissionForm({
           ))}
           <option value={NEW_RESUME}>+ Add a new resume</option>
         </Select>
+        {resumeCleared && (
+          <p className="mt-1 text-xs text-amber-700">
+            Résumé selection was cleared because you changed the candidate. Pick
+            one for the new candidate.
+          </p>
+        )}
       </Field>
 
       {resumeChoice === "new" && (
@@ -248,11 +372,24 @@ export function SubmissionForm({
         />
       </Field>
 
-      {state.needsConfirm && state.needsConfirm !== true && (() => {
+      {/* Not-assigned gate: a self-claim prompt, not a reason picker. The
+          hidden claim flag rides along so the next submit assigns + submits. */}
+      {gate === "not_assigned" && (
+        <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3">
+          <p className="text-sm text-amber-800">{state.error}</p>
+          <p className="text-xs text-amber-700">
+            Claiming assigns this job to you (recorded on the job&apos;s timeline)
+            so you own it going forward. Admins can reassign later.
+          </p>
+          <input type="hidden" name="claim" value="1" />
+        </div>
+      )}
+
+      {/* Duplicate / iLabor gates: a preset reason + optional note. */}
+      {isGate && gate !== "not_assigned" && (() => {
         // The gate kind comes typed from the server (no error-string sniffing).
         // Duplicate overrides and iLabor overrides are recorded under different
         // audit fields, so the composed reason goes to the matching field name.
-        const gate = state.needsConfirm;
         const fieldName =
           gate === "duplicate" ? "duplicateReason" : "ilaborOverrideReason";
         // Persist the preset code (analyzable) plus an optional note in parens.
@@ -310,22 +447,24 @@ export function SubmissionForm({
         );
       })()}
 
-      {state.error && !state.needsConfirm && (
+      {state.error && !isGate && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
           {state.error}
         </p>
       )}
 
       <div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
-        <Link href={`/jobs/${jobId}`} className={buttonClass("secondary")}>
+        <Link href={cancelHref} className={buttonClass("secondary")}>
           Cancel
         </Link>
         <Button type="submit" disabled={pending}>
           {pending
             ? "Submitting…"
-            : state.needsConfirm
-              ? "Submit anyway"
-              : "Submit candidate"}
+            : gate === "not_assigned"
+              ? "Claim this job & submit"
+              : isGate
+                ? "Submit anyway"
+                : "Submit candidate"}
         </Button>
       </div>
     </form>

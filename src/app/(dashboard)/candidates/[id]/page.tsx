@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ExternalLink, Pencil } from "lucide-react";
+import { ArrowLeft, ExternalLink, Pencil, Send } from "lucide-react";
 import { LinkButton } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, Th, Td } from "@/components/ui/table";
@@ -177,10 +177,19 @@ export default async function CandidateDetailPage({
             {candidate.currentCompany || "Company not set"}
           </p>
         </div>
-        <LinkButton href={`/candidates/${candidate.id}/edit`} variant="secondary">
-          <Pencil className="h-4 w-4" />
-          Edit candidate
-        </LinkButton>
+        <div className="flex shrink-0 items-center gap-2">
+          <LinkButton href={`/candidates/${candidate.id}/submissions/new`}>
+            <Send className="h-4 w-4" />
+            Submit to a job
+          </LinkButton>
+          <LinkButton
+            href={`/candidates/${candidate.id}/edit`}
+            variant="secondary"
+          >
+            <Pencil className="h-4 w-4" />
+            Edit candidate
+          </LinkButton>
+        </div>
       </div>
 
       {activePlacement && (

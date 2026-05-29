@@ -90,6 +90,26 @@ export async function createSubmission(
       fieldErrors: { candidateId: "Select a candidate." },
     };
 
+  // Assignment gate (Round 5 — assignment workflow). Admins submit to any job
+  // and may attribute the submission to anyone. A recruiter must be assigned to
+  // the job first, but can self-claim it inline: the form re-submits with
+  // claim=1, which assigns the job to them (logged) in the same tx as the
+  // submission. Without the claim flag we pause and prompt.
+  const claim = String(formData.get("claim") ?? "") === "1";
+  const isAdmin = user.role === "ADMIN";
+  if (!isAdmin) {
+    const assignment = await prisma.jobAssignment.findFirst({
+      where: { jobId: d.jobId, recruiterId: user.id },
+      select: { id: true },
+    });
+    if (!assignment && !claim) {
+      return {
+        needsConfirm: "not_assigned",
+        error: `You're not assigned to "${job.title}". Claim it to submit a candidate.`,
+      };
+    }
+  }
+
   // §C4 — duplicate-submission check moved out of the DB to the action so
   // recruiters can override with a reason (e.g. role was rebooted, prior
   // submission was cancelled). The DB unique constraint was dropped in
@@ -185,6 +205,38 @@ export async function createSubmission(
             cap: job.submitLimit,
             active: effectiveActive,
           };
+        }
+      }
+
+      // Self-claim: a recruiter submitting to a job they don't own gets
+      // assigned to it here, in the same tx as the submission, so ownership and
+      // the submission commit together. The upsert is idempotent against
+      // @@unique([jobId, recruiterId]) — a concurrent claim is a harmless no-op
+      // (no P2002) — and we only log RECRUITER_ASSIGNED when we actually create.
+      if (!isAdmin) {
+        const owned = await tx.jobAssignment.findFirst({
+          where: { jobId: d.jobId, recruiterId: user.id },
+          select: { id: true },
+        });
+        if (!owned) {
+          await tx.jobAssignment.upsert({
+            where: {
+              jobId_recruiterId: { jobId: d.jobId, recruiterId: user.id },
+            },
+            create: {
+              jobId: d.jobId,
+              recruiterId: user.id,
+              assignedById: user.id,
+            },
+            update: {},
+          });
+          await logActivity(tx, {
+            entityType: "JOB",
+            action: "RECRUITER_ASSIGNED",
+            description: `${user.fullName} claimed this job`,
+            performedById: user.id,
+            jobId: d.jobId,
+          });
         }
       }
 
