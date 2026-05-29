@@ -401,7 +401,10 @@ async function main() {
   await prisma.activity.deleteMany();
   await prisma.note.deleteMany();
   await prisma.interviewRound.deleteMany();
+  await prisma.placementExtension.deleteMany();
+  await prisma.placement.deleteMany();
   await prisma.submission.deleteMany();
+  await prisma.candidateDocument.deleteMany();
   await prisma.candidateResume.deleteMany();
   await prisma.jobAssignment.deleteMany();
   await prisma.job.deleteMany();
