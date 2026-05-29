@@ -100,6 +100,12 @@ export function SubmissionForm({
   // Surfaced after a candidate switch clears a résumé pick, so the wipe isn't
   // silent (it used to vanish a freshly-typed Drive link with no warning).
   const [resumeCleared, setResumeCleared] = useState(false);
+  // The rate prefills from the job's target rate. Flag it as an unconfirmed
+  // default until the recruiter edits it, so they don't submit the job's
+  // number as if it were the negotiated candidate rate.
+  const [rateUnconfirmed, setRateUnconfirmed] = useState(
+    defaultCandidateRate !== "",
+  );
 
   const set =
     (name: keyof Fields) =>
@@ -133,11 +139,13 @@ export function SubmissionForm({
   const onJobChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const nextJobId = e.target.value;
     const picked = jobOptions.find((j) => j.id === nextJobId);
+    const seeded = fields.candidateRate === "" && !!picked?.candidateRate;
     setFields((f) => ({
       ...f,
       jobId: nextJobId,
       candidateRate: f.candidateRate === "" ? (picked?.candidateRate ?? "") : f.candidateRate,
     }));
+    if (seeded) setRateUnconfirmed(true);
   };
 
   const errors = state.fieldErrors ?? {};
@@ -285,8 +293,17 @@ export function SubmissionForm({
             min="0"
             step="0.01"
             value={fields.candidateRate}
-            onChange={set("candidateRate")}
+            onChange={(e) => {
+              setRateUnconfirmed(false);
+              set("candidateRate")(e);
+            }}
           />
+          {rateUnconfirmed && fields.candidateRate !== "" && (
+            <p className="mt-1 text-xs text-amber-700">
+              Prefilled from the job&apos;s target rate — confirm or adjust to
+              the candidate&apos;s actual rate.
+            </p>
+          )}
         </Field>
       </div>
 

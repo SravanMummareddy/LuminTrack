@@ -339,6 +339,7 @@ function readSubmissionEdit(formData: FormData) {
     candidateRate: formData.get("candidateRate") ?? "",
     submissionNotes: formData.get("submissionNotes") ?? "",
     submittedAt: formData.get("submittedAt") ?? "",
+    submittedById: formData.get("submittedById") ?? "",
     resumeChoice: formData.get("resumeChoice") ?? "none",
     candidateResumeId: formData.get("candidateResumeId") ?? "",
     newResumeLabel: formData.get("newResumeLabel") ?? "",
@@ -372,9 +373,30 @@ export async function updateSubmission(
     include: {
       candidate: { select: { id: true, fullName: true } },
       job: { select: { id: true, title: true } },
+      submittedBy: { select: { fullName: true } },
     },
   });
   if (!existing) return { error: "This submission no longer exists." };
+
+  // Admin-only re-attribution of "Submitted by". Recruiter scorecards key off
+  // submittedById, so a mis-set submitter previously had no correction path.
+  // Non-admins never reach this — the field is locked in their form.
+  const isAdmin = user.role === "ADMIN";
+  let newSubmittedById: string | null = null;
+  let newSubmitterName = "";
+  if (isAdmin && d.submittedById && d.submittedById !== existing.submittedById) {
+    const target = await prisma.user.findUnique({
+      where: { id: d.submittedById },
+      select: { id: true, fullName: true },
+    });
+    if (!target)
+      return {
+        error: "Please fix the highlighted fields.",
+        fieldErrors: { submittedById: "Pick a valid user." },
+      };
+    newSubmittedById = target.id;
+    newSubmitterName = target.fullName;
+  }
 
   // Resolve a previously-saved résumé up front so a bad pick returns cleanly.
   let pickedResume: { id: string; driveLink: string } | null = null;
@@ -439,6 +461,7 @@ export async function updateSubmission(
       String(existing.resumeDriveLink ?? "") !== String(resumeSnapshot ?? "")
     )
       changed.push("resume");
+    if (newSubmittedById) changed.push("submitted by");
 
     await tx.submission.update({
       where: { id: submissionId },
@@ -449,18 +472,25 @@ export async function updateSubmission(
         candidateResumeId,
         // Snapshot the link used so it survives résumé edits/deletes.
         resumeDriveLink: resumeSnapshot,
+        ...(newSubmittedById ? { submittedById: newSubmittedById } : {}),
       },
     });
 
-    if (changed.length)
+    if (changed.length) {
+      // Spell out the re-attribution (old → new) so the audit trail is
+      // legible without cross-referencing — scorecards depend on it.
+      const reattrNote = newSubmittedById
+        ? `; submitted-by changed from ${existing.submittedBy.fullName} to ${newSubmitterName}`
+        : "";
       await logActivity(tx, {
         entityType: "SUBMISSION",
         action: "SUBMISSION_UPDATED",
-        description: `${existing.candidate.fullName} on "${existing.job.title}": submission updated (${changed.join(", ")})`,
+        description: `${existing.candidate.fullName} on "${existing.job.title}": submission updated (${changed.join(", ")})${reattrNote}`,
         newValue: changed.join(", "),
         performedById: user.id,
         submissionId,
       });
+    }
   });
 
   revalidatePath("/submissions");

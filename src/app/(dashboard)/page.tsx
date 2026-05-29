@@ -14,6 +14,7 @@ import {
   getDashboardData,
   getMyWork,
   getMyAssignedJobs,
+  getOnboardingStatus,
 } from "@/server/queries/dashboard";
 import { getExpiringDocuments } from "@/server/queries/candidates";
 import { getRatesPendingPlacements } from "@/server/queries/placements";
@@ -38,6 +39,7 @@ import {
 } from "@/lib/labels";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
 import { StatCard } from "@/components/dashboard/stat-card";
+import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist";
 import { BarChartCard, DonutChartCard } from "@/components/dashboard/charts";
 import { Badge } from "@/components/ui/badge";
 import { Table, Th, Td, cardLink } from "@/components/ui/table";
@@ -195,6 +197,7 @@ export default async function DashboardPage({
     vendors,
     sources,
     recruiters,
+    onboarding,
   ] = await Promise.all([
     getDashboardData(effectiveFilters),
     scope === "me" && user
@@ -217,6 +220,7 @@ export default async function DashboardPage({
     listVendors(),
     listSisterCompanies(),
     listActiveRecruiterOptions(),
+    getOnboardingStatus(),
   ]);
 
   const jobsByStatusChart = data.jobsByStatus.map((d) => ({
@@ -258,6 +262,13 @@ export default async function DashboardPage({
         </div>
         <ScopeToggle scope={scope} sp={sp} />
       </div>
+
+      {!onboarding.hasSubmissions && (
+        <OnboardingChecklist
+          status={onboarding}
+          isAdmin={user?.role === "ADMIN"}
+        />
+      )}
 
       {(scope === "me" &&
         (myWork.staleSubmissions.length > 0 ||

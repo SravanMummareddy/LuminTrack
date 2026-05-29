@@ -14,6 +14,8 @@ type SubmissionAction = (
   formData: FormData,
 ) => Promise<FormState>;
 
+type RecruiterOption = { id: string; fullName: string; isActive: boolean };
+
 type EditValues = {
   candidateRate: string;
   // "" = no résumé, "__new__" = add a new one, otherwise a saved résumé id.
@@ -21,6 +23,8 @@ type EditValues = {
   submissionNotes: string;
   /** The raw submitted date — converted to a datetime-local value in the form. */
   submittedAt: Date | string;
+  /** The current submitting recruiter — only editable when canReattribute. */
+  submittedById: string;
 };
 
 type Fields = {
@@ -28,6 +32,7 @@ type Fields = {
   resumeSelection: string;
   submissionNotes: string;
   submittedAt: string;
+  submittedById: string;
   newResumeLabel: string;
   newResumeLink: string;
 };
@@ -61,6 +66,8 @@ export function SubmissionEditForm({
   candidateName,
   jobTitle,
   recruiterName,
+  canReattribute = false,
+  recruiters = [],
   resumes,
   values,
 }: {
@@ -69,6 +76,9 @@ export function SubmissionEditForm({
   candidateName: string;
   jobTitle: string;
   recruiterName: string;
+  /** Admins may correct the submitting recruiter; recruiters see it locked. */
+  canReattribute?: boolean;
+  recruiters?: RecruiterOption[];
   resumes: ResumeOption[];
   values: EditValues;
 }) {
@@ -80,6 +90,7 @@ export function SubmissionEditForm({
     resumeSelection: values.resumeSelection,
     submissionNotes: values.submissionNotes,
     submittedAt: toDateTimeLocal(values.submittedAt),
+    submittedById: values.submittedById,
     newResumeLabel: "",
     newResumeLink: "",
   });
@@ -113,7 +124,29 @@ export function SubmissionEditForm({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <LockedField label="Candidate" value={candidateName} />
         <LockedField label="Job" value={jobTitle} />
-        <LockedField label="Submitted by" value={recruiterName} />
+        {canReattribute ? (
+          <Field
+            label="Submitted by"
+            htmlFor="submittedById"
+            hint="Admin: correct who this submission is credited to."
+            error={errors.submittedById}
+          >
+            <Select
+              id="submittedById"
+              name="submittedById"
+              value={fields.submittedById}
+              onChange={set("submittedById")}
+            >
+              {recruiters.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.isActive ? r.fullName : `${r.fullName} (inactive)`}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        ) : (
+          <LockedField label="Submitted by" value={recruiterName} />
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

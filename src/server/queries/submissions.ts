@@ -234,6 +234,7 @@ export function getSubmissionForEdit(id: string) {
       submittedAt: true,
       candidateResumeId: true,
       resumeDriveLink: true,
+      submittedById: true,
       job: { select: { title: true } },
       submittedBy: { select: { fullName: true } },
       candidate: {

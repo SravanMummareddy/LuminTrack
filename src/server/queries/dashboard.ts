@@ -235,3 +235,25 @@ export async function getMyAssignedJobs(userId: string) {
 }
 
 export type MyAssignedJobs = Awaited<ReturnType<typeof getMyAssignedJobs>>;
+
+/**
+ * Onboarding signal for a team migrating off Excel: which of the core
+ * setup steps have any data yet. Cheap existence checks (`findFirst` on the
+ * id) — the Dashboard shows a getting-started checklist until the first
+ * submission exists, then the card disappears.
+ */
+export async function getOnboardingStatus() {
+  const exists = async (
+    p: Promise<{ id: string } | null>,
+  ): Promise<boolean> => Boolean(await p);
+  const [hasJobs, hasCandidates, hasAssignments, hasSubmissions] =
+    await Promise.all([
+      exists(prisma.job.findFirst({ select: { id: true } })),
+      exists(prisma.candidate.findFirst({ select: { id: true } })),
+      exists(prisma.jobAssignment.findFirst({ select: { id: true } })),
+      exists(prisma.submission.findFirst({ select: { id: true } })),
+    ]);
+  return { hasJobs, hasCandidates, hasAssignments, hasSubmissions };
+}
+
+export type OnboardingStatus = Awaited<ReturnType<typeof getOnboardingStatus>>;

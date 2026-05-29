@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
+import { Info } from "lucide-react";
 import { Select, Textarea, Input } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
@@ -103,8 +104,20 @@ export function SubmissionStatusForm({
           </Select>
         </div>
         <div className="w-56">
-          <label htmlFor="eventAt" className={labelClass}>
-            When this happened
+          <label
+            htmlFor="eventAt"
+            className={`${labelClass} flex items-center gap-1`}
+          >
+            Effective date/time
+            <span
+              tabIndex={0}
+              role="img"
+              aria-label="Defaults to now. Set this to when the change actually happened if it was earlier — it feeds the time-in-stage and time-to-fill reports."
+              title="Defaults to now. Set this to when the change actually happened if it was earlier — it feeds the time-in-stage and time-to-fill reports."
+              className="cursor-help text-slate-400"
+            >
+              <Info className="h-3 w-3" aria-hidden />
+            </span>
           </label>
           <Input
             id="eventAt"
@@ -127,9 +140,8 @@ export function SubmissionStatusForm({
         </p>
       )}
       <p className="text-xs text-slate-400">
-        &ldquo;When this happened&rdquo; defaults to now — adjust it if the
-        change actually happened earlier. To correct the original{" "}
-        <strong>submitted date</strong>, use{" "}
+        To correct the original <strong>submitted date</strong> (not this
+        change), use{" "}
         <a
           href={`/submissions/${submissionId}/edit`}
           className="text-indigo-600 hover:underline"
