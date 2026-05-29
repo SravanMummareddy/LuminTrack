@@ -157,6 +157,33 @@ export function ImportRequisitions() {
           );
         })()}
 
+        {previewState.source ? (
+          <div
+            className={`rounded-md border px-3 py-2 text-xs ${
+              previewState.source.status === "will-create"
+                ? "border-amber-200 bg-amber-50 text-amber-900"
+                : "border-slate-200 bg-slate-50 text-slate-700"
+            }`}
+          >
+            <span className="font-medium">Source:</span>{" "}
+            {previewState.source.name}{" "}
+            <span
+              className={
+                previewState.source.status === "will-create"
+                  ? "text-amber-700"
+                  : "text-slate-500"
+              }
+            >
+              ({previewState.source.status === "will-create"
+                ? "will be created"
+                : "existing"})
+            </span>
+            <span className="ml-1 text-slate-500">
+              — new jobs will be attributed here.
+            </span>
+          </div>
+        ) : null}
+
         {(() => {
           // Net-new Vendor/Client name banner — surfaces likely-rename risk.
           // Names compared case-insensitively, so "RANDSTAD" vs "Randstad"

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/lib/session";
 import { logActivity } from "@/server/activity";
+import { ensureSourceForPortal } from "@/server/portals";
 import {
   ilaborFileSchema,
   ilaborRowSchema,
@@ -93,6 +94,11 @@ export type IlaborImportPreviewState = {
   newVendorNames?: string[];
   /** Same idea for Client. */
   newClientNames?: string[];
+  /** Managed Source this import will attribute new jobs to. Mirrors the portal
+   *  name. `status` is "existing" if the SisterCompanySource row already exists,
+   *  "will-create" if the importer will create it on commit. Surfaced so the
+   *  admin sees which Source the run lands on before clicking Confirm. */
+  source?: { name: string; status: "existing" | "will-create" };
 };
 
 export type IlaborImportResultState = {
@@ -427,6 +433,21 @@ export async function previewRequisitions(
     (n) => !clientNameLower.has(n.toLowerCase()),
   );
 
+  // Source mirror — read-only at preview time. We resolve the *portal* name
+  // (whether or not it exists yet) and check whether a same-named
+  // SisterCompanySource is already in the DB. If not, the commit step will
+  // create it via ensureSourceForPortal.
+  const existingSource = await prisma.sisterCompanySource.findUnique({
+    where: { name: ILABOR_PORTAL_NAME },
+    select: { id: true },
+  });
+  const source = {
+    name: ILABOR_PORTAL_NAME,
+    status: (existingSource ? "existing" : "will-create") as
+      | "existing"
+      | "will-create",
+  };
+
   return {
     status: "ready",
     summary: {
@@ -442,6 +463,7 @@ export async function previewRequisitions(
     errorRows: errors,
     newVendorNames,
     newClientNames,
+    source,
   };
 }
 
@@ -512,6 +534,11 @@ export async function importRequisitions(
       update: {},
       create: { name: ILABOR_PORTAL_NAME, kind: "VMS" },
     });
+    // Mirror the portal as a managed Source so it appears under Settings →
+    // Sources and the /jobs Source filter. Attribution is one-way: we set
+    // sisterCompanySourceId on the create path below, but NOT on update —
+    // an admin may have hand-re-pointed a job and we don't silently revert.
+    const sourceId = await ensureSourceForPortal(prisma, portal.name);
 
     // B.2 Pre-query existing portalRefIds so we can classify each row as
     //     NEW or UPDATE for the audit summary. We also load each existing
@@ -637,6 +664,7 @@ export async function importRequisitions(
           create: {
             ...withoutInternal(createPayload),
             portalId: portal.id,
+            sisterCompanySourceId: sourceId,
             clientId,
             vendorId,
             createdById: user.id,
