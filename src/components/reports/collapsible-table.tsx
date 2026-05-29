@@ -18,6 +18,7 @@ export function CollapsibleTable({
 }: {
   rows: React.ReactNode[];
   defaultLimit?: number;
+  /** The header row(s) only — a bare `<tr>`. This component supplies the `<thead>`. */
   head: React.ReactNode;
   emptyState?: React.ReactNode;
 }) {
@@ -41,7 +42,7 @@ export function CollapsibleTable({
   return (
     <div className="space-y-2">
       <Table>
-        <thead>{head}</thead>
+        <thead className="border-b border-slate-200 bg-slate-50">{head}</thead>
         <tbody className="divide-y divide-slate-100">{visible}</tbody>
       </Table>
 

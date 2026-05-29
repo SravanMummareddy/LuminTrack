@@ -56,17 +56,15 @@ function pct(value: number): string {
 // Fresh JSX per call — reusing the same React element across multiple
 // `<CollapsibleTable>` instances triggers React's key-reconciliation warning.
 const dimensionHead = () => (
-  <thead className="border-b border-slate-200 bg-slate-50">
-    <tr>
-      <Th>Name</Th>
-      <Th className="text-right">Jobs</Th>
-      <Th className="text-right">Submissions</Th>
-      <Th className="text-right">Interviews</Th>
-      <Th className="text-right">Selected</Th>
-      <Th className="text-right">Joined</Th>
-      <Th className="text-right">Joined %</Th>
-    </tr>
-  </thead>
+  <tr>
+    <Th>Name</Th>
+    <Th className="text-right">Jobs</Th>
+    <Th className="text-right">Submissions</Th>
+    <Th className="text-right">Interviews</Th>
+    <Th className="text-right">Selected</Th>
+    <Th className="text-right">Joined</Th>
+    <Th className="text-right">Joined %</Th>
+  </tr>
 );
 
 function dimensionRow(r: ReportsData["byClient"][number]) {
@@ -154,25 +152,21 @@ export default async function ReportsPage({
   const { conversions } = data;
 
   const recruiterHead = (
-    <thead className="border-b border-slate-200 bg-slate-50">
-      <tr>
-        <Th>Recruiter</Th>
-        <Th className="text-right">Submissions</Th>
-        <Th className="text-right">Interviews</Th>
-        <Th className="text-right">Selected</Th>
-        <Th className="text-right">Joined</Th>
-      </tr>
-    </thead>
+    <tr>
+      <Th>Recruiter</Th>
+      <Th className="text-right">Submissions</Th>
+      <Th className="text-right">Interviews</Th>
+      <Th className="text-right">Selected</Th>
+      <Th className="text-right">Joined</Th>
+    </tr>
   );
 
   const revenueHead = (
-    <thead className="border-b border-slate-200 bg-slate-50">
-      <tr>
-        <Th>Client</Th>
-        <Th className="text-right">Active jobs</Th>
-        <Th className="text-right">Projected revenue</Th>
-      </tr>
-    </thead>
+    <tr>
+      <Th>Client</Th>
+      <Th className="text-right">Active jobs</Th>
+      <Th className="text-right">Projected revenue</Th>
+    </tr>
   );
 
   return (
@@ -609,14 +603,12 @@ function FillDimensionTable({
   rows: ReportsData["timeToFill"]["byClient"];
 }) {
   const head = (
-    <thead className="border-b border-slate-200 bg-slate-50">
-      <tr>
-        <Th>Name</Th>
-        <Th className="text-right">Filled</Th>
-        <Th className="text-right">Median</Th>
-        <Th className="text-right">p90</Th>
-      </tr>
-    </thead>
+    <tr>
+      <Th>Name</Th>
+      <Th className="text-right">Filled</Th>
+      <Th className="text-right">Median</Th>
+      <Th className="text-right">p90</Th>
+    </tr>
   );
   return (
     <div>
