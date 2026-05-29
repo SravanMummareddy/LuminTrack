@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import Link from "next/link";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { Button, buttonClass } from "@/components/ui/button";
@@ -106,6 +106,25 @@ export function SubmissionForm({
   const [rateUnconfirmed, setRateUnconfirmed] = useState(
     defaultCandidateRate !== "",
   );
+  // React 19 auto-resets the <form> after each action completes. Controlled
+  // <input>s survive (their value prop is re-applied), but controlled <select>s
+  // do NOT re-sync — form.reset() snaps them to their first option and React
+  // skips the DOM write because its value prop is unchanged. That made every
+  // select show the wrong option after a gate re-render (and previously caused
+  // the name-bearing "Submitted by" select to SUBMIT the wrong recruiter —
+  // submittedById is now also backstopped by a hidden input below).
+  // Fix: bump a key on each action response so the selects remount and re-apply
+  // their controlled value. This MUST run in an effect, not during render — the
+  // form reset fires AFTER commit, so a render-time re-key gets clobbered by it.
+  // The extra render is intentional and bounded to one per action response.
+  const [selectSyncKey, setSelectSyncKey] = useState(0);
+  useEffect(() => {
+    // Re-key after React 19's post-action <form> reset, which only runs after
+    // commit; a render-time bump would be clobbered by it. Bounded to one extra
+    // render per action response.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectSyncKey((k) => k + 1);
+  }, [state]);
 
   const set =
     (name: keyof Fields) =>
@@ -176,6 +195,7 @@ export function SubmissionForm({
     <form action={formAction} className="space-y-5">
       <input type="hidden" name="jobId" value={effectiveJobId} />
       <input type="hidden" name="candidateId" value={effectiveCandidateId} />
+      <input type="hidden" name="submittedById" value={fields.submittedById} />
       <input type="hidden" name="resumeChoice" value={resumeChoice} />
       <input
         type="hidden"
@@ -199,6 +219,7 @@ export function SubmissionForm({
           hint="Only jobs still open for submissions are listed."
         >
           <Select
+            key={`jobId-${selectSyncKey}`}
             id="jobId"
             value={fields.jobId}
             onChange={onJobChange}
@@ -237,6 +258,7 @@ export function SubmissionForm({
           }
         >
           <Select
+            key={`candidateId-${selectSyncKey}`}
             id="candidateId"
             value={fields.candidateId}
             onChange={onCandidateChange}
@@ -264,8 +286,8 @@ export function SubmissionForm({
           error={errors.submittedById}
         >
           <Select
+            key={`submittedBy-${selectSyncKey}`}
             id="submittedById"
-            name="submittedById"
             value={fields.submittedById}
             onChange={set("submittedById")}
             required
@@ -314,6 +336,7 @@ export function SubmissionForm({
         error={errors.candidateResumeId}
       >
         <Select
+          key={`resumeSelection-${selectSyncKey}`}
           id="resumeSelection"
           value={fields.resumeSelection}
           onChange={(e) => {
@@ -433,6 +456,7 @@ export function SubmissionForm({
             <input type="hidden" name={fieldName} value={composed} />
             <Field label="Reason" htmlFor="overridePreset" required>
               <Select
+                key={`overridePreset-${selectSyncKey}`}
                 id="overridePreset"
                 value={fields.overridePreset}
                 onChange={set("overridePreset")}
