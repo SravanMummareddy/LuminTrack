@@ -127,8 +127,12 @@ See `src/lib/validation/submission.ts`:
   meant the team couldn't legitimately re-submit (different rate,
   refreshed résumé, etc.). Action-level with a captured reason is
   more flexible and still auditable.
-- **Résumé snapshot + FK.** If the library entry is edited or
-  deleted later, we still know what was sent at submission time.
+- **Résumé snapshot + FK.** If the library entry is edited or archived
+  later, we still know what was sent at submission time — and because
+  removing a résumé *archives* it (soft delete) rather than deleting,
+  the `candidateResumeId` FK link survives too. The edit form still
+  offers an archived résumé when this submission is the one using it,
+  labelled "(archived)".
 - **Status-change extras.** Recruiters wanted to record "the
   rejection email came yesterday but I'm only logging it now."
   `eventAt` captures real-world time separately from `createdAt`

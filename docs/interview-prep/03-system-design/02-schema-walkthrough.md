@@ -89,8 +89,10 @@ one inside the same transaction."
 
 Talk: "CandidateResume is the per-candidate résumé library — a
 candidate keeps multiple labelled Drive links. Submission picks
-one and *snapshots* its URL so history survives later edits to
-the library entry. JobAssignment is an explicit join so we can
+one and *snapshots* its URL so history survives later edits to the
+library entry. Removing a résumé *archives* it (`isActive`) rather
+than deleting, so the submission's live FK link survives too.
+JobAssignment is an explicit join so we can
 audit who-assigned-whom. Contact is polymorphic to the three
 org entities."
 

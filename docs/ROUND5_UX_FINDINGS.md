@@ -353,6 +353,13 @@ envelope). Two user-captured screenshots in `uploads/` show what to investigate:
   `dc0fe1d` (submittedById select-reset), `542c65c` (edit-form same fix),
   `38871b4` (amber >7d highlight was dead — cn-no-merge), `1a99bc4` (recruiter
   second-gate-after-claim loop). All tsc+eslint clean and verified live.
+- **Follow-up feature shipped (2026-05-30, `cf03c8f`): résumé archive (soft
+  delete).** Deleting a résumé now archives it (`CandidateResume.isActive`)
+  instead of hard-deleting, so submissions keep their link; archived hidden
+  behind a "Show archived" chip; permanent delete only for 0-submission
+  résumés. Migration `20260530052124_resume_soft_delete`. Verified live on
+  candidate Ravi Garcia (archive used → link kept, restore, permanent-delete a
+  throwaway). Test data restored — no lingering mutations on that candidate.
 - Preview MCP unreliable here — drive the **Claude in Chrome** extension + `npm run dev`.
 - Test data already mutated: SUB-312 → Joined (PLC-002), SUB-191 → Vendor Screening Call,
   Priscilla Nguyen → PLACED; Elena Rossi self-claimed REQ-157385 (SUB-323) and

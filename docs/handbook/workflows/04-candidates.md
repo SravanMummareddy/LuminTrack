@@ -70,7 +70,8 @@ them).
   tag.
 - **Résumé library** — per-candidate list of `CandidateResume` rows
   (label + Drive link). Inline preview via Google Drive's embedded
-  viewer.
+  viewer. Shows **active** résumés by default; archived ones sit behind
+  a "Show archived (N)" chip with an *Archived* badge + Restore.
 - **Interview history (grouped by job)** — each row is one job the
   candidate's been submitted to, with pip indicators (✓ pass / ✗ fail
   / ⌛ pending) per round and a `<details>` expand to see the round
@@ -87,8 +88,13 @@ them).
 - **Add résumé** → opens `ResumeForm` (`src/components/candidates/
   resume-form.tsx`); calls `createResume` action; writes
   `RESUME_ADDED`.
-- **Edit résumé / Delete résumé** → respective actions; audit
-  `RESUME_UPDATED` / `RESUME_DELETED`.
+- **Edit résumé** → `updateCandidateResume`; audit `RESUME_UPDATED`.
+- **Archive / Restore résumé** → `archiveCandidateResume` /
+  `restoreCandidateResume` (soft delete via `isActive`); audit
+  `RESUME_ARCHIVED` / `RESUME_RESTORED`. Archiving keeps the row so
+  submissions stay linked. **Delete permanently** (`deleteCandidateResume`,
+  audit `RESUME_DELETED`) only appears for a résumé with zero
+  submissions.
 - **Submit to a job** button → `/submissions/new?candidateId=<id>`.
 
 ## Code map

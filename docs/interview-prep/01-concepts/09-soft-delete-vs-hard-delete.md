@@ -52,8 +52,15 @@ data in a report.)
 - **Jobs, Submissions** — no delete at all. Retire via
   `JobStatus` (`CLOSED`, `CANCELLED`) or by changing
   `SubmissionStatus`.
-- **Notes, Interview Rounds, Resumes** — hard delete allowed
-  (low-stakes), with audit row.
+- **Notes, Interview Rounds** — hard delete allowed (low-stakes),
+  with audit row.
+- **Resumes** — soft delete via `isActive` (archive). Archiving keeps
+  the row, so any Submission that used it keeps its live
+  `candidateResumeId` link (and the snapshot); archived résumés drop out
+  of the library's active list and the submit picker. A true hard delete
+  is allowed only for a résumé with **zero submissions** (safe cleanup of
+  a mistaken add). Audit: `RESUME_ARCHIVED / RESUME_RESTORED /
+  RESUME_DELETED`.
 
 ## How to talk about it in an interview
 
@@ -65,11 +72,14 @@ data in a report.)
 > coherent story. Org entities like Clients and Vendors use a
 > classic `isActive` soft delete because old jobs still reference
 > them and we want their names to render correctly years later.
-> Small low-stakes data — Notes, Interview Rounds, Resumes — can be
-> hard-deleted, and the audit log captures enough context that the
-> delete itself is reconstructible. If we ever had to handle a
-> GDPR erasure request, we'd need a real anonymisation pass on
-> the soft-deleted user records — that's an open item."
+> Small low-stakes data — Notes and Interview Rounds — can be
+> hard-deleted, with enough audit context to reconstruct the delete.
+> Résumés are the interesting middle case: they moved from hard delete
+> to a soft delete (`isActive` archive) once we noticed a submission
+> keeps a live FK to the résumé it used — so archiving preserves that
+> link, and only an unused résumé can still be hard-deleted. If we ever
+> had to handle a GDPR erasure request, we'd need a real anonymisation
+> pass on the soft-deleted user records — that's an open item."
 
 **Expect:**
 

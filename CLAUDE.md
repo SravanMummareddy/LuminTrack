@@ -41,15 +41,41 @@ confirm dialogs; 4 — submissions-list upgrades; 5 — polish. Reasons are
 `labels.ts` string sets, so the only possible migration is one optional
 `Activity.isOverride` boolean.
 
-**Post-build UX testing (2026-05-29, in progress):** driving the app via the
-Claude-in-Chrome extension as admin + recruiter personas. Live test tracker
-(what's tested / what's pending, incl. the `uploads/` iLabor-import scenarios)
-lives in [`docs/ROUND5_UX_FINDINGS.md`](./docs/ROUND5_UX_FINDINGS.md). One bug
-found + fixed: after any submission gate (duplicate/iLabor/not-assigned),
-React 19's post-action `<form>` reset snapped controlled `<select>`s to their
-first option, silently mis-attributing `submittedById`; fixed with a hidden-input
-backstop + a remount key on the selects (commit `dc0fe1d`). Follow-up: apply the
-same fix to `submission-edit-form.tsx`.
+**Post-build UX testing (2026-05-29/30, admin + recruiter personas via the
+Claude-in-Chrome extension).** Live test tracker (what's tested / pending, incl.
+the `uploads/` iLabor scenarios) in
+[`docs/ROUND5_UX_FINDINGS.md`](./docs/ROUND5_UX_FINDINGS.md). The headline
+assignment-gate + self-claim flow, all three submit entry points, the
+"Mine, stale >7d" filter, the Columns menu, and the iLabor `closed` gate were
+all verified live. **Four bugs found + fixed (all shipped to `main`):**
+- `dc0fe1d` — after any submission gate, React 19's post-action `<form>` reset
+  snapped controlled `<select>`s to their first option, silently mis-attributing
+  `submittedById`. Fixed with a hidden-input backstop + a remount key on the
+  selects (`submission-form.tsx`).
+- `542c65c` — same React-19 reset exposure applied to `submission-edit-form.tsx`
+  (the earlier follow-up; now done).
+- `38871b4` — the "days in stage > 7d" **amber stale highlight never rendered**:
+  `<Td>` bakes in `text-slate-700` and `cn()` has no `tailwind-merge`, so the
+  passed `text-amber-700` lost the cascade. Moved the colour onto the inner span.
+- `1a99bc4` — a recruiter on a job that's **both unassigned and iLabor-closed**
+  (or capped/duplicate) was trapped in an infinite not_assigned → claim → second
+  gate → not_assigned loop, because `claim=1` only lived in the not-assigned
+  block. Fixed by latching `claimIntent` and persisting `claim=1` across
+  follow-up gates.
+
+**Résumé archive (soft delete) — SHIPPED 2026-05-30 (commit `cf03c8f`,
+migration `20260530052124_resume_soft_delete`).** "Deleting" a résumé now
+**archives** it (`CandidateResume.isActive = false`) instead of hard-deleting,
+so a submission keeps its live `candidateResumeId` link (and snapshot) — the
+résumé → submission → interview chain stays intact. New `archiveCandidateResume`
+/ `restoreCandidateResume` actions (`RESUME_ARCHIVED` / `RESUME_RESTORED`
+audit); `deleteCandidateResume` kept but guarded to **zero-submission** résumés
+only. The new-submission picker (`listCandidateOptions`) offers active résumés
+only; the edit form (`getSubmissionForEdit`) also includes the in-use résumé
+even if archived, labelled "(archived)", so the controlled select never drops
+the saved selection. The library splits active vs archived behind a
+"Show archived (N)" chip with an *Archived* badge + Restore; permanent delete
+shows only on unused résumés. Verified live end-to-end.
 
 ## 🚧 Current work — Round 4 pre-demo (Documents → Placements → Export)
 
@@ -342,6 +368,7 @@ snapshot, file map, resolved decisions, iLabor JSON sample. The architectural
 - Auth: hand-rolled session (`bcryptjs` + `jose` JWT cookie) — NOT NextAuth
 - Resumes = a per-candidate **résumé library** (`CandidateResume`) of labelled Google
   Drive links with inline preview; each submission picks one and snapshots its link.
+  "Deleting" a résumé soft-archives it (`isActive`) so submissions stay linked.
   `@vercel/blob` file upload deferred until a Blob store is provisioned. Recharts (Phase 7)
 - Deploy target: Vercel
 
