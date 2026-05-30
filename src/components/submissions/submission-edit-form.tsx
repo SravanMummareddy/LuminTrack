@@ -7,7 +7,14 @@ import { Button, buttonClass } from "@/components/ui/button";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 import { isLikelyDriveUrl, DRIVE_LINK_WARNING } from "@/lib/validation/resume";
 
-type ResumeOption = { id: string; label: string; driveLink: string };
+type ResumeOption = {
+  id: string;
+  label: string;
+  driveLink: string;
+  // false when the résumé has been archived but this submission still uses it —
+  // kept in the list so the selection isn't dropped, flagged so we can label it.
+  isActive?: boolean;
+};
 
 type SubmissionAction = (
   prev: FormState,
@@ -222,6 +229,7 @@ export function SubmissionEditForm({
           {resumes.map((r) => (
             <option key={r.id} value={r.id}>
               {r.label}
+              {r.isActive === false ? " (archived)" : ""}
             </option>
           ))}
           <option value={NEW_RESUME}>+ Add a new resume</option>

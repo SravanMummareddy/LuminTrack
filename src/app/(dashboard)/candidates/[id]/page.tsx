@@ -340,6 +340,7 @@ export default async function CandidateDetailPage({
           id: r.id,
           label: r.label,
           driveLink: r.driveLink,
+          isActive: r.isActive,
           submissionCount: r._count.submissions,
         }))}
       />

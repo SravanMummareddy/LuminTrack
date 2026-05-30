@@ -223,12 +223,14 @@ export function getSubmissionDetail(id: string) {
 }
 
 /** One submission for the edit form — fixed candidate/job/recruiter plus the
- *  candidate's full résumé library so the form can offer the résumé picker. */
-export function getSubmissionForEdit(id: string) {
-  return prisma.submission.findUnique({
+ *  candidate's active résumés (and the currently-used one even if archived) so
+ *  the form can offer the résumé picker without dropping the saved selection. */
+export async function getSubmissionForEdit(id: string) {
+  const submission = await prisma.submission.findUnique({
     where: { id },
     select: {
       id: true,
+      candidateId: true,
       candidateRate: true,
       submissionNotes: true,
       submittedAt: true,
@@ -237,17 +239,30 @@ export function getSubmissionForEdit(id: string) {
       submittedById: true,
       job: { select: { title: true } },
       submittedBy: { select: { fullName: true } },
-      candidate: {
-        select: {
-          fullName: true,
-          resumes: {
-            orderBy: { createdAt: "asc" },
-            select: { id: true, label: true, driveLink: true },
-          },
-        },
-      },
+      candidate: { select: { fullName: true } },
     },
   });
+  if (!submission) return null;
+
+  // Offer active résumés in the picker, plus the one this submission currently
+  // uses even if it's since been archived — otherwise the controlled <select>
+  // finds no matching option and snaps to "No resume", silently dropping the
+  // selection on save.
+  const resumes = await prisma.candidateResume.findMany({
+    where: {
+      candidateId: submission.candidateId,
+      OR: [
+        { isActive: true },
+        ...(submission.candidateResumeId
+          ? [{ id: submission.candidateResumeId }]
+          : []),
+      ],
+    },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, label: true, driveLink: true, isActive: true },
+  });
+
+  return { ...submission, candidate: { ...submission.candidate, resumes } };
 }
 
 /** Submissions for one job — the submitted-candidates table on the job detail page. */
