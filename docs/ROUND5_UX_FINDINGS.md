@@ -84,10 +84,21 @@ resets but submits correctly (résumé uses hidden `resumeChoice`/`candidateResu
 
 ### Phase 4 — Submissions list upgrades  (task #1)
 - ✅ **Days-in-stage column** present and sortable.
-  - 🟡 Could NOT verify the **amber >7d highlight** — all current rows show
-    0d–1d (data is recent / sorted newest-first). Need an older/stale row to
-    confirm the amber styling actually triggers. TODO: sort ascending or use
-    a seeded stale submission.
+- ### 🟠 FIXED (2026-05-29) — amber >7d stale highlight was silently dead
+  Verified live via the recruiter "Mine, stale >7d" view (SUB-184, 10d in stage).
+  **Bug:** the days-in-stage cell passed `text-amber-700` to `<Td>`, but `Td`
+  bakes in `text-slate-700` and `cn` (`src/lib/cn.ts`) is a plain join with **no
+  `tailwind-merge`** — so both color utilities landed in the class list and
+  Tailwind's stylesheet order made `text-slate-700` win. The amber (and the
+  non-stale `text-slate-600`) never actually applied; only `font-semibold`
+  showed. **Proven:** computed color was `lab(26.96,…)` = slate-700, not amber.
+  **Fix:** moved the conditional color onto the inner `<span>` (no competing
+  color of its own) so a direct rule beats the inherited td color
+  (`submissions-table.tsx`). **Verified:** computed color now === `text-amber-700`
+  (`lab(47.27, 42.91, 69.30)`), `matchesAmber: true`, font-weight 600.
+  **Possible broader follow-up:** any other `<Td>`/`<Th>` caller passing a
+  `text-*` color expecting it to override the base is subject to the same
+  cn-no-merge defeat. Not audited yet — flag for a sweep if more cells look off.
 - ✅ **S.No hidden by default** — "Showing 10 of 11 columns", ID column leads.
 - ✅ **Inline status edit** (the headline list feature) works end-to-end:
   clicking the ▼ on a status badge opens a branded "Update status" modal with
@@ -141,6 +152,33 @@ made every toast appear reliably.
   clean. (Status forms are single-select with hidden-input backstops already, so
   out of scope.)
 
+### Phase 2 — Assignment gate + self-claim (HEADLINE) — ✅ VERIFIED LIVE (2026-05-29, recruiter Elena Rossi)
+Logged in as **Elena Rossi (Recruiter)**; full end-to-end pass of the headline feature.
+- ✅ **Dashboard scope** defaults to **"My work"** for the recruiter ("Welcome back,
+  Elena Rossi. Your work — only submissions and jobs you own."). Org-wide toggle present.
+- ✅ **Job-locked entry point (#1)** — opened an unassigned iLabor job
+  (REQ-157385 "Cloud FinOps Analyst", "No recruiters assigned"), clicked
+  **"Submit candidate"** → `/jobs/[id]/submissions/new` with **Job fixed** as a
+  read-only box and a Candidate picker. "Submitted by" prefilled to Elena.
+- ✅ **`not_assigned` gate fires** — picked Grace Chen → Submit → amber gate:
+  "You're not assigned to 'Cloud FinOps Analyst'. Claim it to submit a candidate."
+  + helper "Claiming assigns this job to you (recorded on the job's timeline)…",
+  and the button morphed **"Submit candidate" → "Claim this job & submit"**.
+- ✅ **Select-reset fix holds in the live recruiter flow** — after the gate
+  re-render the Candidate (Grace Chen) and Submitted-by (Elena Rossi) selects
+  KEPT their values. This is the `dc0fe1d` fix proven in the real flow.
+- ✅ **Self-claim completes** — "Claim this job & submit" → redirected to
+  **SUB-323 (Grace Chen → Cloud FinOps Analyst, Submitted)** with **SUBMITTED BY:
+  Elena Rossi** (attribution correct all the way through the claim path).
+- ✅ **Claim side-effects verified on the job page:** ASSIGNED RECRUITERS now
+  shows **Elena Rossi** (was "No recruiters assigned"); Submitted candidates (1)
+  lists SUB-323; **Activity timeline** logs both **"Elena Rossi claimed this job"**
+  and **"Grace Chen submitted to…"**.
+- ✅ **Incidental:** iLabor SUBS now reads **"6 (1 active *(iLabor said 0)*)"** in
+  amber — the effective-active-count divergence guard (R4 re-import hardening) works.
+- ⚠️ *Test data created:* Elena now assigned to **Cloud FinOps Analyst** (REQ-157385);
+  **SUB-323 Grace Chen** created (status Submitted). Left in place.
+
 ### Phase 2 / R4.2 — Candidate lifecycle cascade (incidental, confirmed)
 - ✅ After the JOINED test, Priscilla Nguyen's candidate page shows **Active +
   Placed** badges and a **"CURRENTLY PLACED → PLC-002 — QA Automation Engineer
@@ -187,11 +225,11 @@ made every toast appear reliably.
 ### ⏳ Still to test
 - [ ] "Mine, stale >7d" filter actually filters; amber >7d highlight; Columns menu contents
 - [ ] Note-added toast; job-status-change toast; no-toast on login page
-- [ ] **job-locked** entry point (from a job page) renders job fixed + candidate picker
+- [x] **job-locked** entry point (from a job page) renders job fixed + candidate picker ✅ (Elena, REQ-157385)
 - [ ] iLabor **closed / cap** soft gates (need a job with ilaborSubmitOpen=0 / at submitLimit)
 - [ ] Confirm dialogs for document / interview-round / contact deletes (résumé done)
-- [ ] Re-attribution field correctly **absent for recruiters** (needs recruiter login)
-- [ ] **Assignment gate + self-claim as a RECRUITER** (headline; needs recruiter login)
+- [x] Re-attribution field correctly **absent for recruiters** on the EDIT form ✅ (Elena on SUB-323: "Submitted by" is a read-only box, not a select; Candidate + Job also locked)
+- [x] **Assignment gate + self-claim as a RECRUITER** ✅ VERIFIED (Elena → claimed REQ-157385, SUB-323 created)
 - [x] **Edit-form same-bug follow-up** — submittedById fix applied to `submission-edit-form.tsx` (tsc+lint clean)
 - [ ] Regression: old job-status form path (tsc + lint already clean for the fix)
 
