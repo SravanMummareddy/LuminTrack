@@ -41,6 +41,16 @@ confirm dialogs; 4 — submissions-list upgrades; 5 — polish. Reasons are
 `labels.ts` string sets, so the only possible migration is one optional
 `Activity.isOverride` boolean.
 
+**Post-build UX testing (2026-05-29, in progress):** driving the app via the
+Claude-in-Chrome extension as admin + recruiter personas. Live test tracker
+(what's tested / what's pending, incl. the `uploads/` iLabor-import scenarios)
+lives in [`docs/ROUND5_UX_FINDINGS.md`](./docs/ROUND5_UX_FINDINGS.md). One bug
+found + fixed: after any submission gate (duplicate/iLabor/not-assigned),
+React 19's post-action `<form>` reset snapped controlled `<select>`s to their
+first option, silently mis-attributing `submittedById`; fixed with a hidden-input
+backstop + a remount key on the selects (commit `dc0fe1d`). Follow-up: apply the
+same fix to `submission-edit-form.tsx`.
+
 ## 🚧 Current work — Round 4 pre-demo (Documents → Placements → Export)
 
 Admin handed over a new pre-demo requirements bundle on 2026-05-28.
