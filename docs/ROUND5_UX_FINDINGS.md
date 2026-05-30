@@ -25,6 +25,11 @@ screenshots at each step. Each step evaluated for (1) correctness and
   and flipped candidate Priscilla Nguyen to **PLACED**. Reversible (revert
   JOINED → placement TERMINATED) if you want the demo data restored.
 - SUB-191 (Priscilla Wang) advanced Resume Picked → Vendor Screening Call.
+- **Recruiter session (Elena Rossi), 2026-05-29:** self-claimed **Cloud FinOps
+  Analyst** (REQ-157385) → **SUB-323** (Grace Chen); self-claimed **Senior Full
+  Stack Developer** (REQ-158938, iLabor-closed) → **SUB-324** (Hannah Mwangi, via
+  iLabor override DATA_OUT_OF_DATE); added one note to REQ-158938. Elena is now
+  assigned to both jobs. Left in place.
 
 ---
 
@@ -107,7 +112,16 @@ resets but submits correctly (résumé uses hidden `resumeChoice`/`candidateResu
   change persists and the list refreshes; success toast fires (see Toasts).
 - ✅ **"Mine, stale >7d"** quick-filter chip present. NOT yet exercised (need
   to confirm it actually filters to current user's stale subs).
-- ✅ **Columns** menu present. NOT yet opened to confirm S.No is available there.
+- ✅ **Columns** menu (opened as Elena): per-column drag handles + checkboxes +
+  ↑/↓ keyboard reorder, a **Reset** link, header "Drag, use ↑↓, or toggle to
+  show". **S.No is listed there, unchecked (hidden by default)** — "Showing 10 of
+  11 columns". Confirmed.
+- ✅ **Open entry point (#3)** `/submissions/new` (as Elena): title "New
+  submission" / "Pick both, then submit", both a **Job picker** (hint "Only jobs
+  still open for submissions are listed") and a **Candidate picker**, neither
+  locked. The recruiter's Job picker lists **all 301 open reqs org-wide** (not
+  just assigned ones) — the assignment gate, not the picker, is the enforcement
+  point, so open-mode → not_assigned → claim is reachable and consistent.
 - 🟡 **Minor UX note:** in the submissions list the **Candidate name links to
   the submission detail** (`/submissions/{id}`), not the candidate profile.
   Reasonable for a submissions list, but mildly surprising — a user may expect
@@ -126,8 +140,13 @@ made every toast appear reliably.
 - ✅ **JOINED → placement cascade** (the #1 silent-save complaint) →
   two-line toast: "Status updated to Joined" / "Placement **PLC-002** created
   — set its rates next." Names the placement and prompts the next action. 👍
-- ⏳ Still to verify: **note-added** toast, **job-status-change** toast, and
-  that NO toast appears on the unauthenticated login page.
+- ✅ **note-added** toast (as Elena, on a job): added a note → Notes 0→1, textarea
+  cleared, timeline logged "Note added: …". Toast wiring confirmed in code
+  (`notes-section.tsx:44` — `toast({tone:"success", title:"Note added"})` on
+  `state.ok`); the on-screen toast wasn't captured only because of the 4s/​slow-dev
+  timing window already documented above, not a bug.
+- ⏳ Still to verify: **job-status-change** toast, and that NO toast appears on the
+  unauthenticated login page.
 
 ### Phase 3 — Branded confirm dialogs  (task #5)
 - ✅ **Résumé delete** → branded `ConfirmDialog` ("Delete resume?") with a
@@ -330,8 +349,20 @@ envelope). Two user-captured screenshots in `uploads/` show what to investigate:
   iLabor signal fields (submitLimit / submitStatus), and the `/jobs/imports` history row.
 
 ## Notes for the next session (post /clear)
-- Branch `round5-submission-workflow-overhaul`; fix `dc0fe1d` merged to `main`.
+- All Round 5 work is on `main` and pushed. Fixes shipped this session:
+  `dc0fe1d` (submittedById select-reset), `542c65c` (edit-form same fix),
+  `38871b4` (amber >7d highlight was dead — cn-no-merge), `1a99bc4` (recruiter
+  second-gate-after-claim loop). All tsc+eslint clean and verified live.
 - Preview MCP unreliable here — drive the **Claude in Chrome** extension + `npm run dev`.
 - Test data already mutated: SUB-312 → Joined (PLC-002), SUB-191 → Vendor Screening Call,
-  Priscilla Nguyen → PLACED. Not reverted (owner said leave it).
+  Priscilla Nguyen → PLACED; Elena Rossi self-claimed REQ-157385 (SUB-323) and
+  REQ-158938 (SUB-324) + 1 note. Not reverted (owner said leave it).
 - iLabor import is **admin-only** — log in as admin to test the uploads scenarios.
+- **Still untested (lower priority):** iLabor **cap** gate (need a job at
+  submitLimit; the closed gate + the loop fix are done); **job-status-change**
+  toast + **no-toast-on-login**; branded confirm dialogs for **document /
+  interview-round / contact** deletes (résumé delete done, others share the
+  primitive). Possible broader follow-up: audit other `<Td>`/`<Th>` callers that
+  pass a `text-*` color (same cn-no-merge defeat as the amber bug).
+- Recruiter creds (shared pw `LuminTrack2026!`): elena@ / daniel@ / aisha@ /
+  marcus@ / priya@ / raj@ / sophie@ lumintrack.com. Admin: admin@lumintrack.com.
