@@ -152,6 +152,33 @@ made every toast appear reliably.
   clean. (Status forms are single-select with hidden-input backstops already, so
   out of scope.)
 
+### 🔴 FIXED (2026-05-29) — recruiter trapped in an infinite loop when a SECOND gate follows self-claim
+**Found live** as Elena on an unassigned **and** iLabor-closed job (REQ-158938
+"Senior Full Stack Developer", `ilaborSubmitOpen=0`).
+**Repro:** recruiter (not assigned) submits → `not_assigned` gate → "Claim this
+job & submit" → `ilabor_closed` gate (pick reason) → "Submit anyway" → **bounced
+straight back to `not_assigned`**, losing the iLabor reason. Repeats forever.
+**Root cause:** the `claim=1` hidden input lived ONLY inside the not-assigned
+prompt block in `submission-form.tsx`. The moment the gate became `ilabor_closed`
+that block (and its claim flag) unmounted, so "Submit anyway" posted the override
+reason WITHOUT `claim=1`. Server-side, the self-claim assignment write sits AFTER
+the iLabor/cap checks in the tx (`submissions.ts`), so the first claim attempt
+returns at `ilabor_closed` before any assignment is persisted — the recruiter is
+still unassigned on the next submit and `not_assigned` re-fires. Same trap applies
+to (unassigned + iLabor-cap) and (unassigned + duplicate) — any second gate after
+a self-claim.
+**Fix:** latch a `claimIntent` state the moment the recruiter clicks "Claim this
+job & submit" (onClick on the submit button while `gate === "not_assigned"`), and
+render a persistent `<input name="claim" value="1">` at form level whenever
+`claimIntent` is set — so the claim rides along through the follow-up gate. The
+real assignment still only commits in the same tx as the submission, so a claim
+is never persisted without a submission. tsc + eslint clean.
+**Verified live:** repeated the exact chain → "Submit anyway" now lands SUB-324
+(Hannah Mwangi → Senior Full Stack Developer, Submitted). Job page: ASSIGNED
+RECRUITERS = Elena Rossi; timeline logs "Elena Rossi claimed this job" + "Hannah
+Mwangi submitted… (iLabor override: DATA_OUT_OF_DATE)" with note
+`ilabor-override:DATA_OUT_OF_DATE`.
+
 ### Phase 2 — Assignment gate + self-claim (HEADLINE) — ✅ VERIFIED LIVE (2026-05-29, recruiter Elena Rossi)
 Logged in as **Elena Rossi (Recruiter)**; full end-to-end pass of the headline feature.
 - ✅ **Dashboard scope** defaults to **"My work"** for the recruiter ("Welcome back,
@@ -226,7 +253,7 @@ Logged in as **Elena Rossi (Recruiter)**; full end-to-end pass of the headline f
 - [ ] "Mine, stale >7d" filter actually filters; amber >7d highlight; Columns menu contents
 - [ ] Note-added toast; job-status-change toast; no-toast on login page
 - [x] **job-locked** entry point (from a job page) renders job fixed + candidate picker ✅ (Elena, REQ-157385)
-- [ ] iLabor **closed / cap** soft gates (need a job with ilaborSubmitOpen=0 / at submitLimit)
+- [x] iLabor **closed** soft gate ✅ (REQ-158938 as Elena: gate fires, override reason logged) — and found+fixed the second-gate-after-claim loop (see above). iLabor **cap** gate still untested (need a job at submitLimit).
 - [ ] Confirm dialogs for document / interview-round / contact deletes (résumé done)
 - [x] Re-attribution field correctly **absent for recruiters** on the EDIT form ✅ (Elena on SUB-323: "Submitted by" is a read-only box, not a select; Candidate + Job also locked)
 - [x] **Assignment gate + self-claim as a RECRUITER** ✅ VERIFIED (Elena → claimed REQ-157385, SUB-323 created)

@@ -106,6 +106,15 @@ export function SubmissionForm({
   const [rateUnconfirmed, setRateUnconfirmed] = useState(
     defaultCandidateRate !== "",
   );
+  // A recruiter who self-claims an unassigned job can hit a SECOND gate right
+  // after (iLabor closed/cap, or a duplicate). The claim flag used to live only
+  // inside the not-assigned prompt, so it was dropped on the next submit and the
+  // action re-fired `not_assigned` — an inescapable loop that also discarded the
+  // override reason. Once the recruiter chooses to claim, latch this and keep
+  // claim=1 on every subsequent submit so they clear the assignment gate and
+  // reach the real override. The actual assignment still only commits in the same
+  // tx as the submission, so a claim is never persisted without a submission.
+  const [claimIntent, setClaimIntent] = useState(false);
   // React 19 auto-resets the <form> after each action completes. Controlled
   // <input>s survive (their value prop is re-applied), but controlled <select>s
   // do NOT re-sync — form.reset() snaps them to their first option and React
@@ -196,6 +205,9 @@ export function SubmissionForm({
       <input type="hidden" name="jobId" value={effectiveJobId} />
       <input type="hidden" name="candidateId" value={effectiveCandidateId} />
       <input type="hidden" name="submittedById" value={fields.submittedById} />
+      {/* Persisted across gate transitions once the recruiter has claimed —
+          see claimIntent above. Carries the self-claim through a second gate. */}
+      {claimIntent && <input type="hidden" name="claim" value="1" />}
       <input type="hidden" name="resumeChoice" value={resumeChoice} />
       <input
         type="hidden"
@@ -498,7 +510,15 @@ export function SubmissionForm({
         <Link href={cancelHref} className={buttonClass("secondary")}>
           Cancel
         </Link>
-        <Button type="submit" disabled={pending}>
+        <Button
+          type="submit"
+          disabled={pending}
+          onClick={() => {
+            // Latch the claim the moment the recruiter acts on the not-assigned
+            // prompt, so claim=1 also rides along to any follow-up gate.
+            if (gate === "not_assigned") setClaimIntent(true);
+          }}
+        >
           {pending
             ? "Submitting…"
             : gate === "not_assigned"
