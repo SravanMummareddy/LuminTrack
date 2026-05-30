@@ -127,13 +127,13 @@ const COLUMNS: Column[] = [
     render: (s) => {
       const stale = s.daysInStage > STALE_STAGE_DAYS;
       return (
-        <Td label="Days in stage" className="text-right tabular-nums">
-          {/* Color goes on the span, not the <td>: Td bakes in `text-slate-700`
-              and `cn` doesn't tailwind-merge, so a `text-*` passed to the cell
-              loses to the base color in the cascade. A direct rule on the inner
-              span beats the inherited td color, so the amber stale cue shows. */}
+        <Td
+          label="Days in stage"
+          className={`text-right tabular-nums ${
+            stale ? "font-semibold text-amber-700" : "text-slate-600"
+          }`}
+        >
           <span
-            className={stale ? "font-semibold text-amber-700" : "text-slate-600"}
             title={
               stale
                 ? `In this stage ${s.daysInStage} days — over the ${STALE_STAGE_DAYS}-day mark`
