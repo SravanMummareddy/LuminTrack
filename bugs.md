@@ -9,10 +9,13 @@ verified live.
   `submittedById`. Hidden-input backstop + remount key (`submission-form.tsx`).
 - `542c65c` — same fix applied to `submission-edit-form.tsx` (the follow-up).
 - `38871b4` — "days in stage > 7d" **amber stale highlight never rendered**:
-  `<Td>` bakes in `text-slate-700` and `cn()` has no `tailwind-merge`, so the
-  passed `text-amber-700` lost the cascade. Moved colour onto the inner span.
-  *Open follow-up:* audit other `<Td>`/`<Th>` callers passing a `text-*` colour
-  for the same cn-no-merge defeat.
+  `<Td>` bakes in `text-slate-700` and `cn()` was a plain string-join (no
+  conflict resolution), so the passed `text-amber-700` lost the cascade.
+  **Root-caused + fixed at source 2026-05-30:** `cn()` now uses
+  **`tailwind-merge`** (last-wins), killing this *whole class* of defeat — it
+  also fixed the reports negative-margin `text-red-600` that was silently
+  rendering slate. The submissions cell colour moved back to the cell.
+  *(The interim `38871b4` fix had moved the colour to an inner span.)*
 - `1a99bc4` — a recruiter on a job that's **both unassigned and iLabor-closed**
   (or capped/duplicate) was trapped in an infinite not_assigned → claim → second
   gate → not_assigned loop (`claim=1` only lived in the not-assigned block).
@@ -22,9 +25,15 @@ verified live.
   (`CandidateResume.isActive`) so submissions keep their link; new picker offers
   active only; edit form keeps an in-use archived résumé labelled "(archived)";
   hard delete only for 0-submission résumés.
-- *Still untested (low priority):* iLabor **cap** gate; **job-status-change**
-  toast + no-toast-on-login; branded confirm dialogs for document /
-  interview-round / contact deletes (résumé + document done, share the primitive).
+- *Loose ends closed 2026-05-30:* iLabor **cap** gate verified live (temp
+  `submitLimit=1` → gate "cap of 1 is reached (1 active)", then reverted); all
+  delete confirm dialogs are branded `ConfirmSubmit` (résumé / document /
+  interview-round / contact); the contact **close-with-unsaved-edits** prompt is
+  now a branded dialog (the rare cross-entity-switch guard stays native — it's a
+  synchronous render-phase decision). `cn()` → `tailwind-merge` (above).
+- *Still unexercised live (code-verified):* **job-status-change** toast (wired in
+  `job-status-form.tsx`) + **no-toast-on-login** (structural — `ToastProvider`
+  wraps only the authenticated tree).
 
 **✅ Shipped — iLabor import: expired-transaction crash fix (2026-05-28).**
 Was: running `/jobs/import` confirm against the 306-row sample failed with

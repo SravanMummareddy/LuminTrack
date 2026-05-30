@@ -170,7 +170,10 @@ Full details: [`09-audit-and-timeline.md`](./09-audit-and-timeline.md).
 - `src/lib/labels.ts` — enum → display string + tone maps for the
   Badge component.
 - `src/lib/cn.ts` — the classic `cn(...classes)` helper for Tailwind
-  composition.
+  composition. Backed by `tailwind-merge`, so conflicting utilities
+  resolve last-wins (a caller's `text-amber-700` overrides a component's
+  baked-in `text-slate-700`) — added after a plain string-join silently
+  defeated passed colours.
 
 ## The "no API routes" decision
 

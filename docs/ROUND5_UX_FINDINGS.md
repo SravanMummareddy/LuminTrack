@@ -101,9 +101,12 @@ resets but submits correctly (résumé uses hidden `resumeChoice`/`candidateResu
   color of its own) so a direct rule beats the inherited td color
   (`submissions-table.tsx`). **Verified:** computed color now === `text-amber-700`
   (`lab(47.27, 42.91, 69.30)`), `matchesAmber: true`, font-weight 600.
-  **Possible broader follow-up:** any other `<Td>`/`<Th>` caller passing a
-  `text-*` color expecting it to override the base is subject to the same
-  cn-no-merge defeat. Not audited yet — flag for a sweep if more cells look off.
+  **Follow-up RESOLVED (2026-05-30):** the root cause was `cn()` doing a plain
+  string-join with no conflict resolution, so this defeat could hit *any*
+  `<Td>`/`<Th>` caller passing a `text-*` colour. Fixed at the source — `cn()`
+  now uses **`tailwind-merge`** (last-wins), which also fixed the reports
+  negative-margin `text-red-600`. The submissions cell colour moved back to the
+  cell (the span workaround is no longer needed).
 - ✅ **S.No hidden by default** — "Showing 10 of 11 columns", ID column leads.
 - ✅ **Inline status edit** (the headline list feature) works end-to-end:
   clicking the ▼ on a status badge opens a branded "Update status" modal with
@@ -365,11 +368,17 @@ envelope). Two user-captured screenshots in `uploads/` show what to investigate:
   Priscilla Nguyen → PLACED; Elena Rossi self-claimed REQ-157385 (SUB-323) and
   REQ-158938 (SUB-324) + 1 note. Not reverted (owner said leave it).
 - iLabor import is **admin-only** — log in as admin to test the uploads scenarios.
-- **Still untested (lower priority):** iLabor **cap** gate (need a job at
-  submitLimit; the closed gate + the loop fix are done); **job-status-change**
-  toast + **no-toast-on-login**; branded confirm dialogs for **document /
-  interview-round / contact** deletes (résumé delete done, others share the
-  primitive). Possible broader follow-up: audit other `<Td>`/`<Th>` callers that
-  pass a `text-*` color (same cn-no-merge defeat as the amber bug).
+- **Loose ends closed (2026-05-30):** iLabor **cap** gate verified live (set a
+  test job's `submitLimit=1` → gate fired "cap of 1 is reached (1 active)", then
+  reverted); the cn-no-merge audit is fixed at the source (`cn()` →
+  `tailwind-merge`, also fixing the reports negative-margin red); branded confirm
+  dialogs confirmed for résumé / document / interview-round / contact deletes
+  (all share `ConfirmSubmit`), and the contact **close-with-unsaved-edits** path
+  is now branded (the rare cross-entity-switch guard stays native by design —
+  it's a synchronous render-phase decision).
+- **Still unexercised live (low; code-verified):** **job-status-change** toast
+  (wired in `job-status-form.tsx`; same proven toast mechanism as the others) +
+  **no-toast-on-login** (structural — `ToastProvider` wraps only the
+  authenticated tree, so the public login page has no provider).
 - Recruiter creds (shared pw `LuminTrack2026!`): elena@ / daniel@ / aisha@ /
   marcus@ / priya@ / raj@ / sophie@ lumintrack.com. Admin: admin@lumintrack.com.

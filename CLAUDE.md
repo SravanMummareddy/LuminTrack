@@ -77,6 +77,18 @@ the saved selection. The library splits active vs archived behind a
 "Show archived (N)" chip with an *Archived* badge + Restore; permanent delete
 shows only on unused résumés. Verified live end-to-end.
 
+**Loose-ends wrap (2026-05-30).** (1) **`cn()` → `tailwind-merge`**
+([`src/lib/cn.ts`](./src/lib/cn.ts)): the amber-highlight bug's root cause was
+`cn` plain-joining classes with no conflict resolution, so a component's baked
+`text-slate-700` beat a caller's `text-*`. Now conflicts resolve last-wins,
+fixing the whole class — including a silently-defeated `text-red-600` on the
+reports negative-margin cell. The submissions stale cell reverted to the simple
+cell-level colour. (2) **Contacts dialog** close-with-unsaved-edits prompt is now
+a branded `ConfirmDialog` (the rare cross-entity-switch guard stays native — a
+synchronous render-phase decision). (3) **iLabor cap gate verified live**. All
+delete confirm dialogs are branded `ConfirmSubmit`. Remaining low-priority,
+code-verified-only: job-status-change toast + no-toast-on-login.
+
 ## 🚧 Current work — Round 4 pre-demo (Documents → Placements → Export)
 
 Admin handed over a new pre-demo requirements bundle on 2026-05-28.
