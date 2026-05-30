@@ -192,7 +192,49 @@ made every toast appear reliably.
 - [ ] **Edit-form same-bug follow-up** — apply submittedById fix to `submission-edit-form.tsx`
 - [ ] Regression: old job-status form path (tsc + lint already clean for the fix)
 
-### ⏳ iLabor import scenarios — from `uploads/` (admin only)
+### ✅ iLabor import scenarios — VERIFIED LIVE (2026-05-29, admin)
+Uploaded `uploads/ilabor_data_sample.json` (raw capture) → Preview:
+- ✅ **Envelope check PASSED** — no error. The tolerant adapter
+  (`ilabor-import.ts:154-170`) wraps a raw `{requisitionViewList}` capture
+  (no `source` key) into the extension envelope. **The `json upload error.png`
+  screenshot is STALE** — it predates that adapter (Phase 4 polish). Current
+  behavior accepts raw captures, as CLAUDE.md claims.
+- ✅ **Preview = 305 NEW / 0 UPDATED / 1 ERRORED / 0 UNMAPPED** — matches the
+  exact code+data prediction. The 1 skip is row #71 (req 158969 "Zscaler
+  Engineer"), `customerName` empty in the source → **correct** validation skip,
+  not a bug. The other 305 import.
+- ✅ Preview also warns "will create 1 new vendor (RANDSTAD) and 79 new clients"
+  with rename guidance (rename in Settings first so jobs stay linked) — good guard.
+- ✅ **CONFIRMED import (owner approved):** "Import complete — Created 305 ·
+  Updated 0 · Unchanged 0 · Skipped 1". DB verified: Job count 50→355, 79 new
+  clients + RANDSTAD vendor created. Success card links to the run's change log.
+
+### 🔴 PERF / PRODUCTION RISK — 305-row import took 11.3 minutes
+Dev server log: `POST /jobs/import 200 in 11.3min … importRequisitions … in
+677459ms`. The import is functionally correct but **extremely slow**: the
+per-row mini-transaction design (one `$transaction([job.upsert, audit])` per row
++ ~80 entity resolves, all sequential round-trips to Neon serverless) means 305
+rows = ~11 min here.
+- **Why it matters:** on Vercel, Server Actions run as serverless functions with
+  a `maxDuration` cap (Hobby 60s; Pro default ~15s, max 300s; Enterprise max
+  900s). A 677s execution **exceeds the Pro 300s limit** — a 305-row import would
+  be **killed mid-run in production**, leaving a partial import (per-row commits
+  persist, so no rollback). The current design only "works" locally because dev
+  has no function timeout.
+- **Context:** this slowness is the flip side of the earlier fix that split the
+  single 60s `$transaction` into per-row transactions to dodge the Postgres
+  "expired transaction" error (see DEVLOG). It traded the transaction timeout for
+  a very long total request.
+- **Suggested fix:** batch the writes — `prisma.createMany` for jobs +
+  `createMany` for audit rows in chunks (e.g. 50/chunk), or move the import to a
+  background job / queue and stream progress. Either keeps each DB round-trip
+  count low instead of 305 sequential ones. Needs a follow-up ticket.
+- Caveat: today's dev server was unusually slow across the board (status changes
+  took 5–7s each), so prod might be 2–4 min rather than 11 — but that still
+  exceeds Hobby's 60s and risks Pro's 300s. Worth load-testing before relying on
+  large imports in prod.
+
+### (original to-do, now resolved above) iLabor import scenarios — from `uploads/` (admin only)
 Source file: `uploads/ilabor_data_sample.json` — a RAW iLabor API response
 (top-level `requisitionViewList`, 306 rows; no `source:"lumintrack-labor-extension"`
 envelope). Two user-captured screenshots in `uploads/` show what to investigate:
