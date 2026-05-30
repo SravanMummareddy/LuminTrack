@@ -39,8 +39,8 @@ Two related admin workflows for a single candidate:
   - The full `Candidate` row (name, email, phone, location, work auth,
     experience, current company, skills, featured skills, LinkedIn,
     notes, status, tags, lastContactedAt, source, isActive, timestamps).
-  - Every `CandidateResume` (label + Drive link — file contents stay in
-    Drive).
+  - Every `CandidateResume` (label + Drive link + `isActive` so archived
+    résumés are still captured — file contents stay in Drive).
   - Every `Submission` for the candidate, with linked Job title + Client
     name + Vendor name resolved (status, rate, notes, rejection reason,
     duplicate-override reason, submittedAt, expected/actual join dates).
