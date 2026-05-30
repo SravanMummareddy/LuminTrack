@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import Link from "next/link";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { Button, buttonClass } from "@/components/ui/button";
@@ -103,6 +103,21 @@ export function SubmissionEditForm({
     ) =>
       setFields((f) => ({ ...f, [name]: e.target.value }));
 
+  // React 19 auto-resets the <form> after each action completes. This form
+  // redirects on success, but a validation error returns without redirecting —
+  // and then controlled <select>s do NOT re-sync (form.reset() snaps them to
+  // their first option and React skips the DOM write because the value prop is
+  // unchanged). That would silently mis-attribute the name-bearing "Submitted
+  // by" select (now also backstopped by a hidden input below). Bump a key on
+  // each action response so the selects remount and re-apply their controlled
+  // value. MUST run in an effect — the reset fires AFTER commit, so a
+  // render-time re-key would be clobbered by it. (Mirrors submission-form.tsx.)
+  const [selectSyncKey, setSelectSyncKey] = useState(0);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectSyncKey((k) => k + 1);
+  }, [state]);
+
   const errors = state.fieldErrors ?? {};
   const resumeChoice =
     fields.resumeSelection === ""
@@ -131,9 +146,17 @@ export function SubmissionEditForm({
             hint="Admin: correct who this submission is credited to."
             error={errors.submittedById}
           >
-            <Select
-              id="submittedById"
+            {/* Backstop: the visible select is presentational (no name) so a
+                post-action form reset can't diverge the submitted value from
+                state. The hidden input is the one that's actually submitted. */}
+            <input
+              type="hidden"
               name="submittedById"
+              value={fields.submittedById}
+            />
+            <Select
+              key={`submittedBy-${selectSyncKey}`}
+              id="submittedById"
               value={fields.submittedById}
               onChange={set("submittedById")}
             >
@@ -190,6 +213,7 @@ export function SubmissionEditForm({
         error={errors.candidateResumeId}
       >
         <Select
+          key={`resumeSelection-${selectSyncKey}`}
           id="resumeSelection"
           value={fields.resumeSelection}
           onChange={set("resumeSelection")}

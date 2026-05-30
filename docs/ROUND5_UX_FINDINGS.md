@@ -131,12 +131,15 @@ made every toast appear reliably.
 - ✅ Edit submission page (admin) shows an editable **"Submitted by"** select
   with helper "Admin: correct who this submission is credited to." Candidate +
   Job are read-only (fixed at creation). Recruiter-side absence still to verify.
-- 🟠 **FOLLOW-UP / likely same bug:** `submission-edit-form.tsx` has the same
+- ✅ **FOLLOW-UP FIXED (2026-05-29):** `submission-edit-form.tsx` had the same
   controlled, name-bearing "Submitted by" + "Resume" selects. It redirects on
   success (safe), BUT on a validation-error re-render (no redirect) it would hit
   the identical React-19 form-reset → submittedById mis-attribution + selects
-  showing wrong values. Apply the same fix (hidden-input backstop + remount key)
-  there. Also worth scanning the status forms, though those are single-select.
+  showing wrong values. Applied the same fix: hidden `<input name="submittedById">`
+  backstop + presentational visible select + `selectSyncKey` remount key (bumped
+  in a `useEffect([state])`) on the submittedById + résumé selects. tsc + eslint
+  clean. (Status forms are single-select with hidden-input backstops already, so
+  out of scope.)
 
 ### Phase 2 / R4.2 — Candidate lifecycle cascade (incidental, confirmed)
 - ✅ After the JOINED test, Priscilla Nguyen's candidate page shows **Active +
@@ -189,7 +192,7 @@ made every toast appear reliably.
 - [ ] Confirm dialogs for document / interview-round / contact deletes (résumé done)
 - [ ] Re-attribution field correctly **absent for recruiters** (needs recruiter login)
 - [ ] **Assignment gate + self-claim as a RECRUITER** (headline; needs recruiter login)
-- [ ] **Edit-form same-bug follow-up** — apply submittedById fix to `submission-edit-form.tsx`
+- [x] **Edit-form same-bug follow-up** — submittedById fix applied to `submission-edit-form.tsx` (tsc+lint clean)
 - [ ] Regression: old job-status form path (tsc + lint already clean for the fix)
 
 ### ✅ iLabor import scenarios — VERIFIED LIVE (2026-05-29, admin)
