@@ -209,7 +209,17 @@ Uploaded `uploads/ilabor_data_sample.json` (raw capture) → Preview:
   Updated 0 · Unchanged 0 · Skipped 1". DB verified: Job count 50→355, 79 new
   clients + RANDSTAD vendor created. Success card links to the run's change log.
 
-### 🔴 PERF / PRODUCTION RISK — 305-row import took 11.3 minutes
+### ✅ FIXED (2026-05-29, commit `4f0d9b2`) — import perf / Vercel-timeout risk
+Rewrote the confirm step to batch DB writes: vendor/client resolution loads
+once + `createMany` the missing names; NEW rows go through one
+`createManyAndReturn` + one `activity.createMany` in a single short transaction;
+UNCHANGED rows collapse to one `updateMany` heartbeat; CHANGED rows stay per-row
+(uncommon). Per-row cost is now O(1) — total time is fixed prep, not row count.
+Verified live: 2 new rows imported in ~16s (incl. prep) vs the old 677s for 305;
+jobs + audit rows + signal fields + client/vendor links all correct; tsc+eslint
+clean. Original analysis below for reference.
+
+### (original report) 🔴 PERF / PRODUCTION RISK — 305-row import took 11.3 minutes
 Dev server log: `POST /jobs/import 200 in 11.3min … importRequisitions … in
 677459ms`. The import is functionally correct but **extremely slow**: the
 per-row mini-transaction design (one `$transaction([job.upsert, audit])` per row
