@@ -116,8 +116,11 @@ export default async function SubmissionDetailPage({
       </Card>
 
       <Card title="Update status">
+        {/* Not keyed by status: a `key={submission.status}` here remounts the
+            form on every successful save, which unmounted the instance before
+            its success-toast effect could fire (the toast was silently eaten).
+            The form now resets its own fields in the success effect instead. */}
         <SubmissionStatusForm
-          key={submission.status}
           submissionId={submission.id}
           status={submission.status}
         />

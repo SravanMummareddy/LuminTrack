@@ -209,6 +209,37 @@ export function getJobSummary(id: string) {
   });
 }
 
+/**
+ * Lightweight job list for the submission form's job picker (candidate-locked
+ * and open entry points). Mirrors `listCandidateOptions`. Scoped to jobs that
+ * still accept submissions (OPEN / ON_HOLD) so the dropdown isn't cluttered
+ * with filled/closed/cancelled reqs. `candidateRate` lets the form seed a rate
+ * default once a job is picked; `seq`/`portalRefId` build the display id label.
+ */
+export async function listJobOptions() {
+  const rows = await prisma.job.findMany({
+    where: { status: { in: ["OPEN", "ON_HOLD"] } },
+    orderBy: { title: "asc" },
+    select: {
+      id: true,
+      title: true,
+      seq: true,
+      portalRefId: true,
+      candidateRate: true,
+      client: { select: { name: true } },
+    },
+  });
+  // Decimal isn't serializable across the RSC → Client boundary; flatten the
+  // rate to a plain string the form can drop straight into the rate input.
+  return rows.map(({ candidateRate, client, ...rest }) => ({
+    ...rest,
+    clientName: client?.name ?? null,
+    candidateRate: candidateRate != null ? candidateRate.toString() : "",
+  }));
+}
+
+export type JobOption = Awaited<ReturnType<typeof listJobOptions>>[number];
+
 /** Minimal job shape for the edit form — includes assigned recruiter IDs. */
 export function getJobForEdit(id: string) {
   return prisma.job.findUnique({

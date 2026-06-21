@@ -5,6 +5,8 @@ import { PageHeader } from "@/components/ui/page-header";
 import { SubmissionEditForm } from "@/components/submissions/submission-edit-form";
 import { updateSubmission } from "@/server/actions/submissions";
 import { getSubmissionForEdit } from "@/server/queries/submissions";
+import { listUsers } from "@/server/queries/org";
+import { getCurrentUser } from "@/lib/session";
 
 export default async function EditSubmissionPage({
   params,
@@ -12,8 +14,22 @@ export default async function EditSubmissionPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const submission = await getSubmissionForEdit(id);
+  const [submission, user] = await Promise.all([
+    getSubmissionForEdit(id),
+    getCurrentUser(),
+  ]);
   if (!submission) notFound();
+
+  // Admins may correct the submitting recruiter (scorecards key off it);
+  // recruiters see it locked. Only fetch the picker list when it's needed.
+  const isAdmin = user?.role === "ADMIN";
+  const recruiters = isAdmin
+    ? (await listUsers()).map((u) => ({
+        id: u.id,
+        fullName: u.fullName,
+        isActive: u.isActive,
+      }))
+    : [];
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -37,6 +53,8 @@ export default async function EditSubmissionPage({
           candidateName={submission.candidate.fullName}
           jobTitle={submission.job.title}
           recruiterName={submission.submittedBy.fullName}
+          canReattribute={isAdmin}
+          recruiters={recruiters}
           resumes={submission.candidate.resumes}
           values={{
             candidateRate: submission.candidateRate?.toString() ?? "",
@@ -49,6 +67,7 @@ export default async function EditSubmissionPage({
             payRate: submission.payRate?.toString() ?? "",
             billRate: submission.billRate?.toString() ?? "",
             teamLead: submission.teamLead ?? "",
+            submittedById: submission.submittedById,
           }}
         />
       </div>

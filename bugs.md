@@ -1,5 +1,40 @@
 # Remaining work (2026-05-25 sweep)
 
+**✅ Shipped — Round 5 UX-testing fixes + résumé archive (2026-05-29/30).**
+Found while driving the app as admin + recruiter personas (Claude-in-Chrome);
+full tracker in `docs/ROUND5_UX_FINDINGS.md`. All on `main`, tsc+eslint clean,
+verified live.
+- `dc0fe1d` — after any submission gate, React 19's post-action `<form>` reset
+  snapped controlled `<select>`s to their first option, silently mis-attributing
+  `submittedById`. Hidden-input backstop + remount key (`submission-form.tsx`).
+- `542c65c` — same fix applied to `submission-edit-form.tsx` (the follow-up).
+- `38871b4` — "days in stage > 7d" **amber stale highlight never rendered**:
+  `<Td>` bakes in `text-slate-700` and `cn()` was a plain string-join (no
+  conflict resolution), so the passed `text-amber-700` lost the cascade.
+  **Root-caused + fixed at source 2026-05-30:** `cn()` now uses
+  **`tailwind-merge`** (last-wins), killing this *whole class* of defeat — it
+  also fixed the reports negative-margin `text-red-600` that was silently
+  rendering slate. The submissions cell colour moved back to the cell.
+  *(The interim `38871b4` fix had moved the colour to an inner span.)*
+- `1a99bc4` — a recruiter on a job that's **both unassigned and iLabor-closed**
+  (or capped/duplicate) was trapped in an infinite not_assigned → claim → second
+  gate → not_assigned loop (`claim=1` only lived in the not-assigned block).
+  Latched `claimIntent`; persists `claim=1` across follow-up gates.
+- `cf03c8f` — **résumé archive (soft delete)** (migration
+  `20260530052124_resume_soft_delete`): "deleting" a résumé archives it
+  (`CandidateResume.isActive`) so submissions keep their link; new picker offers
+  active only; edit form keeps an in-use archived résumé labelled "(archived)";
+  hard delete only for 0-submission résumés.
+- *Loose ends closed 2026-05-30:* iLabor **cap** gate verified live (temp
+  `submitLimit=1` → gate "cap of 1 is reached (1 active)", then reverted); all
+  delete confirm dialogs are branded `ConfirmSubmit` (résumé / document /
+  interview-round / contact); the contact **close-with-unsaved-edits** prompt is
+  now a branded dialog (the rare cross-entity-switch guard stays native — it's a
+  synchronous render-phase decision). `cn()` → `tailwind-merge` (above).
+- *Still unexercised live (code-verified):* **job-status-change** toast (wired in
+  `job-status-form.tsx`) + **no-toast-on-login** (structural — `ToastProvider`
+  wraps only the authenticated tree).
+
 **✅ Shipped — iLabor import: expired-transaction crash fix (2026-05-28).**
 Was: running `/jobs/import` confirm against the 306-row sample failed with
 `Transaction API error: A query cannot be executed on an expired

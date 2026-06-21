@@ -65,11 +65,13 @@ export default async function NewSubmissionPage({
         <div className="rounded-lg border border-slate-200 bg-white p-6">
           <SubmissionForm
             action={createSubmission}
-            jobId={job.id}
+            mode="job-locked"
+            job={{ id: job.id, title: job.title }}
             candidates={candidateOptions}
             recruiters={recruiters}
             defaultRecruiterId={user.id}
             defaultCandidateRate={job.candidateRate?.toString() ?? ""}
+            cancelHref={`/jobs/${job.id}`}
           />
         </div>
       )}

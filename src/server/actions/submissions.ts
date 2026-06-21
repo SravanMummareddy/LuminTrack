@@ -96,6 +96,26 @@ export async function createSubmission(
       fieldErrors: { candidateId: "Select a candidate." },
     };
 
+  // Assignment gate (Round 5 — assignment workflow). Admins submit to any job
+  // and may attribute the submission to anyone. A recruiter must be assigned to
+  // the job first, but can self-claim it inline: the form re-submits with
+  // claim=1, which assigns the job to them (logged) in the same tx as the
+  // submission. Without the claim flag we pause and prompt.
+  const claim = String(formData.get("claim") ?? "") === "1";
+  const isAdmin = user.role === "ADMIN";
+  if (!isAdmin) {
+    const assignment = await prisma.jobAssignment.findFirst({
+      where: { jobId: d.jobId, recruiterId: user.id },
+      select: { id: true },
+    });
+    if (!assignment && !claim) {
+      return {
+        needsConfirm: "not_assigned",
+        error: `You're not assigned to "${job.title}". Claim it to submit a candidate.`,
+      };
+    }
+  }
+
   // §C4 — duplicate-submission check moved out of the DB to the action so
   // recruiters can override with a reason (e.g. role was rebooted, prior
   // submission was cancelled). The DB unique constraint was dropped in
@@ -148,7 +168,7 @@ export async function createSubmission(
   // we need to bail with `needsConfirm` so the caller can show the prompt.
   type CreateResult =
     | { kind: "created"; submissionId: string }
-    | { kind: "duplicate" }
+    | { kind: "duplicate"; existingId: string }
     | { kind: "ilabor_closed" }
     | { kind: "ilabor_cap"; cap: number; active: number };
   const lockHash = hashPair(d.candidateId, d.jobId);
@@ -162,7 +182,8 @@ export async function createSubmission(
         where: { candidateId: d.candidateId, jobId: d.jobId },
         select: { id: true },
       });
-      if (existing && !duplicateReason) return { kind: "duplicate" };
+      if (existing && !duplicateReason)
+        return { kind: "duplicate", existingId: existing.id };
 
       // iLabor "closed for submissions" gate. Fires when iLabor's
       // submitStatus is 0 — independent of LuminTrack's job status. Override
@@ -190,6 +211,38 @@ export async function createSubmission(
             cap: job.submitLimit,
             active: effectiveActive,
           };
+        }
+      }
+
+      // Self-claim: a recruiter submitting to a job they don't own gets
+      // assigned to it here, in the same tx as the submission, so ownership and
+      // the submission commit together. The upsert is idempotent against
+      // @@unique([jobId, recruiterId]) — a concurrent claim is a harmless no-op
+      // (no P2002) — and we only log RECRUITER_ASSIGNED when we actually create.
+      if (!isAdmin) {
+        const owned = await tx.jobAssignment.findFirst({
+          where: { jobId: d.jobId, recruiterId: user.id },
+          select: { id: true },
+        });
+        if (!owned) {
+          await tx.jobAssignment.upsert({
+            where: {
+              jobId_recruiterId: { jobId: d.jobId, recruiterId: user.id },
+            },
+            create: {
+              jobId: d.jobId,
+              recruiterId: user.id,
+              assignedById: user.id,
+            },
+            update: {},
+          });
+          await logActivity(tx, {
+            entityType: "JOB",
+            action: "RECRUITER_ASSIGNED",
+            description: `${user.fullName} claimed this job`,
+            performedById: user.id,
+            jobId: d.jobId,
+          });
         }
       }
 
@@ -267,20 +320,22 @@ export async function createSubmission(
 
   if (result.kind === "duplicate") {
     return {
-      needsConfirm: true,
-      error: `${candidate.fullName} was already submitted to this job. Add a reason to submit again.`,
+      needsConfirm: "duplicate",
+      confirmData: { existingSubmissionId: result.existingId },
+      error: `${candidate.fullName} was already submitted to this job. Pick a reason to submit again.`,
     };
   }
   if (result.kind === "ilabor_closed") {
     return {
-      needsConfirm: true,
-      error: `iLabor has closed submissions on this requisition. Add a reason to submit anyway.`,
+      needsConfirm: "ilabor_closed",
+      error: `iLabor has closed submissions on this requisition. Pick a reason to submit anyway.`,
     };
   }
   if (result.kind === "ilabor_cap") {
     return {
-      needsConfirm: true,
-      error: `iLabor's cap of ${result.cap} is reached (${result.active} active). Add a reason to submit past the cap.`,
+      needsConfirm: "ilabor_cap",
+      confirmData: { cap: result.cap, active: result.active },
+      error: `iLabor's cap of ${result.cap} is reached (${result.active} active). Pick a reason to submit past the cap.`,
     };
   }
   const submissionId = result.submissionId;
@@ -296,6 +351,7 @@ function readSubmissionEdit(formData: FormData) {
     candidateRate: formData.get("candidateRate") ?? "",
     submissionNotes: formData.get("submissionNotes") ?? "",
     submittedAt: formData.get("submittedAt") ?? "",
+    submittedById: formData.get("submittedById") ?? "",
     resumeChoice: formData.get("resumeChoice") ?? "none",
     candidateResumeId: formData.get("candidateResumeId") ?? "",
     newResumeLabel: formData.get("newResumeLabel") ?? "",
@@ -335,9 +391,30 @@ export async function updateSubmission(
     include: {
       candidate: { select: { id: true, fullName: true } },
       job: { select: { id: true, title: true } },
+      submittedBy: { select: { fullName: true } },
     },
   });
   if (!existing) return { error: "This submission no longer exists." };
+
+  // Admin-only re-attribution of "Submitted by". Recruiter scorecards key off
+  // submittedById, so a mis-set submitter previously had no correction path.
+  // Non-admins never reach this — the field is locked in their form.
+  const isAdmin = user.role === "ADMIN";
+  let newSubmittedById: string | null = null;
+  let newSubmitterName = "";
+  if (isAdmin && d.submittedById && d.submittedById !== existing.submittedById) {
+    const target = await prisma.user.findUnique({
+      where: { id: d.submittedById },
+      select: { id: true, fullName: true },
+    });
+    if (!target)
+      return {
+        error: "Please fix the highlighted fields.",
+        fieldErrors: { submittedById: "Pick a valid user." },
+      };
+    newSubmittedById = target.id;
+    newSubmitterName = target.fullName;
+  }
 
   // Resolve a previously-saved résumé up front so a bad pick returns cleanly.
   let pickedResume: { id: string; driveLink: string } | null = null;
@@ -402,6 +479,7 @@ export async function updateSubmission(
       String(existing.resumeDriveLink ?? "") !== String(resumeSnapshot ?? "")
     )
       changed.push("resume");
+    if (newSubmittedById) changed.push("submitted by");
 
     await tx.submission.update({
       where: { id: submissionId },
@@ -418,18 +496,25 @@ export async function updateSubmission(
         payRate: d.payRate ?? null,
         billRate: d.billRate ?? null,
         teamLead: d.teamLead ?? null,
+        ...(newSubmittedById ? { submittedById: newSubmittedById } : {}),
       },
     });
 
-    if (changed.length)
+    if (changed.length) {
+      // Spell out the re-attribution (old → new) so the audit trail is
+      // legible without cross-referencing — scorecards depend on it.
+      const reattrNote = newSubmittedById
+        ? `; submitted-by changed from ${existing.submittedBy.fullName} to ${newSubmitterName}`
+        : "";
       await logActivity(tx, {
         entityType: "SUBMISSION",
         action: "SUBMISSION_UPDATED",
-        description: `${existing.candidate.fullName} on "${existing.job.title}": submission updated (${changed.join(", ")})`,
+        description: `${existing.candidate.fullName} on "${existing.job.title}": submission updated (${changed.join(", ")})${reattrNote}`,
         newValue: changed.join(", "),
         performedById: user.id,
         submissionId,
       });
+    }
   });
 
   revalidatePath("/submissions");
@@ -507,6 +592,9 @@ export async function changeSubmissionStatus(
   if (next === "JOINED" && d.actualJoinDate)
     joinDates.actualJoinDate = d.actualJoinDate;
 
+  // Surfaced in the success toast — set when JOINED creates/reactivates a placement.
+  let placementSeq: number | null = null;
+
   await prisma.$transaction(async (tx) => {
     await tx.submission.update({
       where: { id: d.id },
@@ -534,7 +622,7 @@ export async function changeSubmissionStatus(
     // R4.2 — placement lifecycle hooks. Same transaction as the status change
     // so the placement state and the audit row commit together (audit invariant).
     if (next === "JOINED" && prev !== "JOINED") {
-      await ensurePlacementOnJoined(tx, {
+      const placement = await ensurePlacementOnJoined(tx, {
         submissionId: d.id,
         candidateId: submission.candidateId,
         jobId: submission.jobId,
@@ -545,6 +633,7 @@ export async function changeSubmissionStatus(
         performedById: user.id,
         eventAt: d.actualJoinDate ?? d.eventAt ?? null,
       });
+      placementSeq = placement.placementSeq;
     } else if (
       prev === "JOINED" &&
       next !== "JOINED" &&
@@ -567,5 +656,14 @@ export async function changeSubmissionStatus(
   revalidatePath(`/submissions/${d.id}`);
   revalidatePath(`/jobs/${submission.jobId}`);
   revalidatePath(`/candidates/${submission.candidateId}`);
-  return { ok: true };
+  return {
+    ok: true,
+    toast: {
+      title: `Status updated to ${SUBMISSION_STATUS_LABEL[next]}`,
+      description:
+        placementSeq != null
+          ? `Placement PLC-${String(placementSeq).padStart(3, "0")} created — set its rates next.`
+          : undefined,
+    },
+  };
 }

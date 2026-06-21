@@ -31,7 +31,9 @@ independently of any one Job. Has a résumé library
 ### CandidateResume
 A labelled Google Drive link saved against a Candidate. One
 Candidate, many Resumes. Submissions reference the chosen one and
-snapshot its URL.
+snapshot its URL. "Removing" a résumé **archives** it
+(`isActive = false`) so submissions that used it stay linked; only an
+unused résumé can be hard-deleted.
 
 ### Client
 The actual hiring company. The end employer. `Client` model.

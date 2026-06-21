@@ -140,6 +140,8 @@ enum ActivityAction {
   NOTE_ADDED
   RESUME_ADDED
   RESUME_UPDATED
+  RESUME_ARCHIVED
+  RESUME_RESTORED
   RESUME_DELETED
   INTERVIEW_ROUND_DELETED
   CANDIDATE_SELECTED
@@ -461,12 +463,17 @@ model CandidateResume {
   candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   label       String
   driveLink   String
+  // Soft-delete: archiving sets this false instead of deleting the row, so
+  // submissions keep their live FK link (and their snapshot). Active résumés
+  // are the only ones offered in the submit picker; the library can reveal
+  // archived ones behind a toggle. True hard-delete is reserved for unused ones.
+  isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   submissions Submission[]
 
-  @@index([candidateId])
+  @@index([candidateId, isActive])
 }
 
 // R4.1 — per-candidate document vault (passports, work auth, transcripts,

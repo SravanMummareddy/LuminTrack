@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import Link from "next/link";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { Button, buttonClass } from "@/components/ui/button";
@@ -8,12 +8,21 @@ import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 import { isLikelyDriveUrl, DRIVE_LINK_WARNING } from "@/lib/validation/resume";
 import { BENCH_ENGAGEMENTS, BENCH_ENGAGEMENT_LABEL } from "@/lib/labels";
 
-type ResumeOption = { id: string; label: string; driveLink: string };
+type ResumeOption = {
+  id: string;
+  label: string;
+  driveLink: string;
+  // false when the résumé has been archived but this submission still uses it —
+  // kept in the list so the selection isn't dropped, flagged so we can label it.
+  isActive?: boolean;
+};
 
 type SubmissionAction = (
   prev: FormState,
   formData: FormData,
 ) => Promise<FormState>;
+
+type RecruiterOption = { id: string; fullName: string; isActive: boolean };
 
 type EditValues = {
   candidateRate: string;
@@ -28,6 +37,8 @@ type EditValues = {
   payRate: string;
   billRate: string;
   teamLead: string;
+  /** The current submitting recruiter — only editable when canReattribute. */
+  submittedById: string;
 };
 
 type Fields = {
@@ -35,6 +46,7 @@ type Fields = {
   resumeSelection: string;
   submissionNotes: string;
   submittedAt: string;
+  submittedById: string;
   newResumeLabel: string;
   newResumeLink: string;
   engagement: string;
@@ -74,6 +86,8 @@ export function SubmissionEditForm({
   candidateName,
   jobTitle,
   recruiterName,
+  canReattribute = false,
+  recruiters = [],
   resumes,
   values,
 }: {
@@ -82,6 +96,9 @@ export function SubmissionEditForm({
   candidateName: string;
   jobTitle: string;
   recruiterName: string;
+  /** Admins may correct the submitting recruiter; recruiters see it locked. */
+  canReattribute?: boolean;
+  recruiters?: RecruiterOption[];
   resumes: ResumeOption[];
   values: EditValues;
 }) {
@@ -93,6 +110,7 @@ export function SubmissionEditForm({
     resumeSelection: values.resumeSelection,
     submissionNotes: values.submissionNotes,
     submittedAt: toDateTimeLocal(values.submittedAt),
+    submittedById: values.submittedById,
     newResumeLabel: "",
     newResumeLink: "",
     engagement: values.engagement,
@@ -110,6 +128,21 @@ export function SubmissionEditForm({
       >,
     ) =>
       setFields((f) => ({ ...f, [name]: e.target.value }));
+
+  // React 19 auto-resets the <form> after each action completes. This form
+  // redirects on success, but a validation error returns without redirecting —
+  // and then controlled <select>s do NOT re-sync (form.reset() snaps them to
+  // their first option and React skips the DOM write because the value prop is
+  // unchanged). That would silently mis-attribute the name-bearing "Submitted
+  // by" select (now also backstopped by a hidden input below). Bump a key on
+  // each action response so the selects remount and re-apply their controlled
+  // value. MUST run in an effect — the reset fires AFTER commit, so a
+  // render-time re-key would be clobbered by it. (Mirrors submission-form.tsx.)
+  const [selectSyncKey, setSelectSyncKey] = useState(0);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectSyncKey((k) => k + 1);
+  }, [state]);
 
   const errors = state.fieldErrors ?? {};
   const resumeChoice =
@@ -132,7 +165,37 @@ export function SubmissionEditForm({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <LockedField label="Candidate" value={candidateName} />
         <LockedField label="Job" value={jobTitle} />
-        <LockedField label="Submitted by" value={recruiterName} />
+        {canReattribute ? (
+          <Field
+            label="Submitted by"
+            htmlFor="submittedById"
+            hint="Admin: correct who this submission is credited to."
+            error={errors.submittedById}
+          >
+            {/* Backstop: the visible select is presentational (no name) so a
+                post-action form reset can't diverge the submitted value from
+                state. The hidden input is the one that's actually submitted. */}
+            <input
+              type="hidden"
+              name="submittedById"
+              value={fields.submittedById}
+            />
+            <Select
+              key={`submittedBy-${selectSyncKey}`}
+              id="submittedById"
+              value={fields.submittedById}
+              onChange={set("submittedById")}
+            >
+              {recruiters.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.isActive ? r.fullName : `${r.fullName} (inactive)`}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        ) : (
+          <LockedField label="Submitted by" value={recruiterName} />
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -176,6 +239,7 @@ export function SubmissionEditForm({
         error={errors.candidateResumeId}
       >
         <Select
+          key={`resumeSelection-${selectSyncKey}`}
           id="resumeSelection"
           value={fields.resumeSelection}
           onChange={set("resumeSelection")}
@@ -184,6 +248,7 @@ export function SubmissionEditForm({
           {resumes.map((r) => (
             <option key={r.id} value={r.id}>
               {r.label}
+              {r.isActive === false ? " (archived)" : ""}
             </option>
           ))}
           <option value={NEW_RESUME}>+ Add a new resume</option>

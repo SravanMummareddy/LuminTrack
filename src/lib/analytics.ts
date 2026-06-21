@@ -47,6 +47,58 @@ export function agingBucket(days: number): AgingBucket {
   return "60+";
 }
 
+// ─── Submission stage age ────────────────────────────────────────────────────
+
+/**
+ * The audited actions `changeSubmissionStatus` emits for a status transition.
+ * Milestone statuses get their own action name but carry the same
+ * oldValue/newValue labels, so a stage walk treats them uniformly. Shared by
+ * Reports (time-in-stage) and the Submissions list (days-in-stage column) so
+ * the two stay in lockstep.
+ */
+export const STATUS_TRANSITION_ACTIONS = [
+  "SUBMISSION_STATUS_CHANGED",
+  "CANDIDATE_SELECTED",
+  "CANDIDATE_REJECTED",
+  "OFFER_RELEASED",
+  "OFFER_ACCEPTED",
+  "CANDIDATE_JOINED",
+] as const;
+
+/**
+ * Early-pipeline, non-terminal statuses where a submission sitting too long is
+ * "stale" and needs a nudge. Shared by Reports §F3 (recruiter aging) and the
+ * Submissions "Mine, stale >7d" quick filter.
+ */
+export const STALE_SUBMISSION_STATUSES: SubmissionStatus[] = [
+  "SUBMITTED",
+  "RESUME_PICKED",
+  "VENDOR_SCREENING_CALL",
+  "CLIENT_INTERVIEW",
+];
+
+/** Days a submission may sit in its current stale-eligible stage before the
+ *  Submissions list flags it (amber) and the "Mine, stale >7d" filter matches. */
+export const STALE_STAGE_DAYS = 7;
+
+/**
+ * Whole days the submission has sat in its *current* status. The latest
+ * status-transition activity marks when it entered the current stage; with no
+ * transitions yet it's been in SUBMITTED since `submittedAt`. `eventAt` (the
+ * user-supplied "when this actually happened") wins over `createdAt`.
+ */
+export function currentStageDays(
+  submittedAt: Date,
+  transitions: { eventAt: Date | null; createdAt: Date }[],
+): number {
+  let enteredAt = submittedAt;
+  for (const t of transitions) {
+    const at = t.eventAt ?? t.createdAt;
+    if (at.getTime() > enteredAt.getTime()) enteredAt = at;
+  }
+  return daysSince(enteredAt);
+}
+
 // ─── Shared analytics filters ────────────────────────────────────────────────
 
 /**

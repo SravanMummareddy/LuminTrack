@@ -149,9 +149,11 @@ Notable columns:
   a reason captured here.
 - `resumeDriveLink` — a **snapshot** of the Drive link at the time of
   submission. `candidateResumeId` is the FK to the live résumé
-  library row. We keep both: if the library entry is edited or
-  deleted later, the snapshot link still tells you what résumé was
-  sent.
+  library row (`onDelete: SetNull`). We keep both: if the library entry
+  is edited the snapshot still shows what was sent, and if it's ever
+  hard-deleted the FK clears but the snapshot survives. Note résumés are
+  now **archived** (soft delete), not hard-deleted, in the normal case —
+  so the FK link is preserved, not severed (see `CandidateResume` below).
 - `expectedJoinDate`, `actualJoinDate` — set when status moves to
   `OFFER_ACCEPTED` and `JOINED` respectively.
 
@@ -199,7 +201,13 @@ note did the recruiter type, what preset reason did they pick).
 
 - `CandidateResume` — labelled Drive links per candidate. 1:N from
   Candidate. A Submission optionally points at one via
-  `candidateResumeId`.
+  `candidateResumeId`. Has `isActive` (default true): "removing" a
+  résumé **archives** it (`isActive = false`) rather than deleting the
+  row, so submissions keep their live link; archived résumés are hidden
+  from the library's active list and the submit picker but can be
+  restored. A true hard delete is allowed only when the résumé has zero
+  submissions (migration `20260530052124_resume_soft_delete`;
+  `@@index([candidateId, isActive])`).
 - `JobAssignment` — recruiter ↔ job many-to-many, but explicit so it
   can be audited. Has `assignedBy` + `assignedAt`.
 - `JobPortal` — one row per external system we import from. Today

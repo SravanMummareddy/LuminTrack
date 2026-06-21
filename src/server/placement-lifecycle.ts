@@ -29,7 +29,7 @@ export async function ensurePlacementOnJoined(
     performedById: string;
     eventAt?: Date | null;
   },
-): Promise<{ placementId: string | null }> {
+): Promise<{ placementId: string | null; placementSeq: number | null }> {
   // Bump Candidate.status → PLACED unless it's already there.
   if (args.candidateStatus !== "PLACED") {
     await tx.candidate.update({
@@ -58,7 +58,7 @@ export async function ensurePlacementOnJoined(
   if (existing) {
     if (existing.status === "ACTIVE" || existing.status === "EXTENDED") {
       // Already live — concurrent JOINED race, no-op.
-      return { placementId: existing.id };
+      return { placementId: existing.id, placementSeq: existing.seq };
     }
     await tx.placement.update({
       where: { id: existing.id },
@@ -79,7 +79,7 @@ export async function ensurePlacementOnJoined(
       candidateId: args.candidateId,
       jobId: args.jobId,
     });
-    return { placementId: existing.id };
+    return { placementId: existing.id, placementSeq: existing.seq };
   }
 
   // Auto-create the Placement. Rates seed from the submission's candidateRate;
@@ -109,12 +109,12 @@ export async function ensurePlacementOnJoined(
       candidateId: args.candidateId,
       jobId: args.jobId,
     });
-    return { placementId: placement.id };
+    return { placementId: placement.id, placementSeq: placement.seq };
   } catch (e) {
     if (isUniqueConstraintError(e)) {
       // Race: another tab already created the Placement between our findUnique
       // and create. No-op.
-      return { placementId: null };
+      return { placementId: null, placementSeq: null };
     }
     throw e;
   }

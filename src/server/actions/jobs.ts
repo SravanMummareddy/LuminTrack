@@ -355,16 +355,26 @@ export async function assignJobRecruiters(
   return { ok: true };
 }
 
-/** Quick status change from the job detail page (covers spec §9.2 "Close job"). */
-export async function changeJobStatus(formData: FormData): Promise<void> {
+/**
+ * Quick status change from the job detail page (covers spec §9.2 "Close job").
+ * Returns a `FormState` (rather than `void`) so the client wrapper can confirm
+ * the save with a toast — this control used to update silently.
+ */
+export async function changeJobStatus(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
   const user = await requireUser();
   const jobId = String(formData.get("id") ?? "").trim();
   const status = String(formData.get("status") ?? "");
-  if (!jobId) return;
-  if (!(JOB_STATUS_VALUES as readonly string[]).includes(status)) return;
+  if (!jobId) return { error: "Missing job reference." };
+  if (!(JOB_STATUS_VALUES as readonly string[]).includes(status))
+    return { error: "That status is not valid." };
 
   const job = await prisma.job.findUnique({ where: { id: jobId } });
-  if (!job || job.status === status) return;
+  if (!job) return { error: "This job no longer exists." };
+  if (job.status === status)
+    return { error: "Status is already set to that value." };
   const next = status as (typeof JOB_STATUS_VALUES)[number];
 
   await prisma.$transaction(async (tx) => {
@@ -382,4 +392,8 @@ export async function changeJobStatus(formData: FormData): Promise<void> {
 
   revalidatePath("/jobs");
   revalidatePath(`/jobs/${jobId}`);
+  return {
+    ok: true,
+    toast: { title: `Job status updated to ${JOB_STATUS_LABEL[next]}` },
+  };
 }

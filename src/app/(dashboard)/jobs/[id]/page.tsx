@@ -1,9 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Pencil, Plus } from "lucide-react";
-import { LinkButton, Button } from "@/components/ui/button";
+import { LinkButton } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Select } from "@/components/ui/field";
 import { Table, Th, Td } from "@/components/ui/table";
 import { ActivityTimeline } from "@/components/timeline/activity-timeline";
 import { NotesSection } from "@/components/notes/notes-section";
@@ -12,11 +11,10 @@ import { getJobDetail } from "@/server/queries/jobs";
 import { getJobSubmissions } from "@/server/queries/submissions";
 import { getTimelineFor } from "@/server/queries/timeline";
 import { getNotesFor } from "@/server/queries/notes";
-import { changeJobStatus } from "@/server/actions/jobs";
+import { JobStatusForm } from "@/components/jobs/job-status-form";
 import { Pagination } from "@/components/ui/pagination";
 import { SUB_PAGE_SIZE as PAGE_SIZE, parsePage } from "@/lib/filters";
 import {
-  JOB_STATUSES,
   JOB_STATUS_LABEL,
   JOB_STATUS_TONE,
   SUBMISSION_STATUS_LABEL,
@@ -170,27 +168,7 @@ export default async function JobDetailPage({
       </div>
 
       <Card title="Status">
-        <form action={changeJobStatus} className="flex flex-wrap items-end gap-2">
-          <input type="hidden" name="id" value={job.id} />
-          <div className="w-full sm:w-48">
-            <label
-              htmlFor="status"
-              className="mb-1 block text-xs font-medium text-slate-500"
-            >
-              Update job status
-            </label>
-            <Select id="status" name="status" defaultValue={job.status}>
-              {JOB_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {JOB_STATUS_LABEL[s]}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <Button type="submit" variant="secondary">
-            Update
-          </Button>
-        </form>
+        <JobStatusForm jobId={job.id} status={job.status} />
       </Card>
 
       {job.portal ? (

@@ -243,7 +243,9 @@ export function getCandidateForEdit(id: string) {
 }
 
 /** Lightweight candidate list for select inputs (e.g. the new-submission form),
- *  each with its saved résumés so the submission form can offer a picker. */
+ *  each with its saved résumés so the submission form can offer a picker.
+ *  Only **active** résumés are offered — archived ones can't be picked for a
+ *  new submission (existing submissions keep their link via the edit form). */
 export function listCandidateOptions() {
   return prisma.candidate.findMany({
     orderBy: { fullName: "asc" },
@@ -251,6 +253,7 @@ export function listCandidateOptions() {
       id: true,
       fullName: true,
       resumes: {
+        where: { isActive: true },
         orderBy: { createdAt: "asc" },
         select: { id: true, label: true, driveLink: true },
       },

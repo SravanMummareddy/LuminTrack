@@ -304,6 +304,33 @@ export const STATUS_CHANGE_REASON_LABEL: Record<StatusChangeReason, string> = {
   OTHER: "Other",
 };
 
+/**
+ * Preset reasons offered when a recruiter overrides a submission gate
+ * (duplicate / iLabor closed / iLabor cap). Plain strings, not a DB enum, so
+ * the list can evolve without a migration — same pattern as
+ * STATUS_CHANGE_REASONS. Persisted into the `CANDIDATE_SUBMITTED` audit note
+ * so overrides become analyzable instead of free text.
+ */
+export const OVERRIDE_REASONS = [
+  "ROLE_REBOOTED",
+  "PRIOR_CANCELLED",
+  "MANAGER_APPROVED",
+  "CLIENT_REQUESTED",
+  "DATA_OUT_OF_DATE",
+  "OTHER",
+] as const;
+
+export type OverrideReason = (typeof OVERRIDE_REASONS)[number];
+
+export const OVERRIDE_REASON_LABEL: Record<OverrideReason, string> = {
+  ROLE_REBOOTED: "Role was rebooted",
+  PRIOR_CANCELLED: "Prior submission cancelled",
+  MANAGER_APPROVED: "Manager approved",
+  CLIENT_REQUESTED: "Client / vendor requested",
+  DATA_OUT_OF_DATE: "iLabor data is out of date",
+  OTHER: "Other",
+};
+
 // R4.2 — placement lifecycle labels.
 export const PLACEMENT_STATUSES: PlacementStatus[] = [
   "ACTIVE",

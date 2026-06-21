@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useState } from "react";
 import { Plus, Star, Trash2 } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
+import { ConfirmSubmit, ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Field, Input } from "@/components/ui/field";
@@ -42,6 +43,9 @@ export function ContactsDialog({
   readOnly: boolean;
 }) {
   const [editing, setEditing] = useState<ContactRow | "new" | null>(null);
+  // Branded confirm for the close-with-unsaved-edits path (replaces a native
+  // window.confirm). Same modal-in-modal pattern as the delete confirm below.
+  const [confirmingClose, setConfirmingClose] = useState(false);
 
   // Reset the inline form when the dialog closes, or when it re-opens for a
   // different parent entity. Tracked via a "previous key" using React's
@@ -57,6 +61,10 @@ export function ContactsDialog({
   const [prevKey, setPrevKey] = useState<string | null>(currentKey);
   if (prevKey !== currentKey) {
     if (editing !== null && prevKey !== null && currentKey !== null) {
+      // Stays a native confirm by design: this is a *synchronous* render-phase
+      // decision (we early-return null below), and an async branded modal can't
+      // gate that. Rare path — only hit when switching directly between two
+      // entities' Contacts dialogs mid-edit. The common close path is branded.
       const discard = window.confirm(
         "You have unsaved contact changes. Discard them and switch?",
       );
@@ -69,20 +77,24 @@ export function ContactsDialog({
     if (editing !== null) setEditing(null);
   }
 
-  function handleClose() {
-    if (
-      editing !== null &&
-      !window.confirm(
-        "You have unsaved contact changes. Discard them and close?",
-      )
-    ) {
-      return;
-    }
+  function performClose() {
+    setConfirmingClose(false);
     setEditing(null);
     onClose();
   }
 
+  function handleClose() {
+    // Unsaved inline edit → ask before discarding (branded dialog at the
+    // bottom of the return), instead of a native window.confirm.
+    if (editing !== null) {
+      setConfirmingClose(true);
+      return;
+    }
+    performClose();
+  }
+
   return (
+    <>
     <Dialog open={open} onClose={handleClose} title={`Contacts · ${parentName}`}>
       <div className="space-y-3">
         {contacts.length === 0 ? (
@@ -121,16 +133,16 @@ export function ContactsDialog({
                     >
                       Edit
                     </button>
-                    <form action={deleteContact}>
-                      <input type="hidden" name="id" value={c.id} />
-                      <button
-                        type="submit"
-                        title="Delete contact"
-                        className="text-slate-400 hover:text-red-600"
-                      >
-                        <Trash2 className="h-4 w-4" aria-hidden />
-                      </button>
-                    </form>
+                    <ConfirmSubmit
+                      action={deleteContact}
+                      fields={{ id: c.id }}
+                      title="Delete contact?"
+                      description={`"${c.name}" will be removed from ${parentName}.`}
+                      confirmLabel="Delete contact"
+                      trigger={<Trash2 className="h-4 w-4" aria-hidden />}
+                      triggerClassName="text-slate-400 hover:text-red-600"
+                      triggerTitle="Delete contact"
+                    />
                   </div>
                 )}
               </li>
@@ -162,6 +174,15 @@ export function ContactsDialog({
         )}
       </div>
     </Dialog>
+      <ConfirmDialog
+        open={confirmingClose}
+        onClose={() => setConfirmingClose(false)}
+        onConfirm={performClose}
+        title="Discard unsaved changes?"
+        description="Your unsaved contact changes will be lost."
+        confirmLabel="Discard"
+      />
+    </>
   );
 }
 

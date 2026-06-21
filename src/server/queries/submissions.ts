@@ -4,6 +4,12 @@ import type { SubmissionStatus } from "@/generated/prisma/enums";
 import { OTHER_SOURCE } from "@/lib/labels";
 import { RANDSTAD_PORTAL_NAME } from "@/server/queries/jobs";
 import {
+  currentStageDays,
+  STALE_STAGE_DAYS,
+  STALE_SUBMISSION_STATUSES,
+  STATUS_TRANSITION_ACTIONS,
+} from "@/lib/analytics";
+import {
   PAGE_SIZE,
   SUB_PAGE_SIZE,
   type DateRange,
@@ -24,6 +30,10 @@ export type SubmissionListFilters = {
   vendorPortalOnly?: boolean;
   sort?: SortState;
   page?: number;
+  /** "Mine, stale >7d" quick filter — narrows to `currentUserId`'s early-
+   *  pipeline submissions sitting in their current stage longer than 7 days. */
+  mineStale?: boolean;
+  currentUserId?: string;
 };
 
 /** Columns the Submissions list can be sorted by → their Prisma `orderBy`. */
@@ -41,11 +51,73 @@ const SUBMISSION_SORTS: Record<
   submitted: (d) => ({ submittedAt: d }),
 };
 
-export const SUBMISSION_SORT_KEYS = Object.keys(SUBMISSION_SORTS);
+// `daysInStage` is derived (not a column), so it's not in SUBMISSION_SORTS;
+// it's a valid sort *key* handled by an in-memory sort below.
+export const SUBMISSION_SORT_KEYS = [
+  ...Object.keys(SUBMISSION_SORTS),
+  "daysInStage",
+];
 export const SUBMISSION_DEFAULT_SORT: SortState = {
   key: "submitted",
   dir: "desc",
 };
+
+const SUBMISSION_INCLUDE = {
+  candidate: { select: { id: true, fullName: true } },
+  job: {
+    select: {
+      id: true,
+      title: true,
+      client: { select: { name: true } },
+      vendor: { select: { name: true } },
+    },
+  },
+  submittedBy: { select: { fullName: true } },
+  candidateResume: { select: { label: true, driveLink: true } },
+  _count: { select: { interviewRounds: true } },
+} satisfies Prisma.SubmissionInclude;
+
+type RawSubmissionRow = Prisma.SubmissionGetPayload<{
+  include: typeof SUBMISSION_INCLUDE;
+}>;
+
+/** Flatten the non-serialisable `Decimal` rates — the table is a Client Component. */
+function flattenRow(s: RawSubmissionRow) {
+  return {
+    ...s,
+    candidateRate: s.candidateRate == null ? null : Number(s.candidateRate),
+    payRate: s.payRate == null ? null : Number(s.payRate),
+    billRate: s.billRate == null ? null : Number(s.billRate),
+  };
+}
+
+/**
+ * Attach `daysInStage` to each row with ONE batched audit query over the given
+ * submission ids (no N+1 — mirrors the time-in-stage walk in reports.ts).
+ */
+async function attachDaysInStage<T extends { id: string; submittedAt: Date }>(
+  rows: T[],
+): Promise<(T & { daysInStage: number })[]> {
+  if (rows.length === 0) return [];
+  const transitions = await prisma.activity.findMany({
+    where: {
+      action: { in: [...STATUS_TRANSITION_ACTIONS] },
+      submissionId: { in: rows.map((r) => r.id) },
+    },
+    select: { submissionId: true, eventAt: true, createdAt: true },
+  });
+  const bySub = new Map<string, { eventAt: Date | null; createdAt: Date }[]>();
+  for (const t of transitions) {
+    if (!t.submissionId) continue;
+    const list = bySub.get(t.submissionId) ?? [];
+    list.push({ eventAt: t.eventAt, createdAt: t.createdAt });
+    bySub.set(t.submissionId, list);
+  }
+  return rows.map((r) => ({
+    ...r,
+    daysInStage: currentStageDays(r.submittedAt, bySub.get(r.id) ?? []),
+  }));
+}
 
 export async function listSubmissions(filters: SubmissionListFilters) {
   const where: Prisma.SubmissionWhereInput = {};
@@ -74,12 +146,45 @@ export async function listSubmissions(filters: SubmissionListFilters) {
       { job: { title: { contains: filters.q, mode: "insensitive" } } },
     ];
 
+  // "Mine, stale >7d" — narrow to the acting user's early-pipeline submissions;
+  // the >7-days-in-stage cut needs daysInStage, so it's applied in memory below.
+  const mineStale = Boolean(filters.mineStale && filters.currentUserId);
+  if (mineStale) {
+    where.submittedById = filters.currentUserId;
+    where.status = { in: STALE_SUBMISSION_STATUSES };
+  }
+
   const sort = filters.sort ?? SUBMISSION_DEFAULT_SORT;
+  const sortByDays = sort.key === "daysInStage";
   const sortFn = SUBMISSION_SORTS[sort.key] ?? SUBMISSION_SORTS.submitted;
   const orderBy: Prisma.SubmissionOrderByWithRelationInput[] = [
     sortFn(sort.dir),
     { id: "asc" },
   ];
+
+  // daysInStage is derived and the mineStale cut drops rows, so both cases need
+  // the full filtered set computed before paginating (in memory, like reports.ts).
+  // The common case keeps efficient DB pagination + a page-scoped audit query.
+  if (sortByDays || mineStale) {
+    const raw = await prisma.submission.findMany({
+      where,
+      orderBy,
+      include: SUBMISSION_INCLUDE,
+    });
+    let all = await attachDaysInStage(raw.map(flattenRow));
+    if (mineStale) all = all.filter((r) => r.daysInStage > STALE_STAGE_DAYS);
+    if (sortByDays)
+      all.sort((a, b) =>
+        sort.dir === "asc"
+          ? a.daysInStage - b.daysInStage
+          : b.daysInStage - a.daysInStage,
+      );
+    const total = all.length;
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
+    const rows = all.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+    return { rows, total, page };
+  }
 
   const total = await prisma.submission.count({ where });
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -90,29 +195,9 @@ export async function listSubmissions(filters: SubmissionListFilters) {
     orderBy,
     skip: (page - 1) * PAGE_SIZE,
     take: PAGE_SIZE,
-    include: {
-      candidate: { select: { id: true, fullName: true } },
-      job: {
-        select: {
-          id: true,
-          title: true,
-          client: { select: { name: true } },
-          vendor: { select: { name: true } },
-        },
-      },
-      submittedBy: { select: { fullName: true } },
-      candidateResume: { select: { label: true, driveLink: true } },
-      _count: { select: { interviewRounds: true } },
-    },
+    include: SUBMISSION_INCLUDE,
   });
-  // Prisma `Decimal` isn't serializable across the RSC → Client boundary;
-  // the Submissions table is a Client Component, so flatten every rate.
-  const rows = raw.map((s) => ({
-    ...s,
-    candidateRate: s.candidateRate == null ? null : Number(s.candidateRate),
-    payRate: s.payRate == null ? null : Number(s.payRate),
-    billRate: s.billRate == null ? null : Number(s.billRate),
-  }));
+  const rows = await attachDaysInStage(raw.map(flattenRow));
 
   return { rows, total, page };
 }
@@ -147,12 +232,14 @@ export function getSubmissionDetail(id: string) {
 }
 
 /** One submission for the edit form — fixed candidate/job/recruiter plus the
- *  candidate's full résumé library so the form can offer the résumé picker. */
-export function getSubmissionForEdit(id: string) {
-  return prisma.submission.findUnique({
+ *  candidate's active résumés (and the currently-used one even if archived) so
+ *  the form can offer the résumé picker without dropping the saved selection. */
+export async function getSubmissionForEdit(id: string) {
+  const submission = await prisma.submission.findUnique({
     where: { id },
     select: {
       id: true,
+      candidateId: true,
       candidateRate: true,
       submissionNotes: true,
       submittedAt: true,
@@ -164,19 +251,33 @@ export function getSubmissionForEdit(id: string) {
       payRate: true,
       billRate: true,
       teamLead: true,
+      submittedById: true,
       job: { select: { title: true } },
       submittedBy: { select: { fullName: true } },
-      candidate: {
-        select: {
-          fullName: true,
-          resumes: {
-            orderBy: { createdAt: "asc" },
-            select: { id: true, label: true, driveLink: true },
-          },
-        },
-      },
+      candidate: { select: { fullName: true } },
     },
   });
+  if (!submission) return null;
+
+  // Offer active résumés in the picker, plus the one this submission currently
+  // uses even if it's since been archived — otherwise the controlled <select>
+  // finds no matching option and snaps to "No resume", silently dropping the
+  // selection on save.
+  const resumes = await prisma.candidateResume.findMany({
+    where: {
+      candidateId: submission.candidateId,
+      OR: [
+        { isActive: true },
+        ...(submission.candidateResumeId
+          ? [{ id: submission.candidateResumeId }]
+          : []),
+      ],
+    },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, label: true, driveLink: true, isActive: true },
+  });
+
+  return { ...submission, candidate: { ...submission.candidate, resumes } };
 }
 
 /** Submissions for one job — the submitted-candidates table on the job detail page. */

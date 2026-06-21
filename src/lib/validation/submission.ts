@@ -109,6 +109,9 @@ export const submissionEditSchema = z
     ...benchFields,
     // datetime-local string → Date; an empty/invalid value fails validation.
     submittedAt: z.coerce.date(),
+    // Admin-only re-attribution of the submitting recruiter. Optional and
+    // honored only for admins in the action; absent/empty leaves it unchanged.
+    submittedById: z.preprocess(emptyToUndefined, z.string().optional()),
   })
   .superRefine(refineResumeChoice);
 

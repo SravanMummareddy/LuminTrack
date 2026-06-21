@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { ConfirmSubmit } from "@/components/ui/confirm-dialog";
 import { DocumentForm, type DocumentData } from "./document-form";
 import { deleteCandidateDocument } from "@/server/actions/candidate-documents";
 import type { DocumentCategory } from "@/generated/prisma/enums";
@@ -157,15 +158,15 @@ export function DocumentsManager({
                 key={cat.key}
                 className="rounded-md border border-slate-200"
               >
-                <button
-                  type="button"
-                  onClick={() =>
-                    setExpanded((e) => ({ ...e, [cat.key]: !e[cat.key] }))
-                  }
-                  className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
-                  aria-expanded={open}
-                >
-                  <span className="flex items-center gap-2">
+                <div className="flex items-center justify-between gap-2 pr-4 hover:bg-slate-50">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpanded((e) => ({ ...e, [cat.key]: !e[cat.key] }))
+                    }
+                    className="flex flex-1 items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-slate-700"
+                    aria-expanded={open}
+                  >
                     {open ? (
                       <ChevronDown className="h-4 w-4 text-slate-400" />
                     ) : (
@@ -180,18 +181,15 @@ export function DocumentsManager({
                         Admin only
                       </span>
                     )}
-                  </span>
+                  </button>
                   <button
                     type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditing({ mode: "new", category: cat.key });
-                    }}
+                    onClick={() => setEditing({ mode: "new", category: cat.key })}
                     className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
                   >
                     + Add
                   </button>
-                </button>
+                </div>
                 {open && (
                   <div className="border-t border-slate-200 px-4 py-3">
                     {docs.length === 0 ? (
@@ -251,19 +249,15 @@ export function DocumentsManager({
                                 >
                                   Edit
                                 </button>
-                                <form action={deleteCandidateDocument}>
-                                  <input type="hidden" name="id" value={d.id} />
-                                  <button
-                                    type="submit"
-                                    onClick={(e) => {
-                                      if (!window.confirm(`Delete "${d.label}"?`))
-                                        e.preventDefault();
-                                    }}
-                                    className="text-red-600 hover:text-red-800"
-                                  >
-                                    Delete
-                                  </button>
-                                </form>
+                                <ConfirmSubmit
+                                  action={deleteCandidateDocument}
+                                  fields={{ id: d.id }}
+                                  title="Delete document?"
+                                  description={`"${d.label}" will be removed from this candidate.`}
+                                  confirmLabel="Delete document"
+                                  trigger="Delete"
+                                  triggerClassName="text-red-600 hover:text-red-800"
+                                />
                               </div>
                             </li>
                           );

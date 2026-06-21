@@ -92,8 +92,11 @@ update for free.
   status (`JobStatus.CLOSED`, `Candidate.isActive = false`, etc.).
 - **Org entities (Client, Vendor, Source)** — deactivated via
   `isActive = false`. Old records still reference them.
-- **Notes, Rounds, Résumés** — *can* be deleted (small, low-value
-  data; deletes are audited).
+- **Notes, Rounds** — *can* be hard-deleted (small, low-value data;
+  deletes are audited).
+- **Résumés** — soft-deleted via `CandidateResume.isActive` (archive),
+  because a Submission keeps a live FK to the résumé it used. A true
+  hard delete is allowed only for a résumé with no submissions.
 
 This means the audit trail is always complete.
 

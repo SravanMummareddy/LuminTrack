@@ -107,8 +107,77 @@ export async function updateCandidateResume(
 }
 
 /**
- * Removes a résumé from the library. Submissions that used it keep their own
- * snapshot link; their `candidateResumeId` is cleared by the `SetNull` FK.
+ * Archives a résumé (soft delete). The row stays, so any submission that used
+ * it keeps its live `candidateResumeId` link *and* its snapshot. Archived
+ * résumés drop out of the library's active list and the submit picker until
+ * restored. This is the default "remove" action.
+ */
+export async function archiveCandidateResume(
+  formData: FormData,
+): Promise<void> {
+  const user = await requireUser();
+  const resumeId = String(formData.get("id") ?? "").trim();
+  if (!resumeId) return;
+
+  const existing = await prisma.candidateResume.findUnique({
+    where: { id: resumeId },
+    select: { id: true, label: true, candidateId: true, isActive: true },
+  });
+  if (!existing || !existing.isActive) return;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.candidateResume.update({
+      where: { id: resumeId },
+      data: { isActive: false },
+    });
+    await logActivity(tx, {
+      entityType: "CANDIDATE",
+      action: "RESUME_ARCHIVED",
+      description: `Resume "${existing.label}" archived`,
+      performedById: user.id,
+      candidateId: existing.candidateId,
+    });
+  });
+
+  revalidatePath(`/candidates/${existing.candidateId}`);
+}
+
+/** Restores an archived résumé back into the active library. */
+export async function restoreCandidateResume(
+  formData: FormData,
+): Promise<void> {
+  const user = await requireUser();
+  const resumeId = String(formData.get("id") ?? "").trim();
+  if (!resumeId) return;
+
+  const existing = await prisma.candidateResume.findUnique({
+    where: { id: resumeId },
+    select: { id: true, label: true, candidateId: true, isActive: true },
+  });
+  if (!existing || existing.isActive) return;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.candidateResume.update({
+      where: { id: resumeId },
+      data: { isActive: true },
+    });
+    await logActivity(tx, {
+      entityType: "CANDIDATE",
+      action: "RESUME_RESTORED",
+      description: `Resume "${existing.label}" restored`,
+      performedById: user.id,
+      candidateId: existing.candidateId,
+    });
+  });
+
+  revalidatePath(`/candidates/${existing.candidateId}`);
+}
+
+/**
+ * Permanently deletes a résumé. Guarded: only allowed when nothing references
+ * it (0 submissions) — a used résumé can only be archived, never hard-deleted,
+ * so submission history is never severed. The UI only offers this for unused
+ * résumés; this count check is the server-side backstop.
  */
 export async function deleteCandidateResume(formData: FormData): Promise<void> {
   const user = await requireUser();
@@ -117,15 +186,18 @@ export async function deleteCandidateResume(formData: FormData): Promise<void> {
 
   const existing = await prisma.candidateResume.findUnique({
     where: { id: resumeId },
+    include: { _count: { select: { submissions: true } } },
   });
   if (!existing) return;
+  // Backstop: never hard-delete a résumé still referenced by a submission.
+  if (existing._count.submissions > 0) return;
 
   await prisma.$transaction(async (tx) => {
     await tx.candidateResume.delete({ where: { id: resumeId } });
     await logActivity(tx, {
       entityType: "CANDIDATE",
       action: "RESUME_DELETED",
-      description: `Resume "${existing.label}" removed`,
+      description: `Resume "${existing.label}" permanently deleted`,
       performedById: user.id,
       candidateId: existing.candidateId,
     });

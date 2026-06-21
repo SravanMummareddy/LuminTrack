@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/lib/session";
 import { logActivity } from "@/server/activity";
@@ -782,54 +783,82 @@ export async function importRequisitions(
         .map((j) => [j.portalRefId as string, j] as const),
     );
 
-    // B.3 Match-or-create Vendors and Clients. Case-INSENSITIVE (after trim)
-    //     — without this, "RANDSTAD" today and "Randstad" tomorrow would
-    //     create two Vendor rows, orphaning every job that pointed at the
-    //     original. Postgres has no case-insensitive unique index here, so
-    //     we pre-resolve each name via findFirst({ mode: "insensitive" })
-    //     and only create when no existing row matches. The DB's
-    //     unique-on-name constraint still protects against true races.
-    const vendorNames = Array.from(
-      new Set(
-        valid.map((r) => (r.clientName || ILABOR_DEFAULT_VENDOR).trim()),
-      ),
-    );
-    const vendorIdByName = new Map<string, string>();
-    for (const name of vendorNames) {
-      const found = await prisma.vendor.findFirst({
-        where: { name: { equals: name, mode: "insensitive" } },
-        select: { id: true },
-      });
-      if (found) {
-        vendorIdByName.set(name, found.id);
-      } else {
-        const v = await prisma.vendor.create({ data: { name } });
-        vendorIdByName.set(name, v.id);
+    // B.3 Match-or-create Vendors and Clients in BULK. Case-INSENSITIVE (after
+    //     trim) — without this, "RANDSTAD" today and "Randstad" tomorrow would
+    //     create two rows, orphaning every job that pointed at the original.
+    //     The old per-name findFirst+create loop did ~160 sequential round
+    //     trips on a full import — a big chunk of the slow-import problem.
+    //     Batched here: load existing rows once, createMany the missing names
+    //     in a single insert, re-read to pick up ids. The unique-on-name
+    //     constraint (+ skipDuplicates) still protects against admin races.
+    const resolveOrgIds = async (
+      incoming: string[],
+      load: () => Promise<{ id: string; name: string }[]>,
+      createMissing: (names: string[]) => Promise<unknown>,
+    ): Promise<Map<string, string>> => {
+      const idByLower = new Map<string, string>();
+      for (const r of await load()) idByLower.set(r.name.trim().toLowerCase(), r.id);
+      // Case-insensitive unique incoming names (first cased form wins) so two
+      // rows differing only by case don't both get created.
+      const canonByLower = new Map<string, string>();
+      for (const n of incoming) {
+        const lo = n.toLowerCase();
+        if (!canonByLower.has(lo)) canonByLower.set(lo, n);
       }
-    }
+      const missing = [...canonByLower]
+        .filter(([lo]) => !idByLower.has(lo))
+        .map(([, cased]) => cased);
+      if (missing.length > 0) {
+        await createMissing(missing);
+        for (const r of await load()) idByLower.set(r.name.trim().toLowerCase(), r.id);
+      }
+      const idByName = new Map<string, string>();
+      for (const n of incoming) {
+        const id = idByLower.get(n.toLowerCase());
+        if (id) idByName.set(n, id);
+      }
+      return idByName;
+    };
+
+    const vendorNames = Array.from(
+      new Set(valid.map((r) => (r.clientName || ILABOR_DEFAULT_VENDOR).trim())),
+    );
+    const vendorIdByName = await resolveOrgIds(
+      vendorNames,
+      () => prisma.vendor.findMany({ select: { id: true, name: true } }),
+      (names) =>
+        prisma.vendor.createMany({
+          data: names.map((name) => ({ name })),
+          skipDuplicates: true,
+        }),
+    );
 
     const clientNames = Array.from(
       new Set(valid.map((r) => r.customerName.trim())),
     );
-    const clientIdByName = new Map<string, string>();
-    for (const name of clientNames) {
-      const found = await prisma.client.findFirst({
-        where: { name: { equals: name, mode: "insensitive" } },
-        select: { id: true },
-      });
-      if (found) {
-        clientIdByName.set(name, found.id);
-      } else {
-        const c = await prisma.client.create({ data: { name } });
-        clientIdByName.set(name, c.id);
-      }
-    }
+    const clientIdByName = await resolveOrgIds(
+      clientNames,
+      () => prisma.client.findMany({ select: { id: true, name: true } }),
+      (names) =>
+        prisma.client.createMany({
+          data: names.map((name) => ({ name })),
+          skipDuplicates: true,
+        }),
+    );
 
-    // Phase C — per-row upserts. Each row's job.upsert + its audit row
-    // commit together in their own mini transaction (~2–3 statements,
-    // well under the 5s default budget). Cross-row atomicity is NOT
-    // preserved by design — partial success on a 300-row bulk is more
-    // useful than rolling back row 297's failure across the first 296.
+    // Phase C — apply changes in BULK where possible.
+    //  • NEW rows  → one createManyAndReturn + one audit createMany, in a
+    //    single short transaction so jobs + their JOB_IMPORTED audit commit
+    //    together.
+    //  • UNCHANGED → collected and bumped with one updateMany heartbeat.
+    //  • CHANGED   → applied per-row (each payload differs) with its audit, in
+    //    its own mini transaction — the uncommon re-import path.
+    // This replaces the old one-transaction-per-row loop (~305 sequential
+    // round trips → minutes on a full import) that would blow past Vercel's
+    // serverless function timeout.
+    const newJobsData: Prisma.JobCreateManyInput[] = [];
+    const heartbeatIds: string[] = [];
+
     for (const row of valid) {
       const vendorName = (row.clientName || ILABOR_DEFAULT_VENDOR).trim();
       const clientName = row.customerName.trim();
@@ -843,48 +872,32 @@ export async function importRequisitions(
       }
 
       const createPayload = jobCreateFields(row);
-      const updatePayload = withoutInternal(jobUpdateFields(row));
       if (createPayload._statusUnknown) statusWarningCount += 1;
 
       const isNew = !existingSet.has(String(row.requisitionId));
       const prior = existingByRefId.get(String(row.requisitionId));
 
       if (isNew) {
-        // CREATE path — unchanged from before, plus importRunId stamp on
-        // the per-job audit so the drill-down + downloadable log can find
-        // new jobs from this run.
-        await prisma.$transaction(async (tx) => {
-          const upserted = await tx.job.create({
-            data: {
-              ...withoutInternal(createPayload),
-              portalId: portal.id,
-              sisterCompanySourceId: sourceId,
-              clientId,
-              vendorId,
-              createdById: user.id,
-            },
-            select: { id: true },
-          });
-          await logActivity(tx, {
-            entityType: "JOB",
-            action: "JOB_IMPORTED",
-            jobId: upserted.id,
-            description: `Imported from Randstad iLabor (Req ${String(row.requisitionId)})`,
-            note: runNote,
-            performedById: user.id,
-          });
+        // Collect for the bulk insert below.
+        newJobsData.push({
+          ...withoutInternal(createPayload),
+          portalId: portal.id,
+          sisterCompanySourceId: sourceId,
+          clientId,
+          vendorId,
+          createdById: user.id,
         });
-        createdCount += 1;
         continue;
       }
 
-      // UPDATE path — diff fields first; skip the write entirely when
-      // nothing changed except the heartbeat.
+      // UPDATE path — diff fields first; collect unchanged for one heartbeat
+      // updateMany, apply changed rows individually.
       if (!prior) {
         // Defensive — existingSet says yes but the map miss. Shouldn't happen.
         throw new Error(`Internal: prior snapshot missing for req ${row.requisitionId}`);
       }
 
+      const updatePayload = withoutInternal(jobUpdateFields(row));
       const priorForDiff = prior as unknown as Record<DiffKey, unknown>;
       const nextForDiff = updatePayload as unknown as Record<DiffKey, unknown>;
       const { changed, diffs } = diffJobFields(priorForDiff, nextForDiff);
@@ -901,13 +914,10 @@ export async function importRequisitions(
         Object.keys(changed).length + (clientChanged ? 1 : 0) + (vendorChanged ? 1 : 0);
 
       if (totalChanges === 0) {
-        // No-op except heartbeat. Single-column UPDATE, no audit row.
-        // lastImportedAt MUST still bump or listStaleIlaborJobs would
-        // false-positive every unchanged row on the next run.
-        await prisma.job.update({
-          where: { id: prior.id },
-          data: { lastImportedAt: new Date() },
-        });
+        // No-op except heartbeat. lastImportedAt MUST still bump or
+        // listStaleIlaborJobs would false-positive every unchanged row on the
+        // next run. Batched into one updateMany after the loop.
+        heartbeatIds.push(prior.id);
         unchangedCount += 1;
         continue;
       }
@@ -953,6 +963,38 @@ export async function importRequisitions(
         });
       });
       updatedCount += 1;
+    }
+
+    // Bulk-insert the NEW jobs and their JOB_IMPORTED audit rows together.
+    // Two bulk statements in one short transaction — fast and atomic, unlike
+    // the old per-row loop. createManyAndReturn hands back the generated ids
+    // so each audit row can point at its job.
+    if (newJobsData.length > 0) {
+      await prisma.$transaction(async (tx) => {
+        const created = await tx.job.createManyAndReturn({
+          data: newJobsData,
+          select: { id: true, portalRefId: true },
+        });
+        await tx.activity.createMany({
+          data: created.map((j) => ({
+            entityType: "JOB" as const,
+            action: "JOB_IMPORTED" as const,
+            jobId: j.id,
+            description: `Imported from Randstad iLabor (Req ${j.portalRefId ?? ""})`,
+            note: runNote,
+            performedById: user.id,
+          })),
+        });
+      });
+      createdCount = newJobsData.length;
+    }
+
+    // One heartbeat bump for every unchanged row.
+    if (heartbeatIds.length > 0) {
+      await prisma.job.updateMany({
+        where: { id: { in: heartbeatIds } },
+        data: { lastImportedAt: new Date() },
+      });
     }
 
     // Phase D — finalize the summary row pre-created in Phase B.0.

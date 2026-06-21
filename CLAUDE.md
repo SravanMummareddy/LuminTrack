@@ -62,7 +62,84 @@ things are genuinely new. Full plan:
 > the dev server** (HMR does not reload the regenerated client) — which also
 > **logs you out** (session cookie), so re-login after a restart.
 
-## Round 4 pre-demo (Documents → Placements → Export)
+## 🚧 Current work — Round 5: Submission & workflow UX overhaul (IN PROGRESS)
+
+Owner asked (2026-05-29) for a deep rework of the submission experience.
+A 5-persona UX/product audit (recruiter, admin, UX, PM, QA) all converged on
+the same problems. Full plan + decisions + phased build in
+[`docs/PLAN_submission_workflow_overhaul.md`](./docs/PLAN_submission_workflow_overhaul.md)
+(working copy: `~/.claude/plans/i-got-a-initial-cozy-sloth.md`).
+
+**Owner decisions:** (1) submissions **gated by assignment with self-claim**
+("Claim this job" → submit; admins submit/assign freely); (2) **three submit
+entry points** sharing one form (job page + candidate page + global
+`/submissions` "New submission"); (3) override + status reasons become a
+**preset list + optional note**; (4) all four areas in scope (submission flow,
+assignment, columns/density, confirmations/feedback).
+
+**Top problems found:** no toast/success feedback anywhere (silent saves,
+incl. the JOINED→placement cascade); submissions only startable from a job
+page; assignment is decorative (`createSubmission` never reads `JobAssignment`);
+override gates are toothless/brittle (`error.startsWith("iLabor")` field sniff);
+no inline list editing; submissions list lacks days-in-stage / "mine stale >7d";
+résumé silently wiped on candidate switch; native `window.confirm` in 4 delete
+paths; `submittedById` un-correctable.
+
+**Phases:** 1 — toast primitive + typed gate kinds (foundational); 2 —
+assignment gate + self-claim + 3 entry points; 3 — wire toasts + branded
+confirm dialogs; 4 — submissions-list upgrades; 5 — polish. Reasons are
+`labels.ts` string sets, so the only possible migration is one optional
+`Activity.isOverride` boolean.
+
+**Post-build UX testing (2026-05-29/30, admin + recruiter personas via the
+Claude-in-Chrome extension).** Live test tracker (what's tested / pending, incl.
+the `uploads/` iLabor scenarios) in
+[`docs/ROUND5_UX_FINDINGS.md`](./docs/ROUND5_UX_FINDINGS.md). The headline
+assignment-gate + self-claim flow, all three submit entry points, the
+"Mine, stale >7d" filter, the Columns menu, and the iLabor `closed` gate were
+all verified live. **Four bugs found + fixed (all shipped to `main`):**
+- `dc0fe1d` — after any submission gate, React 19's post-action `<form>` reset
+  snapped controlled `<select>`s to their first option, silently mis-attributing
+  `submittedById`. Fixed with a hidden-input backstop + a remount key on the
+  selects (`submission-form.tsx`).
+- `542c65c` — same React-19 reset exposure applied to `submission-edit-form.tsx`
+  (the earlier follow-up; now done).
+- `38871b4` — the "days in stage > 7d" **amber stale highlight never rendered**:
+  `<Td>` bakes in `text-slate-700` and `cn()` has no `tailwind-merge`, so the
+  passed `text-amber-700` lost the cascade. Moved the colour onto the inner span.
+- `1a99bc4` — a recruiter on a job that's **both unassigned and iLabor-closed**
+  (or capped/duplicate) was trapped in an infinite not_assigned → claim → second
+  gate → not_assigned loop, because `claim=1` only lived in the not-assigned
+  block. Fixed by latching `claimIntent` and persisting `claim=1` across
+  follow-up gates.
+
+**Résumé archive (soft delete) — SHIPPED 2026-05-30 (commit `cf03c8f`,
+migration `20260530052124_resume_soft_delete`).** "Deleting" a résumé now
+**archives** it (`CandidateResume.isActive = false`) instead of hard-deleting,
+so a submission keeps its live `candidateResumeId` link (and snapshot) — the
+résumé → submission → interview chain stays intact. New `archiveCandidateResume`
+/ `restoreCandidateResume` actions (`RESUME_ARCHIVED` / `RESUME_RESTORED`
+audit); `deleteCandidateResume` kept but guarded to **zero-submission** résumés
+only. The new-submission picker (`listCandidateOptions`) offers active résumés
+only; the edit form (`getSubmissionForEdit`) also includes the in-use résumé
+even if archived, labelled "(archived)", so the controlled select never drops
+the saved selection. The library splits active vs archived behind a
+"Show archived (N)" chip with an *Archived* badge + Restore; permanent delete
+shows only on unused résumés. Verified live end-to-end.
+
+**Loose-ends wrap (2026-05-30).** (1) **`cn()` → `tailwind-merge`**
+([`src/lib/cn.ts`](./src/lib/cn.ts)): the amber-highlight bug's root cause was
+`cn` plain-joining classes with no conflict resolution, so a component's baked
+`text-slate-700` beat a caller's `text-*`. Now conflicts resolve last-wins,
+fixing the whole class — including a silently-defeated `text-red-600` on the
+reports negative-margin cell. The submissions stale cell reverted to the simple
+cell-level colour. (2) **Contacts dialog** close-with-unsaved-edits prompt is now
+a branded `ConfirmDialog` (the rare cross-entity-switch guard stays native — a
+synchronous render-phase decision). (3) **iLabor cap gate verified live**. All
+delete confirm dialogs are branded `ConfirmSubmit`. Remaining low-priority,
+code-verified-only: job-status-change toast + no-toast-on-login.
+
+## 🚧 Current work — Round 4 pre-demo (Documents → Placements → Export)
 
 Admin handed over a new pre-demo requirements bundle on 2026-05-28.
 The full plan + UI/UX shape + code-review fixes live in
@@ -353,6 +430,7 @@ snapshot, file map, resolved decisions, iLabor JSON sample. The architectural
 - Auth: hand-rolled session (`bcryptjs` + `jose` JWT cookie) — NOT NextAuth
 - Resumes = a per-candidate **résumé library** (`CandidateResume`) of labelled Google
   Drive links with inline preview; each submission picks one and snapshots its link.
+  "Deleting" a résumé soft-archives it (`isActive`) so submissions stay linked.
   `@vercel/blob` file upload deferred until a Blob store is provisioned. Recharts (Phase 7)
 - Deploy target: Vercel
 
