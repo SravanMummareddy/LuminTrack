@@ -296,6 +296,42 @@ const LAST_NAMES = [
   "Mwangi",
   "Rossi",
 ];
+// ── Bench-Sales sample data pools ──
+const BENCH_TECHS = [
+  "Java Full Stack",
+  "React / Node",
+  ".NET Core",
+  "Data Engineer",
+  "DevOps / AWS",
+  "Python / Django",
+  "Salesforce",
+  "QA Automation",
+];
+const BENCH_VISAS = ["H1B", "GC", "USC", "OPT-EAD", "H4-EAD", "TN"];
+const CALL_TYPES = ["Direct Client", "Implementation Partner", "Tier-1 Vendor"];
+const PAYROLL_TYPES = ["C2C", "W2", "1099"];
+const PROJECT_TYPES = ["Contract", "Contract-to-Hire", "Full-time"];
+const BENCH_REFERENCES = [
+  "LinkedIn outreach",
+  "Internal referral",
+  "Vendor pool",
+  "Job board",
+  "Repeat consultant",
+];
+const VENDOR_RECRUITER_NAMES = [
+  "Amit (TechProsource)",
+  "Lisa Wong (Collabera)",
+  "Raj K. (Cybertec)",
+  "Megan (Insight Global)",
+  "Carlos (Apex Systems)",
+];
+const JOB_DUTIES_SAMPLES = [
+  "Design and build REST microservices; own CI/CD pipeline.",
+  "Lead front-end migration to React 19; mentor two juniors.",
+  "Build data ingestion pipelines on AWS (Glue, Redshift).",
+  "Automate regression suite in Playwright; cut cycle time.",
+  "Configure Salesforce flows and Apex triggers for sales ops.",
+];
 const INTERVIEWERS = [
   "Sarah Chen",
   "Michael Brown",
@@ -870,6 +906,11 @@ async function main() {
         rejectionReason:
           finalStatus === "REJECTED" ? pick(REJECTION_REASONS) : null,
         submissionNotes: chance(0.4) ? pick(SUBMISSION_NOTES) : null,
+        // Bench-Sales fields — populated on a subset so the new columns/detail
+        // rows have realistic data; left null on the rest (regular submissions).
+        engagement: chance(0.6) ? (chance(0.5) ? "C2C" : "W2") : null,
+        vendorRecruiterName: chance(0.5) ? pick(VENDOR_RECRUITER_NAMES) : null,
+        jobDuties: chance(0.3) ? pick(JOB_DUTIES_SAMPLES) : null,
         candidateResumeId: pickedResume?.id ?? null,
         resumeDriveLink: pickedResume?.driveLink ?? null,
         submittedAt,
@@ -1060,6 +1101,84 @@ async function main() {
     }
   }
 
+  // ── Bench consultants (marketing roster) ──
+  console.log("Creating bench consultants…");
+  let benchCount = 0;
+  const BENCH_N = 9;
+  for (let i = 0; i < BENCH_N; i++) {
+    const first = pick(FIRST_NAMES);
+    const last = pick(LAST_NAMES);
+    const fullName = `${first} ${last}`;
+    const createdAt = randDate(WINDOW_START, new Date(NOW.getTime() - 2 * DAY));
+    const recruiter = pick(recruiters);
+    const priority = chance(0.4) ? "HIGH" : "SECOND";
+    const marketingStatus = weighted<
+      "ACTIVE" | "PAUSED" | "PLACED" | "INACTIVE"
+    >([
+      ["ACTIVE", 6],
+      ["PAUSED", 2],
+      ["PLACED", 1],
+      ["INACTIVE", 1],
+    ]);
+    // Link the first few consultants to a distinct existing candidate (1:1).
+    const linkedCandidate = i < 4 ? candidates[i] : null;
+    const hasCreds = chance(0.7);
+    const mkExp = randInt(3, 14) + (chance(0.5) ? 0.5 : 0);
+
+    const consultant = await prisma.benchConsultant.create({
+      data: {
+        fullName,
+        email: `${first}.${last}${i}.bench`.toLowerCase() + "@example.com",
+        phone: `+1 ${randInt(200, 989)}-${randInt(200, 989)}-${randInt(1000, 9999)}`,
+        currentLocation: pick(LOCATIONS),
+        workAuthorization: pick(BENCH_VISAS),
+        mVisa: pick(BENCH_VISAS),
+        aVisa: chance(0.4) ? pick(BENCH_VISAS) : null,
+        marketingExpYears: mkExp,
+        realTimeExpYears: Math.max(1, mkExp - randInt(1, 3)),
+        technology: pick(BENCH_TECHS),
+        skills: pickN(SKILLS, randInt(3, 6)),
+        reference: chance(0.6) ? pick(BENCH_REFERENCES) : null,
+        company: chance(0.5) ? pick(CURRENT_COMPANIES) : null,
+        projectType: pick(PROJECT_TYPES),
+        leastRateC2C: randInt(55, 95),
+        callType: pick(CALL_TYPES),
+        payrollType: pick(PAYROLL_TYPES),
+        relocation: chance(0.5),
+        marketingStartDate: createdAt,
+        marketingEmail: hasCreds
+          ? `${first}.${last}.mktg`.toLowerCase() + "@bench-marketing.com"
+          : null,
+        marketingPassword: hasCreds ? `Mktg!${randInt(1000, 9999)}` : null,
+        marketingNumber: hasCreds
+          ? `+1 ${randInt(200, 989)}-${randInt(200, 989)}-${randInt(1000, 9999)}`
+          : null,
+        personalNumber: chance(0.5)
+          ? `+1 ${randInt(200, 989)}-${randInt(200, 989)}-${randInt(1000, 9999)}`
+          : null,
+        priority,
+        marketingStatus,
+        notes: chance(0.4) ? pick(CANDIDATE_NOTES) : null,
+        candidateId: linkedCandidate?.id ?? null,
+        recruiterId: recruiter.id,
+        createdById: admin.id,
+        createdAt,
+        updatedAt: createdAt,
+      },
+      select: { id: true },
+    });
+    benchCount++;
+
+    activityRows.push({
+      entityType: "CONSULTANT",
+      action: "BENCH_CONSULTANT_CREATED",
+      description: `Bench consultant "${fullName}" added to marketing roster`,
+      performedById: admin.id,
+      benchConsultantId: consultant.id,
+      createdAt,
+    });
+  }
+
   // ── Job & candidate notes ──
   console.log("Creating notes…");
   for (const job of jobs) {
@@ -1142,6 +1261,7 @@ async function main() {
   console.log(`  Users:        ${recruiters.length + 1} (1 admin, ${recruiters.length} recruiters)`);
   console.log(`  Jobs:         ${jobs.length}`);
   console.log(`  Candidates:   ${candidates.length}`);
+  console.log(`  Bench consultants: ${benchCount}`);
   console.log(`  Resumes:      ${resumeCount}`);
   console.log(`  Submissions:  ${submissionCount}`);
   console.log(`  Interview rounds: ${roundCount}`);

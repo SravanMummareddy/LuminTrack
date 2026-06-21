@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/lib/session";
+import { canViewBenchCredentials } from "@/lib/permissions";
 import { logActivity } from "@/server/activity";
 import {
   benchConsultantSchema,
@@ -86,6 +87,22 @@ function benchData(d: BenchConsultantInput) {
   };
 }
 
+/** The admin-gated marketing-credential fields. */
+const CREDENTIAL_FIELDS = [
+  "marketingEmail",
+  "marketingPassword",
+  "marketingNumber",
+  "personalNumber",
+] as const;
+
+/** Remove credential fields from an update/create payload so a user who can't
+ *  view them can neither set nor blank them. Deleting the keys (vs. setting
+ *  null) means Prisma leaves any existing values untouched on update. */
+function stripCredentials(data: ReturnType<typeof benchData>): void {
+  const rec = data as Record<string, unknown>;
+  for (const k of CREDENTIAL_FIELDS) delete rec[k];
+}
+
 export async function createBenchConsultant(
   _prev: FormState,
   formData: FormData,
@@ -99,9 +116,15 @@ export async function createBenchConsultant(
     };
   const d = parsed.data;
 
+  const data = benchData(d);
+  // Only credential-cleared users (admins) may set the gated marketing
+  // credentials. For everyone else the form never renders those inputs, so we
+  // strip them rather than persist blanks.
+  if (!canViewBenchCredentials(user)) stripCredentials(data);
+
   const consultant = await prisma.$transaction(async (tx) => {
     const created = await tx.benchConsultant.create({
-      data: { ...benchData(d), createdById: user.id },
+      data: { ...data, createdById: user.id },
     });
     await logActivity(tx, {
       entityType: "CONSULTANT",
@@ -154,11 +177,18 @@ export async function updateBenchConsultant(
   compare("linked candidate", existing.candidateId, d.candidateId);
   compare("notes", existing.notes, d.notes);
   compare("active", existing.isActive, d.isActive);
-  if (existing.marketingPassword !== (d.marketingPassword ?? null))
+
+  const data = benchData(d);
+  const canCreds = canViewBenchCredentials(user);
+  // Non-admins can't see or edit credentials — their form omits those inputs, so
+  // strip the (blank) credential fields here. Omitting them from the Prisma
+  // update leaves the admin-set values untouched instead of wiping them.
+  if (!canCreds) stripCredentials(data);
+  else if (existing.marketingPassword !== (d.marketingPassword ?? null))
     changed.push("marketing credentials");
 
   await prisma.$transaction(async (tx) => {
-    await tx.benchConsultant.update({ where: { id }, data: benchData(d) });
+    await tx.benchConsultant.update({ where: { id }, data });
     if (changed.length)
       await logActivity(tx, {
         entityType: "CONSULTANT",

@@ -10,6 +10,49 @@ short instead of long.
 
 ---
 
+## 2026-06-20 · A recruiter editing a bench consultant silently wiped admin-only credentials
+
+**Situation.** Live-testing the Bench roster as a recruiter (not admin). The
+marketing-credentials block (`marketingEmail` / `marketingPassword` / numbers)
+is admin-gated — correctly hidden on the detail page and omitted from the edit
+form for non-admins. But when a recruiter saved *any* edit to a consultant
+(e.g. changing the location), the admin-set credentials vanished.
+
+**Diagnosis.** A classic gated-field-on-a-shared-form trap. The edit form only
+renders the credential inputs when `canEditCredentials` is true, so a recruiter's
+submit carries *no* credential keys. `updateBenchConsultant` was gated only by
+`requireUser()` (no admin check) and wrote the full `benchData(d)` payload, where
+each credential field is `d.marketingPassword ?? null`. Missing form field →
+`undefined` → `?? null` → the column was overwritten with `null`. The recruiter
+never saw the secrets, yet their routine edit destroyed them — and the same
+no-admin-gate path would let a crafted request *set* credentials too.
+
+**Fix.** Compute `canViewBenchCredentials(user)` inside both create and update.
+When false, `stripCredentials()` *deletes* the four credential keys from the
+Prisma payload entirely. Omitting a key (vs. setting `null`) makes Prisma leave
+the existing column untouched on update, and fall back to the default on create.
+The "marketing credentials changed" audit line is likewise only evaluated for
+credential-cleared users. Verified end-to-end on a production build: recruiter
+Priya edited BC-011's location → location persisted, `marketingPassword` stayed
+`Secret123!`, audit logged "location" only.
+
+**Lesson.** When a form hides fields by permission but the action writes the
+whole object, "absent input" reads as "set to null" — a silent destroyer of data
+the editor isn't even allowed to see. The permission boundary has to live in the
+*action*, not just the form: omit gated fields from the write so they're neither
+set nor blanked. Form-level hiding is UX; server-level omission is the control.
+
+> **Testing note.** This was found only after abandoning the Turbopack *dev*
+> server, which had wedged into serving error-fallback pages (`ENOENT …
+> build-manifest.json`, `Cannot find module '[turbopack]_runtime.js'`) after
+> repeated branch-switches + `.next` clears — symptom was "nothing hydrates,
+> every client toggle dead." A `next build` + `next start` gave a stable,
+> manifest-complete server where hydration worked and real bugs surfaced. When
+> dev-server state looks impossibly broken site-wide with no code cause, a
+> production build is both the cleaner test bed and a stronger compile check.
+
+---
+
 ## 2026-06-20 · `seed-demo` wipe predated three feature areas → FK violation on re-seed
 
 **Situation.** After shipping the Monthly Performance scorecard (which needed
