@@ -24,6 +24,7 @@ function makeTx(opts: {
   existing?: ExistingPlacement;
   activeCount?: number;
   createImpl?: () => Promise<{ id: string; seq: number }>;
+  bench?: { id: string; marketingStatus: string } | null;
 } = {}) {
   return {
     candidate: { update: vi.fn().mockResolvedValue({}) },
@@ -34,6 +35,12 @@ function makeTx(opts: {
         (args: { data: Record<string, unknown> }) => Promise<{ id: string; seq: number }>
       >(opts.createImpl ?? (() => Promise.resolve({ id: "new-placement", seq: 7 }))),
       count: vi.fn().mockResolvedValue(opts.activeCount ?? 0),
+    },
+    // Bench lifecycle sync — defaults to "no linked bench record" so the sync
+    // no-ops and these placement-focused tests stay unaffected.
+    benchConsultant: {
+      findUnique: vi.fn().mockResolvedValue(opts.bench ?? null),
+      update: vi.fn().mockResolvedValue({}),
     },
     activity: { create: vi.fn().mockResolvedValue({}) },
   };

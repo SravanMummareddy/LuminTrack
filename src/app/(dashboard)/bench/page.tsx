@@ -34,10 +34,14 @@ export default async function BenchRosterPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const sp = await searchParams;
+  // Status modes: absent → "onbench" (default, ACTIVE/PAUSED); "all" → every
+  // status; or a specific marketing status. Lets the roster default to "who
+  // we're marketing now" while keeping placed/inactive one click away.
+  const statusMode = clean(sp.status) ?? "onbench";
   const current = {
     q: clean(sp.q),
     priority: clean(sp.priority),
-    status: clean(sp.status),
+    status: statusMode,
     recruiterId: clean(sp.recruiterId),
   };
 
@@ -53,9 +57,10 @@ export default async function BenchRosterPage({
     priority: (BENCH_PRIORITIES as string[]).includes(current.priority ?? "")
       ? (current.priority as BenchPriority)
       : undefined,
-    marketingStatus: (BENCH_MARKETING_STATUSES as string[]).includes(current.status ?? "")
-      ? (current.status as BenchMarketingStatus)
+    marketingStatus: (BENCH_MARKETING_STATUSES as string[]).includes(statusMode)
+      ? (statusMode as BenchMarketingStatus)
       : undefined,
+    onBench: statusMode === "onbench",
     recruiterId: current.recruiterId,
     sort,
     page: parsePage(clean(sp.page)),
@@ -104,8 +109,9 @@ export default async function BenchRosterPage({
         </label>
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-slate-600">Marketing status</span>
-          <select name="status" defaultValue={current.status ?? ""} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-            <option value="">All</option>
+          <select name="status" defaultValue={statusMode} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <option value="onbench">On bench (Active + Paused)</option>
+            <option value="all">All</option>
             {BENCH_MARKETING_STATUSES.map((s) => (
               <option key={s} value={s}>{BENCH_MARKETING_STATUS_LABEL[s]}</option>
             ))}

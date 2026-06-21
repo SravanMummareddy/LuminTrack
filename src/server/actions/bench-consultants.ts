@@ -204,3 +204,36 @@ export async function updateBenchConsultant(
   revalidatePath(`/bench/${id}`);
   redirect(`/bench/${id}`);
 }
+
+/**
+ * One-click "remove from bench" (e.g. the consultant moved to another company).
+ * Flips the marketing status to INACTIVE so they drop off the active roster
+ * without deleting the record — the marketing history stays intact.
+ */
+export async function removeFromBench(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) return;
+  const existing = await prisma.benchConsultant.findUnique({
+    where: { id },
+    select: { marketingStatus: true },
+  });
+  if (!existing || existing.marketingStatus === "INACTIVE") return;
+  await prisma.$transaction(async (tx) => {
+    await tx.benchConsultant.update({
+      where: { id },
+      data: { marketingStatus: "INACTIVE" },
+    });
+    await logActivity(tx, {
+      entityType: "CONSULTANT",
+      action: "BENCH_CONSULTANT_UPDATED",
+      description: `Removed from bench (marketing status ${existing.marketingStatus} → INACTIVE)`,
+      oldValue: existing.marketingStatus,
+      newValue: "INACTIVE",
+      performedById: user.id,
+      benchConsultantId: id,
+    });
+  });
+  revalidatePath("/bench");
+  revalidatePath(`/bench/${id}`);
+}

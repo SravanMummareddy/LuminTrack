@@ -10,6 +10,10 @@ export type BenchListFilters = {
   q?: string;
   priority?: BenchPriority;
   marketingStatus?: BenchMarketingStatus;
+  /** On-bench = actively being marketed (ACTIVE/PAUSED). The roster's default
+   *  view; placed/inactive consultants are hidden unless explicitly requested.
+   *  Ignored when an explicit `marketingStatus` is set. */
+  onBench?: boolean;
   recruiterId?: string;
   sort?: SortState;
   page?: number;
@@ -54,6 +58,7 @@ export async function listBenchConsultants(filters: BenchListFilters) {
   const where: Prisma.BenchConsultantWhereInput = {};
   if (filters.priority) where.priority = filters.priority;
   if (filters.marketingStatus) where.marketingStatus = filters.marketingStatus;
+  else if (filters.onBench) where.marketingStatus = { in: ["ACTIVE", "PAUSED"] };
   if (filters.recruiterId) where.recruiterId = filters.recruiterId;
   if (filters.q)
     where.OR = [

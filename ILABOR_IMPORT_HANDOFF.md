@@ -9,7 +9,28 @@
 
 ---
 
-## 1. Status snapshot (2026-05-25)
+## 1. Status snapshot (2026-05-28)
+
+**Latest shipped:** diff-based re-import + per-run change log
+(`b018d5e`) and JobPortal → SisterCompanySource auto-mirror
+(`10c3769`). Re-imports now only write changed columns, bump
+`lastImportedAt` on no-op rows, and produce a downloadable
+`.txt`/`.csv` change log per run at
+`/jobs/imports/[activityId]` (admin only). Every JobPortal has a
+same-named Source so iLabor jobs attribute correctly on
+`/reports`. See `docs/DEVLOG.md` for the diagnoses.
+
+**Pre-demo polish (2026-05-28):** placement reactivation on
+re-JOINED, candidate-status guard while ACTIVE placement exists,
+3 iLabor signal fields (`submitLimit`, `ilaborSubmitOpen`,
+`ilaborScreenerCode`), soft submission gates (`ilabor_closed` /
+`ilabor_cap`), preview drift detection (red badges + banner),
+4 re-import guards (intra-batch Req ID dedup, effective active
+count, disappeared-from-iLabor signal, case-insensitive
+Vendor/Client match), streaming Excel export, restore-from-backup
+script. All in commits `ae4847f..03fede5` and `a878f00..b018d5e`.
+
+## 1. Original status snapshot (2026-05-25)
 
 | Phase | What it delivers | Status |
 |---|---|---|

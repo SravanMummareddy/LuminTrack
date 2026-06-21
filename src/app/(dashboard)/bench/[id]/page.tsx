@@ -6,6 +6,7 @@ import { buttonClass } from "@/components/ui/button";
 import { ActivityTimeline } from "@/components/timeline/activity-timeline";
 import { BenchCredentials } from "@/components/bench/bench-credentials";
 import { getBenchConsultant } from "@/server/queries/bench-consultants";
+import { removeFromBench } from "@/server/actions/bench-consultants";
 import { getTimelineFor } from "@/server/queries/timeline";
 import {
   BENCH_PRIORITY_LABEL,
@@ -70,6 +71,14 @@ export default async function BenchConsultantDetailPage({
         <Link href={`/bench/${c.id}/edit`} className={buttonClass("secondary")}>
           Edit
         </Link>
+        {(c.marketingStatus === "ACTIVE" || c.marketingStatus === "PAUSED") && (
+          <form action={removeFromBench}>
+            <input type="hidden" name="id" value={c.id} />
+            <button type="submit" className={buttonClass("danger")}>
+              Remove from bench
+            </button>
+          </form>
+        )}
       </PageHeader>
 
       <div className="flex flex-wrap items-center gap-2">

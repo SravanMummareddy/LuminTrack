@@ -128,4 +128,53 @@ describe.skipIf(!dbReachable)("changeSubmissionStatus — real DB cascades", () 
     expect(res.ok).toBeUndefined();
     expect(res.error).toMatch(/already set/i);
   });
+
+  // ── Bench lifecycle sync (Phase 0) ─────────────────────────────────────────
+
+  /** Put the seeded candidate on the bench (linked 1:1, actively marketed). */
+  async function putOnBench() {
+    return testPrisma.benchConsultant.create({
+      data: {
+        fullName: "Test Candidate",
+        marketingStatus: "ACTIVE",
+        candidate: { connect: { id: ctx.candidate.id } },
+        createdBy: { connect: { id: ctx.user.id } },
+      },
+    });
+  }
+
+  it("JOINED rolls the linked bench consultant off the active bench (→ PLACED)", async () => {
+    const bench = await putOnBench();
+    await changeSubmissionStatus(
+      undefined as never,
+      form({ id: ctx.submission.id, status: "JOINED" }),
+    );
+
+    const after = await testPrisma.benchConsultant.findUnique({ where: { id: bench.id } });
+    expect(after!.marketingStatus).toBe("PLACED");
+
+    const actions = (
+      await testPrisma.activity.findMany({ where: { benchConsultantId: bench.id }, select: { action: true } })
+    ).map((a) => a.action);
+    expect(actions).toContain("BENCH_CONSULTANT_UPDATED");
+  });
+
+  it("reverting JOINED puts the consultant back on the active bench (→ ACTIVE)", async () => {
+    const bench = await putOnBench();
+    await changeSubmissionStatus(undefined as never, form({ id: ctx.submission.id, status: "JOINED" }));
+    await changeSubmissionStatus(undefined as never, form({ id: ctx.submission.id, status: "SELECTED" }));
+
+    const after = await testPrisma.benchConsultant.findUnique({ where: { id: bench.id } });
+    expect(after!.marketingStatus).toBe("ACTIVE");
+  });
+
+  it("a candidate with no bench record is unaffected by JOIN (no-op sync)", async () => {
+    // ctx.candidate has no linked bench consultant here.
+    const res = await changeSubmissionStatus(
+      undefined as never,
+      form({ id: ctx.submission.id, status: "JOINED" }),
+    );
+    expect(res.ok).toBe(true);
+    expect(await testPrisma.benchConsultant.count()).toBe(0);
+  });
 });

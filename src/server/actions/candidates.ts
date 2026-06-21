@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/lib/session";
 import { logActivity } from "@/server/activity";
+import { ensureBenchForCandidate } from "@/server/bench-lifecycle";
 import { candidateSchema, type CandidateInput } from "@/lib/validation/candidate";
 import { toFieldErrors } from "@/lib/validation/common";
 import {
@@ -110,6 +111,21 @@ export async function createCandidate(
       performedById: user.id,
       candidateId: created.id,
     });
+    // Lifecycle bench: every available candidate is on the bench (being
+    // marketed) from creation. Skip retired/non-available ones.
+    if (created.status === "AVAILABLE" && created.isActive) {
+      await ensureBenchForCandidate(tx, {
+        candidateId: created.id,
+        fullName: created.fullName,
+        email: created.email,
+        phone: created.phone,
+        currentLocation: created.currentLocation,
+        workAuthorization: created.workAuthorization,
+        skills: created.skills,
+        recruiterId: user.role === "RECRUITER" ? user.id : null,
+        performedById: user.id,
+      });
+    }
     return created;
   });
 
