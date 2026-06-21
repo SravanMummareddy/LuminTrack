@@ -54,7 +54,6 @@ export function SubmissionFilters({
       : undefined;
 
   const chips: FilterChip[] = [];
-  if (current.q) chips.push({ keys: ["q"], label: `Search: "${current.q}"` });
   if (current.status)
     chips.push({
       keys: ["status"],
@@ -86,17 +85,6 @@ export function SubmissionFilters({
 
   const primary = (
     <>
-      <div className="min-w-0 flex-1">
-        <label className={labelClass} htmlFor="f-q">
-          Search candidate or job
-        </label>
-        <Input
-          id="f-q"
-          name="q"
-          defaultValue={current.q ?? ""}
-          placeholder="Candidate name or job title"
-        />
-      </div>
       <div className="sm:w-44">
         <label className={labelClass} htmlFor="f-status">
           Status
@@ -212,6 +200,7 @@ export function SubmissionFilters({
   return (
     <FilterBar
       basePath="/submissions"
+      search={{ name: "q", defaultValue: current.q, placeholder: "Search candidate or job…" }}
       primary={primary}
       advanced={advanced}
       advancedActiveCount={advancedActiveCount}

@@ -1,5 +1,6 @@
-import { Input, Select } from "@/components/ui/field";
+import { Select } from "@/components/ui/field";
 import { FilterBar, type FilterChip } from "@/components/ui/filter-bar";
+import { DateRangeField } from "@/components/ui/date-range-field";
 import { DATE_PRESETS } from "@/lib/filters";
 import {
   JOB_STATUSES,
@@ -88,18 +89,12 @@ export function AnalyticsFilters({
 
   const primary = (
     <>
-      <div className="sm:w-48">
-        <label className={labelClass} htmlFor="f-preset">
-          Date range
-        </label>
-        <Select id="f-preset" name="preset" defaultValue={current.preset ?? "all"}>
-          {DATE_PRESETS.map((p) => (
-            <option key={p.value} value={p.value}>
-              {p.label}
-            </option>
-          ))}
-        </Select>
-      </div>
+      <DateRangeField
+        label="Date range"
+        preset={current.preset}
+        from={current.from}
+        to={current.to}
+      />
       {showRecruiterFilter && (
         <div className="sm:w-52">
           <label className={labelClass} htmlFor="f-recruiter">
@@ -210,20 +205,6 @@ export function AnalyticsFilters({
           </div>
         </>
       )}
-
-      <div>
-        <label className={labelClass} htmlFor="f-from">
-          From (custom range)
-        </label>
-        <Input id="f-from" name="from" type="date" defaultValue={current.from ?? ""} />
-      </div>
-
-      <div>
-        <label className={labelClass} htmlFor="f-to">
-          To (custom range)
-        </label>
-        <Input id="f-to" name="to" type="date" defaultValue={current.to ?? ""} />
-      </div>
     </>
   );
 

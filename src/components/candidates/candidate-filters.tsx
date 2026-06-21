@@ -30,7 +30,6 @@ export function CandidateFilters({
       : undefined;
 
   const chips: FilterChip[] = [];
-  if (current.q) chips.push({ keys: ["q"], label: `Name: "${current.q}"` });
   if (current.skill)
     chips.push({ keys: ["skill"], label: `Skill: ${current.skill}` });
   if (current.location)
@@ -68,17 +67,6 @@ export function CandidateFilters({
 
   const primary = (
     <>
-      <div className="min-w-0 flex-1">
-        <label className={labelClass} htmlFor="f-q">
-          Search name
-        </label>
-        <Input
-          id="f-q"
-          name="q"
-          defaultValue={current.q ?? ""}
-          placeholder="Candidate name"
-        />
-      </div>
       <div className="sm:w-44">
         <label className={labelClass} htmlFor="f-skill">
           Skill
@@ -185,6 +173,7 @@ export function CandidateFilters({
   return (
     <FilterBar
       basePath="/candidates"
+      search={{ name: "q", defaultValue: current.q, placeholder: "Search candidate name…" }}
       primary={primary}
       advanced={advanced}
       advancedActiveCount={advancedActiveCount}
