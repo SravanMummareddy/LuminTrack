@@ -4,6 +4,7 @@ import type { PlacementStatus } from "@/generated/prisma/enums";
 import {
   PAGE_SIZE,
   SUB_PAGE_SIZE,
+  type DateRange,
   type SortDir,
   type SortState,
 } from "@/lib/filters";
@@ -13,6 +14,8 @@ export type PlacementListFilters = {
   status?: PlacementStatus;
   clientId?: string;
   recruiterId?: string;
+  /** Filters on the placement start date (when the assignment began). */
+  startedRange?: DateRange;
   sort?: SortState;
   page?: number;
 };
@@ -64,6 +67,8 @@ export async function listPlacements(filters: PlacementListFilters) {
   if (filters.clientId) where.job = { clientId: filters.clientId };
   if (filters.recruiterId)
     where.submission = { submittedById: filters.recruiterId };
+  if (filters.startedRange?.gte || filters.startedRange?.lte)
+    where.startDate = filters.startedRange;
   if (filters.q)
     where.OR = [
       { candidate: { fullName: { contains: filters.q, mode: "insensitive" } } },
