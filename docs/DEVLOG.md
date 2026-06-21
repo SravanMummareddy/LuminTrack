@@ -10,6 +10,45 @@ short instead of long.
 
 ---
 
+## 2026-06-21 · "Nothing on the page is clickable" — every `/_next/static/chunks/*` 404ing
+
+**Situation.** Mid filter-redesign, live-verifying the new Placements filter via
+the browser. The page rendered fine (correct data, correct layout) but **nothing
+hydrated** — selecting "Custom range" didn't reveal the date inputs, the Filters
+toggle did nothing, and a DOM probe showed the `<select>` had no React fiber. My
+first instinct was a bug in the new `DateRangeField` (a controlled select), but
+its logic is trivial `useState` + conditional render, and tsc/eslint were clean.
+
+**Diagnosis.** The console was full of `Failed to load resource: 404` for every
+`/_next/static/chunks/*.js`, plus a repeating HMR-WebSocket handshake failure.
+Server logs gave it away: `ENOENT: …/_buildManifest.js.tmp…` and `Compaction
+failed: Another write batch or compaction is already active (Only a single write
+operation is allowed at a time)`. **Two Turbopack dev servers were running against
+the same `.next` directory** — a leftover from a `preview_start` attempt that had
+errored with "Another next dev server is already running" but left a zombie still
+writing to `.next`. The two processes raced on the build manifest, so the HTML
+referenced chunk filenames the other process had already superseded → 404 →
+no client JS → no hydration. The bug was never in the component.
+
+**Fix.** Kill *all* dev-server PIDs (`lsof -ti:3000 | xargs kill -9`, not just the
+one I knew about), `rm -rf .next` to clear the corrupted build cache, then start a
+single clean server. Hydration came back. For the parts I still couldn't click
+(the preview/automation path can't complete the HMR WebSocket upgrade, which
+blocks Turbopack's client bootstrap), I verified server-side instead:
+`?preset=custom` server-renders the From/To inputs because the field's state
+initializes from the URL, and a narrowed date range dropped the row count — proving
+the filter end to end without needing the browser to hydrate.
+
+**Lesson.** When *everything* interactive is dead but the HTML is correct, suspect
+the build pipeline, not the component — read the chunk 404s + server log before
+touching code. Two `next dev` processes silently corrupting a shared `.next` is the
+classic cause; the "Another next dev server is already running" guard only covers
+the happy path, not a half-dead zombie. Also: a controlled field whose initial
+state comes from the URL is verifiable server-side, which sidesteps a
+broken-hydration environment entirely.
+
+---
+
 ## 2026-06-20 · A recruiter editing a bench consultant silently wiped admin-only credentials
 
 **Situation.** Live-testing the Bench roster as a recruiter (not admin). The
