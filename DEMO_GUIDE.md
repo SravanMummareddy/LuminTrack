@@ -34,8 +34,8 @@ Sign in with an **email and password**.
 
 | Role | Example email | Password |
 |------|---------------|----------|
-| Administrator | `admin@lumintrack.com` | `LuminTrack2026!` |
-| Recruiter | `priya@lumintrack.com`, `marcus@lumintrack.com`, … | `LuminTrack2026!` |
+| Administrator / Team lead | `sriman@lumintrack.com` (Sriman Udugula) | `LuminTrack2026!` |
+| Recruiter | `hrishikesh@lumintrack.com`, `sameer@lumintrack.com`, `akhila@lumintrack.com`, … | `LuminTrack2026!` |
 
 ### Roles
 - **Administrator** — full access, including managing app users in Settings.

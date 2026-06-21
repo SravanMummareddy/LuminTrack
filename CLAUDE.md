@@ -12,6 +12,61 @@ timeline, and recruiter performance. Replaces a manual Excel/Word process.
 "Remaining work" summary — start there before grepping the audit sections).
 **Future enhancements (large multi-session items):** [`ENHANCEMENTS.md`](./ENHANCEMENTS.md).
 
+## 🚧 Current work — Lifecycle bench + reseed + Vendor Portal tab + filter redesign (2026-06-21, on `bench-sales-build` / PR #31)
+
+Four phases, all shipped to the branch (green CI). Plan:
+`~/.claude/plans/users-smumma-documents-company-dashboar-prancy-lightning.md`
+(active section at top).
+
+- **Phase 0 — Lifecycle bench (no migration).** Owner's model: the Bench is "who
+  we're marketing now." A candidate is on the bench via a `BenchConsultant`
+  linked 1:1 (`candidateId`), and `marketingStatus` drives on/off-bench
+  (ACTIVE/PAUSED = on, PLACED/INACTIVE = off). New `src/server/bench-lifecycle.ts`:
+  `ensureBenchForCandidate` (auto-creates the linked bench row when a candidate is
+  created AVAILABLE — wired in `createCandidate`) + `syncBenchOnPlacement` (wired
+  into `placement-lifecycle.ts`: JOINED → PLACED, placement-end/revert → ACTIVE).
+  One-click **Remove from bench** (`removeFromBench` → INACTIVE) on the detail
+  page. Roster defaults to on-bench (new `onBench` filter on `listBenchConsultants`).
+  +3 integration tests.
+- **Phase A — Reseed (`prisma/seed-demo.ts`, run `npx tsx prisma/seed-demo.ts`).**
+  **Admin login changed → `sriman@lumintrack.com` / `LuminTrack2026!`** (Sriman
+  Udugula, the team lead). 11 users total: **3 admins** (Sriman + 2 generated
+  managers) + **8 recruiters** (3 real from the sheet — Hrishikesh Batta TK2090,
+  Sameer Shaik TK2161, Akhila Kalyadapu INC83 — + 5 generated), across **2 teams**
+  (`USEI-Sales IT` / `USEI-Sales IT-2`). Bench consultants now seeded **linked 1:1
+  to candidates** with `marketingStatus` derived from pipeline state. New edge
+  cases: candidate documents with past/within-30d/future expiries, iLabor jobs
+  closed-for-subs / at-cap / unassigned, rates-pending placements, archived
+  résumés, all candidate/submission statuses.
+- **Phase B — Vendor Portal nav tab.** New `/vendor-portal` route +
+  `nav-links.tsx` entry (ClipboardList, after Jobs); reuses
+  `listJobs({ source: "randstad" })`. `JobsTable` gained optional
+  `storageKey`/`columnDefaults` props + 4 requirement columns (positions,
+  submitLimit, externalActiveCount, releasedDate) so the view leads with the
+  requisition fields. The old `/jobs?source=randstad` sub-tab still works.
+- **Phase C — Unified filter redesign + Placements date filter.** New
+  `src/components/ui/date-range-field.tsx` (preset dropdown that reveals From/To
+  **inline** on "Custom range"). Restyled `FilterBar` (kept API; added optional
+  `search` prop = polished icon search box; indigo pill chips). Migrated all list
+  pages: Placements (new `startedRange` startDate filter), Bench, Interviews onto
+  FilterBar; Jobs/Candidates/Submissions adopt the `search` prop;
+  `analytics-filters` (Recruiters/Reports) swapped preset+from/to → inline
+  `DateRangeField` (fixes the custom-range-hides-inputs gap).
+- **Also fixed: `src/proxy.ts` matcher** — excluded the whole `_next/` tree (was
+  only `_next/static|_next/image`), so middleware no longer runs on
+  `/_next/webpack-hmr` and breaks the dev HMR WebSocket (→ broken hydration). See
+  `docs/DEVLOG.md` 2026-06-21.
+
+> **Verification caveat (2026-06-21):** client interactivity (the Filters
+> expand/collapse toggle, the custom-range click-reveal) could **not** be verified
+> through the agent's browser tooling — the preview/Playwright path can't complete
+> the HMR WebSocket handshake, so React doesn't hydrate there. Native form
+> filtering (search/dropdowns/Apply → GET) IS verified, and the reveal is verified
+> server-side (`?preset=custom` renders the inputs). The toggle/reveal are standard
+> `useState` (unchanged pattern) — **needs a real-browser eyeball** (owner testing
+> on Vercel preview or a clean local `npm run dev`). Owner reported the toggle not
+> opening; the proxy matcher fix is the prime suspect (restart + hard-refresh).
+
 ## 🚧 Current work — Bench-Sales build (post-June-19 demo)
 
 After the 2026-06-20 demo the stakeholder handed over
@@ -594,5 +649,6 @@ upgrade, not a functional gate.
 
 - `DEMO_GUIDE.md` (project root) — end-to-end app & workflow walkthrough for demos.
 - `prisma/seed-demo.ts` wipes the DB and loads ~3 months of realistic sample data
-  (8 users, 50 jobs, 30 candidates, 160 submissions). Admin login:
-  `admin@lumintrack.com` / `LuminTrack2026!` (all sample recruiters share that password).
+  (11 users — 3 admins + 8 recruiters, 50 jobs, 30 candidates + linked bench
+  consultants, 160 submissions). Admin login (since 2026-06-21):
+  `sriman@lumintrack.com` / `LuminTrack2026!` (all 11 users share that password).
