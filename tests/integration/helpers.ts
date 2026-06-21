@@ -53,3 +53,54 @@ export async function seedBasics(prisma: PrismaClient) {
   });
   return { user, client, vendor, candidate, job, submission };
 }
+
+/** A placement owned by `recruiterA` (recruiter-of-record), plus an admin and an
+ *  unrelated `recruiterB`. For the rate-permission gating tests. */
+export async function seedPlacementScenario(prisma: PrismaClient) {
+  const [admin, recruiterA, recruiterB] = await Promise.all([
+    prisma.user.create({
+      data: { fullName: "Admin", email: "admin@test.local", passwordHash: "x", role: "ADMIN" },
+    }),
+    prisma.user.create({
+      data: { fullName: "Rec A", email: "reca@test.local", passwordHash: "x", role: "RECRUITER" },
+    }),
+    prisma.user.create({
+      data: { fullName: "Rec B", email: "recb@test.local", passwordHash: "x", role: "RECRUITER" },
+    }),
+  ]);
+  const [client, vendor] = await Promise.all([
+    prisma.client.create({ data: { name: "Test Client" } }),
+    prisma.vendor.create({ data: { name: "Test Vendor" } }),
+  ]);
+  const candidate = await prisma.candidate.create({
+    data: { fullName: "Placed Candidate", status: "PLACED", createdBy: { connect: { id: admin.id } } },
+  });
+  const job = await prisma.job.create({
+    data: {
+      title: "Senior Engineer",
+      candidateRate: 80,
+      client: { connect: { id: client.id } },
+      vendor: { connect: { id: vendor.id } },
+      createdBy: { connect: { id: admin.id } },
+    },
+  });
+  const submission = await prisma.submission.create({
+    data: {
+      status: "JOINED",
+      candidate: { connect: { id: candidate.id } },
+      job: { connect: { id: job.id } },
+      submittedBy: { connect: { id: recruiterA.id } }, // recruiter-of-record
+    },
+  });
+  const placement = await prisma.placement.create({
+    data: {
+      startDate: new Date("2026-06-01"),
+      billRate: 90,
+      payRate: 70,
+      submission: { connect: { id: submission.id } },
+      candidate: { connect: { id: candidate.id } },
+      job: { connect: { id: job.id } },
+    },
+  });
+  return { admin, recruiterA, recruiterB, client, vendor, candidate, job, submission, placement };
+}
