@@ -1,0 +1,20 @@
+# Disposable Postgres for the integration suite (`npm run test:integration`).
+# Port 5433 to avoid colliding with any local Postgres on the default 5432.
+#   npm run test:db:up    # start + apply migrations
+#   npm run test:db:down  # stop + wipe the volume
+services:
+  postgres-test:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: lumintrack_test
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+    tmpfs:
+      - /var/lib/postgresql/data

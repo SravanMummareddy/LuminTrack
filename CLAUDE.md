@@ -481,12 +481,31 @@ screenshots a page → drops it in `uploads/` → agent reads the image".
 ## Commands
 
 ```
-npm run dev         # dev server (Turbopack)
-npm run build       # production build
-npm run db:migrate  # prisma migrate dev
-npm run db:seed     # seed admin + sample data (prisma/seed.ts)
-npm run db:studio   # prisma studio
+npm run dev          # dev server (Turbopack)
+npm run build        # production build
+npm run db:migrate   # prisma migrate dev
+npm run db:seed      # seed admin + sample data (prisma/seed.ts)
+npm run db:studio    # prisma studio
+npm test             # vitest unit suite (no DB — pure logic + mocked lifecycle)
+npm run test:watch   # vitest in watch mode
+npm run test:integration  # integration suite vs Dockerized Postgres (see below)
 ```
+
+## Testing
+
+- **Unit suite** (`npm test`) — `vitest`, plain Node, **no database**. Pure logic
+  (permissions, validation, labels exhaustiveness, analytics) + the placement
+  lifecycle state machine via a **mock Prisma transaction client** (`@/server/db`
+  is mocked so the Neon adapter is never built). Fast (<1s); runs on pre-commit
+  and in CI. Lives in `src/**/__tests__/*.test.ts`.
+- **Integration suite** (`npm run test:integration`) — `vitest` against a **real
+  disposable Postgres** (Docker). Tests the actual server actions + Prisma
+  cascades end-to-end. One-time setup: `npm run test:db:up` (starts
+  `postgres:16` on :5433 + applies migrations); then `npm run test:integration`.
+  `npm run test:db:down` tears it down. Uses `@prisma/adapter-pg` against
+  `DATABASE_URL_TEST` (defaults to the local Docker URL). Lives in
+  `tests/integration/*.test.ts`. Skipped automatically if the test DB is
+  unreachable, so it never blocks the unit suite or CI's no-DB job.
 
 ## Environment (.env — gitignored; see .env.example)
 
