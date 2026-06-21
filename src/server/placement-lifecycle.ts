@@ -93,6 +93,8 @@ export async function ensurePlacementOnJoined(
         candidateId: args.candidateId,
         jobId: args.jobId,
         startDate,
+        // "Date of Placement" defaults to the JOINED date; recruiter can edit.
+        placementDate: startDate,
         billRate: seedRate,
         payRate: seedRate,
       },

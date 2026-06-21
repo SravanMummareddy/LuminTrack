@@ -93,6 +93,7 @@ export async function listPlacements(filters: PlacementListFilters) {
           id: true,
           title: true,
           client: { select: { name: true } },
+          vendor: { select: { name: true } },
         },
       },
       submission: {

@@ -595,6 +595,46 @@ commit button.
 
 ---
 
+## 2026-06-20 · The Placements tab was empty in every demo — seed never reached JOINED
+
+**Situation.** Adding the five Bench-Sales "Placements" sheet fields
+(Organisation, Lead, Date of Interview, Date of Placement, Remarks)
+was the easy part. The harder discovery: after seeding fresh demo
+data, `/placements` was completely empty — `Placements: 0`. The
+feature being demo'd had no rows to demo.
+
+**Diagnosis.** `seed-demo.ts` creates 160 submissions with a random
+final status drawn from age-bucketed weight tables, but **`JOINED`
+only appeared in the oldest bucket (`age >= 45` days)** — and a real
+data check showed only 11 of 160 submissions were that old, so the
+expected JOINED count was ~2 and the actual draw was 0. Worse, the
+seed never created `Placement` rows at all: placements are normally
+auto-created by `ensurePlacementOnJoined` on a *live* status change
+through the UI, a code path the seed bypasses entirely. So even the
+rare JOINED submission left no placement behind. Two gaps stacked:
+JOINED was nearly unreachable, and reaching it produced nothing.
+
+**Fix.** (1) Added `JOINED` to the `age < 20` and `age < 45` weight
+buckets and bumped its weight in the oldest bucket, lifting placements
+to a realistic ~8% join rate (13 of 160). (2) Added an explicit
+placement-creation block in the submission loop, fired on
+`finalStatus === "JOINED"`, that writes a `Placement` with the new
+sheet fields populated (org/lead/remarks on a subset, interviewDate a
+few days before the start, placementDate = start), a 75/25 ACTIVE/ENDED
+split, and a matching `PLACEMENT_CREATED` audit row — and flips the
+candidate to `PLACED` so status stays consistent with a live placement.
+
+**Lesson.** *A feature with no seed data is a feature you can't see —
+and "the seed has a JOINED path" is not the same as "the seed produces
+placements."* The status existed in the weight table and the lifecycle
+helper existed in the app, but nothing connected them in the seed. When
+you ship a new tab, the demo isn't done until you've *looked at the tab
+with seeded data* — count the rows, don't assume the upstream weights
+flow through. A one-line `Placements: ${count}` in the seed summary
+would have caught this on day one.
+
+---
+
 ## Recommended use
 
 - **Before an interview:** scan the entries' titles and pick 2–3

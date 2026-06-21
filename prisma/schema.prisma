@@ -655,6 +655,14 @@ model Placement {
   invoiceRef           String?
   onsiteManagerName    String?
   onsiteManagerEmail   String?
+  // Bench-Sales sheet fields (June-19 requirements "Placements" tab). All
+  // nullable + editable on the placement edit form. `placementDate` defaults to
+  // the JOINED date at auto-create; the rest are filled in by the recruiter.
+  organisation         String?   // implementation / sister company marketing the consultant
+  teamLead             String?   // "Lead" column on the sheet
+  interviewDate        DateTime? // "Date of Interview"
+  placementDate        DateTime? // "Date of Placement" (distinct from Start Date)
+  remarks              String?
   extensions           PlacementExtension[]
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt

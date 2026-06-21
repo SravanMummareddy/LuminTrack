@@ -52,6 +52,11 @@ export async function updatePlacement(
     invoiceRef: formData.get("invoiceRef") ?? "",
     onsiteManagerName: formData.get("onsiteManagerName") ?? "",
     onsiteManagerEmail: formData.get("onsiteManagerEmail") ?? "",
+    organisation: formData.get("organisation") ?? "",
+    teamLead: formData.get("teamLead") ?? "",
+    interviewDate: formData.get("interviewDate") ?? "",
+    placementDate: formData.get("placementDate") ?? "",
+    remarks: formData.get("remarks") ?? "",
   });
   if (!parsed.success)
     return {
@@ -91,6 +96,11 @@ export async function updatePlacement(
     invoiceRef: d.invoiceRef ?? null,
     onsiteManagerName: d.onsiteManagerName ?? null,
     onsiteManagerEmail: d.onsiteManagerEmail ?? null,
+    organisation: d.organisation ?? null,
+    teamLead: d.teamLead ?? null,
+    interviewDate: d.interviewDate ?? null,
+    placementDate: d.placementDate ?? null,
+    remarks: d.remarks ?? null,
   };
   if (mayEditRates) {
     if (d.billRate !== undefined) {
@@ -121,6 +131,19 @@ export async function updatePlacement(
   compare("invoice ref", existing.invoiceRef, d.invoiceRef);
   compare("onsite manager", existing.onsiteManagerName, d.onsiteManagerName);
   compare("onsite email", existing.onsiteManagerEmail, d.onsiteManagerEmail);
+  compare("organisation", existing.organisation, d.organisation);
+  compare("lead", existing.teamLead, d.teamLead);
+  compare(
+    "interview date",
+    existing.interviewDate?.toISOString().slice(0, 10) ?? "",
+    d.interviewDate?.toISOString().slice(0, 10) ?? "",
+  );
+  compare(
+    "placement date",
+    existing.placementDate?.toISOString().slice(0, 10) ?? "",
+    d.placementDate?.toISOString().slice(0, 10) ?? "",
+  );
+  compare("remarks", existing.remarks, d.remarks);
 
   if (!changed.length) return { ok: true };
 

@@ -34,6 +34,12 @@ export const placementUpdateSchema = z.object({
   invoiceRef: optionalText,
   onsiteManagerName: optionalText,
   onsiteManagerEmail: optionalEmail,
+  // Bench-Sales "Placements" sheet fields.
+  organisation: optionalText,
+  teamLead: optionalText,
+  interviewDate: optionalDateTime,
+  placementDate: optionalDateTime,
+  remarks: optionalText,
 });
 
 export type PlacementUpdateInput = z.infer<typeof placementUpdateSchema>;

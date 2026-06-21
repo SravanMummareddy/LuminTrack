@@ -343,6 +343,19 @@ const INTERVIEWERS = [
   "Lisa Anderson",
 ];
 const TEAM_LEADS = ["Sriman Udugula", "Akhila Kalyadapu", "Sameer Shaik"];
+const ORGANISATIONS = [
+  "USEI Technologies",
+  "Lumin Global Inc",
+  "Astra Consulting LLC",
+  "Vertex Systems Group",
+];
+const PLACEMENT_REMARKS = [
+  "Client confirmed start; onboarding paperwork in progress.",
+  "Remote role, 1 day onsite per month.",
+  "Rate locked for 6 months, renewal expected.",
+  "Backfill for a prior consultant who rolled off.",
+  "Net-30 payment terms with the vendor.",
+];
 const REJECTION_REASONS = [
   "Client selected another candidate.",
   "Rate expectations above the approved band.",
@@ -777,6 +790,7 @@ async function main() {
         ["CLIENT_INTERVIEW", 2],
         ["REJECTED", 3],
         ["ON_HOLD", 1],
+        ["JOINED", 1],
         // A fast offer-then-backout — keeps the scorecard's Backouts column
         // populated for the current month, not just old data.
         ["BACKED_OUT", 1],
@@ -790,6 +804,7 @@ async function main() {
         ["REJECTED", 4],
         ["ON_HOLD", 2],
         ["OFFER_RELEASED", 1],
+        ["JOINED", 4],
         ["BACKED_OUT", 1],
       ]);
     return weighted<SubmissionStatus>([
@@ -799,7 +814,7 @@ async function main() {
       ["REJECTED", 4],
       ["ON_HOLD", 1],
       ["OFFER_RELEASED", 2],
-      ["JOINED", 3],
+      ["JOINED", 5],
       ["BACKED_OUT", 2],
     ]);
   }
@@ -861,6 +876,7 @@ async function main() {
   const subCountByCandidate = new Map<string, number>();
   let submissionCount = 0;
   let roundCount = 0;
+  let placementCount = 0;
 
   for (let i = 0; i < 160; i++) {
     // Pick a unique candidate+job pair (candidate capped at 9 submissions).
@@ -1104,6 +1120,71 @@ async function main() {
       }
     }
 
+    // Placement — created when the submission reached JOINED. Populates the
+    // Bench-Sales "Placements" sheet fields so /placements has realistic data.
+    if (finalStatus === "JOINED") {
+      const startDate = times[times.length - 1];
+      const bill = job.candidateRate + randInt(12, 30);
+      const pay = job.candidateRate + randInt(-3, 4);
+      // ~25% have already ended; the rest stay ACTIVE (open-ended or a future
+      // end date for a fixed-length contract).
+      const ended = chance(0.25);
+      const contractMonths = randInt(3, 12);
+      const endDate = ended
+        ? new Date(
+            Math.min(
+              startDate.getTime() + contractMonths * 30 * DAY,
+              NOW.getTime() - DAY,
+            ),
+          )
+        : chance(0.5)
+          ? new Date(startDate.getTime() + contractMonths * 30 * DAY)
+          : null;
+      const interviewDate = new Date(
+        startDate.getTime() - randInt(5, 20) * DAY,
+      );
+      const placement = await prisma.placement.create({
+        data: {
+          submissionId: submission.id,
+          candidateId: candidate.id,
+          jobId: job.id,
+          startDate,
+          endDate,
+          billRate: bill,
+          payRate: pay,
+          status: ended ? "ENDED" : "ACTIVE",
+          endReason: ended ? "COMPLETED" : null,
+          endNote: ended ? "Contract completed." : null,
+          organisation: chance(0.7) ? pick(ORGANISATIONS) : null,
+          teamLead: chance(0.7) ? pick(TEAM_LEADS) : null,
+          interviewDate,
+          placementDate: startDate,
+          remarks: chance(0.5) ? pick(PLACEMENT_REMARKS) : null,
+          createdAt: startDate,
+          updatedAt: endDate ?? startDate,
+        },
+        select: { id: true, seq: true },
+      });
+      placementCount++;
+      // Keep the candidate's status consistent with a live placement.
+      if (!ended) {
+        await prisma.candidate.update({
+          where: { id: candidate.id },
+          data: { status: "PLACED" },
+        });
+      }
+      activityRows.push({
+        entityType: "SUBMISSION",
+        action: "PLACEMENT_CREATED",
+        description: `Placement PLC-${String(placement.seq).padStart(3, "0")} created for ${candidate.fullName} on "${job.title}"`,
+        performedById: submittedById,
+        submissionId: submission.id,
+        candidateId: candidate.id,
+        jobId: job.id,
+        createdAt: startDate,
+      });
+    }
+
     // Submission note (~45%).
     if (chance(0.45)) {
       const body = pick(SUBMISSION_NOTES);
@@ -1289,6 +1370,7 @@ async function main() {
   console.log(`  Bench consultants: ${benchCount}`);
   console.log(`  Resumes:      ${resumeCount}`);
   console.log(`  Submissions:  ${submissionCount}`);
+  console.log(`  Placements:   ${placementCount}`);
   console.log(`  Interview rounds: ${roundCount}`);
   console.log(`  Notes:        ${noteRows.length}`);
   console.log(`  Activity rows: ${activityRows.length}`);

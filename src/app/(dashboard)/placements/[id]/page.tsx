@@ -171,6 +171,11 @@ export default async function PlacementDetailPage({
               invoiceRef: placement.invoiceRef,
               onsiteManagerName: placement.onsiteManagerName,
               onsiteManagerEmail: placement.onsiteManagerEmail,
+              organisation: placement.organisation,
+              teamLead: placement.teamLead,
+              interviewDate: placement.interviewDate,
+              placementDate: placement.placementDate,
+              remarks: placement.remarks,
             }}
             canManageRates={canManageRates}
           />
@@ -268,6 +273,16 @@ export default async function PlacementDetailPage({
 
       <Card title="Details">
         <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <SummaryItem label="Organisation">
+            {placement.organisation ?? "—"}
+          </SummaryItem>
+          <SummaryItem label="Lead">{placement.teamLead ?? "—"}</SummaryItem>
+          <SummaryItem label="Date of interview">
+            {placement.interviewDate ? formatDate(placement.interviewDate) : "—"}
+          </SummaryItem>
+          <SummaryItem label="Date of placement">
+            {placement.placementDate ? formatDate(placement.placementDate) : "—"}
+          </SummaryItem>
           <SummaryItem label="Client PO #">
             {placement.clientPoNumber ?? "—"}
           </SummaryItem>
@@ -282,6 +297,11 @@ export default async function PlacementDetailPage({
               </span>
             )}
           </SummaryItem>
+          {placement.remarks && (
+            <div className="col-span-2 sm:col-span-3">
+              <SummaryItem label="Remarks">{placement.remarks}</SummaryItem>
+            </div>
+          )}
         </dl>
       </Card>
 
