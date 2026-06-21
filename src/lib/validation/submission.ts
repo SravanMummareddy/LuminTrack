@@ -56,6 +56,10 @@ const benchFields = {
   ),
   vendorRecruiterName: optionalText,
   jobDuties: optionalText,
+  // The sheet's Pay Rate / Bill Rate pair + Team lead.
+  payRate: optionalNonNegativeNumber,
+  billRate: optionalNonNegativeNumber,
+  teamLead: optionalText,
 };
 
 function refineResumeChoice(d: ResumeFields, ctx: z.RefinementCtx) {

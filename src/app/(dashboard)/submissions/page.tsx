@@ -37,6 +37,9 @@ export default async function SubmissionsPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const sp = await searchParams;
+  // Option B "Vendor Portal" view: the same submissions list, scoped to
+  // Randstad-iLabor-sourced jobs, defaulting to the sheet's columns.
+  const vendorPortal = clean(sp.vendorPortal) === "1";
 
   const current = {
     q: clean(sp.q),
@@ -64,6 +67,7 @@ export default async function SubmissionsPage({
     clientId: current.clientId,
     vendorId: current.vendorId,
     sisterCompanySourceId: current.sisterCompanySourceId,
+    vendorPortalOnly: vendorPortal,
     submittedRange: parseDateRange({
       preset: current.preset,
       from: current.from,
@@ -72,6 +76,21 @@ export default async function SubmissionsPage({
     sort,
     page: parsePage(clean(sp.page)),
   };
+
+  // The Vendor Portal view leads with the sheet's columns; it also keeps its own
+  // column-pref storage key so it doesn't clobber the main Submissions list.
+  const VP_COLUMNS = [
+    "sno",
+    "candidate",
+    "job",
+    "vendor",
+    "client",
+    "billRate",
+    "payRate",
+    "engagement",
+    "recruiter",
+    "resume",
+  ];
 
   const [
     { rows: submissions, total, page },
@@ -102,9 +121,37 @@ export default async function SubmissionsPage({
   return (
     <div className="mx-auto max-w-6xl space-y-5">
       <PageHeader
-        title="Submissions"
-        description="Every candidate submitted to a job. Create new submissions from a job page."
+        title={vendorPortal ? "Vendor Portal" : "Submissions"}
+        description={
+          vendorPortal
+            ? "Candidates submitted to Randstad iLabor (Vendor Portal) requirements, with pay/bill rates and résumés."
+            : "Every candidate submitted to a job. Create new submissions from a job page."
+        }
       />
+
+      <nav className="border-b border-slate-200" aria-label="Submissions view">
+        <ul className="-mb-px flex gap-1">
+          {[
+            { label: "All submissions", href: "/submissions", active: !vendorPortal },
+            { label: "Vendor Portal", href: "/submissions?vendorPortal=1", active: vendorPortal },
+          ].map((t) => (
+            <li key={t.href}>
+              <a
+                href={t.href}
+                aria-current={t.active ? "page" : undefined}
+                className={
+                  "inline-block border-b-2 px-3 py-2 text-sm font-medium transition " +
+                  (t.active
+                    ? "border-indigo-600 text-indigo-700"
+                    : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700")
+                }
+              >
+                {t.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
 
       <SubmissionFilters
         current={current}
@@ -135,6 +182,12 @@ export default async function SubmissionsPage({
           <SubmissionsTable
             rows={submissions}
             pageOffset={(page - 1) * PAGE_SIZE}
+            storageKey={
+              vendorPortal
+                ? "lumintrack.vendorportal.columns"
+                : "lumintrack.submissions.columns"
+            }
+            defaultVisibleKeys={vendorPortal ? VP_COLUMNS : undefined}
           />
           <Pagination page={page} totalPages={totalPages} total={total} />
         </div>

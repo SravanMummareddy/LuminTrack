@@ -2,6 +2,7 @@ import { prisma } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
 import type { SubmissionStatus } from "@/generated/prisma/enums";
 import { OTHER_SOURCE } from "@/lib/labels";
+import { RANDSTAD_PORTAL_NAME } from "@/server/queries/jobs";
 import {
   PAGE_SIZE,
   SUB_PAGE_SIZE,
@@ -18,6 +19,9 @@ export type SubmissionListFilters = {
   vendorId?: string;
   sisterCompanySourceId?: string;
   submittedRange?: DateRange;
+  // Option B "Vendor Portal" scope: only submissions to portal-sourced
+  // (Randstad iLabor) jobs.
+  vendorPortalOnly?: boolean;
   sort?: SortState;
   page?: number;
 };
@@ -52,6 +56,8 @@ export async function listSubmissions(filters: SubmissionListFilters) {
     where.submittedAt = filters.submittedRange;
 
   const job: Prisma.JobWhereInput = {};
+  if (filters.vendorPortalOnly)
+    job.portal = { is: { name: RANDSTAD_PORTAL_NAME } };
   if (filters.clientId) job.clientId = filters.clientId;
   if (filters.vendorId) job.vendorId = filters.vendorId;
   if (filters.sisterCompanySourceId)
@@ -95,14 +101,17 @@ export async function listSubmissions(filters: SubmissionListFilters) {
         },
       },
       submittedBy: { select: { fullName: true } },
+      candidateResume: { select: { label: true, driveLink: true } },
       _count: { select: { interviewRounds: true } },
     },
   });
   // Prisma `Decimal` isn't serializable across the RSC → Client boundary;
-  // the Submissions table is a Client Component, so flatten the rate.
+  // the Submissions table is a Client Component, so flatten every rate.
   const rows = raw.map((s) => ({
     ...s,
     candidateRate: s.candidateRate == null ? null : Number(s.candidateRate),
+    payRate: s.payRate == null ? null : Number(s.payRate),
+    billRate: s.billRate == null ? null : Number(s.billRate),
   }));
 
   return { rows, total, page };
@@ -152,6 +161,9 @@ export function getSubmissionForEdit(id: string) {
       engagement: true,
       vendorRecruiterName: true,
       jobDuties: true,
+      payRate: true,
+      billRate: true,
+      teamLead: true,
       job: { select: { title: true } },
       submittedBy: { select: { fullName: true } },
       candidate: {

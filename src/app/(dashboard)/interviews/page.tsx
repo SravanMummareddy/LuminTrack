@@ -9,7 +9,7 @@ import {
   type InterviewListFilters,
 } from "@/server/queries/interviews";
 import { listActiveRecruiterOptions } from "@/server/queries/org";
-import { parseSort, parsePage, PAGE_SIZE } from "@/lib/filters";
+import { parseSort, parsePage, parseDateRange, PAGE_SIZE } from "@/lib/filters";
 
 function clean(value: string | string[] | undefined): string | undefined {
   const single = Array.isArray(value) ? value[0] : value;
@@ -23,7 +23,12 @@ export default async function InterviewsPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const sp = await searchParams;
-  const current = { q: clean(sp.q), recruiterId: clean(sp.recruiterId) };
+  const current = {
+    q: clean(sp.q),
+    recruiterId: clean(sp.recruiterId),
+    from: clean(sp.from),
+    to: clean(sp.to),
+  };
 
   const sort = parseSort(
     clean(sp.sort),
@@ -35,6 +40,7 @@ export default async function InterviewsPage({
   const filters: InterviewListFilters = {
     q: current.q,
     recruiterId: current.recruiterId,
+    scheduledRange: parseDateRange({ from: current.from, to: current.to }),
     sort,
     page: parsePage(clean(sp.page)),
   };
@@ -57,7 +63,7 @@ export default async function InterviewsPage({
         method="get"
         className="grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-3"
       >
-        <label className="block sm:col-span-2">
+        <label className="block">
           <span className="mb-1 block text-xs font-medium text-slate-600">Search</span>
           <input
             type="search"
@@ -68,6 +74,24 @@ export default async function InterviewsPage({
           />
         </label>
         <label className="block">
+          <span className="mb-1 block text-xs font-medium text-slate-600">Interview from</span>
+          <input
+            type="date"
+            name="from"
+            defaultValue={current.from ?? ""}
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-slate-600">Interview to</span>
+          <input
+            type="date"
+            name="to"
+            defaultValue={current.to ?? ""}
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="block sm:col-span-3">
           <span className="mb-1 block text-xs font-medium text-slate-600">Sales recruiter</span>
           <select
             name="recruiterId"

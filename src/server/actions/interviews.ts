@@ -22,6 +22,8 @@ function readRound(formData: FormData) {
     meetingLink: formData.get("meetingLink") ?? "",
     scheduledAt: formData.get("scheduledAt") ?? "",
     scheduledTimezone: formData.get("scheduledTimezone") ?? "",
+    // Checkbox: "on" when ticked, absent otherwise.
+    supportNeeded: formData.get("supportNeeded") === "on",
     feedback: formData.get("feedback") ?? "",
     notes: formData.get("notes") ?? "",
   });
@@ -69,6 +71,7 @@ export async function createInterviewRound(
         meetingLink: d.meetingLink ?? null,
         scheduledAt: d.scheduledAt ?? null,
         scheduledTimezone: d.scheduledTimezone ?? null,
+        supportNeeded: d.supportNeeded,
         feedback: d.feedback ?? null,
         notes: d.notes ?? null,
         updatedById: user.id,
@@ -136,6 +139,7 @@ export async function updateInterviewRound(
         meetingLink: d.meetingLink ?? null,
         scheduledAt: d.scheduledAt ?? null,
         scheduledTimezone: d.scheduledTimezone ?? null,
+        supportNeeded: d.supportNeeded,
         feedback: d.feedback ?? null,
         notes: d.notes ?? null,
         updatedById: user.id,

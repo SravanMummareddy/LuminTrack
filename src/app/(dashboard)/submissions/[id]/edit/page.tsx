@@ -46,6 +46,9 @@ export default async function EditSubmissionPage({
             engagement: submission.engagement ?? "",
             vendorRecruiterName: submission.vendorRecruiterName ?? "",
             jobDuties: submission.jobDuties ?? "",
+            payRate: submission.payRate?.toString() ?? "",
+            billRate: submission.billRate?.toString() ?? "",
+            teamLead: submission.teamLead ?? "",
           }}
         />
       </div>

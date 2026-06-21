@@ -32,6 +32,7 @@ export function InterviewsTable({
           <Th>Sales recruiter</Th>
           <Th>Technology</Th>
           <Th>Round</Th>
+          <Th>Support</Th>
           <Th>Result</Th>
         </tr>
       </thead>
@@ -73,6 +74,13 @@ export function InterviewsTable({
                 <span className="ml-1 text-xs text-slate-400">
                   · {INTERVIEW_TYPE_LABEL[r.interviewType]}
                 </span>
+              </Td>
+              <Td label="Support" secondary>
+                {r.supportNeeded ? (
+                  <span className="font-medium text-indigo-700">Yes</span>
+                ) : (
+                  "—"
+                )}
               </Td>
               <Td label="Result">
                 <Badge tone={INTERVIEW_RESULT_TONE[r.result]}>

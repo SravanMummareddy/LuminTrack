@@ -176,6 +176,19 @@ export default async function SubmissionDetailPage({
               {submission.vendorRecruiterName}
             </SummaryItem>
           ) : null}
+          {submission.payRate != null ? (
+            <SummaryItem label="Pay rate">
+              {formatRate(submission.payRate)}
+            </SummaryItem>
+          ) : null}
+          {submission.billRate != null ? (
+            <SummaryItem label="Bill rate">
+              {formatRate(submission.billRate)}
+            </SummaryItem>
+          ) : null}
+          {submission.teamLead ? (
+            <SummaryItem label="Team lead">{submission.teamLead}</SummaryItem>
+          ) : null}
         </dl>
 
         {submission.jobDuties ? (

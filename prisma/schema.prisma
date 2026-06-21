@@ -575,6 +575,13 @@ model Submission {
   engagement          BenchEngagement?
   vendorRecruiterName String?
   jobDuties           String?
+  // Bench/Vendor-Portal rate pair (the sheet's "Pay Rate" / "Bill Rate"):
+  // payRate = what we pay the consultant, billRate = what we bill the client.
+  // Separate from candidateRate (the legacy single rate) and nullable so
+  // non-bench submissions ignore them. teamLead = the sales team lead's name.
+  payRate  Decimal? @db.Decimal(12, 2)
+  billRate Decimal? @db.Decimal(12, 2)
+  teamLead String?
   // §C4 — set when the recruiter consciously submits a duplicate
   // (same candidate already submitted to this job). The DB-level
   // `@@unique([candidateId, jobId])` constraint was dropped so the
@@ -696,6 +703,9 @@ model InterviewRound {
   result         InterviewResult @default(WAITING)
   feedback       String?
   notes          String?
+  // The sheet's "Support (Y/N)" — whether a team member shadows/supports this
+  // interview (e.g. a tech buddy on the call). Defaults to false.
+  supportNeeded  Boolean         @default(false)
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 

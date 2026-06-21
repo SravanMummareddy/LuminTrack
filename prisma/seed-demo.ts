@@ -342,6 +342,7 @@ const INTERVIEWERS = [
   "James Wilson",
   "Lisa Anderson",
 ];
+const TEAM_LEADS = ["Sriman Udugula", "Akhila Kalyadapu", "Sameer Shaik"];
 const REJECTION_REASONS = [
   "Client selected another candidate.",
   "Rate expectations above the approved band.",
@@ -479,10 +480,10 @@ async function main() {
     const fullName = RECRUITER_NAMES[i];
     const email =
       fullName.split(" ")[0].toLowerCase() + "@lumintrack.com";
-    // EMP IDs + team split so the Monthly Performance scorecard has something
-    // to group by. First four on Team Alpha, the rest on Team Beta.
-    const empId = `EMP-${String(101 + i)}`;
-    const teamLabel = i < 4 ? "Team Alpha" : "Team Beta";
+    // EMP IDs + team to match the spreadsheet's Monthly Performance tab
+    // (team "USEI-Sales IT", IDs like INC105 / TK2090).
+    const empId = `${i % 2 === 0 ? "INC" : "TK"}${100 + i * 17}`;
+    const teamLabel = "USEI-Sales IT";
     const created = await prisma.user.create({
       data: {
         email,
@@ -547,6 +548,20 @@ async function main() {
   }
 
   // ── Jobs + assignments ──
+  // Vendor-portal (Randstad iLabor) — some jobs are sourced from it so the
+  // submission-level "Vendor Portal" view has data. Name must match
+  // RANDSTAD_PORTAL_NAME in src/server/queries/jobs.ts.
+  console.log("Creating job portal…");
+  const randstadPortal = await prisma.jobPortal.create({
+    data: {
+      name: "Randstad iLabor",
+      kind: "VMS",
+      createdAt: adminCreatedAt,
+      updatedAt: adminCreatedAt,
+    },
+    select: { id: true },
+  });
+
   console.log("Creating 50 jobs…");
   const jobs: {
     id: string;
@@ -575,6 +590,9 @@ async function main() {
     const candidateRate = vendorRate - randInt(8, 22);
     const creator = chance(0.7) ? admin : pick(recruiters);
     const client = pick(clients);
+    // ~35% come from the Randstad iLabor vendor portal; those carry a portal
+    // ref instead of a managed source so the source label reads "Randstad iLabor".
+    const isPortal = chance(0.35);
 
     const job = await prisma.job.create({
       data: {
@@ -590,7 +608,9 @@ async function main() {
         notes: chance(0.4) ? pick(JOB_NOTES) : null,
         clientId: client.id,
         vendorId: pick(vendors).id,
-        sisterCompanySourceId: pick(sources).id,
+        sisterCompanySourceId: isPortal ? null : pick(sources).id,
+        portalId: isPortal ? randstadPortal.id : null,
+        portalRefId: isPortal ? String(159000 + i) : null,
         createdById: creator.id,
         createdAt,
         updatedAt: createdAt,
@@ -911,6 +931,10 @@ async function main() {
         engagement: chance(0.6) ? (chance(0.5) ? "C2C" : "W2") : null,
         vendorRecruiterName: chance(0.5) ? pick(VENDOR_RECRUITER_NAMES) : null,
         jobDuties: chance(0.3) ? pick(JOB_DUTIES_SAMPLES) : null,
+        // Pay/Bill rate pair (bill > pay) + team lead on a subset.
+        payRate: chance(0.6) ? job.candidateRate + randInt(-3, 4) : null,
+        billRate: chance(0.6) ? job.candidateRate + randInt(12, 30) : null,
+        teamLead: chance(0.5) ? pick(TEAM_LEADS) : null,
         candidateResumeId: pickedResume?.id ?? null,
         resumeDriveLink: pickedResume?.driveLink ?? null,
         submittedAt,
@@ -1021,6 +1045,7 @@ async function main() {
             interviewerName: pick(INTERVIEWERS),
             scheduledAt,
             result,
+            supportNeeded: chance(0.3),
             feedback: feedback || null,
             notes: chance(0.4) ? pick(ROUND_NOTES) : null,
             updatedById: submittedById,

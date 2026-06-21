@@ -25,6 +25,9 @@ type EditValues = {
   engagement: string;
   vendorRecruiterName: string;
   jobDuties: string;
+  payRate: string;
+  billRate: string;
+  teamLead: string;
 };
 
 type Fields = {
@@ -37,6 +40,9 @@ type Fields = {
   engagement: string;
   vendorRecruiterName: string;
   jobDuties: string;
+  payRate: string;
+  billRate: string;
+  teamLead: string;
 };
 
 const NEW_RESUME = "__new__";
@@ -92,6 +98,9 @@ export function SubmissionEditForm({
     engagement: values.engagement,
     vendorRecruiterName: values.vendorRecruiterName,
     jobDuties: values.jobDuties,
+    payRate: values.payRate,
+    billRate: values.billRate,
+    teamLead: values.teamLead,
   });
   const set =
     (name: keyof Fields) =>
@@ -239,6 +248,18 @@ export function SubmissionEditForm({
             value={fields.vendorRecruiterName}
             onChange={set("vendorRecruiterName")}
           />
+        </Field>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Field label="Pay rate" htmlFor="payRate" error={errors.payRate} hint="$/hr we pay the consultant.">
+          <Input id="payRate" name="payRate" type="number" min="0" step="0.01" inputMode="decimal" value={fields.payRate} onChange={set("payRate")} />
+        </Field>
+        <Field label="Bill rate" htmlFor="billRate" error={errors.billRate} hint="$/hr we bill the client.">
+          <Input id="billRate" name="billRate" type="number" min="0" step="0.01" inputMode="decimal" value={fields.billRate} onChange={set("billRate")} />
+        </Field>
+        <Field label="Team lead" htmlFor="teamLead" error={errors.teamLead}>
+          <Input id="teamLead" name="teamLead" value={fields.teamLead} onChange={set("teamLead")} />
         </Field>
       </div>
 

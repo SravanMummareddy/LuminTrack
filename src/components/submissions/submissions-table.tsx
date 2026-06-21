@@ -170,10 +170,65 @@ const COLUMNS: Column[] = [
       </Td>
     ),
   },
+  {
+    key: "payRate",
+    label: "Pay rate",
+    defaultVisible: false,
+    render: (s) => (
+      <Td label="Pay rate" secondary className="tabular-nums">
+        {s.payRate != null ? `$${s.payRate}/hr` : "—"}
+      </Td>
+    ),
+  },
+  {
+    key: "billRate",
+    label: "Bill rate",
+    defaultVisible: false,
+    render: (s) => (
+      <Td label="Bill rate" secondary className="tabular-nums">
+        {s.billRate != null ? `$${s.billRate}/hr` : "—"}
+      </Td>
+    ),
+  },
+  {
+    key: "teamLead",
+    label: "Team lead",
+    defaultVisible: false,
+    render: (s) => (
+      <Td label="Team lead" secondary>
+        {s.teamLead ?? "—"}
+      </Td>
+    ),
+  },
+  {
+    key: "resume",
+    label: "Submitted resume",
+    defaultVisible: false,
+    render: (s) => {
+      const link = s.candidateResume?.driveLink ?? s.resumeDriveLink;
+      const label = s.candidateResume?.label ?? (link ? "Resume" : null);
+      return (
+        <Td label="Submitted resume" secondary>
+          {link ? (
+            <a
+              href={link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-indigo-600 hover:underline"
+            >
+              {label}
+            </a>
+          ) : (
+            "—"
+          )}
+        </Td>
+      );
+    },
+  },
 ];
 
 const STORAGE_KEY = "lumintrack.submissions.columns";
-const STORAGE_VERSION = 2;
+const STORAGE_VERSION = 3;
 const DEFAULTS: ColumnPrefs = {
   visible: COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key),
   order: COLUMNS.map((c) => c.key),
@@ -182,14 +237,25 @@ const DEFAULTS: ColumnPrefs = {
 export function SubmissionsTable({
   rows,
   pageOffset = 0,
+  storageKey = STORAGE_KEY,
+  defaultVisibleKeys,
 }: {
   rows: SubmissionListRow[];
   pageOffset?: number;
+  /** Override the localStorage key so a scoped view (e.g. Vendor Portal) keeps
+   *  its own column prefs separate from the main Submissions list. */
+  storageKey?: string;
+  /** Override which columns are visible by default (the Vendor Portal view
+   *  surfaces the sheet's Pay/Bill/C2C-W2/resume columns up front). */
+  defaultVisibleKeys?: string[];
 }) {
+  const defaults: ColumnPrefs = defaultVisibleKeys
+    ? { visible: defaultVisibleKeys, order: COLUMNS.map((c) => c.key) }
+    : DEFAULTS;
   const [prefs, setPrefs] = useColumnPrefs(
-    STORAGE_KEY,
+    storageKey,
     STORAGE_VERSION,
-    DEFAULTS,
+    defaults,
   );
 
   const byKey = new Map(COLUMNS.map((c) => [c.key, c]));
@@ -210,7 +276,7 @@ export function SubmissionsTable({
           columns={orderedCols.map((c) => ({ key: c.key, label: c.label }))}
           prefs={prefs}
           onChange={setPrefs}
-          defaults={DEFAULTS}
+          defaults={defaults}
         />
       </div>
 

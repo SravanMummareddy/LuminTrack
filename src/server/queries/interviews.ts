@@ -3,6 +3,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import {
   SUB_PAGE_SIZE as PAGE_SIZE,
   PAGE_SIZE as LIST_PAGE_SIZE,
+  type DateRange,
   type SortDir,
   type SortState,
 } from "@/lib/filters";
@@ -112,6 +113,7 @@ export type CandidateInterviewGroup = Awaited<
 export type InterviewListFilters = {
   q?: string;
   recruiterId?: string;
+  scheduledRange?: DateRange;
   sort?: SortState;
   page?: number;
 };
@@ -135,6 +137,8 @@ export const INTERVIEW_DEFAULT_SORT: SortState = { key: "date", dir: "desc" };
  */
 export async function listInterviews(filters: InterviewListFilters) {
   const where: Prisma.InterviewRoundWhereInput = { scheduledAt: { not: null } };
+  if (filters.scheduledRange?.gte || filters.scheduledRange?.lte)
+    where.scheduledAt = { not: null, ...filters.scheduledRange };
   if (filters.recruiterId)
     where.submission = { submittedById: filters.recruiterId };
   if (filters.q)
@@ -178,6 +182,7 @@ export async function listInterviews(filters: InterviewListFilters) {
       interviewType: true,
       scheduledAt: true,
       result: true,
+      supportNeeded: true,
       submission: {
         select: {
           id: true,

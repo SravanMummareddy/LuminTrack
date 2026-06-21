@@ -53,6 +53,9 @@ function readSubmission(formData: FormData) {
     engagement: formData.get("engagement") ?? "",
     vendorRecruiterName: formData.get("vendorRecruiterName") ?? "",
     jobDuties: formData.get("jobDuties") ?? "",
+    payRate: formData.get("payRate") ?? "",
+    billRate: formData.get("billRate") ?? "",
+    teamLead: formData.get("teamLead") ?? "",
   });
 }
 
@@ -234,6 +237,9 @@ export async function createSubmission(
           engagement: d.engagement ?? null,
           vendorRecruiterName: d.vendorRecruiterName ?? null,
           jobDuties: d.jobDuties ?? null,
+          payRate: d.payRate ?? null,
+          billRate: d.billRate ?? null,
+          teamLead: d.teamLead ?? null,
         },
       });
       // Compose an audit note carrying every override reason that fired,
@@ -297,6 +303,9 @@ function readSubmissionEdit(formData: FormData) {
     engagement: formData.get("engagement") ?? "",
     vendorRecruiterName: formData.get("vendorRecruiterName") ?? "",
     jobDuties: formData.get("jobDuties") ?? "",
+    payRate: formData.get("payRate") ?? "",
+    billRate: formData.get("billRate") ?? "",
+    teamLead: formData.get("teamLead") ?? "",
   });
 }
 
@@ -406,6 +415,9 @@ export async function updateSubmission(
         engagement: d.engagement ?? null,
         vendorRecruiterName: d.vendorRecruiterName ?? null,
         jobDuties: d.jobDuties ?? null,
+        payRate: d.payRate ?? null,
+        billRate: d.billRate ?? null,
+        teamLead: d.teamLead ?? null,
       },
     });
 
