@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import Link from "next/link";
 import { Table, Th, Td, cardLink } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
@@ -46,7 +47,9 @@ const COLUMNS: Column[] = [
   {
     key: "id",
     label: "ID",
-    defaultVisible: true,
+    // Hidden by default — the sheet's display set is S.No, Name, Technology,
+    // Visa, Experience, Location, Relocation, Recruiter. Available via ColumnsMenu.
+    defaultVisible: false,
     render: (c) => (
       <Td label="ID" secondary className="whitespace-nowrap font-mono text-xs">
         {formatBenchConsultantDisplayId(c)}
@@ -76,7 +79,9 @@ const COLUMNS: Column[] = [
     key: "priority",
     label: "Priority",
     sortKey: "priority",
-    defaultVisible: true,
+    // Hidden by default — priority is shown as section headers (High / Second)
+    // in the default priority sort, matching the sheet. Toggle on via ColumnsMenu.
+    defaultVisible: false,
     render: (c) => (
       <Td label="Priority">
         <Badge tone={BENCH_PRIORITY_TONE[c.priority]}>
@@ -210,7 +215,7 @@ const COLUMNS: Column[] = [
 ];
 
 const STORAGE_KEY = "lumintrack.bench.columns";
-const STORAGE_VERSION = 1;
+const STORAGE_VERSION = 2;
 const DEFAULTS: ColumnPrefs = {
   visible: COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key),
   order: COLUMNS.map((c) => c.key),
@@ -219,9 +224,13 @@ const DEFAULTS: ColumnPrefs = {
 export function BenchRosterTable({
   rows,
   pageOffset = 0,
+  groupByPriority = false,
 }: {
   rows: BenchListRow[];
   pageOffset?: number;
+  /** When sorted by priority (the default), render High/Second section headers
+   *  — but only while the Priority column itself is hidden, to match the sheet. */
+  groupByPriority?: boolean;
 }) {
   const [prefs, setPrefs] = useColumnPrefs(
     STORAGE_KEY,
@@ -234,6 +243,8 @@ export function BenchRosterTable({
     .map((k) => byKey.get(k))
     .filter((c): c is Column => Boolean(c));
   const visibleCols = orderedCols.filter((c) => prefs.visible.includes(c.key));
+  const showGroups =
+    groupByPriority && !visibleCols.some((c) => c.key === "priority");
 
   return (
     <div className="space-y-3">
@@ -285,18 +296,34 @@ export function BenchRosterTable({
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {rows.map((row, idx) => (
-            <tr key={row.id} className="hover:bg-slate-50">
-              {visibleCols.map((c) => (
-                <RenderCell
-                  key={c.key}
-                  column={c}
-                  row={row}
-                  rowNumber={pageOffset + idx + 1}
-                />
-              ))}
-            </tr>
-          ))}
+          {rows.map((row, idx) => {
+            const showHeader =
+              showGroups && (idx === 0 || rows[idx - 1].priority !== row.priority);
+            return (
+              <Fragment key={row.id}>
+                {showHeader && (
+                  <tr className="bg-slate-50">
+                    <td
+                      colSpan={visibleCols.length}
+                      className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500"
+                    >
+                      {BENCH_PRIORITY_LABEL[row.priority]}
+                    </td>
+                  </tr>
+                )}
+                <tr className="hover:bg-slate-50">
+                  {visibleCols.map((c) => (
+                    <RenderCell
+                      key={c.key}
+                      column={c}
+                      row={row}
+                      rowNumber={pageOffset + idx + 1}
+                    />
+                  ))}
+                </tr>
+              </Fragment>
+            );
+          })}
         </tbody>
       </Table>
     </div>

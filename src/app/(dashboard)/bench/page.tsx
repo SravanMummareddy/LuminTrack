@@ -141,7 +141,11 @@ export default async function BenchRosterPage({
           <p className="text-xs text-slate-500">
             {total} consultant{total === 1 ? "" : "s"}
           </p>
-          <BenchRosterTable rows={rows} pageOffset={(page - 1) * PAGE_SIZE} />
+          <BenchRosterTable
+            rows={rows}
+            pageOffset={(page - 1) * PAGE_SIZE}
+            groupByPriority={sort.key === "priority"}
+          />
           <Pagination page={page} totalPages={totalPages} total={total} />
         </div>
       )}
