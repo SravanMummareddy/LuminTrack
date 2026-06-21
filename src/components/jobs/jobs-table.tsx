@@ -213,11 +213,56 @@ const COLUMNS: Column[] = [
       </Td>
     ),
   },
+  // ─── Vendor-portal requirement columns (hidden by default on /jobs; the
+  //     /vendor-portal view surfaces them via its own column preset) ──────────
+  {
+    key: "positions",
+    label: "Positions",
+    align: "right",
+    defaultVisible: false,
+    render: (job) => (
+      <Td label="Positions" secondary className="text-right tabular-nums">
+        {job.positions ?? "—"}
+      </Td>
+    ),
+  },
+  {
+    key: "submitLimit",
+    label: "Submit limit",
+    align: "right",
+    defaultVisible: false,
+    render: (job) => (
+      <Td label="Submit limit" secondary className="text-right tabular-nums">
+        {job.submitLimit ?? "—"}
+      </Td>
+    ),
+  },
+  {
+    key: "activeCount",
+    label: "Active (iLabor)",
+    align: "right",
+    defaultVisible: false,
+    render: (job) => (
+      <Td label="Active (iLabor)" secondary className="text-right tabular-nums">
+        {job.externalActiveCount ?? "—"}
+      </Td>
+    ),
+  },
+  {
+    key: "released",
+    label: "Released",
+    defaultVisible: false,
+    render: (job) => (
+      <Td label="Released" secondary className="whitespace-nowrap">
+        {job.releasedDate ? formatDate(job.releasedDate) : "—"}
+      </Td>
+    ),
+  },
 ];
 
 const STORAGE_KEY = "lumintrack.jobs.columns";
-// Bumped to 2 in Phase 7 — added sno + jobId columns. Saved prefs reset once.
-const STORAGE_VERSION = 2;
+// Bumped to 3 — added the vendor-portal requirement columns to the registry.
+const STORAGE_VERSION = 3;
 const DEFAULTS: ColumnPrefs = {
   visible: COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key),
   order: COLUMNS.map((c) => c.key),
@@ -228,6 +273,8 @@ export function JobsTable({
   pageOffset = 0,
   canEditRecruiters = false,
   allRecruiters = [],
+  storageKey = STORAGE_KEY,
+  columnDefaults = DEFAULTS,
 }: {
   rows: JobListRow[];
   /** Row count preceding the first row on this page (e.g. (page-1)*pageSize). */
@@ -236,12 +283,17 @@ export function JobsTable({
   canEditRecruiters?: boolean;
   /** Full set of active recruiters available for inline assignment. */
   allRecruiters?: { id: string; fullName: string }[];
+  /** Override the localStorage key so a different view (e.g. /vendor-portal)
+   *  keeps its own independent column preferences. */
+  storageKey?: string;
+  /** Override which columns are visible/ordered by default for this view. */
+  columnDefaults?: ColumnPrefs;
 }) {
   const ctx: RenderCtx = { canEditRecruiters, allRecruiters };
   const [prefs, setPrefs] = useColumnPrefs(
-    STORAGE_KEY,
+    storageKey,
     STORAGE_VERSION,
-    DEFAULTS,
+    columnDefaults,
   );
 
   const byKey = new Map(COLUMNS.map((c) => [c.key, c]));
@@ -262,7 +314,7 @@ export function JobsTable({
           columns={orderedCols.map((c) => ({ key: c.key, label: c.label }))}
           prefs={prefs}
           onChange={setPrefs}
-          defaults={DEFAULTS}
+          defaults={columnDefaults}
         />
       </div>
 

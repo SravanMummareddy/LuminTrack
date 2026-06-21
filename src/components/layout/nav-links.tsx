@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Briefcase,
+  ClipboardList,
   Users,
   Send,
   CalendarClock,
@@ -26,6 +27,7 @@ type NavItem = {
 const NAV: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/jobs", label: "Jobs", icon: Briefcase },
+  { href: "/vendor-portal", label: "Vendor Portal", icon: ClipboardList },
   { href: "/candidates", label: "Candidates", icon: Users },
   { href: "/submissions", label: "Submissions", icon: Send },
   { href: "/interviews", label: "Interviews", icon: CalendarClock },
