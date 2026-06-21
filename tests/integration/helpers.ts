@@ -76,6 +76,55 @@ export async function seedSubmissionScenario(prisma: PrismaClient) {
   return { admin, recruiter, client, vendor, candidate };
 }
 
+/** A live SUBMITTED submission owned by `recruiterA`, plus an admin, a
+ *  re-attribution target `recruiterB`, and one résumé in the candidate's
+ *  library. For the updateSubmission edit tests. The submission's submittedAt
+ *  is pinned to a fixed minute so a no-op edit can re-post it unchanged. */
+export async function seedSubmissionEditScenario(prisma: PrismaClient) {
+  const [admin, recruiterA, recruiterB] = await Promise.all([
+    prisma.user.create({
+      data: { fullName: "Admin", email: "admin@test.local", passwordHash: "x", role: "ADMIN" },
+    }),
+    prisma.user.create({
+      data: { fullName: "Rec A", email: "reca@test.local", passwordHash: "x", role: "RECRUITER" },
+    }),
+    prisma.user.create({
+      data: { fullName: "Rec B", email: "recb@test.local", passwordHash: "x", role: "RECRUITER" },
+    }),
+  ]);
+  const [client, vendor] = await Promise.all([
+    prisma.client.create({ data: { name: "Test Client" } }),
+    prisma.vendor.create({ data: { name: "Test Vendor" } }),
+  ]);
+  const candidate = await prisma.candidate.create({
+    data: { fullName: "Edit Candidate", status: "AVAILABLE", createdBy: { connect: { id: admin.id } } },
+  });
+  const job = await prisma.job.create({
+    data: {
+      title: "Senior Engineer",
+      candidateRate: 80,
+      client: { connect: { id: client.id } },
+      vendor: { connect: { id: vendor.id } },
+      createdBy: { connect: { id: admin.id } },
+    },
+  });
+  const resume = await prisma.candidateResume.create({
+    data: { candidateId: candidate.id, label: "Primary", driveLink: "https://drive.google.com/file/abc" },
+  });
+  const submission = await prisma.submission.create({
+    data: {
+      status: "SUBMITTED",
+      candidateRate: 80,
+      submissionNotes: "Original note",
+      submittedAt: new Date("2026-06-01T10:00"), // local; matches the edit form's string
+      candidate: { connect: { id: candidate.id } },
+      job: { connect: { id: job.id } },
+      submittedBy: { connect: { id: recruiterA.id } },
+    },
+  });
+  return { admin, recruiterA, recruiterB, client, vendor, candidate, job, resume, submission };
+}
+
 /** A placement owned by `recruiterA` (recruiter-of-record), plus an admin and an
  *  unrelated `recruiterB`. For the rate-permission gating tests. */
 export async function seedPlacementScenario(prisma: PrismaClient) {
