@@ -22,7 +22,10 @@ export function JobSourceTabs({
   const tabs: { key: JobSource | "all"; label: string }[] = [
     { key: "all", label: "All jobs" },
     { key: "manual", label: "Manual" },
-    { key: "randstad", label: "Randstad iLabor" },
+    // "Vendor Portal" = the Randstad iLabor requisitions (the spreadsheet's
+    // "Vendor Portal Requirements" tab). Label only — the `randstad` key and
+    // the portal-name filter are unchanged so URLs/imports keep working.
+    { key: "randstad", label: "Vendor Portal" },
   ];
 
   function hrefFor(key: JobSource | "all"): string {

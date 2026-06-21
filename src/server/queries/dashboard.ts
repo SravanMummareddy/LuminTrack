@@ -154,7 +154,7 @@ export async function getMyWork(userId: string) {
         // through the pipeline that's been sitting for more than a week is
         // worth a nudge.
         status: {
-          notIn: ["SELECTED", "REJECTED", "ON_HOLD", "OFFER_RELEASED", "JOINED"],
+          notIn: ["SELECTED", "REJECTED", "ON_HOLD", "OFFER_RELEASED", "JOINED", "BACKED_OUT"],
         },
         submittedAt: { lte: sevenDaysAgo },
       },

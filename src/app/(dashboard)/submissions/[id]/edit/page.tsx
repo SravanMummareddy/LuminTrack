@@ -43,6 +43,9 @@ export default async function EditSubmissionPage({
             resumeSelection: submission.candidateResumeId ?? "",
             submissionNotes: submission.submissionNotes ?? "",
             submittedAt: submission.submittedAt,
+            engagement: submission.engagement ?? "",
+            vendorRecruiterName: submission.vendorRecruiterName ?? "",
+            jobDuties: submission.jobDuties ?? "",
           }}
         />
       </div>

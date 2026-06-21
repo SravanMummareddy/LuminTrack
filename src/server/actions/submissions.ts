@@ -50,6 +50,9 @@ function readSubmission(formData: FormData) {
     candidateResumeId: formData.get("candidateResumeId") ?? "",
     newResumeLabel: formData.get("newResumeLabel") ?? "",
     newResumeLink: formData.get("newResumeLink") ?? "",
+    engagement: formData.get("engagement") ?? "",
+    vendorRecruiterName: formData.get("vendorRecruiterName") ?? "",
+    jobDuties: formData.get("jobDuties") ?? "",
   });
 }
 
@@ -228,6 +231,9 @@ export async function createSubmission(
           resumeDriveLink: resumeSnapshot,
           submissionNotes: d.submissionNotes ?? null,
           duplicateReason: existing ? duplicateReason : null,
+          engagement: d.engagement ?? null,
+          vendorRecruiterName: d.vendorRecruiterName ?? null,
+          jobDuties: d.jobDuties ?? null,
         },
       });
       // Compose an audit note carrying every override reason that fired,
@@ -288,6 +294,9 @@ function readSubmissionEdit(formData: FormData) {
     candidateResumeId: formData.get("candidateResumeId") ?? "",
     newResumeLabel: formData.get("newResumeLabel") ?? "",
     newResumeLink: formData.get("newResumeLink") ?? "",
+    engagement: formData.get("engagement") ?? "",
+    vendorRecruiterName: formData.get("vendorRecruiterName") ?? "",
+    jobDuties: formData.get("jobDuties") ?? "",
   });
 }
 
@@ -394,6 +403,9 @@ export async function updateSubmission(
         candidateResumeId,
         // Snapshot the link used so it survives résumé edits/deletes.
         resumeDriveLink: resumeSnapshot,
+        engagement: d.engagement ?? null,
+        vendorRecruiterName: d.vendorRecruiterName ?? null,
+        jobDuties: d.jobDuties ?? null,
       },
     });
 

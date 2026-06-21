@@ -8,6 +8,9 @@ import type {
   CandidateStatus,
   PlacementStatus,
   PlacementEndReason,
+  BenchPriority,
+  BenchMarketingStatus,
+  BenchEngagement,
 } from "@/generated/prisma/enums";
 
 /** Display order for job statuses across filters, forms, and the pipeline. */
@@ -95,6 +98,7 @@ export const SUBMISSION_STATUSES: SubmissionStatus[] = [
   "OFFER_RELEASED",
   "OFFER_ACCEPTED",
   "JOINED",
+  "BACKED_OUT",
 ];
 
 export const SUBMISSION_STATUS_LABEL: Record<SubmissionStatus, string> = {
@@ -108,6 +112,7 @@ export const SUBMISSION_STATUS_LABEL: Record<SubmissionStatus, string> = {
   OFFER_RELEASED: "Offer Released",
   OFFER_ACCEPTED: "Offer Accepted",
   JOINED: "Joined",
+  BACKED_OUT: "Backed Out",
 };
 
 export const SUBMISSION_STATUS_TONE: Record<SubmissionStatus, BadgeTone> = {
@@ -121,6 +126,7 @@ export const SUBMISSION_STATUS_TONE: Record<SubmissionStatus, BadgeTone> = {
   OFFER_RELEASED: "indigo",
   OFFER_ACCEPTED: "green",
   JOINED: "green",
+  BACKED_OUT: "red",
 };
 
 /**
@@ -150,6 +156,9 @@ export const SUBMISSION_STAGE_INDEX: Record<SubmissionStatus, number> = {
   OFFER_RELEASED: 5,
   OFFER_ACCEPTED: 6,
   JOINED: 7,
+  // Terminal negative outcome (parallel to REJECTED). Collapses into the
+  // "Decision" branch of the visual pipeline rather than getting its own stage.
+  BACKED_OUT: 4,
 };
 
 // ─── Job source ──────────────────────────────────────────────────────────────
@@ -333,3 +342,40 @@ export const PLACEMENT_END_REASON_LABEL: Record<PlacementEndReason, string> = {
 /** Industry-typical floor for contract-staffing margin. Below this, the Margin %
  * column renders amber on the Placements list. */
 export const MARGIN_AMBER_THRESHOLD_PCT = 15;
+
+// ─── Bench-Sales roster ──────────────────────────────────────────────────────
+
+export const BENCH_PRIORITIES: BenchPriority[] = ["HIGH", "SECOND"];
+export const BENCH_PRIORITY_LABEL: Record<BenchPriority, string> = {
+  HIGH: "High Priority",
+  SECOND: "Second Priority",
+};
+export const BENCH_PRIORITY_TONE: Record<BenchPriority, BadgeTone> = {
+  HIGH: "red",
+  SECOND: "amber",
+};
+
+export const BENCH_MARKETING_STATUSES: BenchMarketingStatus[] = [
+  "ACTIVE",
+  "PAUSED",
+  "PLACED",
+  "INACTIVE",
+];
+export const BENCH_MARKETING_STATUS_LABEL: Record<BenchMarketingStatus, string> = {
+  ACTIVE: "Active",
+  PAUSED: "Paused",
+  PLACED: "Placed",
+  INACTIVE: "Inactive",
+};
+export const BENCH_MARKETING_STATUS_TONE: Record<BenchMarketingStatus, BadgeTone> = {
+  ACTIVE: "green",
+  PAUSED: "amber",
+  PLACED: "blue",
+  INACTIVE: "slate",
+};
+
+export const BENCH_ENGAGEMENTS: BenchEngagement[] = ["C2C", "W2"];
+export const BENCH_ENGAGEMENT_LABEL: Record<BenchEngagement, string> = {
+  C2C: "C2C",
+  W2: "W2",
+};

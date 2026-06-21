@@ -10,6 +10,116 @@ short instead of long.
 
 ---
 
+## 2026-06-20 · `seed-demo` wipe predated three feature areas → FK violation on re-seed
+
+**Situation.** After shipping the Monthly Performance scorecard (which needed
+`SubmissionStatus.BACKED_OUT` + `empId`/`teamLabel` on recruiters), re-running
+`prisma/seed-demo.ts` to regenerate sample data crashed at the user-delete step
+with `P2003 ForeignKeyConstraintViolation` on `User`.
+
+**Diagnosis.** The seed's "wipe existing data" block was a hand-maintained list
+of `deleteMany()` calls written back in Phase 7. Since then we'd added
+Placements + PlacementExtensions (R4.2), CandidateDocuments (R4.1), JobPortals,
+Contacts, and now BenchConsultants — **none of which were in the wipe list.** On
+a *fresh* DB the omission was invisible (nothing to delete), but the moment any
+of those tables held a row that referenced a User or Candidate (e.g. the BC-001
+bench consultant created during P1), deleting users blew up on the dangling FK.
+A silent gap that only surfaces once the referencing table is non-empty is the
+worst kind: it passes every test until real data exists.
+
+**Fix.** Rewrote the wipe as a single FK-safe cascade (children → parents):
+activity/note → placementExtension/placement → interviewRound/benchConsultant →
+submission → candidateDocument/candidateResume/jobAssignment → job → candidate →
+contact/jobPortal → vendor/client/source → user, with a comment explaining the
+ordering invariant so the next table addition has an obvious home.
+
+**Lesson.** A destructive teardown must enumerate *every* table that can hold an
+FK to what it deletes — and that list rots silently as the schema grows. Either
+derive the delete order from the schema, or treat "add a model" as also meaning
+"add it to the wipe." When a delete is FK-ordered, write the ordering rationale
+next to it so the list is maintainable, not archaeology.
+
+---
+
+## 2026-06-20 · Seeded `BACKED_OUT` only in the oldest age bucket → scorecard column looked broken
+
+**Situation.** The Monthly Performance scorecard has a Backouts column. After
+wiring it up, the current month's column was entirely empty, and a DB count
+showed **zero** `BACKED_OUT` submissions total — even though I'd added
+`["BACKED_OUT", 1]` to the seed's status mix.
+
+**Diagnosis.** Two compounding issues. (1) I'd added the weight to only the
+`age >= 45 days` bucket of `pickFinalStatus`. Backouts bucket on `submittedAt`,
+and a 45+-day-old submission was submitted in March/April — so by construction a
+backout could *never* land in a recent month's column. (2) The seed RNG is a
+*deterministic* PRNG, and that single low-weight entry in one bucket happened to
+roll zero across the whole run. So the feature looked broken in exactly the view
+a stakeholder would open first (the current month).
+
+**Fix.** Added modest `BACKED_OUT` weight to the recent buckets too
+(`age < 20`, `age < 45`) and bumped the oldest to 2, so a fast
+offer-then-backout shows up in the current month. Re-seed: 3 total, 1 in June —
+the column now renders a red `1` cell that reconciles against the submissions.
+
+**Lesson.** Demo data has to exercise the feature *in the view the audience will
+actually look at*, not just somewhere in the table. A metric bucketed by date
+needs sample rows whose date lands in the default window — and with a fixed-seed
+PRNG, "low probability" effectively means "verify it actually happened," because
+there's no second roll. Always count the rows after seeding a new metric.
+
+---
+
+## 2026-06-20 · A phantom migration in the shared dev DB blocked all new migrations
+
+**Situation.** Starting the Bench-Sales build, the very first
+`prisma migrate dev` (adding bench enum values + two `User` columns)
+refused to run and announced it needed to **reset the database** — drop
+all data — to proceed. The reported reason was "drift": the live Neon dev
+DB contained a migration `20260530052124_resume_soft_delete` (adding
+`CandidateResume.isActive` + `RESUME_ARCHIVED`/`RESUME_RESTORED` actions)
+that existed in the migration *history table* but in no local migration
+folder.
+
+**Diagnosis.** Searched every branch, commit, stash, and reflog
+(`git log --all -S`, `git branch -a`) for the migration name and the
+`isActive` field — **zero hits**. The schema change had been applied to
+the shared Neon database by some working copy (another machine / an
+unpushed branch / a throwaway session) and was never committed here. So
+the DB was strictly *ahead* of the repo by one feature's worth of schema,
+and Prisma's `migrate dev` correctly refuses to evolve a database whose
+state it can't reconstruct from migration files — its only safe offer is a
+reset. Before touching anything, I counted rows to classify the data: 8
+users (the seed-demo set), 30 candidates, ~162 submissions, 357 jobs — i.e.
+regenerable demo seed + a 306-row iLabor import test, not hand-entered
+production data.
+
+**Fix.** Because the data was disposable, the product owner chose
+**reset + reseed** over reverse-engineering the lost migration. Prisma 7
+added an AI-agent guardrail that blocks destructive commands unless you
+pass `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION` set to the user's exact
+consent text — so this required an explicit typed "yes" first. Then:
+`migrate reset --force` (re-applied the 26 committed migrations cleanly,
+clearing the orphan) → hand-authored the bench migration via
+`prisma migrate diff --from-config-datasource --to-schema` + `migrate
+deploy` (because `migrate dev` is interactive and the agent shell is
+non-interactive — it wouldn't acknowledge the `empId` unique-constraint
+warning) → `npx tsx prisma/seed-demo.ts` to restore the demo dataset.
+
+**Lesson / interview framing.** Two transferable points. (1) **A shared
+dev database is mutable global state**; when migration history diverges
+from version control, trust the committed migrations as source of truth and
+*classify the data before reaching for reset* — the right call hinges
+entirely on whether the rows are precious or regenerable, which is a
+one-query question. (2) When `migrate dev` fights you in automation, drop to
+its plumbing: `migrate diff` to render the exact SQL and `migrate deploy` to
+apply a hand-written migration file — same result, fully non-interactive,
+and you get to eyeball the SQL (here: confirming the enum `ADD VALUE`s
+weren't *used* in the same migration, so they were safe to ship in one
+file). The new Prisma consent gate is also worth knowing about: destructive
+commands now hard-stop AI agents by design.
+
+---
+
 ## 2026-05-28 · iLabor import "expired transaction" — wrong layer was the culprit
 
 **Situation.** The 306-row iLabor sample import started failing on

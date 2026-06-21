@@ -88,6 +88,18 @@ export async function listActiveRecruiterOptions() {
   return out;
 }
 
+/** Distinct non-empty team labels across recruiters — powers the Monthly
+ *  Performance team filter. Empty when nobody has been assigned a team yet. */
+export async function listTeamLabels(): Promise<string[]> {
+  const rows = await prisma.user.findMany({
+    where: { role: "RECRUITER", teamLabel: { not: null } },
+    distinct: ["teamLabel"],
+    select: { teamLabel: true },
+    orderBy: { teamLabel: "asc" },
+  });
+  return rows.map((r) => r.teamLabel).filter((t): t is string => !!t);
+}
+
 export type OrgListItem = Awaited<ReturnType<typeof listVendors>>[number];
 export type ClientListItem = Awaited<ReturnType<typeof listClients>>[number];
 export type UserListItem = Awaited<ReturnType<typeof listUsers>>[number];

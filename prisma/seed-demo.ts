@@ -82,6 +82,7 @@ const SUB_LABEL: Record<SubmissionStatus, string> = {
   OFFER_RELEASED: "Offer Released",
   OFFER_ACCEPTED: "Offer Accepted",
   JOINED: "Joined",
+  BACKED_OUT: "Backed Out",
 };
 const JOB_LABEL: Record<JobStatus, string> = {
   OPEN: "Open",
@@ -398,14 +399,24 @@ const RESUME_LABELS = [
 
 async function main() {
   console.log("Wiping existing data…");
+  // FK-safe order: children before parents. Activity/Note carry nullable FKs to
+  // almost everything, so they go first. Then placements → submissions → jobs/
+  // candidates → org entities → users. Bench consultants reference both User and
+  // Candidate, so they clear before either.
   await prisma.activity.deleteMany();
   await prisma.note.deleteMany();
+  await prisma.placementExtension.deleteMany();
+  await prisma.placement.deleteMany();
   await prisma.interviewRound.deleteMany();
+  await prisma.benchConsultant.deleteMany();
   await prisma.submission.deleteMany();
+  await prisma.candidateDocument.deleteMany();
   await prisma.candidateResume.deleteMany();
   await prisma.jobAssignment.deleteMany();
   await prisma.job.deleteMany();
   await prisma.candidate.deleteMany();
+  await prisma.contact.deleteMany();
+  await prisma.jobPortal.deleteMany();
   await prisma.vendor.deleteMany();
   await prisma.client.deleteMany();
   await prisma.sisterCompanySource.deleteMany();
@@ -428,15 +439,22 @@ async function main() {
   });
 
   const recruiters: { id: string; fullName: string }[] = [];
-  for (const fullName of RECRUITER_NAMES) {
+  for (let i = 0; i < RECRUITER_NAMES.length; i++) {
+    const fullName = RECRUITER_NAMES[i];
     const email =
       fullName.split(" ")[0].toLowerCase() + "@lumintrack.com";
+    // EMP IDs + team split so the Monthly Performance scorecard has something
+    // to group by. First four on Team Alpha, the rest on Team Beta.
+    const empId = `EMP-${String(101 + i)}`;
+    const teamLabel = i < 4 ? "Team Alpha" : "Team Beta";
     const created = await prisma.user.create({
       data: {
         email,
         fullName,
         passwordHash,
         role: "RECRUITER",
+        empId,
+        teamLabel,
         createdAt: adminCreatedAt,
         updatedAt: adminCreatedAt,
       },
@@ -703,6 +721,9 @@ async function main() {
         ["CLIENT_INTERVIEW", 2],
         ["REJECTED", 3],
         ["ON_HOLD", 1],
+        // A fast offer-then-backout — keeps the scorecard's Backouts column
+        // populated for the current month, not just old data.
+        ["BACKED_OUT", 1],
       ]);
     if (age < 45)
       return weighted<SubmissionStatus>([
@@ -713,6 +734,7 @@ async function main() {
         ["REJECTED", 4],
         ["ON_HOLD", 2],
         ["OFFER_RELEASED", 1],
+        ["BACKED_OUT", 1],
       ]);
     return weighted<SubmissionStatus>([
       ["VENDOR_SCREENING_CALL", 1],
@@ -722,6 +744,7 @@ async function main() {
       ["ON_HOLD", 1],
       ["OFFER_RELEASED", 2],
       ["JOINED", 3],
+      ["BACKED_OUT", 2],
     ]);
   }
 
@@ -753,6 +776,15 @@ async function main() {
         return [...PIPELINE.slice(0, randInt(1, 4)), "REJECTED"];
       case "ON_HOLD":
         return [...PIPELINE.slice(0, randInt(2, 4)), "ON_HOLD"];
+      case "BACKED_OUT":
+        // Got all the way to an accepted offer, then walked.
+        return [
+          ...PIPELINE,
+          "SELECTED",
+          "OFFER_RELEASED",
+          "OFFER_ACCEPTED",
+          "BACKED_OUT",
+        ];
     }
   }
 

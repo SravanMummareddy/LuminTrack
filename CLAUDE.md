@@ -12,7 +12,57 @@ timeline, and recruiter performance. Replaces a manual Excel/Word process.
 "Remaining work" summary — start there before grepping the audit sections).
 **Future enhancements (large multi-session items):** [`ENHANCEMENTS.md`](./ENHANCEMENTS.md).
 
-## 🚧 Current work — Round 4 pre-demo (Documents → Placements → Export)
+## 🚧 Current work — Bench-Sales build (post-June-19 demo)
+
+After the 2026-06-20 demo the stakeholder handed over
+`Dashboard - requirements- user-june-19th.xlsx` (6 tabs). The product owner
+**pivoted** the architecture: most tabs map onto existing concepts, so only two
+things are genuinely new. Full plan:
+`~/.claude/plans/users-smumma-documents-company-dashboar-prancy-lightning.md`.
+**All phases SHIPPED + verified 2026-06-20.**
+
+- **P1 — Bench roster:** new `BenchConsultant` table (the marketing "as-marketed"
+  identity), optionally 1:1-linked to `Candidate` via `candidateId @unique`.
+  `/bench` roster groups by `BenchPriority` (HIGH/SECOND), `ColumnsMenu` defaults
+  to the sheet's display subset; add/edit form has grouped sections + a
+  collapsible "More details" + an **admin-gated marketing-credentials** section
+  (`canViewBenchCredentials` in `src/lib/permissions.ts`, masked password +
+  Reveal). New enums `BenchPriority`/`BenchMarketingStatus`/`BenchEngagement`;
+  `BC-001` display IDs; `Note`/`Activity` gained `benchConsultantId`. Migrations
+  `20260620120000` (P0 enum/user fields) + `20260620130000`.
+- **P2 — Submission bench fields:** `engagement` (C2C/W2), `vendorRecruiterName`,
+  `jobDuties` on `Submission` (migration `20260620140000`); wired through
+  form/edit/table (hidden-by-default cols)/detail. `SUBMISSION_UPDATED` covers it.
+- **P3 — Interviews list:** standalone read-only `/interviews` roll-up
+  (`listInterviews`) of every scheduled round, linking to candidate + submission.
+- **P4 — Vendor Portal:** Jobs "Randstad iLabor" source tab relabeled →
+  "Vendor Portal" (**label only** — `randstad` key + portal-name filter intact).
+- **P5 — Monthly Performance:** added `SubmissionStatus.BACKED_OUT` (migration
+  `20260620150000`, standalone enum-add) + the exhaustive-map fan-out
+  (`labels.ts`, `validation/submission.ts` `SUBMISSION_STATUS_VALUES` — which
+  also closed a pre-existing missing-`OFFER_ACCEPTED` gap, `reports.ts`
+  `TERMINAL`, `dashboard.ts` active-pipeline `notIn`). `/reports` became a
+  `?tab=` router (`reports-tabs.tsx` + `analytics-tab.tsx` (old body moved
+  verbatim) + `monthly-performance-tab.tsx`); Analytics is the no-param default
+  so its filters/pagination are unchanged. `getMonthlyScorecard`
+  (`src/server/queries/monthly-scorecard.ts`, in-memory Mon-start weekly buckets
+  via date-fns `eachWeekOfInterval`) drives `scorecard-grid.tsx` (2-row grouped
+  header, sticky recruiter col, team Total + grand Total rows, red non-zero
+  Backouts) + `scorecard-picker.tsx` (`?month=YYYY-MM&team=`). Metrics:
+  Submissions/Backouts (on `submittedAt`), Interviews (round `scheduledAt`),
+  New vendors (recruiter's first-ever submit to a vendor), Closures (placement
+  `startDate`). Seed sets `User.empId` (`EMP-101..`) + teams Alpha/Beta;
+  `prisma/backfill-emp-team.ts` for real data. **Also fixed:** `seed-demo` wipe
+  was missing Placements/Documents/Bench (FK violation on re-seed) — now a
+  comprehensive FK-safe cascade.
+
+> **Migration workflow (non-interactive shell):** `prisma migrate dev` is
+> interactive — instead hand-write the SQL under `prisma/migrations/<ts>_<name>/`
+> then `prisma migrate deploy` + `prisma generate`. **After `generate`, RESTART
+> the dev server** (HMR does not reload the regenerated client) — which also
+> **logs you out** (session cookie), so re-login after a restart.
+
+## Round 4 pre-demo (Documents → Placements → Export)
 
 Admin handed over a new pre-demo requirements bundle on 2026-05-28.
 The full plan + UI/UX shape + code-review fixes live in

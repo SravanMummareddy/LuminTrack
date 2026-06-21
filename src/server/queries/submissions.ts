@@ -149,6 +149,9 @@ export function getSubmissionForEdit(id: string) {
       submittedAt: true,
       candidateResumeId: true,
       resumeDriveLink: true,
+      engagement: true,
+      vendorRecruiterName: true,
+      jobDuties: true,
       job: { select: { title: true } },
       submittedBy: { select: { fullName: true } },
       candidate: {

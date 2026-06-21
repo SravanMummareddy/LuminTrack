@@ -510,7 +510,7 @@ export async function getReportsData(
       }
     }
     // Still sitting in the current stage (unless it's terminal).
-    const TERMINAL: SubmissionStatus[] = ["JOINED", "REJECTED", "ON_HOLD"];
+    const TERMINAL: SubmissionStatus[] = ["JOINED", "REJECTED", "ON_HOLD", "BACKED_OUT"];
     if (!TERMINAL.includes(prevStatus)) {
       push(ongoingBuckets, prevStatus, daysBetween(prevTime, NOW));
     }

@@ -6,6 +6,7 @@ import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { Button, buttonClass } from "@/components/ui/button";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 import { isLikelyDriveUrl, DRIVE_LINK_WARNING } from "@/lib/validation/resume";
+import { BENCH_ENGAGEMENTS, BENCH_ENGAGEMENT_LABEL } from "@/lib/labels";
 
 type ResumeOption = { id: string; label: string; driveLink: string };
 
@@ -21,6 +22,9 @@ type EditValues = {
   submissionNotes: string;
   /** The raw submitted date — converted to a datetime-local value in the form. */
   submittedAt: Date | string;
+  engagement: string;
+  vendorRecruiterName: string;
+  jobDuties: string;
 };
 
 type Fields = {
@@ -30,6 +34,9 @@ type Fields = {
   submittedAt: string;
   newResumeLabel: string;
   newResumeLink: string;
+  engagement: string;
+  vendorRecruiterName: string;
+  jobDuties: string;
 };
 
 const NEW_RESUME = "__new__";
@@ -82,6 +89,9 @@ export function SubmissionEditForm({
     submittedAt: toDateTimeLocal(values.submittedAt),
     newResumeLabel: "",
     newResumeLink: "",
+    engagement: values.engagement,
+    vendorRecruiterName: values.vendorRecruiterName,
+    jobDuties: values.jobDuties,
   });
   const set =
     (name: keyof Fields) =>
@@ -207,6 +217,40 @@ export function SubmissionEditForm({
           </Field>
         </div>
       )}
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="Engagement" htmlFor="engagement" error={errors.engagement} hint="Bench/W2 — for bench-sales submissions.">
+          <Select
+            id="engagement"
+            name="engagement"
+            value={fields.engagement}
+            onChange={set("engagement")}
+          >
+            <option value="">—</option>
+            {BENCH_ENGAGEMENTS.map((e) => (
+              <option key={e} value={e}>{BENCH_ENGAGEMENT_LABEL[e]}</option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Vendor recruiter name" htmlFor="vendorRecruiterName" error={errors.vendorRecruiterName}>
+          <Input
+            id="vendorRecruiterName"
+            name="vendorRecruiterName"
+            value={fields.vendorRecruiterName}
+            onChange={set("vendorRecruiterName")}
+          />
+        </Field>
+      </div>
+
+      <Field label="Job duties" htmlFor="jobDuties" error={errors.jobDuties}>
+        <Textarea
+          id="jobDuties"
+          name="jobDuties"
+          rows={3}
+          value={fields.jobDuties}
+          onChange={set("jobDuties")}
+        />
+      </Field>
 
       <Field
         label="Submission notes"

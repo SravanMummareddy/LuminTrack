@@ -1,19 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { Table, Th, Td, cardLink, cardLinkRaise } from "@/components/ui/table";
+import { Table, Th, Td, cardLink } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { MobileSort } from "@/components/ui/mobile-sort";
 import { Badge } from "@/components/ui/badge";
 import { ColumnsMenu } from "@/components/ui/columns-menu";
 import {
-  SUBMISSION_STATUS_LABEL,
-  SUBMISSION_STATUS_TONE,
-  BENCH_ENGAGEMENT_LABEL,
+  BENCH_PRIORITY_LABEL,
+  BENCH_PRIORITY_TONE,
+  BENCH_MARKETING_STATUS_LABEL,
+  BENCH_MARKETING_STATUS_TONE,
 } from "@/lib/labels";
-import { formatDate, formatSubmissionDisplayId } from "@/lib/format";
+import { formatBenchConsultantDisplayId, formatRate } from "@/lib/format";
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
-import type { SubmissionListRow } from "@/server/queries/submissions";
+import type { BenchListRow } from "@/server/queries/bench-consultants";
 
 type Column = {
   key: string;
@@ -22,8 +23,13 @@ type Column = {
   sortDefaultDir?: "asc" | "desc";
   align?: "right";
   defaultVisible: boolean;
-  render: (row: SubmissionListRow, rowNumber: number) => React.ReactNode;
+  render: (row: BenchListRow, rowNumber: number) => React.ReactNode;
 };
+
+function yearsLabel(n: number | null): string | null {
+  if (n === null) return null;
+  return `${n} yr${n === 1 ? "" : "s"}`;
+}
 
 const COLUMNS: Column[] = [
   {
@@ -41,149 +47,180 @@ const COLUMNS: Column[] = [
     key: "id",
     label: "ID",
     defaultVisible: true,
-    render: (s) => (
+    render: (c) => (
       <Td label="ID" secondary className="whitespace-nowrap font-mono text-xs">
-        {formatSubmissionDisplayId(s)}
+        {formatBenchConsultantDisplayId(c)}
       </Td>
     ),
   },
   {
-    key: "candidate",
-    label: "Candidate",
-    sortKey: "candidate",
+    key: "name",
+    label: "Candidate Name",
+    sortKey: "name",
     defaultVisible: true,
-    render: (s) => (
+    render: (c) => (
       <Td heading>
         <Link
-          href={`/submissions/${s.id}`}
+          href={`/bench/${c.id}`}
           className={`${cardLink} font-medium text-indigo-600 hover:underline`}
         >
-          {s.candidate.fullName}
+          {c.fullName}
         </Link>
+        {!c.isActive && (
+          <span className="ml-2 text-xs text-slate-400">(inactive)</span>
+        )}
       </Td>
     ),
   },
   {
-    key: "job",
-    label: "Job",
-    sortKey: "job",
+    key: "priority",
+    label: "Priority",
+    sortKey: "priority",
     defaultVisible: true,
-    render: (s) => (
-      <Td label="Job">
-        <Link
-          href={`/jobs/${s.job.id}`}
-          className={`${cardLinkRaise} text-slate-700 hover:underline`}
-        >
-          {s.job.title}
-        </Link>
-      </Td>
-    ),
-  },
-  {
-    key: "client",
-    label: "Client",
-    sortKey: "client",
-    defaultVisible: true,
-    render: (s) => (
-      <Td label="Client" secondary>
-        {s.job.client.name}
-      </Td>
-    ),
-  },
-  {
-    key: "vendor",
-    label: "Vendor",
-    sortKey: "vendor",
-    defaultVisible: true,
-    render: (s) => (
-      <Td label="Vendor" secondary>
-        {s.job.vendor.name}
-      </Td>
-    ),
-  },
-  {
-    key: "recruiter",
-    label: "Submitted by",
-    sortKey: "recruiter",
-    defaultVisible: true,
-    render: (s) => (
-      <Td label="Submitted by" secondary>
-        {s.submittedBy.fullName}
-      </Td>
-    ),
-  },
-  {
-    key: "status",
-    label: "Status",
-    sortKey: "status",
-    defaultVisible: true,
-    render: (s) => (
-      <Td label="Status">
-        <Badge tone={SUBMISSION_STATUS_TONE[s.status]}>
-          {SUBMISSION_STATUS_LABEL[s.status]}
+    render: (c) => (
+      <Td label="Priority">
+        <Badge tone={BENCH_PRIORITY_TONE[c.priority]}>
+          {BENCH_PRIORITY_LABEL[c.priority]}
         </Badge>
       </Td>
     ),
   },
   {
-    key: "rounds",
-    label: "Rounds",
-    sortKey: "rounds",
-    sortDefaultDir: "desc",
+    key: "technology",
+    label: "Technology",
+    sortKey: "technology",
+    defaultVisible: true,
+    render: (c) => (
+      <Td label="Technology" secondary>
+        {c.technology ?? "—"}
+      </Td>
+    ),
+  },
+  {
+    key: "visa",
+    label: "Visa",
+    defaultVisible: true,
+    render: (c) => {
+      const primary = c.mVisa || c.workAuthorization || c.aVisa;
+      const secondary = c.mVisa && c.aVisa ? c.aVisa : null;
+      return (
+        <Td label="Visa" secondary>
+          {primary ?? "—"}
+          {secondary && (
+            <div className="text-xs text-slate-400">{secondary}</div>
+          )}
+        </Td>
+      );
+    },
+  },
+  {
+    key: "experience",
+    label: "Experience",
     align: "right",
     defaultVisible: true,
-    render: (s) => (
-      <Td label="Rounds" className="text-right tabular-nums">
-        {s._count.interviewRounds}
-      </Td>
-    ),
+    render: (c) => {
+      const marketing = yearsLabel(c.marketingExpYears);
+      const real = yearsLabel(c.realTimeExpYears);
+      return (
+        <Td label="Experience" secondary className="text-right tabular-nums">
+          {marketing ?? real ?? "—"}
+          {marketing && real && (
+            <div className="text-xs text-slate-400">{real} real-time</div>
+          )}
+        </Td>
+      );
+    },
   },
   {
-    key: "submitted",
-    label: "Submitted",
-    sortKey: "submitted",
-    sortDefaultDir: "desc",
+    key: "location",
+    label: "Location",
+    sortKey: "location",
     defaultVisible: true,
-    render: (s) => (
-      <Td label="Submitted" secondary className="whitespace-nowrap">
-        {formatDate(s.submittedAt)}
+    render: (c) => (
+      <Td label="Location" secondary>
+        {c.currentLocation ?? "—"}
       </Td>
     ),
   },
   {
-    key: "engagement",
-    label: "Engagement",
-    defaultVisible: false,
-    render: (s) => (
-      <Td label="Engagement" secondary>
-        {s.engagement ? BENCH_ENGAGEMENT_LABEL[s.engagement] : "—"}
+    key: "relocation",
+    label: "Relocation",
+    defaultVisible: true,
+    render: (c) => (
+      <Td label="Relocation" secondary>
+        {c.relocation ? "Yes" : "No"}
       </Td>
     ),
   },
   {
-    key: "vendorRecruiter",
-    label: "Vendor recruiter",
+    key: "recruiter",
+    label: "Recruiter",
+    sortKey: "recruiter",
+    defaultVisible: true,
+    render: (c) => (
+      <Td label="Recruiter" secondary>
+        {c.recruiter?.fullName ?? "—"}
+      </Td>
+    ),
+  },
+  {
+    key: "status",
+    label: "Marketing status",
+    sortKey: "status",
     defaultVisible: false,
-    render: (s) => (
-      <Td label="Vendor recruiter" secondary>
-        {s.vendorRecruiterName ?? "—"}
+    render: (c) => (
+      <Td label="Marketing status">
+        <Badge tone={BENCH_MARKETING_STATUS_TONE[c.marketingStatus]}>
+          {BENCH_MARKETING_STATUS_LABEL[c.marketingStatus]}
+        </Badge>
+      </Td>
+    ),
+  },
+  {
+    key: "company",
+    label: "Company",
+    defaultVisible: false,
+    render: (c) => (
+      <Td label="Company" secondary>
+        {c.company ?? "—"}
+      </Td>
+    ),
+  },
+  {
+    key: "leastRate",
+    label: "Least C2C",
+    align: "right",
+    defaultVisible: false,
+    render: (c) => (
+      <Td label="Least C2C" className="text-right tabular-nums">
+        {formatRate(c.leastRateC2C)}
+      </Td>
+    ),
+  },
+  {
+    key: "linked",
+    label: "Candidate link",
+    defaultVisible: false,
+    render: (c) => (
+      <Td label="Candidate link" secondary>
+        {c.candidateId ? "Linked" : "—"}
       </Td>
     ),
   },
 ];
 
-const STORAGE_KEY = "lumintrack.submissions.columns";
-const STORAGE_VERSION = 2;
+const STORAGE_KEY = "lumintrack.bench.columns";
+const STORAGE_VERSION = 1;
 const DEFAULTS: ColumnPrefs = {
   visible: COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key),
   order: COLUMNS.map((c) => c.key),
 };
 
-export function SubmissionsTable({
+export function BenchRosterTable({
   rows,
   pageOffset = 0,
 }: {
-  rows: SubmissionListRow[];
+  rows: BenchListRow[];
   pageOffset?: number;
 }) {
   const [prefs, setPrefs] = useColumnPrefs(
@@ -272,9 +309,8 @@ function RenderCell({
   rowNumber,
 }: {
   column: Column;
-  row: SubmissionListRow;
+  row: BenchListRow;
   rowNumber: number;
 }) {
   return <>{column.render(row, rowNumber)}</>;
 }
-

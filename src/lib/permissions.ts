@@ -32,3 +32,11 @@ export function canViewSensitiveDocs(viewer: Viewer | null | undefined): boolean
 export function canManageSensitiveDocs(viewer: Viewer | null | undefined): boolean {
   return viewer?.role === "ADMIN";
 }
+
+// Bench-Sales — the marketing email/password stored on a BenchConsultant are
+// shared portal credentials. Detail-page only, never a list column or export.
+// Admin-only for now (mirrors the sensitive-docs rule); when per-recruiter
+// ownership lands, widen this to "admin OR the consultant's recruiter".
+export function canViewBenchCredentials(viewer: Viewer | null | undefined): boolean {
+  return viewer?.role === "ADMIN";
+}

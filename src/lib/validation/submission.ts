@@ -17,7 +17,9 @@ export const SUBMISSION_STATUS_VALUES = [
   "REJECTED",
   "ON_HOLD",
   "OFFER_RELEASED",
+  "OFFER_ACCEPTED",
   "JOINED",
+  "BACKED_OUT",
 ] as const;
 
 /**
@@ -43,6 +45,17 @@ type ResumeFields = {
   candidateResumeId?: string;
   newResumeLabel?: string;
   newResumeLink?: string;
+};
+
+/** Bench-Sales fields shared by the create- and edit-submission forms. All
+ *  optional — regular (non-bench) submissions leave them blank. */
+const benchFields = {
+  engagement: z.preprocess(
+    emptyToUndefined,
+    z.enum(["C2C", "W2"]).optional(),
+  ),
+  vendorRecruiterName: optionalText,
+  jobDuties: optionalText,
 };
 
 function refineResumeChoice(d: ResumeFields, ctx: z.RefinementCtx) {
@@ -75,6 +88,7 @@ export const submissionSchema = z
     jobId: z.string().min(1, "Missing job reference."),
     submittedById: z.string().min(1, "Select the submitting recruiter."),
     ...resumeFields,
+    ...benchFields,
   })
   .superRefine(refineResumeChoice);
 
@@ -88,6 +102,7 @@ export type SubmissionInput = z.infer<typeof submissionSchema>;
 export const submissionEditSchema = z
   .object({
     ...resumeFields,
+    ...benchFields,
     // datetime-local string → Date; an empty/invalid value fails validation.
     submittedAt: z.coerce.date(),
   })
