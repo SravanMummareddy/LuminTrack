@@ -54,6 +54,28 @@ export async function seedBasics(prisma: PrismaClient) {
   return { user, client, vendor, candidate, job, submission };
 }
 
+/** Loose actors for the createSubmission gate tests: an admin, an unassigned
+ *  recruiter, a candidate, and a client/vendor pair. Jobs are created per-test
+ *  (with the iLabor flags each gate needs) via the returned ids. */
+export async function seedSubmissionScenario(prisma: PrismaClient) {
+  const [admin, recruiter] = await Promise.all([
+    prisma.user.create({
+      data: { fullName: "Admin", email: "admin@test.local", passwordHash: "x", role: "ADMIN" },
+    }),
+    prisma.user.create({
+      data: { fullName: "Rec One", email: "rec1@test.local", passwordHash: "x", role: "RECRUITER" },
+    }),
+  ]);
+  const [client, vendor] = await Promise.all([
+    prisma.client.create({ data: { name: "Test Client" } }),
+    prisma.vendor.create({ data: { name: "Test Vendor" } }),
+  ]);
+  const candidate = await prisma.candidate.create({
+    data: { fullName: "Bench Candidate", status: "AVAILABLE", createdBy: { connect: { id: admin.id } } },
+  });
+  return { admin, recruiter, client, vendor, candidate };
+}
+
 /** A placement owned by `recruiterA` (recruiter-of-record), plus an admin and an
  *  unrelated `recruiterB`. For the rate-permission gating tests. */
 export async function seedPlacementScenario(prisma: PrismaClient) {
