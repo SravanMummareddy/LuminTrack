@@ -14,7 +14,7 @@
 
 import type { DocumentCategory, UserRole } from "@/generated/prisma/enums";
 
-type Viewer = { role: UserRole };
+type Viewer = { role: UserRole; isTeamLead?: boolean };
 
 const SENSITIVE: ReadonlySet<DocumentCategory> = new Set<DocumentCategory>([
   "IDENTITY",
@@ -39,4 +39,13 @@ export function canManageSensitiveDocs(viewer: Viewer | null | undefined): boole
 // ownership lands, widen this to "admin OR the consultant's recruiter".
 export function canViewBenchCredentials(viewer: Viewer | null | undefined): boolean {
   return viewer?.role === "ADMIN";
+}
+
+// Vendor Portal Requirements — the pre-submission planning layer. Admins and
+// team leads decide the commercial terms (create/edit/cancel requirements);
+// recruiters convert them to submissions. `isTeamLead` is a capability flag on
+// User — a lead behaves as a RECRUITER everywhere else, so this is the only
+// branch that distinguishes them (cheaper than a third role).
+export function canManageRequirements(viewer: Viewer | null | undefined): boolean {
+  return viewer?.role === "ADMIN" || viewer?.isTeamLead === true;
 }

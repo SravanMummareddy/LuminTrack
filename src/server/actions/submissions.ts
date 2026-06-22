@@ -21,23 +21,7 @@ import {
   ensurePlacementOnJoined,
   terminatePlacementOnRevert,
 } from "@/server/placement-lifecycle";
-
-/**
- * Maps a `(candidateId, jobId)` pair to two signed 32-bit integers, suitable
- * for `pg_advisory_xact_lock(int, int)`. Collisions across unrelated pairs
- * are harmless — at worst two unrelated submits serialize briefly. Same-pair
- * inputs always produce the same key, so concurrent submits to the same
- * (candidate, job) reliably gate on each other.
- */
-function hashPair(a: string, b: string): { a: number; b: number } {
-  const hash = (s: string) => {
-    // djb2 — small, deterministic, no crypto dep. Final XOR fits int32.
-    let h = 5381;
-    for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i);
-    return h | 0;
-  };
-  return { a: hash(a), b: hash(b) };
-}
+import { createSubmissionRecord } from "@/server/submission-create";
 
 function readSubmission(formData: FormData) {
   return submissionSchema.safeParse({
@@ -129,20 +113,6 @@ export async function createSubmission(
     formData.get("ilaborOverrideReason") ?? "",
   ).trim();
 
-  // Non-terminal submission statuses — i.e. ones that still count against
-  // an iLabor cap. Excludes JOINED (slot already filled) and REJECTED
-  // (no longer in pipeline). Matches iLabor's own "active" definition.
-  const ACTIVE_STATUSES: SubmissionStatus[] = [
-    "SUBMITTED",
-    "RESUME_PICKED",
-    "VENDOR_SCREENING_CALL",
-    "CLIENT_INTERVIEW",
-    "SELECTED",
-    "ON_HOLD",
-    "OFFER_RELEASED",
-    "OFFER_ACCEPTED",
-  ];
-
   // Resolve a previously-saved résumé up front so a bad pick returns cleanly.
   let pickedResume: { id: string; driveLink: string } | null = null;
   if (d.resumeChoice === "existing" && d.candidateResumeId) {
@@ -160,163 +130,36 @@ export async function createSubmission(
     pickedResume = { id: resume.id, driveLink: resume.driveLink };
   }
 
-  // Two concurrent submits for the same (candidate, job) used to race past
-  // the duplicate check because the findFirst lived outside the transaction.
-  // We now wrap the check + create in one tx, gated by a Postgres advisory
-  // lock keyed on a stable hash of both ids. Same-pair submits serialize;
-  // unrelated pairs still run in parallel. Returns null from the tx when
-  // we need to bail with `needsConfirm` so the caller can show the prompt.
-  type CreateResult =
-    | { kind: "created"; submissionId: string }
-    | { kind: "duplicate"; existingId: string }
-    | { kind: "ilabor_closed" }
-    | { kind: "ilabor_cap"; cap: number; active: number };
-  const lockHash = hashPair(d.candidateId, d.jobId);
-  const result: CreateResult = await prisma.$transaction(async (tx) => {
-      // pg_advisory_xact_lock blocks until acquired and auto-releases at tx
-      // end. Two int4 keys derived from the (candidate, job) pair — see
-      // hashPair() below for the encoding.
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockHash.a}::int, ${lockHash.b}::int)`;
-
-      const existing = await tx.submission.findFirst({
-        where: { candidateId: d.candidateId, jobId: d.jobId },
-        select: { id: true },
-      });
-      if (existing && !duplicateReason)
-        return { kind: "duplicate", existingId: existing.id };
-
-      // iLabor "closed for submissions" gate. Fires when iLabor's
-      // submitStatus is 0 — independent of LuminTrack's job status. Override
-      // with a reason; otherwise stop and prompt.
-      if (job.ilaborSubmitOpen === 0 && !ilaborOverrideReason) {
-        return { kind: "ilabor_closed" };
-      }
-
-      // iLabor cap gate. We compute the "effective" active count as the max
-      // of iLabor's last-known active count and our local non-terminal sub
-      // count, so locally-created subs we haven't re-imported don't slip
-      // past the cap. Same lock + same tx means concurrent recruiters can't
-      // race past the cap.
-      if (job.submitLimit !== null && job.submitLimit !== undefined) {
-        const localActive = await tx.submission.count({
-          where: { jobId: d.jobId, status: { in: ACTIVE_STATUSES } },
-        });
-        const effectiveActive = Math.max(
-          job.externalActiveCount ?? 0,
-          localActive,
-        );
-        if (effectiveActive >= job.submitLimit && !ilaborOverrideReason) {
-          return {
-            kind: "ilabor_cap",
-            cap: job.submitLimit,
-            active: effectiveActive,
-          };
-        }
-      }
-
-      // Self-claim: a recruiter submitting to a job they don't own gets
-      // assigned to it here, in the same tx as the submission, so ownership and
-      // the submission commit together. The upsert is idempotent against
-      // @@unique([jobId, recruiterId]) — a concurrent claim is a harmless no-op
-      // (no P2002) — and we only log RECRUITER_ASSIGNED when we actually create.
-      if (!isAdmin) {
-        const owned = await tx.jobAssignment.findFirst({
-          where: { jobId: d.jobId, recruiterId: user.id },
-          select: { id: true },
-        });
-        if (!owned) {
-          await tx.jobAssignment.upsert({
-            where: {
-              jobId_recruiterId: { jobId: d.jobId, recruiterId: user.id },
-            },
-            create: {
-              jobId: d.jobId,
-              recruiterId: user.id,
-              assignedById: user.id,
-            },
-            update: {},
-          });
-          await logActivity(tx, {
-            entityType: "JOB",
-            action: "RECRUITER_ASSIGNED",
-            description: `${user.fullName} claimed this job`,
-            performedById: user.id,
-            jobId: d.jobId,
-          });
-        }
-      }
-
-      // Settle the résumé: an existing library entry, a new one, or none.
-      let candidateResumeId: string | null = null;
-      let resumeSnapshot: string | null = null;
-
-      if (pickedResume) {
-        candidateResumeId = pickedResume.id;
-        resumeSnapshot = pickedResume.driveLink;
-      } else if (
-        d.resumeChoice === "new" &&
-        d.newResumeLabel &&
-        d.newResumeLink
-      ) {
-        const newResume = await tx.candidateResume.create({
-          data: {
-            candidateId: d.candidateId,
-            label: d.newResumeLabel,
-            driveLink: d.newResumeLink,
-          },
-        });
-        candidateResumeId = newResume.id;
-        resumeSnapshot = newResume.driveLink;
-        await logActivity(tx, {
-          entityType: "CANDIDATE",
-          action: "RESUME_UPDATED",
-          description: `Resume "${newResume.label}" added`,
-          performedById: user.id,
-          candidateId: d.candidateId,
-        });
-      }
-
-      const created = await tx.submission.create({
-        data: {
-          candidateId: d.candidateId,
-          jobId: d.jobId,
-          submittedById: d.submittedById,
-          candidateRate: d.candidateRate ?? null,
-          candidateResumeId,
-          // Snapshot the link used so it survives résumé edits/deletes.
-          resumeDriveLink: resumeSnapshot,
-          submissionNotes: d.submissionNotes ?? null,
-          duplicateReason: existing ? duplicateReason : null,
-          engagement: d.engagement ?? null,
-          vendorRecruiterName: d.vendorRecruiterName ?? null,
-          jobDuties: d.jobDuties ?? null,
-          payRate: d.payRate ?? null,
-          billRate: d.billRate ?? null,
-          teamLead: d.teamLead ?? null,
-        },
-      });
-      // Compose an audit note carrying every override reason that fired,
-      // so the trail later explains why a submission got through despite
-      // the duplicate / closed / cap gates.
-      const notes: string[] = [];
-      if (existing) notes.push(`duplicate:${duplicateReason}`);
-      if (ilaborOverrideReason)
-        notes.push(`ilabor-override:${ilaborOverrideReason}`);
-      const description = existing
-        ? `${candidate.fullName} re-submitted to "${job.title}" (duplicate override: ${duplicateReason})`
-        : ilaborOverrideReason
-          ? `${candidate.fullName} submitted to "${job.title}" (iLabor override: ${ilaborOverrideReason})`
-          : `${candidate.fullName} submitted to "${job.title}"`;
-      await logActivity(tx, {
-        entityType: "SUBMISSION",
-        action: "CANDIDATE_SUBMITTED",
-        description,
-        note: notes.length ? notes.join("; ") : null,
-        performedById: user.id,
-        submissionId: created.id,
-      });
-      return { kind: "created", submissionId: created.id };
-  });
+  // One transaction, advisory-locked on the (candidate, job) pair. The actual
+  // create + gates live in the shared createSubmissionRecord helper, which the
+  // requirement→submission convert flow reuses. Overridable gates come back as
+  // a tagged union so we can surface the right `needsConfirm` prompt.
+  const newResume =
+    !pickedResume && d.resumeChoice === "new" && d.newResumeLabel && d.newResumeLink
+      ? { label: d.newResumeLabel, link: d.newResumeLink }
+      : null;
+  const result = await prisma.$transaction((tx) =>
+    createSubmissionRecord(tx, {
+      candidateId: d.candidateId,
+      jobId: d.jobId,
+      submittedById: d.submittedById,
+      candidateRate: d.candidateRate ?? null,
+      submissionNotes: d.submissionNotes ?? null,
+      engagement: d.engagement ?? null,
+      vendorRecruiterName: d.vendorRecruiterName ?? null,
+      jobDuties: d.jobDuties ?? null,
+      payRate: d.payRate ?? null,
+      billRate: d.billRate ?? null,
+      teamLead: d.teamLead ?? null,
+      pickedResume,
+      newResume,
+      duplicateReason,
+      ilaborOverrideReason,
+      job,
+      candidateFullName: candidate.fullName,
+      actor: { id: user.id, fullName: user.fullName, isAdmin },
+    }),
+  );
 
   if (result.kind === "duplicate") {
     return {

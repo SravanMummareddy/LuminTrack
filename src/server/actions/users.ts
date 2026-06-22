@@ -22,6 +22,7 @@ export async function saveUser(
     email: formData.get("email") ?? "",
     role: formData.get("role") ?? "RECRUITER",
     isActive: formData.get("isActive") != null,
+    isTeamLead: formData.get("isTeamLead") != null,
     password: formData.get("password") ?? "",
   };
   const parsed = id
@@ -42,6 +43,7 @@ export async function saveUser(
     email: parsed.data.email.toLowerCase(),
     role: parsed.data.role,
     isActive: parsed.data.isActive,
+    isTeamLead: parsed.data.isTeamLead,
   };
 
   try {

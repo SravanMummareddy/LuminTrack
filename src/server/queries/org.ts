@@ -63,6 +63,7 @@ export function listUsers() {
       email: true,
       role: true,
       isActive: true,
+      isTeamLead: true,
       createdAt: true,
     },
   });
