@@ -1,5 +1,13 @@
 import { prisma } from "@/server/db";
-import { SUB_PAGE_SIZE as PAGE_SIZE } from "@/lib/filters";
+import type { Prisma } from "@/generated/prisma/client";
+import {
+  SUB_PAGE_SIZE as PAGE_SIZE,
+  PAGE_SIZE as LIST_PAGE_SIZE,
+  searchTerms,
+  type DateRange,
+  type SortDir,
+  type SortState,
+} from "@/lib/filters";
 
 /**
  * Interview rounds across all of a candidate's submissions — powers the
@@ -88,6 +96,7 @@ export async function getCandidateInterviewsGroupedByJob(
           interviewerName: true,
           scheduledAt: true,
           result: true,
+          supportNeeded: true,
           feedback: true,
         },
       },
@@ -99,4 +108,104 @@ export async function getCandidateInterviewsGroupedByJob(
 
 export type CandidateInterviewGroup = Awaited<
   ReturnType<typeof getCandidateInterviewsGroupedByJob>
+>["rows"][number];
+
+// ─── Standalone interviews list (the "Interviews" tab) ───────────────────────
+
+export type InterviewListFilters = {
+  q?: string;
+  recruiterId?: string[];
+  scheduledRange?: DateRange;
+  sort?: SortState;
+  page?: number;
+};
+
+const INTERVIEW_SORTS: Record<
+  string,
+  (d: SortDir) => Prisma.InterviewRoundOrderByWithRelationInput
+> = {
+  date: (d) => ({ scheduledAt: d }),
+  candidate: (d) => ({ submission: { candidate: { fullName: d } } }),
+  client: (d) => ({ submission: { job: { client: { name: d } } } }),
+};
+
+export const INTERVIEW_SORT_KEYS = Object.keys(INTERVIEW_SORTS);
+export const INTERVIEW_DEFAULT_SORT: SortState = { key: "date", dir: "desc" };
+
+/**
+ * Read-only roll-up of every scheduled interview round across all submissions —
+ * the standalone Interviews list. Undated rounds are excluded so a date-sorted
+ * sheet stays clean. Each row links back to its candidate and submission.
+ */
+export async function listInterviews(filters: InterviewListFilters) {
+  const where: Prisma.InterviewRoundWhereInput = { scheduledAt: { not: null } };
+  if (filters.scheduledRange?.gte || filters.scheduledRange?.lte)
+    where.scheduledAt = { not: null, ...filters.scheduledRange };
+  if (filters.recruiterId?.length)
+    where.submission = { submittedById: { in: filters.recruiterId } };
+  const terms = searchTerms(filters.q);
+  if (terms.length)
+    where.AND = terms.map((t) => ({
+      OR: [
+        {
+          submission: {
+            candidate: { fullName: { contains: t, mode: "insensitive" } },
+          },
+        },
+        {
+          submission: { job: { title: { contains: t, mode: "insensitive" } } },
+        },
+        {
+          submission: {
+            job: { client: { name: { contains: t, mode: "insensitive" } } },
+          },
+        },
+      ],
+    }));
+
+  const sort = filters.sort ?? INTERVIEW_DEFAULT_SORT;
+  const sortFn = INTERVIEW_SORTS[sort.key] ?? INTERVIEW_SORTS.date;
+  const orderBy: Prisma.InterviewRoundOrderByWithRelationInput[] = [
+    sortFn(sort.dir),
+    { id: "asc" },
+  ];
+
+  const total = await prisma.interviewRound.count({ where });
+  const totalPages = Math.max(1, Math.ceil(total / LIST_PAGE_SIZE));
+  const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
+
+  const rows = await prisma.interviewRound.findMany({
+    where,
+    orderBy,
+    skip: (page - 1) * LIST_PAGE_SIZE,
+    take: LIST_PAGE_SIZE,
+    select: {
+      id: true,
+      roundOrder: true,
+      roundName: true,
+      interviewType: true,
+      scheduledAt: true,
+      result: true,
+      supportNeeded: true,
+      submission: {
+        select: {
+          id: true,
+          seq: true,
+          candidate: {
+            select: { id: true, fullName: true, skills: true, featuredSkills: true },
+          },
+          job: {
+            select: { id: true, title: true, client: { select: { name: true } } },
+          },
+          submittedBy: { select: { fullName: true } },
+        },
+      },
+    },
+  });
+
+  return { rows, total, page };
+}
+
+export type InterviewListRow = Awaited<
+  ReturnType<typeof listInterviews>
 >["rows"][number];

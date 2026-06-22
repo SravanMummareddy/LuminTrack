@@ -5,6 +5,7 @@ import { Table, Th, Td, cardLink, cardLinkRaise } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { MobileSort } from "@/components/ui/mobile-sort";
 import { ColumnsMenu } from "@/components/ui/columns-menu";
+import { BENCH_ENGAGEMENT_LABEL } from "@/lib/labels";
 import { SubmissionStatusCell } from "@/components/submissions/submission-status-cell";
 import { formatDate, formatSubmissionDisplayId } from "@/lib/format";
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
@@ -171,12 +172,89 @@ const COLUMNS: Column[] = [
       </Td>
     ),
   },
+  {
+    key: "engagement",
+    label: "Engagement",
+    defaultVisible: false,
+    render: (s) => (
+      <Td label="Engagement" secondary>
+        {s.engagement ? BENCH_ENGAGEMENT_LABEL[s.engagement] : "—"}
+      </Td>
+    ),
+  },
+  {
+    key: "vendorRecruiter",
+    label: "Vendor recruiter",
+    defaultVisible: false,
+    render: (s) => (
+      <Td label="Vendor recruiter" secondary>
+        {s.vendorRecruiterName ?? "—"}
+      </Td>
+    ),
+  },
+  {
+    key: "payRate",
+    label: "Pay rate",
+    defaultVisible: false,
+    render: (s) => (
+      <Td label="Pay rate" secondary className="tabular-nums">
+        {s.payRate != null ? `$${s.payRate}/hr` : "—"}
+      </Td>
+    ),
+  },
+  {
+    key: "billRate",
+    label: "Bill rate",
+    defaultVisible: false,
+    render: (s) => (
+      <Td label="Bill rate" secondary className="tabular-nums">
+        {s.billRate != null ? `$${s.billRate}/hr` : "—"}
+      </Td>
+    ),
+  },
+  {
+    key: "teamLead",
+    label: "Team lead",
+    defaultVisible: false,
+    render: (s) => (
+      <Td label="Team lead" secondary>
+        {s.teamLead ?? "—"}
+      </Td>
+    ),
+  },
+  {
+    key: "resume",
+    label: "Submitted resume",
+    defaultVisible: false,
+    render: (s) => {
+      const link = s.candidateResume?.driveLink ?? s.resumeDriveLink;
+      const label = s.candidateResume?.label ?? (link ? "Resume" : null);
+      return (
+        <Td label="Submitted resume" secondary>
+          {link ? (
+            <a
+              href={link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-indigo-600 hover:underline"
+            >
+              {label}
+            </a>
+          ) : (
+            "—"
+          )}
+        </Td>
+      );
+    },
+  },
 ];
 
 const STORAGE_KEY = "lumintrack.submissions.columns";
-// Bumped to 2 for Round 5: adds the Days-in-stage column and drops S.No from
-// the default-visible set, so existing saved prefs should reset to the new defaults.
-const STORAGE_VERSION = 2;
+// Bumped to 4 at the bench-sales × Round 5 merge: Round 5 added the
+// Days-in-stage column + dropped S.No from defaults (was v2); the bench-sales
+// work added engagement/pay/bill/team-lead/resume columns (was v3). Bump past
+// both so every existing saved pref resets to the combined new defaults.
+const STORAGE_VERSION = 4;
 const DEFAULTS: ColumnPrefs = {
   visible: COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key),
   order: COLUMNS.map((c) => c.key),
@@ -185,14 +263,25 @@ const DEFAULTS: ColumnPrefs = {
 export function SubmissionsTable({
   rows,
   pageOffset = 0,
+  storageKey = STORAGE_KEY,
+  defaultVisibleKeys,
 }: {
   rows: SubmissionListRow[];
   pageOffset?: number;
+  /** Override the localStorage key so a scoped view (e.g. Vendor Portal) keeps
+   *  its own column prefs separate from the main Submissions list. */
+  storageKey?: string;
+  /** Override which columns are visible by default (the Vendor Portal view
+   *  surfaces the sheet's Pay/Bill/C2C-W2/resume columns up front). */
+  defaultVisibleKeys?: string[];
 }) {
+  const defaults: ColumnPrefs = defaultVisibleKeys
+    ? { visible: defaultVisibleKeys, order: COLUMNS.map((c) => c.key) }
+    : DEFAULTS;
   const [prefs, setPrefs] = useColumnPrefs(
-    STORAGE_KEY,
+    storageKey,
     STORAGE_VERSION,
-    DEFAULTS,
+    defaults,
   );
 
   const byKey = new Map(COLUMNS.map((c) => [c.key, c]));
@@ -213,7 +302,7 @@ export function SubmissionsTable({
           columns={orderedCols.map((c) => ({ key: c.key, label: c.label }))}
           prefs={prefs}
           onChange={setPrefs}
-          defaults={DEFAULTS}
+          defaults={defaults}
         />
       </div>
 

@@ -17,6 +17,8 @@ export type LogActivityInput = {
   candidateId?: string;
   submissionId?: string;
   interviewRoundId?: string;
+  benchConsultantId?: string;
+  requirementId?: string;
 };
 
 /**
@@ -40,6 +42,8 @@ export function logActivity(db: Prisma.TransactionClient, input: LogActivityInpu
       candidateId: input.candidateId ?? null,
       submissionId: input.submissionId ?? null,
       interviewRoundId: input.interviewRoundId ?? null,
+      benchConsultantId: input.benchConsultantId ?? null,
+      requirementId: input.requirementId ?? null,
     },
   });
 }

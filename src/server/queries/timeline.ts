@@ -1,7 +1,12 @@
 import { prisma } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
 
-export type TimelineEntityType = "JOB" | "CANDIDATE" | "SUBMISSION";
+export type TimelineEntityType =
+  | "JOB"
+  | "CANDIDATE"
+  | "SUBMISSION"
+  | "CONSULTANT"
+  | "REQUIREMENT";
 
 /**
  * Hard ceiling on how many activity rows a single timeline view will fetch.
@@ -23,7 +28,14 @@ export async function getTimelineFor(
 ) {
   const or: Prisma.ActivityWhereInput[] = [];
 
-  if (entityType === "SUBMISSION") {
+  if (entityType === "CONSULTANT") {
+    // Bench consultant — own activity only (no descendant entities yet).
+    or.push({ benchConsultantId: id });
+  } else if (entityType === "REQUIREMENT") {
+    // Vendor Portal Requirement — own activity only (its converted submission
+    // keeps its own timeline on the submission detail page).
+    or.push({ requirementId: id });
+  } else if (entityType === "SUBMISSION") {
     or.push({ submissionId: id });
     const rounds = await prisma.interviewRound.findMany({
       where: { submissionId: id },

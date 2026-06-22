@@ -2,7 +2,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import type { JobStatus, SubmissionStatus } from "@/generated/prisma/enums";
 import type { BadgeTone } from "@/lib/labels";
 import { JOB_STATUSES, SUBMISSION_STATUSES, OTHER_SOURCE } from "@/lib/labels";
-import { parseDateRange, type DateRange } from "@/lib/filters";
+import { parseDateRange, parseList, type DateRange } from "@/lib/filters";
 
 /** Hex equivalents of the badge tones, for Recharts (which needs real colours). */
 export const TONE_HEX: Record<BadgeTone, string> = {
@@ -107,10 +107,10 @@ export function currentStageDays(
  */
 export type AnalyticsFilters = {
   dateRange?: DateRange;
-  recruiterId?: string;
+  recruiterId?: string[];
   sisterCompanySourceId?: string;
-  clientId?: string;
-  vendorId?: string;
+  clientId?: string[];
+  vendorId?: string[];
   jobStatus?: JobStatus;
   submissionStatus?: SubmissionStatus;
 };
@@ -124,13 +124,13 @@ export function buildJobWhere(f: AnalyticsFilters): Prisma.JobWhereInput {
   const where: Prisma.JobWhereInput = {};
   if (hasRange(f.dateRange)) where.createdAt = f.dateRange;
   if (f.jobStatus) where.status = f.jobStatus;
-  if (f.clientId) where.clientId = f.clientId;
-  if (f.vendorId) where.vendorId = f.vendorId;
+  if (f.clientId?.length) where.clientId = { in: f.clientId };
+  if (f.vendorId?.length) where.vendorId = { in: f.vendorId };
   if (f.sisterCompanySourceId)
     where.sisterCompanySourceId =
       f.sisterCompanySourceId === OTHER_SOURCE ? null : f.sisterCompanySourceId;
-  if (f.recruiterId)
-    where.assignments = { some: { recruiterId: f.recruiterId } };
+  if (f.recruiterId?.length)
+    where.assignments = { some: { recruiterId: { in: f.recruiterId } } };
   return where;
 }
 
@@ -141,11 +141,11 @@ export function buildSubmissionWhere(
   const where: Prisma.SubmissionWhereInput = {};
   if (hasRange(f.dateRange)) where.submittedAt = f.dateRange;
   if (f.submissionStatus) where.status = f.submissionStatus;
-  if (f.recruiterId) where.submittedById = f.recruiterId;
+  if (f.recruiterId?.length) where.submittedById = { in: f.recruiterId };
 
   const job: Prisma.JobWhereInput = {};
-  if (f.clientId) job.clientId = f.clientId;
-  if (f.vendorId) job.vendorId = f.vendorId;
+  if (f.clientId?.length) job.clientId = { in: f.clientId };
+  if (f.vendorId?.length) job.vendorId = { in: f.vendorId };
   if (f.sisterCompanySourceId)
     job.sisterCompanySourceId =
       f.sisterCompanySourceId === OTHER_SOURCE ? null : f.sisterCompanySourceId;
@@ -221,9 +221,9 @@ export function parseAnalyticsParams(sp: RawSearchParams): {
       from: current.from,
       to: current.to,
     }),
-    recruiterId: current.recruiterId,
-    clientId: current.clientId,
-    vendorId: current.vendorId,
+    recruiterId: parseList(sp.recruiterId),
+    clientId: parseList(sp.clientId),
+    vendorId: parseList(sp.vendorId),
     sisterCompanySourceId: current.sisterCompanySourceId,
     jobStatus,
     submissionStatus,
@@ -231,9 +231,9 @@ export function parseAnalyticsParams(sp: RawSearchParams): {
 
   const hasFilters = Boolean(
     (current.preset && current.preset !== "all") ||
-      current.recruiterId ||
-      current.clientId ||
-      current.vendorId ||
+      filters.recruiterId ||
+      filters.clientId ||
+      filters.vendorId ||
       current.sisterCompanySourceId ||
       jobStatus ||
       submissionStatus,

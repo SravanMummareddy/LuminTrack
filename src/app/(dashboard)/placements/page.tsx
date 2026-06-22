@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { Pagination } from "@/components/ui/pagination";
 import { PlacementsTable } from "@/components/placements/placements-table";
@@ -10,7 +9,8 @@ import {
   type PlacementListFilters,
 } from "@/server/queries/placements";
 import { listClients, listUsers } from "@/server/queries/org";
-import { parseSort, parsePage, PAGE_SIZE } from "@/lib/filters";
+import { PlacementsFilters } from "@/components/placements/placements-filters";
+import { parseSort, parsePage, parseDateRange, parseList, PAGE_SIZE } from "@/lib/filters";
 import { PLACEMENT_STATUSES } from "@/lib/labels";
 import { requireUser } from "@/lib/session";
 import type { PlacementStatus } from "@/generated/prisma/enums";
@@ -40,11 +40,14 @@ export default async function PlacementsPage({
   const sp = await searchParams;
   const current = {
     q: clean(sp.q),
-    // Default to ACTIVE — the most useful view by far. Empty `status` query
-    // param explicitly means "all"; absence means default.
+    // Default to ACTIVE — the most useful view by far. `status=all` explicitly
+    // means every status; absence means the ACTIVE default.
     status: sp.status !== undefined ? clean(sp.status) : "ACTIVE",
-    clientId: clean(sp.clientId),
-    recruiterId: clean(sp.recruiterId),
+    clientId: parseList(sp.clientId),
+    recruiterId: parseList(sp.recruiterId),
+    preset: clean(sp.preset),
+    from: clean(sp.from),
+    to: clean(sp.to),
   };
 
   const sort = parseSort(
@@ -59,6 +62,11 @@ export default async function PlacementsPage({
     status: asPlacementStatus(current.status),
     clientId: current.clientId,
     recruiterId: current.recruiterId,
+    startedRange: parseDateRange({
+      preset: current.preset,
+      from: current.from,
+      to: current.to,
+    }),
     sort,
     page: parsePage(clean(sp.page)),
   };
@@ -73,7 +81,7 @@ export default async function PlacementsPage({
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div className="space-y-5">
       <PageHeader
         title="Placements"
         description="Candidates currently working an assignment. Created automatically when a submission's status flips to Joined."
@@ -93,11 +101,7 @@ export default async function PlacementsPage({
         />
       </div>
 
-      <PlacementsFilters
-        current={current}
-        clients={clients}
-        recruiters={recruiters}
-      />
+      <PlacementsFilters clients={clients} recruiters={recruiters} />
 
       {total === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">
@@ -138,92 +142,5 @@ function SummaryStat({
       <p className="mt-1 text-xl font-semibold text-slate-900 tabular-nums">{value}</p>
       {hint && <p className="text-xs text-slate-400">{hint}</p>}
     </div>
-  );
-}
-
-function PlacementsFilters({
-  current,
-  clients,
-  recruiters,
-}: {
-  current: { q?: string; status?: string; clientId?: string; recruiterId?: string };
-  clients: { id: string; name: string }[];
-  recruiters: { id: string; fullName: string }[];
-}) {
-  return (
-    <form
-      method="get"
-      className="grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-4"
-    >
-      <label className="block">
-        <span className="mb-1 block text-xs font-medium text-slate-600">Search</span>
-        <input
-          type="search"
-          name="q"
-          defaultValue={current.q ?? ""}
-          placeholder="Candidate or job"
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-        />
-      </label>
-      <label className="block">
-        <span className="mb-1 block text-xs font-medium text-slate-600">Status</span>
-        <select
-          name="status"
-          defaultValue={current.status ?? "ACTIVE"}
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-        >
-          <option value="">All</option>
-          {PLACEMENT_STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s.charAt(0) + s.slice(1).toLowerCase()}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="block">
-        <span className="mb-1 block text-xs font-medium text-slate-600">Client</span>
-        <select
-          name="clientId"
-          defaultValue={current.clientId ?? ""}
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-        >
-          <option value="">All</option>
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="block">
-        <span className="mb-1 block text-xs font-medium text-slate-600">Recruiter</span>
-        <select
-          name="recruiterId"
-          defaultValue={current.recruiterId ?? ""}
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-        >
-          <option value="">All</option>
-          {recruiters.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.fullName}
-            </option>
-          ))}
-        </select>
-      </label>
-      <div className="sm:col-span-4 flex justify-end gap-2">
-        <Link
-          href="/placements"
-          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50"
-        >
-          Reset
-        </Link>
-        <button
-          type="submit"
-          className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
-        >
-          Apply
-        </button>
-      </div>
-    </form>
   );
 }

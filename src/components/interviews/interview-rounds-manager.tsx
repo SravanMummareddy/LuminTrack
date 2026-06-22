@@ -81,6 +81,9 @@ export function InterviewRoundsManager({
                     <Badge tone={INTERVIEW_RESULT_TONE[r.result]}>
                       {INTERVIEW_RESULT_LABEL[r.result]}
                     </Badge>
+                    {r.supportNeeded && (
+                      <Badge tone="indigo">Support needed</Badge>
+                    )}
                   </div>
                   <p className="mt-0.5 text-xs text-slate-500">
                     {INTERVIEW_TYPE_LABEL[r.interviewType]}

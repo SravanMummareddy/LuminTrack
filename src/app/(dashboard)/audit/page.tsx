@@ -60,6 +60,7 @@ export default async function AuditPage({
         jobId: true,
         candidateId: true,
         submissionId: true,
+        requirementId: true,
       },
     }),
     prisma.activity.count({ where }),
@@ -76,11 +77,12 @@ export default async function AuditPage({
     if (r.submissionId) return `/submissions/${r.submissionId}`;
     if (r.candidateId) return `/candidates/${r.candidateId}`;
     if (r.jobId) return `/jobs/${r.jobId}`;
+    if (r.requirementId) return `/vendor-portal/${r.requirementId}`;
     return null;
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div className="space-y-5">
       <PageHeader
         title="Audit log"
         description="Org-wide activity across jobs, candidates, submissions, and interview rounds. Admin only."

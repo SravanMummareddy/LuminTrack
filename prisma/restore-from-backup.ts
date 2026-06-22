@@ -55,6 +55,11 @@ const INSERT_ORDER: ReadonlyArray<[string, string]> = [
   ["placement", "placement"],
   ["placementExtension", "placementExtension"],
   ["interviewRound", "interviewRound"],
+  // BenchConsultant needs user + candidate; VendorRequirement needs job +
+  // candidate + submission. Note references benchConsultant, Activity
+  // references both — so these sit after their parents, before note/activity.
+  ["benchConsultant", "benchConsultant"],
+  ["vendorRequirement", "vendorRequirement"],
   ["note", "note"],
   ["activity", "activity"],
 ];

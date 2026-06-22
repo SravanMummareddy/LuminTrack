@@ -12,6 +12,131 @@ timeline, and recruiter performance. Replaces a manual Excel/Word process.
 "Remaining work" summary — start there before grepping the audit sections).
 **Future enhancements (large multi-session items):** [`ENHANCEMENTS.md`](./ENHANCEMENTS.md).
 
+## ✅ Vendor Portal Requirements (R0–R5) — SHIPPED 2026-06-22 (on `bench-sales-build` / PR #31)
+
+A pre-submission **planning layer**: a team-lead/admin scopes a vendor
+requirement's commercial terms; a recruiter later "moves it to a submission"
+(prefilled + editable), creating the real Submission. Modeled as a **separate
+`VendorRequirement` table** (not Submission+status) so it's invisible to all
+submission analytics by construction. **Team lead = `User.isTeamLead` flag**
+(not a 3rd role); `canManageRequirements = ADMIN || isTeamLead`. Convert reuses an
+extracted `createSubmissionRecord(tx, …)` (`src/server/submission-create.ts`) via
+an idempotent OPEN→CONVERTED claim + a `ConvertGate` sentinel rollback so a
+shared gate (duplicate/iLabor) never orphans a submission. Display id `VPR-###`.
+Key files: `src/app/(dashboard)/vendor-portal/{page,new,[id],[id]/edit,[id]/convert}`,
+`src/components/vendor-portal/*`, `src/server/{actions,queries}/requirements.ts`,
+`src/server/team-lead.ts`. Nav "Vendor Portal" → "Vendor Portal Requirements";
+the old `/jobs?source=randstad` tab relabeled "iLabor Requisitions". Job-create
+form has an optional "plan a requirement" section; job detail + dashboard surface
+them. Full detail + the resume marker: the plan file's "🟢 PROGRESS" block.
+**Owner to-do:** reseed (`npx tsx prisma/seed-demo.ts`) → restart → re-login;
+real-browser eyeball; `git push`.
+
+## 🚧 Current work — Lifecycle bench + reseed + Vendor Portal tab + filter redesign (2026-06-21, on `bench-sales-build` / PR #31)
+
+Four phases, all shipped to the branch (green CI). Plan:
+`~/.claude/plans/users-smumma-documents-company-dashboar-prancy-lightning.md`
+(active section at top).
+
+- **Phase 0 — Lifecycle bench (no migration).** Owner's model: the Bench is "who
+  we're marketing now." A candidate is on the bench via a `BenchConsultant`
+  linked 1:1 (`candidateId`), and `marketingStatus` drives on/off-bench
+  (ACTIVE/PAUSED = on, PLACED/INACTIVE = off). New `src/server/bench-lifecycle.ts`:
+  `ensureBenchForCandidate` (auto-creates the linked bench row when a candidate is
+  created AVAILABLE — wired in `createCandidate`) + `syncBenchOnPlacement` (wired
+  into `placement-lifecycle.ts`: JOINED → PLACED, placement-end/revert → ACTIVE).
+  One-click **Remove from bench** (`removeFromBench` → INACTIVE) on the detail
+  page. Roster defaults to on-bench (new `onBench` filter on `listBenchConsultants`).
+  +3 integration tests.
+- **Phase A — Reseed (`prisma/seed-demo.ts`, run `npx tsx prisma/seed-demo.ts`).**
+  **Admin login changed → `sriman@lumintrack.com` / `LuminTrack2026!`** (Sriman
+  Udugula, the team lead). 11 users total: **3 admins** (Sriman + 2 generated
+  managers) + **8 recruiters** (3 real from the sheet — Hrishikesh Batta TK2090,
+  Sameer Shaik TK2161, Akhila Kalyadapu INC83 — + 5 generated), across **2 teams**
+  (`USEI-Sales IT` / `USEI-Sales IT-2`). Bench consultants now seeded **linked 1:1
+  to candidates** with `marketingStatus` derived from pipeline state. New edge
+  cases: candidate documents with past/within-30d/future expiries, iLabor jobs
+  closed-for-subs / at-cap / unassigned, rates-pending placements, archived
+  résumés, all candidate/submission statuses.
+- **Phase B — Vendor Portal nav tab.** New `/vendor-portal` route +
+  `nav-links.tsx` entry (ClipboardList, after Jobs); reuses
+  `listJobs({ source: "randstad" })`. `JobsTable` gained optional
+  `storageKey`/`columnDefaults` props + 4 requirement columns (positions,
+  submitLimit, externalActiveCount, releasedDate) so the view leads with the
+  requisition fields. The old `/jobs?source=randstad` sub-tab still works.
+- **Phase C — Unified filter redesign + Placements date filter.** New
+  `src/components/ui/date-range-field.tsx` (preset dropdown that reveals From/To
+  **inline** on "Custom range"). Restyled `FilterBar` (kept API; added optional
+  `search` prop = polished icon search box; indigo pill chips). Migrated all list
+  pages: Placements (new `startedRange` startDate filter), Bench, Interviews onto
+  FilterBar; Jobs/Candidates/Submissions adopt the `search` prop;
+  `analytics-filters` (Recruiters/Reports) swapped preset+from/to → inline
+  `DateRangeField` (fixes the custom-range-hides-inputs gap).
+- **Also fixed: `src/proxy.ts` matcher** — excluded the whole `_next/` tree (was
+  only `_next/static|_next/image`), so middleware no longer runs on
+  `/_next/webpack-hmr` and breaks the dev HMR WebSocket (→ broken hydration). See
+  `docs/DEVLOG.md` 2026-06-21.
+
+> **Verification caveat (2026-06-21):** client interactivity (the Filters
+> expand/collapse toggle, the custom-range click-reveal) could **not** be verified
+> through the agent's browser tooling — the preview/Playwright path can't complete
+> the HMR WebSocket handshake, so React doesn't hydrate there. Native form
+> filtering (search/dropdowns/Apply → GET) IS verified, and the reveal is verified
+> server-side (`?preset=custom` renders the inputs). The toggle/reveal are standard
+> `useState` (unchanged pattern) — **needs a real-browser eyeball** (owner testing
+> on Vercel preview or a clean local `npm run dev`). Owner reported the toggle not
+> opening; the proxy matcher fix is the prime suspect (restart + hard-refresh).
+
+## 🚧 Current work — Bench-Sales build (post-June-19 demo)
+
+After the 2026-06-20 demo the stakeholder handed over
+`Dashboard - requirements- user-june-19th.xlsx` (6 tabs). The product owner
+**pivoted** the architecture: most tabs map onto existing concepts, so only two
+things are genuinely new. Full plan:
+`~/.claude/plans/users-smumma-documents-company-dashboar-prancy-lightning.md`.
+**All phases SHIPPED + verified 2026-06-20.**
+
+- **P1 — Bench roster:** new `BenchConsultant` table (the marketing "as-marketed"
+  identity), optionally 1:1-linked to `Candidate` via `candidateId @unique`.
+  `/bench` roster groups by `BenchPriority` (HIGH/SECOND), `ColumnsMenu` defaults
+  to the sheet's display subset; add/edit form has grouped sections + a
+  collapsible "More details" + an **admin-gated marketing-credentials** section
+  (`canViewBenchCredentials` in `src/lib/permissions.ts`, masked password +
+  Reveal). New enums `BenchPriority`/`BenchMarketingStatus`/`BenchEngagement`;
+  `BC-001` display IDs; `Note`/`Activity` gained `benchConsultantId`. Migrations
+  `20260620120000` (P0 enum/user fields) + `20260620130000`.
+- **P2 — Submission bench fields:** `engagement` (C2C/W2), `vendorRecruiterName`,
+  `jobDuties` on `Submission` (migration `20260620140000`); wired through
+  form/edit/table (hidden-by-default cols)/detail. `SUBMISSION_UPDATED` covers it.
+- **P3 — Interviews list:** standalone read-only `/interviews` roll-up
+  (`listInterviews`) of every scheduled round, linking to candidate + submission.
+- **P4 — Vendor Portal:** Jobs "Randstad iLabor" source tab relabeled →
+  "Vendor Portal" (**label only** — `randstad` key + portal-name filter intact).
+- **P5 — Monthly Performance:** added `SubmissionStatus.BACKED_OUT` (migration
+  `20260620150000`, standalone enum-add) + the exhaustive-map fan-out
+  (`labels.ts`, `validation/submission.ts` `SUBMISSION_STATUS_VALUES` — which
+  also closed a pre-existing missing-`OFFER_ACCEPTED` gap, `reports.ts`
+  `TERMINAL`, `dashboard.ts` active-pipeline `notIn`). `/reports` became a
+  `?tab=` router (`reports-tabs.tsx` + `analytics-tab.tsx` (old body moved
+  verbatim) + `monthly-performance-tab.tsx`); Analytics is the no-param default
+  so its filters/pagination are unchanged. `getMonthlyScorecard`
+  (`src/server/queries/monthly-scorecard.ts`, in-memory Mon-start weekly buckets
+  via date-fns `eachWeekOfInterval`) drives `scorecard-grid.tsx` (2-row grouped
+  header, sticky recruiter col, team Total + grand Total rows, red non-zero
+  Backouts) + `scorecard-picker.tsx` (`?month=YYYY-MM&team=`). Metrics:
+  Submissions/Backouts (on `submittedAt`), Interviews (round `scheduledAt`),
+  New vendors (recruiter's first-ever submit to a vendor), Closures (placement
+  `startDate`). Seed sets `User.empId` (`EMP-101..`) + teams Alpha/Beta;
+  `prisma/backfill-emp-team.ts` for real data. **Also fixed:** `seed-demo` wipe
+  was missing Placements/Documents/Bench (FK violation on re-seed) — now a
+  comprehensive FK-safe cascade.
+
+> **Migration workflow (non-interactive shell):** `prisma migrate dev` is
+> interactive — instead hand-write the SQL under `prisma/migrations/<ts>_<name>/`
+> then `prisma migrate deploy` + `prisma generate`. **After `generate`, RESTART
+> the dev server** (HMR does not reload the regenerated client) — which also
+> **logs you out** (session cookie), so re-login after a restart.
+
 ## 🚧 Current work — Round 5: Submission & workflow UX overhaul (IN PROGRESS)
 
 Owner asked (2026-05-29) for a deep rework of the submission experience.
@@ -431,12 +556,31 @@ screenshots a page → drops it in `uploads/` → agent reads the image".
 ## Commands
 
 ```
-npm run dev         # dev server (Turbopack)
-npm run build       # production build
-npm run db:migrate  # prisma migrate dev
-npm run db:seed     # seed admin + sample data (prisma/seed.ts)
-npm run db:studio   # prisma studio
+npm run dev          # dev server (Turbopack)
+npm run build        # production build
+npm run db:migrate   # prisma migrate dev
+npm run db:seed      # seed admin + sample data (prisma/seed.ts)
+npm run db:studio    # prisma studio
+npm test             # vitest unit suite (no DB — pure logic + mocked lifecycle)
+npm run test:watch   # vitest in watch mode
+npm run test:integration  # integration suite vs Dockerized Postgres (see below)
 ```
+
+## Testing
+
+- **Unit suite** (`npm test`) — `vitest`, plain Node, **no database**. Pure logic
+  (permissions, validation, labels exhaustiveness, analytics) + the placement
+  lifecycle state machine via a **mock Prisma transaction client** (`@/server/db`
+  is mocked so the Neon adapter is never built). Fast (<1s); runs on pre-commit
+  and in CI. Lives in `src/**/__tests__/*.test.ts`.
+- **Integration suite** (`npm run test:integration`) — `vitest` against a **real
+  disposable Postgres** (Docker). Tests the actual server actions + Prisma
+  cascades end-to-end. One-time setup: `npm run test:db:up` (starts
+  `postgres:16` on :5433 + applies migrations); then `npm run test:integration`.
+  `npm run test:db:down` tears it down. Uses `@prisma/adapter-pg` against
+  `DATABASE_URL_TEST` (defaults to the local Docker URL). Lives in
+  `tests/integration/*.test.ts`. Skipped automatically if the test DB is
+  unreachable, so it never blocks the unit suite or CI's no-DB job.
 
 ## Environment (.env — gitignored; see .env.example)
 
@@ -525,5 +669,6 @@ upgrade, not a functional gate.
 
 - `DEMO_GUIDE.md` (project root) — end-to-end app & workflow walkthrough for demos.
 - `prisma/seed-demo.ts` wipes the DB and loads ~3 months of realistic sample data
-  (8 users, 50 jobs, 30 candidates, 160 submissions). Admin login:
-  `admin@lumintrack.com` / `LuminTrack2026!` (all sample recruiters share that password).
+  (11 users — 3 admins + 8 recruiters, 50 jobs, 30 candidates + linked bench
+  consultants, 160 submissions). Admin login (since 2026-06-21):
+  `sriman@lumintrack.com` / `LuminTrack2026!` (all 11 users share that password).

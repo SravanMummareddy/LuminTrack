@@ -4,7 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
-import { Field, Input } from "@/components/ui/field";
+import { Field, Input, Textarea } from "@/components/ui/field";
 import { updatePlacement } from "@/server/actions/placements";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
 
@@ -18,6 +18,11 @@ export type PlacementEditData = {
   invoiceRef: string | null;
   onsiteManagerName: string | null;
   onsiteManagerEmail: string | null;
+  organisation: string | null;
+  teamLead: string | null;
+  interviewDate: Date | null;
+  placementDate: Date | null;
+  remarks: string | null;
 };
 
 function toDateInput(d: Date | null): string {
@@ -178,6 +183,59 @@ function EditForm({
           />
         </Field>
       </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Organisation" htmlFor="organisation" error={errors.organisation}>
+          <Input
+            id="organisation"
+            name="organisation"
+            defaultValue={placement.organisation ?? ""}
+          />
+        </Field>
+        <Field label="Lead" htmlFor="teamLead" error={errors.teamLead}>
+          <Input
+            id="teamLead"
+            name="teamLead"
+            defaultValue={placement.teamLead ?? ""}
+          />
+        </Field>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field
+          label="Date of interview"
+          htmlFor="interviewDate"
+          error={errors.interviewDate}
+        >
+          <Input
+            id="interviewDate"
+            name="interviewDate"
+            type="date"
+            defaultValue={toDateInput(placement.interviewDate)}
+          />
+        </Field>
+        <Field
+          label="Date of placement"
+          htmlFor="placementDate"
+          error={errors.placementDate}
+        >
+          <Input
+            id="placementDate"
+            name="placementDate"
+            type="date"
+            defaultValue={toDateInput(placement.placementDate)}
+          />
+        </Field>
+      </div>
+
+      <Field label="Remarks" htmlFor="remarks" error={errors.remarks}>
+        <Textarea
+          id="remarks"
+          name="remarks"
+          rows={2}
+          defaultValue={placement.remarks ?? ""}
+        />
+      </Field>
 
       {state.error && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">

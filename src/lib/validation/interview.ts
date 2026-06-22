@@ -46,6 +46,8 @@ export const interviewRoundSchema = z
     // §D5 — IANA timezone name (e.g. "America/New_York"). Free-text by design
     // so new zones don't need a code release; validated only by length here.
     scheduledTimezone: optionalText,
+    // The sheet's "Support (Y/N)" — a checkbox, so it arrives as a boolean.
+    supportNeeded: z.coerce.boolean(),
     feedback: optionalText,
     notes: optionalText,
   })

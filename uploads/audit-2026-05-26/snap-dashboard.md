@@ -1,0 +1,32 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]: L
+        - generic [ref=e6]: LuminTrack
+      - navigation [ref=e7]:
+        - link "Dashboard" [ref=e8] [cursor=pointer]:
+          - /url: /
+        - link "Jobs" [ref=e14] [cursor=pointer]:
+          - /url: /jobs
+        - link "Candidates" [ref=e18] [cursor=pointer]:
+          - /url: /candidates
+        - link "Submissions" [ref=e24] [cursor=pointer]:
+          - /url: /submissions
+        - link "Recruiters" [ref=e28] [cursor=pointer]:
+          - /url: /recruiters
+        - link "Reports" [ref=e32] [cursor=pointer]:
+          - /url: /reports
+        - link "Settings" [ref=e35] [cursor=pointer]:
+          - /url: /settings
+    - generic [ref=e39]:
+      - banner [ref=e40]:
+        - generic [ref=e42]
+        - generic [ref=e44]
+        - button "Sign out" [ref=e55]
+      - main [ref=e56]:
+        - generic [ref=e57]
+  - button "Open Next.js Dev Tools" [ref=e403] [cursor=pointer]:
+    - img [ref=e404]
+  - alert [ref=e407]
+  - generic [ref=e408]: Accepted

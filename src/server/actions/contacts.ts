@@ -6,12 +6,7 @@ import { prisma } from "@/server/db";
 import { requireUser } from "@/lib/session";
 import { toFieldErrors } from "@/lib/validation/common";
 import type { FormState } from "@/lib/form-state";
-
-/** §B1 contacts live under one of three parent kinds. The schema's CHECK
- *  constraint enforces "exactly one" at the DB layer; this enum gates which
- *  FK we set when writing. */
-export const CONTACT_KINDS = ["client", "vendor", "source"] as const;
-export type ContactKind = (typeof CONTACT_KINDS)[number];
+import { CONTACT_KINDS, type ContactKind } from "@/lib/contact-kinds";
 
 const KIND_FK: Record<ContactKind, "clientId" | "vendorId" | "sourceId"> = {
   client: "clientId",

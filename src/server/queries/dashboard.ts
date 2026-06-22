@@ -146,7 +146,7 @@ export type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;
 export async function getMyWork(userId: string) {
   const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000);
 
-  const [staleSubmissions, pendingRounds] = await Promise.all([
+  const [staleSubmissions, pendingRounds, pendingRequirements] = await Promise.all([
     prisma.submission.findMany({
       where: {
         submittedById: userId,
@@ -154,7 +154,7 @@ export async function getMyWork(userId: string) {
         // through the pipeline that's been sitting for more than a week is
         // worth a nudge.
         status: {
-          notIn: ["SELECTED", "REJECTED", "ON_HOLD", "OFFER_RELEASED", "JOINED"],
+          notIn: ["SELECTED", "REJECTED", "ON_HOLD", "OFFER_RELEASED", "JOINED", "BACKED_OUT"],
         },
         submittedAt: { lte: sevenDaysAgo },
       },
@@ -191,9 +191,22 @@ export async function getMyWork(userId: string) {
         },
       },
     }),
+    // OPEN vendor requirements assigned to this recruiter — planning records
+    // waiting to be moved to a submission.
+    prisma.vendorRequirement.findMany({
+      where: { recruiterId: userId, status: "OPEN" },
+      orderBy: { createdAt: "asc" },
+      take: 10,
+      select: {
+        id: true,
+        seq: true,
+        candidate: { select: { fullName: true } },
+        job: { select: { title: true } },
+      },
+    }),
   ]);
 
-  return { staleSubmissions, pendingRounds };
+  return { staleSubmissions, pendingRounds, pendingRequirements };
 }
 
 export type MyWork = Awaited<ReturnType<typeof getMyWork>>;

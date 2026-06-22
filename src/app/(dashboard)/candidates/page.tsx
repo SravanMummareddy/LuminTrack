@@ -85,7 +85,7 @@ export default async function CandidatesPage({
   );
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div className="space-y-5">
       <PageHeader title="Candidates" description="All candidate profiles.">
         <LinkButton href="/candidates/new">
           <Plus className="h-4 w-4" />
@@ -93,7 +93,7 @@ export default async function CandidatesPage({
         </LinkButton>
       </PageHeader>
 
-      <CandidateFilters current={current} />
+      <CandidateFilters />
 
       {total === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">

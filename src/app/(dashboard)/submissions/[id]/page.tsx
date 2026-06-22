@@ -14,6 +14,7 @@ import { getNotesFor } from "@/server/queries/notes";
 import {
   SUBMISSION_STATUS_LABEL,
   SUBMISSION_STATUS_TONE,
+  BENCH_ENGAGEMENT_LABEL,
   jobSourceLabel,
 } from "@/lib/labels";
 import { formatDate, formatRate, formatSubmissionDisplayId } from "@/lib/format";
@@ -168,7 +169,41 @@ export default async function SubmissionDetailPage({
               {formatDate(submission.actualJoinDate)}
             </SummaryItem>
           ) : null}
+          {submission.engagement ? (
+            <SummaryItem label="Engagement">
+              {BENCH_ENGAGEMENT_LABEL[submission.engagement]}
+            </SummaryItem>
+          ) : null}
+          {submission.vendorRecruiterName ? (
+            <SummaryItem label="Vendor recruiter">
+              {submission.vendorRecruiterName}
+            </SummaryItem>
+          ) : null}
+          {submission.payRate != null ? (
+            <SummaryItem label="Pay rate">
+              {formatRate(submission.payRate)}
+            </SummaryItem>
+          ) : null}
+          {submission.billRate != null ? (
+            <SummaryItem label="Bill rate">
+              {formatRate(submission.billRate)}
+            </SummaryItem>
+          ) : null}
+          {submission.teamLead ? (
+            <SummaryItem label="Team lead">{submission.teamLead}</SummaryItem>
+          ) : null}
         </dl>
+
+        {submission.jobDuties ? (
+          <div className="mt-5">
+            <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">
+              Job duties
+            </dt>
+            <dd className="mt-0.5 whitespace-pre-wrap text-sm text-slate-800">
+              {submission.jobDuties}
+            </dd>
+          </div>
+        ) : null}
 
         <div className="mt-5">
           <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">

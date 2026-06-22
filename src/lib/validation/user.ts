@@ -6,6 +6,9 @@ const base = z.object({
   email: z.email("Enter a valid email address."),
   role: z.enum(["ADMIN", "RECRUITER"]),
   isActive: z.boolean(),
+  // Team-lead capability flag (can manage Vendor Portal Requirements). Not a
+  // role — a lead is otherwise a RECRUITER.
+  isTeamLead: z.boolean(),
 });
 
 const password = z.string().min(8, "Password must be at least 8 characters.");

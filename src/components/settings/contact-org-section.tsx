@@ -11,11 +11,12 @@ import {
   SettingsListFilter,
   type StatusFilter,
 } from "@/components/settings/settings-list-filter";
+import { useLocalPagination } from "@/components/ui/local-pager";
 import {
   ContactsDialog,
   type ContactRow,
 } from "@/components/settings/contacts-dialog";
-import type { ContactKind } from "@/server/actions/contacts";
+import type { ContactKind } from "@/lib/contact-kinds";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 
 export type ContactOrg = {
@@ -62,6 +63,8 @@ export function ContactOrgSection({
       return true;
     });
   }, [items, search, status]);
+
+  const { pageItems, pager } = useLocalPagination(filtered, 10);
 
   return (
     <section className="space-y-3">
@@ -111,7 +114,7 @@ export function ContactOrgSection({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {filtered.map((item) => (
+            {pageItems.map((item) => (
               <tr key={item.id}>
                 <Td label="Name" className="font-medium text-slate-900">
                   {item.name}
@@ -150,6 +153,8 @@ export function ContactOrgSection({
           </tbody>
         </Table>
       )}
+
+      {filtered.length > 0 && pager}
 
       <Dialog
         open={editing !== null}

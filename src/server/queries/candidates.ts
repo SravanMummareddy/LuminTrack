@@ -1,7 +1,7 @@
 import { prisma } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
 import type { UserRole } from "@/generated/prisma/enums";
-import { PAGE_SIZE, type DateRange, type SortDir, type SortState } from "@/lib/filters";
+import { PAGE_SIZE, searchTerms, type DateRange, type SortDir, type SortState } from "@/lib/filters";
 import { canViewSensitiveDocs } from "@/lib/permissions";
 
 export type CandidateListFilters = {
@@ -41,7 +41,11 @@ const candidateListInclude = {
 export async function listCandidates(filters: CandidateListFilters) {
   const where: Prisma.CandidateWhereInput = {};
 
-  if (filters.q) where.fullName = { contains: filters.q, mode: "insensitive" };
+  const terms = searchTerms(filters.q);
+  if (terms.length)
+    where.AND = terms.map((t) => ({
+      fullName: { contains: t, mode: "insensitive" },
+    }));
   if (filters.location)
     where.currentLocation = { contains: filters.location, mode: "insensitive" };
   if (filters.workAuthorization)

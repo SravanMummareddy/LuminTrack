@@ -20,6 +20,7 @@ export type UserRow = {
   email: string;
   role: "ADMIN" | "RECRUITER";
   isActive: boolean;
+  isTeamLead: boolean;
 };
 
 export function UserSection({
@@ -218,6 +219,23 @@ function UserForm({
           className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-200"
         />
         Active
+      </label>
+
+      <label
+        htmlFor="user-isTeamLead"
+        className="flex items-center gap-2 text-sm font-medium text-slate-700"
+      >
+        <input
+          id="user-isTeamLead"
+          type="checkbox"
+          name="isTeamLead"
+          defaultChecked={entity?.isTeamLead ?? false}
+          className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-200"
+        />
+        Team lead
+        <span className="font-normal text-slate-400">
+          — can manage Vendor Portal Requirements
+        </span>
       </label>
 
       {state.error && (

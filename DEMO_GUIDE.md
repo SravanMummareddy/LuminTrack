@@ -34,13 +34,18 @@ Sign in with an **email and password**.
 
 | Role | Example email | Password |
 |------|---------------|----------|
-| Administrator | `admin@lumintrack.com` | `LuminTrack2026!` |
-| Recruiter | `priya@lumintrack.com`, `marcus@lumintrack.com`, … | `LuminTrack2026!` |
+| Administrator / Team lead | `sriman@lumintrack.com` (Sriman Udugula) | `LuminTrack2026!` |
+| Recruiter | `hrishikesh@lumintrack.com`, `sameer@lumintrack.com`, `akhila@lumintrack.com`, … | `LuminTrack2026!` |
 
 ### Roles
 - **Administrator** — full access, including managing app users in Settings.
 - **Recruiter** — full access to jobs, candidates, submissions and reports;
   cannot add or edit users.
+- **Team lead** — *not a separate role* but a flag on a user (set under
+  **Settings → Users**, "Team lead" checkbox). Admins and team leads can
+  **create and edit Vendor Portal Requirements** (the planning layer below);
+  recruiters without the flag can still *move* an existing requirement to a
+  submission, but not create or edit one.
 
 Passwords and users are managed by an administrator under **Settings → Users**.
 
@@ -48,17 +53,21 @@ Passwords and users are managed by an administrator under **Settings → Users**
 
 ## 3. Navigation tour
 
-The left sidebar has seven areas:
+The left sidebar has the following areas:
 
 | Page | What it shows |
 |------|---------------|
 | **Dashboard** | Headline metrics, charts, open‑job aging and recruiter performance. |
-| **Jobs** | Every job requirement and its pipeline. |
+| **Jobs** | Every job requirement and its pipeline (incl. the **iLabor Requisitions** source tab). |
+| **Vendor Portal Requirements** | The planning queue — requirements scoped before they become submissions. |
 | **Candidates** | Every candidate profile. |
 | **Submissions** | Every candidate‑to‑job submission across all jobs. |
+| **Interviews** | A read‑only roll‑up of every scheduled interview round. |
+| **Bench** | The marketing roster of consultants currently being marketed. |
+| **Placements** | Active and past placements with rates and margin. |
 | **Recruiters** | Performance counts per recruiter; drill into one recruiter. |
-| **Reports** | Management analytics — conversion funnel and performance breakdowns. |
-| **Settings** | Sources, clients, vendors and app users. |
+| **Reports** | Management analytics — conversion funnel, performance, and Monthly Performance. |
+| **Settings** | Sources, clients, vendors, app users, and data export. |
 
 The **top bar** has a **global search** box (see Workflow 10) and the signed‑in
 user with a **Sign out** option.
@@ -115,8 +124,34 @@ Before jobs can be created, the supporting lists must exist.
    *Other* to type a one-off source by hand. Optional: status (defaults to
    *Open*), vendor rate, candidate rate, location, description, notes.
 3. Tick the **recruiters** assigned to work the job.
-4. Save. The job appears in the Jobs list and on the assigned recruiters'
+4. *(Admins / team leads)* Optionally expand **"Also plan a vendor portal
+   requirement"** to pre-decide commercial terms (recruiter, location, pay /
+   bill / candidate rates, engagement) at the same time — see Workflow 2a.
+5. Save. The job appears in the Jobs list and on the assigned recruiters'
    pages.
+
+### Workflow 2a — Plan a vendor portal requirement *(Vendor Portal Requirements, admin / team lead)*
+A **vendor portal requirement** is a planning record: a team lead or admin
+decides *who* a vendor requirement is for and *on what terms*, then a recruiter
+**moves it to a submission** later. It is separate from a submission, so nothing
+enters the pipeline (or any analytics) until it's moved.
+1. Go to **Vendor Portal Requirements** → **New requirement** (or use **Create
+   requirement** on a job's detail page, which pre-selects that job).
+2. Pick the **job**, then fill any of: candidate (optional — can be added
+   later), recruiter, location, pay / bill / candidate rates, engagement
+   (C2C / W2), vendor recruiter, team lead (auto-filled from the recruiter's
+   team if blank), résumé link and notes. Save — the requirement shows as
+   **Open** in the list.
+3. Edit or **Cancel** an Open requirement at any time (admin / team lead).
+4. When ready, open the requirement and click **Move to submission**. The
+   submission form opens **prefilled and fully editable**; submitting creates
+   the real submission, links it back to the requirement (now **Converted**),
+   and assigns the job to the submitting recruiter. The same duplicate / iLabor
+   warnings as a normal submission apply, plus convert-time checks (placed
+   candidate, archived résumé, zero or inverted rates) you can override with a
+   reason.
+5. A converted requirement is **read-only** and links to the submission it
+   created; the move is recorded on its activity timeline.
 
 ### Workflow 3 — Add a candidate *(Candidates)*
 1. Go to **Candidates** and click **Add candidate**.

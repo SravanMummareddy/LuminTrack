@@ -31,6 +31,7 @@ export type InterviewRoundData = {
   meetingLink: string | null;
   scheduledAt: Date | string | null;
   scheduledTimezone: string | null;
+  supportNeeded: boolean;
   result: InterviewResult;
   feedback: string | null;
   notes: string | null;
@@ -196,6 +197,16 @@ export function InterviewRoundForm({
             defaultValue={round?.meetingLink ?? ""}
           />
         </Field>
+
+        <label className="flex items-center gap-2 self-end pb-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            name="supportNeeded"
+            defaultChecked={round?.supportNeeded ?? false}
+            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+          />
+          Support needed (a team member shadows this interview)
+        </label>
 
         <Field
           label="Interview date & time"

@@ -34,7 +34,7 @@ export function listVendors() {
   });
 }
 
-import type { ContactKind } from "@/server/actions/contacts";
+import type { ContactKind } from "@/lib/contact-kinds";
 
 export function listContacts(kind: ContactKind, parentId: string) {
   const where =
@@ -63,6 +63,7 @@ export function listUsers() {
       email: true,
       role: true,
       isActive: true,
+      isTeamLead: true,
       createdAt: true,
     },
   });
@@ -86,6 +87,18 @@ export async function listActiveRecruiterOptions() {
     out.push({ id: r.id, fullName: r.fullName });
   }
   return out;
+}
+
+/** Distinct non-empty team labels across recruiters — powers the Monthly
+ *  Performance team filter. Empty when nobody has been assigned a team yet. */
+export async function listTeamLabels(): Promise<string[]> {
+  const rows = await prisma.user.findMany({
+    where: { role: "RECRUITER", teamLabel: { not: null } },
+    distinct: ["teamLabel"],
+    select: { teamLabel: true },
+    orderBy: { teamLabel: "asc" },
+  });
+  return rows.map((r) => r.teamLabel).filter((t): t is string => !!t);
 }
 
 export type OrgListItem = Awaited<ReturnType<typeof listVendors>>[number];

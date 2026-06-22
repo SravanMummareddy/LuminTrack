@@ -2,6 +2,7 @@ import { prisma } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
 import type { SubmissionStatus } from "@/generated/prisma/enums";
 import { OTHER_SOURCE } from "@/lib/labels";
+import { RANDSTAD_PORTAL_NAME } from "@/server/queries/jobs";
 import {
   currentStageDays,
   STALE_STAGE_DAYS,
@@ -11,6 +12,7 @@ import {
 import {
   PAGE_SIZE,
   SUB_PAGE_SIZE,
+  searchTerms,
   type DateRange,
   type SortDir,
   type SortState,
@@ -19,11 +21,14 @@ import {
 export type SubmissionListFilters = {
   q?: string;
   status?: SubmissionStatus;
-  recruiterId?: string;
-  clientId?: string;
-  vendorId?: string;
+  recruiterId?: string[];
+  clientId?: string[];
+  vendorId?: string[];
   sisterCompanySourceId?: string;
   submittedRange?: DateRange;
+  // Option B "Vendor Portal" scope: only submissions to portal-sourced
+  // (Randstad iLabor) jobs.
+  vendorPortalOnly?: boolean;
   sort?: SortState;
   page?: number;
   /** "Mine, stale >7d" quick filter — narrows to `currentUserId`'s early-
@@ -69,6 +74,7 @@ const SUBMISSION_INCLUDE = {
     },
   },
   submittedBy: { select: { fullName: true } },
+  candidateResume: { select: { label: true, driveLink: true } },
   _count: { select: { interviewRounds: true } },
 } satisfies Prisma.SubmissionInclude;
 
@@ -76,11 +82,13 @@ type RawSubmissionRow = Prisma.SubmissionGetPayload<{
   include: typeof SUBMISSION_INCLUDE;
 }>;
 
-/** Flatten the non-serialisable `Decimal` rate — the table is a Client Component. */
+/** Flatten the non-serialisable `Decimal` rates — the table is a Client Component. */
 function flattenRow(s: RawSubmissionRow) {
   return {
     ...s,
     candidateRate: s.candidateRate == null ? null : Number(s.candidateRate),
+    payRate: s.payRate == null ? null : Number(s.payRate),
+    billRate: s.billRate == null ? null : Number(s.billRate),
   };
 }
 
@@ -116,13 +124,16 @@ export async function listSubmissions(filters: SubmissionListFilters) {
   const where: Prisma.SubmissionWhereInput = {};
 
   if (filters.status) where.status = filters.status;
-  if (filters.recruiterId) where.submittedById = filters.recruiterId;
+  if (filters.recruiterId?.length)
+    where.submittedById = { in: filters.recruiterId };
   if (filters.submittedRange?.gte || filters.submittedRange?.lte)
     where.submittedAt = filters.submittedRange;
 
   const job: Prisma.JobWhereInput = {};
-  if (filters.clientId) job.clientId = filters.clientId;
-  if (filters.vendorId) job.vendorId = filters.vendorId;
+  if (filters.vendorPortalOnly)
+    job.portal = { is: { name: RANDSTAD_PORTAL_NAME } };
+  if (filters.clientId?.length) job.clientId = { in: filters.clientId };
+  if (filters.vendorId?.length) job.vendorId = { in: filters.vendorId };
   if (filters.sisterCompanySourceId)
     // OTHER_SOURCE matches jobs with a free-text source (no managed-source FK).
     job.sisterCompanySourceId =
@@ -131,11 +142,14 @@ export async function listSubmissions(filters: SubmissionListFilters) {
         : filters.sisterCompanySourceId;
   if (Object.keys(job).length) where.job = job;
 
-  if (filters.q)
-    where.OR = [
-      { candidate: { fullName: { contains: filters.q, mode: "insensitive" } } },
-      { job: { title: { contains: filters.q, mode: "insensitive" } } },
-    ];
+  const terms = searchTerms(filters.q);
+  if (terms.length)
+    where.AND = terms.map((t) => ({
+      OR: [
+        { candidate: { fullName: { contains: t, mode: "insensitive" } } },
+        { job: { title: { contains: t, mode: "insensitive" } } },
+      ],
+    }));
 
   // "Mine, stale >7d" — narrow to the acting user's early-pipeline submissions;
   // the >7-days-in-stage cut needs daysInStage, so it's applied in memory below.
@@ -236,6 +250,12 @@ export async function getSubmissionForEdit(id: string) {
       submittedAt: true,
       candidateResumeId: true,
       resumeDriveLink: true,
+      engagement: true,
+      vendorRecruiterName: true,
+      jobDuties: true,
+      payRate: true,
+      billRate: true,
+      teamLead: true,
       submittedById: true,
       job: { select: { title: true } },
       submittedBy: { select: { fullName: true } },

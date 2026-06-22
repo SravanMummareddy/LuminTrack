@@ -26,7 +26,7 @@ export default async function RecruitersPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const sp = await searchParams;
-  const { current, filters } = parseAnalyticsParams(sp);
+  const { filters } = parseAnalyticsParams(sp);
 
   const sort = parseSort(
     firstParam(sp.sort),
@@ -48,14 +48,13 @@ export default async function RecruitersPage({
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div className="space-y-5">
       <PageHeader
         title="Recruiters"
         description="Performance counts for every active recruiter. Open a recruiter for their full activity."
       />
 
       <AnalyticsFilters
-        current={current}
         basePath="/recruiters"
         clients={clients}
         vendors={vendors}

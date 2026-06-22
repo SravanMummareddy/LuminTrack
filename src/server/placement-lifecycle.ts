@@ -5,6 +5,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { logActivity } from "@/server/activity";
 import { isUniqueConstraintError } from "@/server/db";
+import { syncBenchOnPlacement } from "@/server/bench-lifecycle";
 
 type Tx = Prisma.TransactionClient;
 
@@ -46,6 +47,14 @@ export async function ensurePlacementOnJoined(
       candidateId: args.candidateId,
     });
   }
+
+  // Roll the candidate off the active bench — they're placed now. No-op if they
+  // have no linked bench record. Runs on every JOIN transition (incl. re-JOIN).
+  await syncBenchOnPlacement(tx, {
+    candidateId: args.candidateId,
+    marketingStatus: "PLACED",
+    performedById: args.performedById,
+  });
 
   // Reactivate a pre-existing placement if the submission was previously JOINED
   // → reverted → re-JOINED. Otherwise the placement would stay TERMINATED while
@@ -93,6 +102,8 @@ export async function ensurePlacementOnJoined(
         candidateId: args.candidateId,
         jobId: args.jobId,
         startDate,
+        // "Date of Placement" defaults to the JOINED date; recruiter can edit.
+        placementDate: startDate,
         billRate: seedRate,
         payRate: seedRate,
       },
@@ -159,6 +170,13 @@ export async function endOfPlacementCascade(
     newValue: "AVAILABLE",
     performedById: args.performedById,
     candidateId: args.candidateId,
+  });
+
+  // Back on the active bench — being marketed again.
+  await syncBenchOnPlacement(tx, {
+    candidateId: args.candidateId,
+    marketingStatus: "ACTIVE",
+    performedById: args.performedById,
   });
 }
 

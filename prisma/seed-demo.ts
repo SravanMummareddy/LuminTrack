@@ -82,6 +82,7 @@ const SUB_LABEL: Record<SubmissionStatus, string> = {
   OFFER_RELEASED: "Offer Released",
   OFFER_ACCEPTED: "Offer Accepted",
   JOINED: "Joined",
+  BACKED_OUT: "Backed Out",
 };
 const JOB_LABEL: Record<JobStatus, string> = {
   OPEN: "Open",
@@ -109,20 +110,41 @@ const IRESULT_LABEL: Record<InterviewResult, string> = {
 
 // ─── Data pools ──────────────────────────────────────────────────────────────
 
-const ADMIN = {
-  email: "admin@lumintrack.com",
-  fullName: "Nina Alvarez",
-};
 const SHARED_PASSWORD = "LuminTrack2026!";
 
-const RECRUITER_NAMES = [
-  "Priya Sharma",
-  "Marcus Lee",
-  "Aisha Khan",
-  "Daniel Okafor",
-  "Elena Rossi",
-  "Raj Patel",
-  "Sophie Tran",
+// Two teams so the Monthly Performance scorecard's team filter has something to
+// do. "USEI-Sales IT" is the team named on the June-19 sheet.
+const TEAM_A = "USEI-Sales IT";
+const TEAM_B = "USEI-Sales IT-2";
+
+// Real people from the June-19 spreadsheet + generated teammates. 3 admins
+// (Sriman is the team lead + 2 team managers), 8 recruiters. Everyone shares
+// SHARED_PASSWORD. Sriman is the primary admin login.
+const ADMIN_LOGIN = "sriman@lumintrack.com";
+type RosterUser = {
+  fullName: string;
+  email: string;
+  role: "ADMIN" | "RECRUITER";
+  empId: string;
+  teamLabel: string;
+  /** Team leads can manage Vendor Portal Requirements — one per team. */
+  isTeamLead?: boolean;
+};
+const USER_ROSTER: RosterUser[] = [
+  // ── Admins / managers ── (one team-lead per team: Sriman → A, Deepa → B)
+  { fullName: "Sriman Udugula", email: ADMIN_LOGIN, role: "ADMIN", empId: "INC105", teamLabel: TEAM_A, isTeamLead: true },
+  { fullName: "Vikram Reddy", email: "vikram@lumintrack.com", role: "ADMIN", empId: "INC112", teamLabel: TEAM_A },
+  { fullName: "Deepa Nair", email: "deepa@lumintrack.com", role: "ADMIN", empId: "TK2204", teamLabel: TEAM_B, isTeamLead: true },
+  // ── Recruiters — real (from the sheet's Monthly Performance tab) ──
+  { fullName: "Hrishikesh Batta", email: "hrishikesh@lumintrack.com", role: "RECRUITER", empId: "TK2090", teamLabel: TEAM_A },
+  { fullName: "Sameer Shaik", email: "sameer@lumintrack.com", role: "RECRUITER", empId: "TK2161", teamLabel: TEAM_A },
+  { fullName: "Akhila Kalyadapu", email: "akhila@lumintrack.com", role: "RECRUITER", empId: "INC83", teamLabel: TEAM_B },
+  // ── Recruiters — generated ──
+  { fullName: "Anil Kumar", email: "anil@lumintrack.com", role: "RECRUITER", empId: "INC121", teamLabel: TEAM_A },
+  { fullName: "Pooja Verma", email: "pooja@lumintrack.com", role: "RECRUITER", empId: "TK2233", teamLabel: TEAM_A },
+  { fullName: "Rahul Joshi", email: "rahul@lumintrack.com", role: "RECRUITER", empId: "INC138", teamLabel: TEAM_B },
+  { fullName: "Sneha Iyer", email: "sneha@lumintrack.com", role: "RECRUITER", empId: "TK2251", teamLabel: TEAM_B },
+  { fullName: "Karthik Menon", email: "karthik@lumintrack.com", role: "RECRUITER", empId: "INC146", teamLabel: TEAM_B },
 ];
 
 const SOURCE_NAMES = [
@@ -143,6 +165,12 @@ const CLIENT_NAMES = [
   "Boeing",
   "Wells Fargo",
   "Cisco Systems",
+  "Bank of America",
+  "AT&T",
+  "Pfizer",
+  "Caterpillar",
+  "American Express",
+  "Lockheed Martin",
 ];
 const VENDOR_NAMES = [
   "ABC Staffing",
@@ -153,6 +181,12 @@ const VENDOR_NAMES = [
   "Cognizant",
   "Collabera",
   "Mastech Digital",
+  "Kforce",
+  "Robert Half",
+  "Randstad Technologies",
+  "Judge Group",
+  "Artech",
+  "Diverse Lynx",
 ];
 
 const JOB_TITLES = [
@@ -295,6 +329,42 @@ const LAST_NAMES = [
   "Mwangi",
   "Rossi",
 ];
+// ── Bench-Sales sample data pools ──
+const BENCH_TECHS = [
+  "Java Full Stack",
+  "React / Node",
+  ".NET Core",
+  "Data Engineer",
+  "DevOps / AWS",
+  "Python / Django",
+  "Salesforce",
+  "QA Automation",
+];
+const BENCH_VISAS = ["H1B", "GC", "USC", "OPT-EAD", "H4-EAD", "TN"];
+const CALL_TYPES = ["Direct Client", "Implementation Partner", "Tier-1 Vendor"];
+const PAYROLL_TYPES = ["C2C", "W2", "1099"];
+const PROJECT_TYPES = ["Contract", "Contract-to-Hire", "Full-time"];
+const BENCH_REFERENCES = [
+  "LinkedIn outreach",
+  "Internal referral",
+  "Vendor pool",
+  "Job board",
+  "Repeat consultant",
+];
+const VENDOR_RECRUITER_NAMES = [
+  "Amit (TechProsource)",
+  "Lisa Wong (Collabera)",
+  "Raj K. (Cybertec)",
+  "Megan (Insight Global)",
+  "Carlos (Apex Systems)",
+];
+const JOB_DUTIES_SAMPLES = [
+  "Design and build REST microservices; own CI/CD pipeline.",
+  "Lead front-end migration to React 19; mentor two juniors.",
+  "Build data ingestion pipelines on AWS (Glue, Redshift).",
+  "Automate regression suite in Playwright; cut cycle time.",
+  "Configure Salesforce flows and Apex triggers for sales ops.",
+];
 const INTERVIEWERS = [
   "Sarah Chen",
   "Michael Brown",
@@ -304,6 +374,20 @@ const INTERVIEWERS = [
   "Amanda White",
   "James Wilson",
   "Lisa Anderson",
+];
+const TEAM_LEADS = ["Sriman Udugula", "Akhila Kalyadapu", "Sameer Shaik"];
+const ORGANISATIONS = [
+  "USEI Technologies",
+  "Lumin Global Inc",
+  "Astra Consulting LLC",
+  "Vertex Systems Group",
+];
+const PLACEMENT_REMARKS = [
+  "Client confirmed start; onboarding paperwork in progress.",
+  "Remote role, 1 day onsite per month.",
+  "Rate locked for 6 months, renewal expected.",
+  "Backfill for a prior consultant who rolled off.",
+  "Net-30 payment terms with the vendor.",
 ];
 const REJECTION_REASONS = [
   "Client selected another candidate.",
@@ -398,17 +482,26 @@ const RESUME_LABELS = [
 
 async function main() {
   console.log("Wiping existing data…");
+  // FK-safe order: children before parents. Activity/Note carry nullable FKs to
+  // almost everything, so they go first. Then placements → submissions → jobs/
+  // candidates → org entities → users. Bench consultants reference both User and
+  // Candidate, so they clear before either.
   await prisma.activity.deleteMany();
   await prisma.note.deleteMany();
-  await prisma.interviewRound.deleteMany();
+  // VendorRequirement holds Restrict FKs to Job — must go before jobs/candidates.
+  await prisma.vendorRequirement.deleteMany();
   await prisma.placementExtension.deleteMany();
   await prisma.placement.deleteMany();
+  await prisma.interviewRound.deleteMany();
+  await prisma.benchConsultant.deleteMany();
   await prisma.submission.deleteMany();
   await prisma.candidateDocument.deleteMany();
   await prisma.candidateResume.deleteMany();
   await prisma.jobAssignment.deleteMany();
   await prisma.job.deleteMany();
   await prisma.candidate.deleteMany();
+  await prisma.contact.deleteMany();
+  await prisma.jobPortal.deleteMany();
   await prisma.vendor.deleteMany();
   await prisma.client.deleteMany();
   await prisma.sisterCompanySource.deleteMany();
@@ -419,34 +512,36 @@ async function main() {
   const passwordHash = await bcrypt.hash(SHARED_PASSWORD, 10);
   const adminCreatedAt = new Date(WINDOW_START.getTime() - 5 * DAY);
 
-  const admin = await prisma.user.create({
-    data: {
-      email: ADMIN.email,
-      fullName: ADMIN.fullName,
-      passwordHash,
-      role: "ADMIN",
-      createdAt: adminCreatedAt,
-      updatedAt: adminCreatedAt,
-    },
-  });
-
-  const recruiters: { id: string; fullName: string }[] = [];
-  for (const fullName of RECRUITER_NAMES) {
-    const email =
-      fullName.split(" ")[0].toLowerCase() + "@lumintrack.com";
+  const allUsers: {
+    id: string;
+    fullName: string;
+    role: string;
+    teamLabel: string | null;
+  }[] = [];
+  for (const u of USER_ROSTER) {
     const created = await prisma.user.create({
       data: {
-        email,
-        fullName,
+        email: u.email,
+        fullName: u.fullName,
         passwordHash,
-        role: "RECRUITER",
+        role: u.role,
+        empId: u.empId,
+        teamLabel: u.teamLabel,
+        isTeamLead: u.isTeamLead ?? false,
         createdAt: adminCreatedAt,
         updatedAt: adminCreatedAt,
       },
-      select: { id: true, fullName: true },
+      select: { id: true, fullName: true, role: true, teamLabel: true },
     });
-    recruiters.push(created);
+    allUsers.push(created);
   }
+  // Sriman is the primary admin (used as createdBy / assignedBy across the seed).
+  const admin = allUsers.find((u) => u.fullName === "Sriman Udugula")!;
+  // Submissions/assignments are attributed to RECRUITER-role users only, so the
+  // Monthly Performance scorecard (recruiters only) reconciles. Managers (admins)
+  // show zero activity — matching Sriman's row on the sheet.
+  const recruiters = allUsers.filter((u) => u.role === "RECRUITER");
+  const adminCount = allUsers.filter((u) => u.role === "ADMIN").length;
 
   // ── Org entities ──
   console.log("Creating organisation entities…");
@@ -496,6 +591,20 @@ async function main() {
   }
 
   // ── Jobs + assignments ──
+  // Vendor-portal (Randstad iLabor) — some jobs are sourced from it so the
+  // submission-level "Vendor Portal" view has data. Name must match
+  // RANDSTAD_PORTAL_NAME in src/server/queries/jobs.ts.
+  console.log("Creating job portal…");
+  const randstadPortal = await prisma.jobPortal.create({
+    data: {
+      name: "Randstad iLabor",
+      kind: "VMS",
+      createdAt: adminCreatedAt,
+      updatedAt: adminCreatedAt,
+    },
+    select: { id: true },
+  });
+
   console.log("Creating 50 jobs…");
   const jobs: {
     id: string;
@@ -524,6 +633,9 @@ async function main() {
     const candidateRate = vendorRate - randInt(8, 22);
     const creator = chance(0.7) ? admin : pick(recruiters);
     const client = pick(clients);
+    // ~35% come from the Randstad iLabor vendor portal; those carry a portal
+    // ref instead of a managed source so the source label reads "Randstad iLabor".
+    const isPortal = chance(0.35);
 
     const job = await prisma.job.create({
       data: {
@@ -539,7 +651,19 @@ async function main() {
         notes: chance(0.4) ? pick(JOB_NOTES) : null,
         clientId: client.id,
         vendorId: pick(vendors).id,
-        sisterCompanySourceId: pick(sources).id,
+        sisterCompanySourceId: isPortal ? null : pick(sources).id,
+        portalId: isPortal ? randstadPortal.id : null,
+        portalRefId: isPortal ? String(159000 + i) : null,
+        // iLabor signal fields — only on vendor-portal jobs. Some are closed for
+        // submissions (ilaborSubmitOpen=0) and some are at/over their cap so the
+        // submission gates can be exercised; some require a screener (code > 0).
+        positions: isPortal ? randInt(1, 4) : null,
+        submitLimit: isPortal ? 30 : null,
+        ilaborSubmitOpen: isPortal ? (chance(0.2) ? 0 : 1) : null,
+        ilaborScreenerCode: isPortal ? (chance(0.3) ? 3 : 0) : null,
+        externalSubsCount: isPortal ? randInt(0, 45) : null,
+        externalActiveCount: isPortal ? (chance(0.25) ? 30 : randInt(0, 22)) : null,
+        releasedDate: isPortal ? createdAt : null,
         createdById: creator.id,
         createdAt,
         updatedAt: createdAt,
@@ -556,8 +680,9 @@ async function main() {
       createdAt,
     });
 
-    // Assignments — 1 to 3 recruiters.
-    const assignees = pickN(recruiters, randInt(1, 3));
+    // Assignments — 1 to 3 recruiters, but ~15% of jobs are left unassigned so
+    // the recruiter assignment gate / self-claim flow can be tested.
+    const assignees = chance(0.15) ? [] : pickN(recruiters, randInt(1, 3));
     for (const r of assignees) {
       const assignedAt = new Date(createdAt.getTime() + randInt(1, 36) * HOUR);
       assignmentRows.push({
@@ -613,8 +738,11 @@ async function main() {
     id: string;
     fullName: string;
     createdAt: Date;
+    status: string;
     resumes: { id: string; driveLink: string }[];
   }[] = [];
+  const CANDIDATE_TAGS = ["java", "react", "remote", "senior", "urgent", "passive", "h1b", "local"];
+  const CANDIDATE_SOURCES = ["LinkedIn", "Referral", "Job board", "Vendor pool", "Repeat consultant"];
   let resumeCount = 0;
   for (let i = 0; i < 30; i++) {
     const first = pick(FIRST_NAMES);
@@ -625,6 +753,13 @@ async function main() {
       new Date(NOW.getTime() - 3 * DAY),
     );
     const creator = pick(recruiters);
+    // Mostly AVAILABLE; a few NOT_INTERESTED / DO_NOT_CONTACT for status variety.
+    // (The join cascade later overrides placed candidates to PLACED.)
+    const status = weighted<string>([
+      ["AVAILABLE", 8],
+      ["NOT_INTERESTED", 1],
+      ["DO_NOT_CONTACT", 1],
+    ]);
 
     const candidate = await prisma.candidate.create({
       data: {
@@ -641,6 +776,10 @@ async function main() {
         skills: pickN(SKILLS, randInt(4, 8)),
         linkedinUrl: `https://www.linkedin.com/in/${first}-${last}-${i}`.toLowerCase(),
         notes: chance(0.35) ? pick(CANDIDATE_NOTES) : null,
+        status: status as never,
+        tags: chance(0.5) ? pickN(CANDIDATE_TAGS, randInt(1, 3)) : [],
+        lastContactedAt: chance(0.6) ? randDate(createdAt, NOW) : null,
+        source: chance(0.5) ? pick(CANDIDATE_SOURCES) : null,
         createdById: creator.id,
         createdAt,
         updatedAt: createdAt,
@@ -653,6 +792,10 @@ async function main() {
     if (chance(0.8)) {
       const labels = pickN(RESUME_LABELS, randInt(1, 3));
       for (let j = 0; j < labels.length; j++) {
+        // A few résumés are archived (soft-deleted) so the "Show archived" chip
+        // on the candidate page has data. Archived ones aren't offered for
+        // submission, so only active ones go into the pick pool below.
+        const isActive = chance(0.85);
         const created = await prisma.candidateResume.create({
           data: {
             candidateId: candidate.id,
@@ -661,11 +804,14 @@ async function main() {
               "https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz" +
               `${i}-${j}` +
               "/view",
+            isActive,
             createdAt,
           },
           select: { id: true, driveLink: true },
         });
-        resumes.push(created);
+        if (isActive) {
+          resumes.push(created);
+        }
         resumeCount++;
       }
     }
@@ -679,7 +825,7 @@ async function main() {
       createdAt,
     });
     updatedAtFixes.push({ table: "Candidate", id: candidate.id, ts: createdAt });
-    candidates.push({ id: candidate.id, fullName, createdAt, resumes });
+    candidates.push({ id: candidate.id, fullName, createdAt, status, resumes });
   }
 
   // ── Submissions + interview rounds ──
@@ -706,6 +852,10 @@ async function main() {
         ["CLIENT_INTERVIEW", 2],
         ["REJECTED", 3],
         ["ON_HOLD", 1],
+        ["JOINED", 1],
+        // A fast offer-then-backout — keeps the scorecard's Backouts column
+        // populated for the current month, not just old data.
+        ["BACKED_OUT", 1],
       ]);
     if (age < 45)
       return weighted<SubmissionStatus>([
@@ -716,6 +866,8 @@ async function main() {
         ["REJECTED", 4],
         ["ON_HOLD", 2],
         ["OFFER_RELEASED", 1],
+        ["JOINED", 4],
+        ["BACKED_OUT", 1],
       ]);
     return weighted<SubmissionStatus>([
       ["VENDOR_SCREENING_CALL", 1],
@@ -724,7 +876,8 @@ async function main() {
       ["REJECTED", 4],
       ["ON_HOLD", 1],
       ["OFFER_RELEASED", 2],
-      ["JOINED", 3],
+      ["JOINED", 5],
+      ["BACKED_OUT", 2],
     ]);
   }
 
@@ -756,6 +909,15 @@ async function main() {
         return [...PIPELINE.slice(0, randInt(1, 4)), "REJECTED"];
       case "ON_HOLD":
         return [...PIPELINE.slice(0, randInt(2, 4)), "ON_HOLD"];
+      case "BACKED_OUT":
+        // Got all the way to an accepted offer, then walked.
+        return [
+          ...PIPELINE,
+          "SELECTED",
+          "OFFER_RELEASED",
+          "OFFER_ACCEPTED",
+          "BACKED_OUT",
+        ];
     }
   }
 
@@ -774,8 +936,12 @@ async function main() {
 
   const usedPairs = new Set<string>();
   const subCountByCandidate = new Map<string, number>();
+  // Candidates with a live (ACTIVE) placement — drives the linked bench record's
+  // marketing status (PLACED) below, so the roster reflects the lifecycle model.
+  const placedCandidateIds = new Set<string>();
   let submissionCount = 0;
   let roundCount = 0;
+  let placementCount = 0;
 
   for (let i = 0; i < 160; i++) {
     // Pick a unique candidate+job pair (candidate capped at 9 submissions).
@@ -841,6 +1007,15 @@ async function main() {
         rejectionReason:
           finalStatus === "REJECTED" ? pick(REJECTION_REASONS) : null,
         submissionNotes: chance(0.4) ? pick(SUBMISSION_NOTES) : null,
+        // Bench-Sales fields — populated on a subset so the new columns/detail
+        // rows have realistic data; left null on the rest (regular submissions).
+        engagement: chance(0.6) ? (chance(0.5) ? "C2C" : "W2") : null,
+        vendorRecruiterName: chance(0.5) ? pick(VENDOR_RECRUITER_NAMES) : null,
+        jobDuties: chance(0.3) ? pick(JOB_DUTIES_SAMPLES) : null,
+        // Pay/Bill rate pair (bill > pay) + team lead on a subset.
+        payRate: chance(0.6) ? job.candidateRate + randInt(-3, 4) : null,
+        billRate: chance(0.6) ? job.candidateRate + randInt(12, 30) : null,
+        teamLead: chance(0.5) ? pick(TEAM_LEADS) : null,
         candidateResumeId: pickedResume?.id ?? null,
         resumeDriveLink: pickedResume?.driveLink ?? null,
         submittedAt,
@@ -951,6 +1126,7 @@ async function main() {
             interviewerName: pick(INTERVIEWERS),
             scheduledAt,
             result,
+            supportNeeded: chance(0.3),
             feedback: feedback || null,
             notes: chance(0.4) ? pick(ROUND_NOTES) : null,
             updatedById: submittedById,
@@ -1009,6 +1185,75 @@ async function main() {
       }
     }
 
+    // Placement — created when the submission reached JOINED. Populates the
+    // Bench-Sales "Placements" sheet fields so /placements has realistic data.
+    if (finalStatus === "JOINED") {
+      const startDate = times[times.length - 1];
+      // ~20% of placements have rates still pending (0/0) — exercises the
+      // "Rates pending" UI flag + the dashboard "rates pending" card.
+      const ratesPending = chance(0.2);
+      const bill = ratesPending ? 0 : job.candidateRate + randInt(12, 30);
+      const pay = ratesPending ? 0 : job.candidateRate + randInt(-3, 4);
+      // ~25% have already ended; the rest stay ACTIVE (open-ended or a future
+      // end date for a fixed-length contract).
+      const ended = chance(0.25);
+      const contractMonths = randInt(3, 12);
+      const endDate = ended
+        ? new Date(
+            Math.min(
+              startDate.getTime() + contractMonths * 30 * DAY,
+              NOW.getTime() - DAY,
+            ),
+          )
+        : chance(0.5)
+          ? new Date(startDate.getTime() + contractMonths * 30 * DAY)
+          : null;
+      const interviewDate = new Date(
+        startDate.getTime() - randInt(5, 20) * DAY,
+      );
+      const placement = await prisma.placement.create({
+        data: {
+          submissionId: submission.id,
+          candidateId: candidate.id,
+          jobId: job.id,
+          startDate,
+          endDate,
+          billRate: bill,
+          payRate: pay,
+          status: ended ? "ENDED" : "ACTIVE",
+          endReason: ended ? "COMPLETED" : null,
+          endNote: ended ? "Contract completed." : null,
+          organisation: chance(0.7) ? pick(ORGANISATIONS) : null,
+          teamLead: chance(0.7) ? pick(TEAM_LEADS) : null,
+          interviewDate,
+          placementDate: startDate,
+          remarks: chance(0.5) ? pick(PLACEMENT_REMARKS) : null,
+          createdAt: startDate,
+          updatedAt: endDate ?? startDate,
+        },
+        select: { id: true, seq: true },
+      });
+      placementCount++;
+      // Keep the candidate's status consistent with a live placement.
+      if (!ended) {
+        await prisma.candidate.update({
+          where: { id: candidate.id },
+          data: { status: "PLACED" },
+        });
+        placedCandidateIds.add(candidate.id);
+      }
+      activityRows.push({
+        entityType: "SUBMISSION",
+        action: "PLACEMENT_CREATED",
+        description: `Placement PLC-${String(placement.seq).padStart(3, "0")} created for ${candidate.fullName} on "${job.title}"`,
+        performedById: submittedById,
+        submissionId: submission.id,
+        candidateId: candidate.id,
+        jobId: job.id,
+        createdAt: startDate,
+      });
+    }
+
     // Submission note (~45%).
     if (chance(0.45)) {
       const body = pick(SUBMISSION_NOTES);
@@ -1027,6 +1272,208 @@ async function main() {
         performedById: submittedById,
         submissionId: submission.id,
         createdAt: noteAt,
+      });
+    }
+  }
+
+  // ── Bench consultants (marketing roster) ──
+  // Lifecycle bench model: every candidate is linked 1:1 to a bench record (the
+  // marketing identity), and its marketing status reflects the candidate's
+  // pipeline state — PLACED for those with a live placement, INACTIVE for the
+  // ones marked not-interested / do-not-contact (off the bench), and a spread of
+  // ACTIVE/PAUSED for the rest (on the bench, being marketed).
+  console.log("Creating bench consultants (linked to candidates)…");
+  let benchCount = 0;
+  for (const c of candidates) {
+    const [first, ...rest] = c.fullName.split(" ");
+    const last = rest.join(" ") || "Consultant";
+    const recruiter = pick(recruiters);
+    const priority = chance(0.4) ? "HIGH" : "SECOND";
+    const marketingStatus = placedCandidateIds.has(c.id)
+      ? "PLACED"
+      : c.status === "NOT_INTERESTED" || c.status === "DO_NOT_CONTACT"
+        ? "INACTIVE"
+        : weighted<"ACTIVE" | "PAUSED">([
+            ["ACTIVE", 8],
+            ["PAUSED", 2],
+          ]);
+    const hasCreds = chance(0.7);
+    const mkExp = randInt(3, 14) + (chance(0.5) ? 0.5 : 0);
+
+    const consultant = await prisma.benchConsultant.create({
+      data: {
+        fullName: c.fullName,
+        email: `${first}.${last}.bench`.toLowerCase().replace(/\s+/g, "") + "@example.com",
+        phone: `+1 ${randInt(200, 989)}-${randInt(200, 989)}-${randInt(1000, 9999)}`,
+        currentLocation: pick(LOCATIONS),
+        workAuthorization: pick(BENCH_VISAS),
+        mVisa: pick(BENCH_VISAS),
+        aVisa: chance(0.4) ? pick(BENCH_VISAS) : null,
+        marketingExpYears: mkExp,
+        realTimeExpYears: Math.max(1, mkExp - randInt(1, 3)),
+        technology: pick(BENCH_TECHS),
+        skills: pickN(SKILLS, randInt(3, 6)),
+        reference: chance(0.6) ? pick(BENCH_REFERENCES) : null,
+        company: chance(0.5) ? pick(CURRENT_COMPANIES) : null,
+        projectType: pick(PROJECT_TYPES),
+        leastRateC2C: randInt(55, 95),
+        callType: pick(CALL_TYPES),
+        payrollType: pick(PAYROLL_TYPES),
+        relocation: chance(0.5),
+        marketingStartDate: c.createdAt,
+        marketingEmail: hasCreds
+          ? `${first}.${last}.mktg`.toLowerCase().replace(/\s+/g, "") + "@bench-marketing.com"
+          : null,
+        marketingPassword: hasCreds ? `Mktg!${randInt(1000, 9999)}` : null,
+        marketingNumber: hasCreds
+          ? `+1 ${randInt(200, 989)}-${randInt(200, 989)}-${randInt(1000, 9999)}`
+          : null,
+        personalNumber: chance(0.5)
+          ? `+1 ${randInt(200, 989)}-${randInt(200, 989)}-${randInt(1000, 9999)}`
+          : null,
+        priority,
+        marketingStatus,
+        notes: chance(0.4) ? pick(CANDIDATE_NOTES) : null,
+        candidateId: c.id,
+        recruiterId: recruiter.id,
+        createdById: admin.id,
+        createdAt: c.createdAt,
+        updatedAt: c.createdAt,
+      },
+      select: { id: true },
+    });
+    benchCount++;
+
+    activityRows.push({
+      entityType: "CONSULTANT",
+      action: "BENCH_CONSULTANT_CREATED",
+      description: `Bench consultant "${c.fullName}" added to marketing roster`,
+      performedById: admin.id,
+      benchConsultantId: consultant.id,
+      createdAt: c.createdAt,
+    });
+  }
+
+  // ── Vendor portal requirements (the planning queue) ──
+  // Mostly OPEN (the requisitions a team lead has scoped, waiting for a
+  // recruiter to move them to a submission) plus a couple CANCELLED so the
+  // status filter has something to do. Team lead is derived from the assigned
+  // recruiter's team (Sriman → TEAM_A, Deepa → TEAM_B).
+  console.log("Creating vendor portal requirements…");
+  const teamLeadByLabel = new Map<string, string>();
+  for (const u of USER_ROSTER) {
+    if (u.isTeamLead) teamLeadByLabel.set(u.teamLabel, u.fullName);
+  }
+  let requirementCount = 0;
+  for (let i = 0; i < 14; i++) {
+    const job = pick(jobs);
+    const recruiter = pick(recruiters);
+    // ~70% already have a candidate picked; the rest are candidate-less plans.
+    const candidate = chance(0.7) ? pick(candidates) : null;
+    const status = weighted<"OPEN" | "CANCELLED">([
+      ["OPEN", 11],
+      ["CANCELLED", 3],
+    ]);
+    const payRate = job.candidateRate - randInt(0, 6);
+    const billRate = job.candidateRate + randInt(10, 30);
+    const createdAt = randDate(
+      new Date(NOW.getTime() - 30 * DAY),
+      new Date(NOW.getTime() - 1 * DAY),
+    );
+    const requirement = await prisma.vendorRequirement.create({
+      data: {
+        jobId: job.id,
+        candidateId: candidate?.id ?? null,
+        recruiterId: recruiter.id,
+        location: pick(LOCATIONS),
+        payRate,
+        billRate,
+        candidateRate: job.candidateRate,
+        engagement: chance(0.6) ? "C2C" : "W2",
+        vendorRecruiterName: chance(0.5) ? pick(VENDOR_RECRUITER_NAMES) : null,
+        teamLead: teamLeadByLabel.get(recruiter.teamLabel ?? "") ?? null,
+        submissionNotes: chance(0.4) ? pick(CANDIDATE_NOTES) : null,
+        status,
+        createdById: admin.id,
+        createdAt,
+        updatedAt: createdAt,
+      },
+      select: { id: true },
+    });
+    requirementCount++;
+    activityRows.push({
+      entityType: "REQUIREMENT",
+      action: "REQUIREMENT_CREATED",
+      description: `Vendor requirement created for "${job.title}"`,
+      performedById: admin.id,
+      requirementId: requirement.id,
+      createdAt,
+    });
+    if (status === "CANCELLED") {
+      activityRows.push({
+        entityType: "REQUIREMENT",
+        action: "REQUIREMENT_CANCELLED",
+        description: "Vendor requirement cancelled",
+        performedById: admin.id,
+        requirementId: requirement.id,
+        createdAt: new Date(createdAt.getTime() + 2 * DAY),
+      });
+    }
+  }
+
+  // ── Candidate documents (with a spread of expiry dates) ──
+  // Exercises the expiry pills + the dashboard "Documents expiring (30 days)"
+  // banner: some are already expired, some expire within 30 days, some far out.
+  console.log("Creating candidate documents…");
+  let docCount = 0;
+  const DOC_TEMPLATES: { category: string; label: string }[] = [
+    { category: "WORK_AUTH", label: "H1-B I-797" },
+    { category: "WORK_AUTH", label: "EAD Card" },
+    { category: "IDENTITY", label: "Passport" },
+    { category: "IDENTITY", label: "Driver's License" },
+    { category: "EDUCATION", label: "Master's Degree" },
+    { category: "EMPLOYMENT", label: "Latest Offer Letter" },
+  ];
+  for (let i = 0; i < candidates.length; i++) {
+    const c = candidates[i];
+    if (!chance(0.5)) continue;
+    for (const t of pickN(DOC_TEMPLATES, randInt(1, 3))) {
+      const bucket = weighted<"past" | "soon" | "future" | "none">([
+        ["past", 1],
+        ["soon", 1],
+        ["future", 2],
+        ["none", 1],
+      ]);
+      const expiresAt =
+        bucket === "past"
+          ? new Date(NOW.getTime() - randInt(5, 60) * DAY)
+          : bucket === "soon"
+            ? new Date(NOW.getTime() + randInt(3, 28) * DAY)
+            : bucket === "future"
+              ? new Date(NOW.getTime() + randInt(120, 700) * DAY)
+              : null;
+      await prisma.candidateDocument.create({
+        data: {
+          candidateId: c.id,
+          category: t.category as never,
+          label: t.label,
+          driveLink:
+            "https://drive.google.com/file/d/1Doc" + `${i}-${docCount}` + "/view",
+          issuedAt: new Date(NOW.getTime() - randInt(200, 1000) * DAY),
+          expiresAt,
+          uploadedById: admin.id,
+          createdAt: c.createdAt,
+          updatedAt: c.createdAt,
+        },
+      });
+      docCount++;
+      activityRows.push({
+        entityType: "CANDIDATE",
+        action: "CANDIDATE_DOCUMENT_ADDED",
+        description: `Document "${t.label}" added`,
+        performedById: admin.id,
+        candidateId: c.id,
+        createdAt: c.createdAt,
       });
     }
   }
@@ -1110,16 +1557,20 @@ async function main() {
   }
 
   console.log("\nSeed complete.");
-  console.log(`  Users:        ${recruiters.length + 1} (1 admin, ${recruiters.length} recruiters)`);
+  console.log(`  Users:        ${allUsers.length} (${adminCount} admins/managers, ${recruiters.length} recruiters)`);
   console.log(`  Jobs:         ${jobs.length}`);
   console.log(`  Candidates:   ${candidates.length}`);
+  console.log(`  Bench consultants: ${benchCount} (linked 1:1 to candidates)`);
+  console.log(`  Vendor requirements: ${requirementCount}`);
+  console.log(`  Candidate documents: ${docCount}`);
   console.log(`  Resumes:      ${resumeCount}`);
   console.log(`  Submissions:  ${submissionCount}`);
+  console.log(`  Placements:   ${placementCount}`);
   console.log(`  Interview rounds: ${roundCount}`);
   console.log(`  Notes:        ${noteRows.length}`);
   console.log(`  Activity rows: ${activityRows.length}`);
-  console.log(`\n  Admin login:  ${ADMIN.email}  /  ${SHARED_PASSWORD}`);
-  console.log(`  (all sample recruiters share the same password)`);
+  console.log(`\n  Admin login:  ${ADMIN_LOGIN}  /  ${SHARED_PASSWORD}  (Sriman Udugula)`);
+  console.log(`  (all 11 users share the same password)`);
 }
 
 main()

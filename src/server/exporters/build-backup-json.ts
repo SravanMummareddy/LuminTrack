@@ -31,6 +31,8 @@ export async function buildBackupJson(): Promise<BackupJson> {
     placements,
     placementExtensions,
     interviewRounds,
+    benchConsultants,
+    vendorRequirements,
     notes,
     activities,
   ] = await Promise.all([
@@ -59,6 +61,8 @@ export async function buildBackupJson(): Promise<BackupJson> {
     prisma.placement.findMany(),
     prisma.placementExtension.findMany(),
     prisma.interviewRound.findMany(),
+    prisma.benchConsultant.findMany(),
+    prisma.vendorRequirement.findMany(),
     prisma.note.findMany(),
     prisma.activity.findMany(),
   ]);
@@ -82,6 +86,8 @@ export async function buildBackupJson(): Promise<BackupJson> {
       placement: placements,
       placementExtension: placementExtensions,
       interviewRound: interviewRounds,
+      benchConsultant: benchConsultants,
+      vendorRequirement: vendorRequirements,
       note: notes,
       activity: activities,
     },
@@ -106,6 +112,8 @@ export async function getBackupPreflight(): Promise<BackupPreflight> {
     submissions,
     placements,
     interviewRounds,
+    benchConsultants,
+    vendorRequirements,
     notes,
     activities,
   ] = await Promise.all([
@@ -120,6 +128,8 @@ export async function getBackupPreflight(): Promise<BackupPreflight> {
     prisma.submission.count(),
     prisma.placement.count(),
     prisma.interviewRound.count(),
+    prisma.benchConsultant.count(),
+    prisma.vendorRequirement.count(),
     prisma.note.count(),
     prisma.activity.count(),
   ]);
@@ -136,6 +146,8 @@ export async function getBackupPreflight(): Promise<BackupPreflight> {
     submissions,
     placements,
     interviewRounds,
+    benchConsultants,
+    vendorRequirements,
     notes,
     activities,
   };

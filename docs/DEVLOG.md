@@ -10,6 +10,243 @@ short instead of long.
 
 ---
 
+## 2026-06-22 · "localhost is unable to open" — a `/` ⇄ `/login` redirect loop after a reseed
+
+**Situation.** Right after shipping the Vendor Portal Requirements feature, the
+owner started `npm run dev` and couldn't open `localhost:3000`. The server log
+was a wall of identical `GET / 307` lines — dozens of them — and conspicuously
+**no `/login` and no `_next` asset requests**. The browser eventually showed
+"localhost is unable to open" (ERR_TOO_MANY_REDIRECTS). The dev server itself was
+healthy (`Ready in 209ms`), so it wasn't a crash.
+
+**Diagnosis.** `curl -sI /` returned `307 → /login` and `curl /login` returned
+`200` — following redirects gave exactly **one** hop and no loop. So *server-side
+with no cookie there is no loop*; the trap needed a cookie. Reading the two auth
+layers side by side exposed the disagreement: `proxy.ts` calls
+`verifySessionToken`, which **only checks the JWT signature — never the DB**,
+while `getCurrentUser` does `prisma.user.findUnique` and also requires
+`isActive`. The owner had just reseeded (the feature's documented "reseed" step),
+which wiped + recreated every user with **new IDs**. Their browser still held a
+validly-signed JWT for a *dead* user id. So: proxy sees a good JWT → "authed" →
+lets `/` through and bounces `/login → /`; the page's `requireUser` hits the DB,
+finds no user → bounces `/ → /login`; repeat forever. Only `GET /` showed in the
+log because the browser **cached the `/login` hop** while the un-cacheable `/`
+kept hitting the server — the missing `/login` lines were the clue, not noise.
+
+**Fix.** `requireUser()` now redirects a missing-user request to a new
+`GET /api/auth/logout` Route Handler that **deletes the session cookie** before
+redirecting to `/login`. The cookie can only be cleared in a Route Handler (an
+RSC render can't mutate cookies), and `/api/*` is excluded from the proxy matcher,
+so the logout hop isn't intercepted. A cookie-less request never reaches
+`requireUser` (the proxy sends it straight to `/login`), so this path fires *only*
+for a stale session — exactly when clearing it is correct. Verified:
+`GET /api/auth/logout → 307 /login` with `Set-Cookie: lumintrack_session=;
+Expires=1970`.
+
+**Lesson.** When two layers both gate auth, they must agree on *what
+"authenticated" means* — here the edge (JWT-valid) and the page (user-exists-and-
+active) diverged, and the gap only opened under a real-world event (a reseed /
+user deletion) that invalidates the user without invalidating the token. The
+debugging unlock was reproducing with `curl` to separate "server loops" from
+"browser loops": once `curl` proved the server did **not** loop without a cookie,
+the cause had to be a cookie the server trusts more than it should. And the
+absence of `/login` in the log (browser cache) was the tell for which leg of the
+loop was which.
+
+---
+
+## 2026-06-21 · "Nothing on the page is clickable" — every `/_next/static/chunks/*` 404ing
+
+**Situation.** Mid filter-redesign, live-verifying the new Placements filter via
+the browser. The page rendered fine (correct data, correct layout) but **nothing
+hydrated** — selecting "Custom range" didn't reveal the date inputs, the Filters
+toggle did nothing, and a DOM probe showed the `<select>` had no React fiber. My
+first instinct was a bug in the new `DateRangeField` (a controlled select), but
+its logic is trivial `useState` + conditional render, and tsc/eslint were clean.
+
+**Diagnosis.** The console was full of `Failed to load resource: 404` for every
+`/_next/static/chunks/*.js`, plus a repeating HMR-WebSocket handshake failure.
+Server logs gave it away: `ENOENT: …/_buildManifest.js.tmp…` and `Compaction
+failed: Another write batch or compaction is already active (Only a single write
+operation is allowed at a time)`. **Two Turbopack dev servers were running against
+the same `.next` directory** — a leftover from a `preview_start` attempt that had
+errored with "Another next dev server is already running" but left a zombie still
+writing to `.next`. The two processes raced on the build manifest, so the HTML
+referenced chunk filenames the other process had already superseded → 404 →
+no client JS → no hydration. The bug was never in the component.
+
+**Fix.** Kill *all* dev-server PIDs (`lsof -ti:3000 | xargs kill -9`, not just the
+one I knew about), `rm -rf .next` to clear the corrupted build cache, then start a
+single clean server. Hydration came back. For the parts I still couldn't click
+(the preview/automation path can't complete the HMR WebSocket upgrade, which
+blocks Turbopack's client bootstrap), I verified server-side instead:
+`?preset=custom` server-renders the From/To inputs because the field's state
+initializes from the URL, and a narrowed date range dropped the row count — proving
+the filter end to end without needing the browser to hydrate.
+
+**Lesson.** When *everything* interactive is dead but the HTML is correct, suspect
+the build pipeline, not the component — read the chunk 404s + server log before
+touching code. Two `next dev` processes silently corrupting a shared `.next` is the
+classic cause; the "Another next dev server is already running" guard only covers
+the happy path, not a half-dead zombie. Also: a controlled field whose initial
+state comes from the URL is verifiable server-side, which sidesteps a
+broken-hydration environment entirely.
+
+---
+
+## 2026-06-20 · A recruiter editing a bench consultant silently wiped admin-only credentials
+
+**Situation.** Live-testing the Bench roster as a recruiter (not admin). The
+marketing-credentials block (`marketingEmail` / `marketingPassword` / numbers)
+is admin-gated — correctly hidden on the detail page and omitted from the edit
+form for non-admins. But when a recruiter saved *any* edit to a consultant
+(e.g. changing the location), the admin-set credentials vanished.
+
+**Diagnosis.** A classic gated-field-on-a-shared-form trap. The edit form only
+renders the credential inputs when `canEditCredentials` is true, so a recruiter's
+submit carries *no* credential keys. `updateBenchConsultant` was gated only by
+`requireUser()` (no admin check) and wrote the full `benchData(d)` payload, where
+each credential field is `d.marketingPassword ?? null`. Missing form field →
+`undefined` → `?? null` → the column was overwritten with `null`. The recruiter
+never saw the secrets, yet their routine edit destroyed them — and the same
+no-admin-gate path would let a crafted request *set* credentials too.
+
+**Fix.** Compute `canViewBenchCredentials(user)` inside both create and update.
+When false, `stripCredentials()` *deletes* the four credential keys from the
+Prisma payload entirely. Omitting a key (vs. setting `null`) makes Prisma leave
+the existing column untouched on update, and fall back to the default on create.
+The "marketing credentials changed" audit line is likewise only evaluated for
+credential-cleared users. Verified end-to-end on a production build: recruiter
+Priya edited BC-011's location → location persisted, `marketingPassword` stayed
+`Secret123!`, audit logged "location" only.
+
+**Lesson.** When a form hides fields by permission but the action writes the
+whole object, "absent input" reads as "set to null" — a silent destroyer of data
+the editor isn't even allowed to see. The permission boundary has to live in the
+*action*, not just the form: omit gated fields from the write so they're neither
+set nor blanked. Form-level hiding is UX; server-level omission is the control.
+
+> **Testing note.** This was found only after abandoning the Turbopack *dev*
+> server, which had wedged into serving error-fallback pages (`ENOENT …
+> build-manifest.json`, `Cannot find module '[turbopack]_runtime.js'`) after
+> repeated branch-switches + `.next` clears — symptom was "nothing hydrates,
+> every client toggle dead." A `next build` + `next start` gave a stable,
+> manifest-complete server where hydration worked and real bugs surfaced. When
+> dev-server state looks impossibly broken site-wide with no code cause, a
+> production build is both the cleaner test bed and a stronger compile check.
+
+---
+
+## 2026-06-20 · `seed-demo` wipe predated three feature areas → FK violation on re-seed
+
+**Situation.** After shipping the Monthly Performance scorecard (which needed
+`SubmissionStatus.BACKED_OUT` + `empId`/`teamLabel` on recruiters), re-running
+`prisma/seed-demo.ts` to regenerate sample data crashed at the user-delete step
+with `P2003 ForeignKeyConstraintViolation` on `User`.
+
+**Diagnosis.** The seed's "wipe existing data" block was a hand-maintained list
+of `deleteMany()` calls written back in Phase 7. Since then we'd added
+Placements + PlacementExtensions (R4.2), CandidateDocuments (R4.1), JobPortals,
+Contacts, and now BenchConsultants — **none of which were in the wipe list.** On
+a *fresh* DB the omission was invisible (nothing to delete), but the moment any
+of those tables held a row that referenced a User or Candidate (e.g. the BC-001
+bench consultant created during P1), deleting users blew up on the dangling FK.
+A silent gap that only surfaces once the referencing table is non-empty is the
+worst kind: it passes every test until real data exists.
+
+**Fix.** Rewrote the wipe as a single FK-safe cascade (children → parents):
+activity/note → placementExtension/placement → interviewRound/benchConsultant →
+submission → candidateDocument/candidateResume/jobAssignment → job → candidate →
+contact/jobPortal → vendor/client/source → user, with a comment explaining the
+ordering invariant so the next table addition has an obvious home.
+
+**Lesson.** A destructive teardown must enumerate *every* table that can hold an
+FK to what it deletes — and that list rots silently as the schema grows. Either
+derive the delete order from the schema, or treat "add a model" as also meaning
+"add it to the wipe." When a delete is FK-ordered, write the ordering rationale
+next to it so the list is maintainable, not archaeology.
+
+---
+
+## 2026-06-20 · Seeded `BACKED_OUT` only in the oldest age bucket → scorecard column looked broken
+
+**Situation.** The Monthly Performance scorecard has a Backouts column. After
+wiring it up, the current month's column was entirely empty, and a DB count
+showed **zero** `BACKED_OUT` submissions total — even though I'd added
+`["BACKED_OUT", 1]` to the seed's status mix.
+
+**Diagnosis.** Two compounding issues. (1) I'd added the weight to only the
+`age >= 45 days` bucket of `pickFinalStatus`. Backouts bucket on `submittedAt`,
+and a 45+-day-old submission was submitted in March/April — so by construction a
+backout could *never* land in a recent month's column. (2) The seed RNG is a
+*deterministic* PRNG, and that single low-weight entry in one bucket happened to
+roll zero across the whole run. So the feature looked broken in exactly the view
+a stakeholder would open first (the current month).
+
+**Fix.** Added modest `BACKED_OUT` weight to the recent buckets too
+(`age < 20`, `age < 45`) and bumped the oldest to 2, so a fast
+offer-then-backout shows up in the current month. Re-seed: 3 total, 1 in June —
+the column now renders a red `1` cell that reconciles against the submissions.
+
+**Lesson.** Demo data has to exercise the feature *in the view the audience will
+actually look at*, not just somewhere in the table. A metric bucketed by date
+needs sample rows whose date lands in the default window — and with a fixed-seed
+PRNG, "low probability" effectively means "verify it actually happened," because
+there's no second roll. Always count the rows after seeding a new metric.
+
+---
+
+## 2026-06-20 · A phantom migration in the shared dev DB blocked all new migrations
+
+**Situation.** Starting the Bench-Sales build, the very first
+`prisma migrate dev` (adding bench enum values + two `User` columns)
+refused to run and announced it needed to **reset the database** — drop
+all data — to proceed. The reported reason was "drift": the live Neon dev
+DB contained a migration `20260530052124_resume_soft_delete` (adding
+`CandidateResume.isActive` + `RESUME_ARCHIVED`/`RESUME_RESTORED` actions)
+that existed in the migration *history table* but in no local migration
+folder.
+
+**Diagnosis.** Searched every branch, commit, stash, and reflog
+(`git log --all -S`, `git branch -a`) for the migration name and the
+`isActive` field — **zero hits**. The schema change had been applied to
+the shared Neon database by some working copy (another machine / an
+unpushed branch / a throwaway session) and was never committed here. So
+the DB was strictly *ahead* of the repo by one feature's worth of schema,
+and Prisma's `migrate dev` correctly refuses to evolve a database whose
+state it can't reconstruct from migration files — its only safe offer is a
+reset. Before touching anything, I counted rows to classify the data: 8
+users (the seed-demo set), 30 candidates, ~162 submissions, 357 jobs — i.e.
+regenerable demo seed + a 306-row iLabor import test, not hand-entered
+production data.
+
+**Fix.** Because the data was disposable, the product owner chose
+**reset + reseed** over reverse-engineering the lost migration. Prisma 7
+added an AI-agent guardrail that blocks destructive commands unless you
+pass `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION` set to the user's exact
+consent text — so this required an explicit typed "yes" first. Then:
+`migrate reset --force` (re-applied the 26 committed migrations cleanly,
+clearing the orphan) → hand-authored the bench migration via
+`prisma migrate diff --from-config-datasource --to-schema` + `migrate
+deploy` (because `migrate dev` is interactive and the agent shell is
+non-interactive — it wouldn't acknowledge the `empId` unique-constraint
+warning) → `npx tsx prisma/seed-demo.ts` to restore the demo dataset.
+
+**Lesson / interview framing.** Two transferable points. (1) **A shared
+dev database is mutable global state**; when migration history diverges
+from version control, trust the committed migrations as source of truth and
+*classify the data before reaching for reset* — the right call hinges
+entirely on whether the rows are precious or regenerable, which is a
+one-query question. (2) When `migrate dev` fights you in automation, drop to
+its plumbing: `migrate diff` to render the exact SQL and `migrate deploy` to
+apply a hand-written migration file — same result, fully non-interactive,
+and you get to eyeball the SQL (here: confirming the enum `ADD VALUE`s
+weren't *used* in the same migration, so they were safe to ship in one
+file). The new Prisma consent gate is also worth knowing about: destructive
+commands now hard-stop AI agents by design.
+
+---
+
 ## 2026-05-29 · seed-demo crashed on wipe — delete order ignored later FK tables
 
 **Situation.** `npx tsx prisma/seed-demo.ts` failed mid-wipe with
@@ -461,6 +698,46 @@ once and pays forward indefinitely. Also: **show the attribution
 in preview.** Mutations that decide invisible things make
 operators distrust the system. Show the decision before the
 commit button.
+
+---
+
+## 2026-06-20 · The Placements tab was empty in every demo — seed never reached JOINED
+
+**Situation.** Adding the five Bench-Sales "Placements" sheet fields
+(Organisation, Lead, Date of Interview, Date of Placement, Remarks)
+was the easy part. The harder discovery: after seeding fresh demo
+data, `/placements` was completely empty — `Placements: 0`. The
+feature being demo'd had no rows to demo.
+
+**Diagnosis.** `seed-demo.ts` creates 160 submissions with a random
+final status drawn from age-bucketed weight tables, but **`JOINED`
+only appeared in the oldest bucket (`age >= 45` days)** — and a real
+data check showed only 11 of 160 submissions were that old, so the
+expected JOINED count was ~2 and the actual draw was 0. Worse, the
+seed never created `Placement` rows at all: placements are normally
+auto-created by `ensurePlacementOnJoined` on a *live* status change
+through the UI, a code path the seed bypasses entirely. So even the
+rare JOINED submission left no placement behind. Two gaps stacked:
+JOINED was nearly unreachable, and reaching it produced nothing.
+
+**Fix.** (1) Added `JOINED` to the `age < 20` and `age < 45` weight
+buckets and bumped its weight in the oldest bucket, lifting placements
+to a realistic ~8% join rate (13 of 160). (2) Added an explicit
+placement-creation block in the submission loop, fired on
+`finalStatus === "JOINED"`, that writes a `Placement` with the new
+sheet fields populated (org/lead/remarks on a subset, interviewDate a
+few days before the start, placementDate = start), a 75/25 ACTIVE/ENDED
+split, and a matching `PLACEMENT_CREATED` audit row — and flips the
+candidate to `PLACED` so status stays consistent with a live placement.
+
+**Lesson.** *A feature with no seed data is a feature you can't see —
+and "the seed has a JOINED path" is not the same as "the seed produces
+placements."* The status existed in the weight table and the lifecycle
+helper existed in the app, but nothing connected them in the seed. When
+you ship a new tab, the demo isn't done until you've *looked at the tab
+with seeded data* — count the rows, don't assume the upstream weights
+flow through. A one-line `Placements: ${count}` in the seed summary
+would have caught this on day one.
 
 ---
 

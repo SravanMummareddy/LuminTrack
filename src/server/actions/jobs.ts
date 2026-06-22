@@ -5,10 +5,63 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/lib/session";
 import { logActivity } from "@/server/activity";
+import { deriveTeamLead } from "@/server/team-lead";
+import { canManageRequirements } from "@/lib/permissions";
 import { jobSchema, JOB_STATUS_VALUES } from "@/lib/validation/job";
 import { toFieldErrors } from "@/lib/validation/common";
-import { JOB_STATUS_LABEL, OTHER_SOURCE } from "@/lib/labels";
+import { JOB_STATUS_LABEL, OTHER_SOURCE, NEW_ORG_ENTITY } from "@/lib/labels";
 import type { FormState } from "@/lib/form-state";
+import type { Prisma } from "@/generated/prisma/client";
+
+/** Resolve a "+ Add new client/vendor" sentinel to an id: reuse a case-
+ *  insensitive name match if one exists, else create the record. Mirrors the
+ *  iLabor importer's create-if-missing so "Acme" and "ACME" don't fork. */
+async function findOrCreateClient(tx: Prisma.TransactionClient, name: string) {
+  const existing = await tx.client.findFirst({
+    where: { name: { equals: name, mode: "insensitive" } },
+    select: { id: true },
+  });
+  return existing ?? (await tx.client.create({ data: { name }, select: { id: true } }));
+}
+async function findOrCreateVendor(tx: Prisma.TransactionClient, name: string) {
+  const existing = await tx.vendor.findFirst({
+    where: { name: { equals: name, mode: "insensitive" } },
+    select: { id: true },
+  });
+  return existing ?? (await tx.vendor.create({ data: { name }, select: { id: true } }));
+}
+
+/**
+ * Reads the optional "also plan a vendor requirement" section of the job-create
+ * form. Returns null unless the section's checkbox is ticked. Fields are
+ * `req_`-prefixed so they never collide with the job's own location/rate fields.
+ */
+function readRequirementSection(formData: FormData) {
+  if (formData.get("createRequirement") == null) return null;
+  const str = (k: string): string | null => {
+    const v = String(formData.get(k) ?? "").trim();
+    return v ? v : null;
+  };
+  const num = (k: string): number | null => {
+    const raw = String(formData.get(k) ?? "").trim();
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  };
+  const engagementRaw = str("req_engagement");
+  const engagement: "C2C" | "W2" | null =
+    engagementRaw === "C2C" ? "C2C" : engagementRaw === "W2" ? "W2" : null;
+  return {
+    recruiterId: str("req_recruiterId"),
+    location: str("req_location"),
+    payRate: num("req_payRate"),
+    billRate: num("req_billRate"),
+    candidateRate: num("req_candidateRate"),
+    engagement,
+    vendorRecruiterName: str("req_vendorRecruiterName"),
+    teamLead: str("req_teamLead"),
+  };
+}
 
 function parseSkillsCsv(raw: unknown): string[] {
   if (typeof raw !== "string") return [];
@@ -66,12 +119,46 @@ export async function createJob(
   const d = parsed.data;
   const isOtherSource = d.sisterCompanySourceId === OTHER_SOURCE;
 
+  // Inline "+ Add new client/vendor" — admin-only (matches Settings org writes).
+  const canCreateOrg = user.role === "ADMIN";
+  const newClientName = String(formData.get("newClientName") ?? "").trim();
+  const newVendorName = String(formData.get("newVendorName") ?? "").trim();
+  const wantNewClient = d.clientId === NEW_ORG_ENTITY;
+  const wantNewVendor = d.vendorId === NEW_ORG_ENTITY;
+  if ((wantNewClient || wantNewVendor) && !canCreateOrg)
+    return { error: "Only admins can add a new client or vendor." };
+  const orgErrors: Record<string, string> = {};
+  if (wantNewClient && !newClientName)
+    orgErrors.clientId = "Enter the new client name.";
+  if (wantNewVendor && !newVendorName)
+    orgErrors.vendorId = "Enter the new vendor name.";
+  if (Object.keys(orgErrors).length)
+    return { error: "Please fix the highlighted fields.", fieldErrors: orgErrors };
+
+  // Optional "plan a vendor requirement" section — only admins / team leads can
+  // create requirements, so a non-privileged POST of req_ fields is ignored.
+  // Resolve the team lead before the tx (it reads the recruiter's team).
+  const reqSection = canManageRequirements(user)
+    ? readRequirementSection(formData)
+    : null;
+  const reqTeamLead = reqSection
+    ? (reqSection.teamLead ?? (await deriveTeamLead(reqSection.recruiterId)))
+    : null;
+
   const job = await prisma.$transaction(async (tx) => {
+    // Resolve inline-added client/vendor first (create-or-reuse by name).
+    const clientId = wantNewClient
+      ? (await findOrCreateClient(tx, newClientName)).id
+      : d.clientId;
+    const vendorId = wantNewVendor
+      ? (await findOrCreateVendor(tx, newVendorName)).id
+      : d.vendorId;
+
     const created = await tx.job.create({
       data: {
         title: d.title,
-        clientId: d.clientId,
-        vendorId: d.vendorId,
+        clientId,
+        vendorId,
         sisterCompanySourceId: isOtherSource ? null : d.sisterCompanySourceId,
         sourceOther: isOtherSource ? (d.sourceOther ?? null) : null,
         status: d.status,
@@ -109,10 +196,36 @@ export async function createJob(
       performedById: user.id,
       jobId: created.id,
     });
+
+    if (reqSection) {
+      const requirement = await tx.vendorRequirement.create({
+        data: {
+          jobId: created.id,
+          recruiterId: reqSection.recruiterId,
+          location: reqSection.location ?? d.location ?? null,
+          payRate: reqSection.payRate,
+          billRate: reqSection.billRate,
+          candidateRate: reqSection.candidateRate,
+          engagement: reqSection.engagement,
+          vendorRecruiterName: reqSection.vendorRecruiterName,
+          teamLead: reqTeamLead,
+          createdById: user.id,
+        },
+      });
+      await logActivity(tx, {
+        entityType: "REQUIREMENT",
+        action: "REQUIREMENT_CREATED",
+        description: `Vendor requirement created for "${created.title}"`,
+        performedById: user.id,
+        requirementId: requirement.id,
+      });
+    }
+
     return created;
   });
 
   revalidatePath("/jobs");
+  revalidatePath("/vendor-portal");
   redirect(`/jobs/${job.id}`);
 }
 

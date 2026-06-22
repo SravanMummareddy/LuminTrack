@@ -90,6 +90,16 @@ const COLUMNS: Column[] = [
     ),
   },
   {
+    key: "vendor",
+    label: "Vendor",
+    defaultVisible: true,
+    render: (p) => (
+      <Td label="Vendor" secondary>
+        {p.job.vendor?.name ?? "—"}
+      </Td>
+    ),
+  },
+  {
     key: "client",
     label: "Client",
     sortKey: "client",
@@ -199,7 +209,9 @@ const COLUMNS: Column[] = [
   {
     key: "recruiter",
     label: "Recruiter",
-    defaultVisible: false,
+    // Visible by default — the sheet's Placements display set is
+    // Name · Vendor · Client · Role · Bill · Pay · Recruiter.
+    defaultVisible: true,
     render: (p) => (
       <Td label="Recruiter" secondary>
         {p.submission.submittedBy.fullName}
@@ -209,7 +221,7 @@ const COLUMNS: Column[] = [
 ];
 
 const STORAGE_KEY = "lumintrack.placements.columns";
-const STORAGE_VERSION = 1;
+const STORAGE_VERSION = 2;
 const DEFAULTS: ColumnPrefs = {
   visible: COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key),
   order: COLUMNS.map((c) => c.key),

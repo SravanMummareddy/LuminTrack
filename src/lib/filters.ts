@@ -69,6 +69,32 @@ export type SortState = { key: string; dir: SortDir };
 /** A page of list rows plus the total row count and the clamped page number. */
 export type Paginated<T> = { rows: T[]; total: number; page: number };
 
+/**
+ * Parses a multi-select param (comma-separated, e.g. `?clientId=a,b,c`) into a
+ * de-duplicated string array, or `undefined` when empty. Tolerates a repeated
+ * param too (takes the first occurrence).
+ */
+export function parseList(
+  value: string | string[] | undefined,
+): string[] | undefined {
+  const single = Array.isArray(value) ? value[0] : value;
+  if (!single) return undefined;
+  const parts = [...new Set(single.split(",").map((s) => s.trim()).filter(Boolean))];
+  return parts.length ? parts : undefined;
+}
+
+/**
+ * Splits the search param into individual terms (comma-separated, e.g.
+ * `?q=engineer,cisco`). Each term narrows the results further (AND), so the
+ * list queries match rows that contain *every* term across their searched
+ * fields. Returns `[]` when there's no search.
+ */
+export function searchTerms(q?: string): string[] {
+  return q
+    ? [...new Set(q.split(",").map((s) => s.trim()).filter(Boolean))]
+    : [];
+}
+
 /** Parses a `?page=` value into a 1-based page number (defaults to 1). */
 export function parsePage(value: string | undefined): number {
   const n = Number(value);

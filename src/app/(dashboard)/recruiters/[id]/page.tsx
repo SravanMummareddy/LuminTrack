@@ -61,7 +61,7 @@ export default async function RecruiterDetailPage({
 }) {
   const { id } = await params;
   const sp = await searchParams;
-  const { current, filters } = parseAnalyticsParams(sp);
+  const { filters } = parseAnalyticsParams(sp);
   const jobsPage = parsePage(
     Array.isArray(sp.jobs) ? sp.jobs[0] : sp.jobs,
   );
@@ -135,7 +135,6 @@ export default async function RecruiterDetailPage({
       </div>
 
       <AnalyticsFilters
-        current={current}
         basePath={`/recruiters/${id}`}
         clients={clients}
         vendors={vendors}

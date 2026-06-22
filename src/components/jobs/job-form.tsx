@@ -3,15 +3,20 @@
 import { useActionState, useState } from "react";
 import Link from "next/link";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
+import { LocationInput } from "@/components/ui/location-input";
+import { SearchSelect } from "@/components/ui/search-select";
 import { Button, buttonClass } from "@/components/ui/button";
 import {
   JOB_STATUSES,
   JOB_STATUS_LABEL,
   OTHER_SOURCE,
+  NEW_ORG_ENTITY,
   WORK_MODES,
   WORK_MODE_LABEL,
   JOB_PRIORITIES,
   JOB_PRIORITY_LABEL,
+  BENCH_ENGAGEMENTS,
+  BENCH_ENGAGEMENT_LABEL,
 } from "@/lib/labels";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 
@@ -63,6 +68,8 @@ export function JobForm({
   recruiters,
   values,
   submitLabel,
+  canManageRequirements = false,
+  canCreateOrgEntities = false,
 }: {
   action: JobAction;
   clients: Option[];
@@ -71,6 +78,10 @@ export function JobForm({
   recruiters: Recruiter[];
   values?: JobFormValues;
   submitLabel: string;
+  /** Show the optional "plan a vendor requirement" section (create mode only). */
+  canManageRequirements?: boolean;
+  /** Allow adding a new client/vendor inline (admins only). */
+  canCreateOrgEntities?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(action, EMPTY_FORM_STATE);
   const errors = state.fieldErrors ?? {};
@@ -88,6 +99,13 @@ export function JobForm({
   );
   const isOtherSource = sourceValue === OTHER_SOURCE;
 
+  // Client / Vendor are controlled so picking "+ Add new…" can reveal a name
+  // box inline (resolved to a created-or-reused record by the action).
+  const [clientValue, setClientValue] = useState(values?.clientId ?? "");
+  const [vendorValue, setVendorValue] = useState(values?.vendorId ?? "");
+  const isNewClient = clientValue === NEW_ORG_ENTITY;
+  const isNewVendor = vendorValue === NEW_ORG_ENTITY;
+
   return (
     <form action={formAction} className="space-y-5">
       {values && <input type="hidden" name="id" value={values.id} />}
@@ -98,46 +116,64 @@ export function JobForm({
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Client" htmlFor="clientId" required error={errors.clientId}>
-          <Select
+          <SearchSelect
             id="clientId"
             name="clientId"
-            defaultValue={values?.clientId ?? ""}
-            required
-          >
-            <option value="" disabled>
-              Select a client…
-            </option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {optionLabel(c.name, c.isActive)}
-              </option>
-            ))}
-          </Select>
+            value={clientValue}
+            onChange={setClientValue}
+            placeholder="Select or type a client…"
+            options={clients.map((c) => ({
+              value: c.id,
+              label: optionLabel(c.name, c.isActive),
+            }))}
+            actionOption={
+              canCreateOrgEntities
+                ? { value: NEW_ORG_ENTITY, label: "+ Add new client…" }
+                : undefined
+            }
+          />
+          {isNewClient && (
+            <Input
+              name="newClientName"
+              placeholder="Type the new client name"
+              className="mt-2"
+              autoFocus
+            />
+          )}
         </Field>
 
         <Field label="Vendor" htmlFor="vendorId" required error={errors.vendorId}>
-          <Select
+          <SearchSelect
             id="vendorId"
             name="vendorId"
-            defaultValue={values?.vendorId ?? ""}
-            required
-          >
-            <option value="" disabled>
-              Select a vendor…
-            </option>
-            {vendors.map((v) => (
-              <option key={v.id} value={v.id}>
-                {optionLabel(v.name, v.isActive)}
-              </option>
-            ))}
-          </Select>
+            value={vendorValue}
+            onChange={setVendorValue}
+            placeholder="Select or type a vendor…"
+            options={vendors.map((v) => ({
+              value: v.id,
+              label: optionLabel(v.name, v.isActive),
+            }))}
+            actionOption={
+              canCreateOrgEntities
+                ? { value: NEW_ORG_ENTITY, label: "+ Add new vendor…" }
+                : undefined
+            }
+          />
+          {isNewVendor && (
+            <Input
+              name="newVendorName"
+              placeholder="Type the new vendor name"
+              className="mt-2"
+              autoFocus
+            />
+          )}
         </Field>
 
         <Field
           label="Source"
           htmlFor="sisterCompanySourceId"
           required
-          error={errors.sisterCompanySourceId}
+          error={errors.sisterCompanySourceId ?? errors.sourceOther}
         >
           <Select
             id="sisterCompanySourceId"
@@ -156,6 +192,18 @@ export function JobForm({
             ))}
             <option value={OTHER_SOURCE}>Other — enter manually</option>
           </Select>
+          {/* The manual-entry box sits directly under the dropdown so it's
+              obviously the thing to fill in once "Other" is picked. */}
+          {isOtherSource && (
+            <Input
+              id="sourceOther"
+              name="sourceOther"
+              defaultValue={values?.sourceOther ?? ""}
+              placeholder="Type the source name (e.g. LinkedIn, referral)"
+              className="mt-2"
+              autoFocus
+            />
+          )}
         </Field>
 
         <Field label="Status" htmlFor="status" error={errors.status}>
@@ -195,24 +243,8 @@ export function JobForm({
         </Field>
       </div>
 
-      {isOtherSource && (
-        <Field
-          label="Source name"
-          htmlFor="sourceOther"
-          required
-          error={errors.sourceOther}
-        >
-          <Input
-            id="sourceOther"
-            name="sourceOther"
-            defaultValue={values?.sourceOther ?? ""}
-            placeholder="e.g. LinkedIn, referral, direct application"
-          />
-        </Field>
-      )}
-
       <Field label="Location" htmlFor="location" error={errors.location}>
-        <Input
+        <LocationInput
           id="location"
           name="location"
           defaultValue={values?.location ?? ""}
@@ -453,6 +485,80 @@ export function JobForm({
           </div>
         )}
       </div>
+
+      {/* Optional vendor-requirement section — create mode only, gated to
+          admins / team leads. Fields are submitted only when the checkbox is
+          ticked (the server reads `createRequirement`'s presence). */}
+      {!values && canManageRequirements && (
+        <details className="rounded-md border border-slate-200 bg-slate-50/50">
+          <summary className="cursor-pointer px-4 py-2.5 text-sm font-medium text-slate-700">
+            Also plan a vendor portal requirement (optional)
+          </summary>
+          <div className="space-y-4 border-t border-slate-200 p-4">
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+              <input
+                type="checkbox"
+                name="createRequirement"
+                value="1"
+                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-200"
+              />
+              Create a vendor requirement for this job
+            </label>
+            <p className="text-xs text-slate-500">
+              Pre-decide the commercial terms now. A recruiter moves it to a
+              submission later (you can add a candidate then or by editing it).
+            </p>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Recruiter" htmlFor="req_recruiterId">
+                <Select id="req_recruiterId" name="req_recruiterId" defaultValue="">
+                  <option value="">— Unassigned</option>
+                  {recruiters.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {optionLabel(r.fullName, r.isActive)}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Engagement" htmlFor="req_engagement">
+                <Select id="req_engagement" name="req_engagement" defaultValue="">
+                  <option value="">—</option>
+                  {BENCH_ENGAGEMENTS.map((e) => (
+                    <option key={e} value={e}>
+                      {BENCH_ENGAGEMENT_LABEL[e]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+
+            <Field label="Location" htmlFor="req_location" hint="Defaults to the job location if left blank.">
+              <LocationInput id="req_location" name="req_location" />
+            </Field>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <Field label="Pay rate" htmlFor="req_payRate">
+                <Input id="req_payRate" name="req_payRate" type="number" min="0" step="0.01" inputMode="decimal" />
+              </Field>
+              <Field label="Bill rate" htmlFor="req_billRate">
+                <Input id="req_billRate" name="req_billRate" type="number" min="0" step="0.01" inputMode="decimal" />
+              </Field>
+              <Field label="Candidate rate" htmlFor="req_candidateRate">
+                <Input id="req_candidateRate" name="req_candidateRate" type="number" min="0" step="0.01" inputMode="decimal" />
+              </Field>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Vendor recruiter name" htmlFor="req_vendorRecruiterName">
+                <Input id="req_vendorRecruiterName" name="req_vendorRecruiterName" />
+              </Field>
+              <Field label="Team lead" htmlFor="req_teamLead" hint="Auto-filled from the recruiter's team lead if blank.">
+                <Input id="req_teamLead" name="req_teamLead" />
+              </Field>
+            </div>
+          </div>
+        </details>
+      )}
 
       {state.error && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">

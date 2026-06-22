@@ -90,6 +90,7 @@ enum SubmissionStatus {
   OFFER_RELEASED
   OFFER_ACCEPTED
   JOINED
+  BACKED_OUT
 }
 
 enum InterviewType {
@@ -116,6 +117,11 @@ enum EntityType {
   CANDIDATE
   SUBMISSION
   INTERVIEW_ROUND
+  // Bench-Sales module — bench-consultant roster + its submissions/interviews/
+  // placements log against the consultant so the Job timeline stays clean.
+  CONSULTANT
+  // Vendor Portal Requirement — the pre-submission planning record.
+  REQUIREMENT
 }
 
 enum ActivityAction {
@@ -156,6 +162,42 @@ enum ActivityAction {
   PLACEMENT_EXTENDED
   PLACEMENT_ENDED
   DATA_EXPORTED
+  // Bench-Sales module (logged against the bench consultant).
+  BENCH_CONSULTANT_CREATED
+  BENCH_CONSULTANT_UPDATED
+  BENCH_SUBMISSION_CREATED
+  BENCH_SUBMISSION_UPDATED
+  BENCH_SUBMISSION_STATUS_CHANGED
+  BENCH_INTERVIEW_ADDED
+  BENCH_INTERVIEW_UPDATED
+  BENCH_PLACEMENT_CREATED
+  BENCH_PLACEMENT_UPDATED
+  // Vendor Portal Requirement (pre-submission planning layer).
+  REQUIREMENT_CREATED
+  REQUIREMENT_UPDATED
+  REQUIREMENT_CONVERTED
+  REQUIREMENT_CANCELLED
+}
+
+// Bench-Sales roster — marketing priority tier (sheet's "High Priority" /
+// "Second Priority" grouping) and the marketing lifecycle state.
+enum BenchPriority {
+  HIGH
+  SECOND
+}
+
+enum BenchMarketingStatus {
+  ACTIVE
+  PAUSED
+  PLACED
+  INACTIVE
+}
+
+// Bench-Sales — engagement model captured on a submission (the sheet's
+// "Bench/W2" and "C2C/W2" columns).
+enum BenchEngagement {
+  C2C
+  W2
 }
 
 // ─── Models ──────────────────────────────────────────────────────────────────
@@ -167,6 +209,18 @@ model User {
   passwordHash String
   role         UserRole @default(RECRUITER)
   isActive     Boolean  @default(true)
+  // Bench-Sales — externally-assigned employee id (e.g. "INC105", "TK2090")
+  // shown verbatim on the Monthly Performance scorecard. Nullable + unique
+  // (Postgres treats multiple NULLs as distinct, so existing users are fine).
+  empId        String?  @unique
+  // Free-text team label (e.g. "USEI-Sales IT") used to group the scorecard.
+  // v1 placeholder — normalize to a Team model later.
+  teamLabel    String?
+  // Team-lead capability flag. A lead is a RECRUITER in every existing role
+  // check (assignment gate, scorecard, listings) EXCEPT it can manage Vendor
+  // Portal Requirements (canManageRequirements). Cheaper than a 3rd role, which
+  // would ripple through every `role ===` branch.
+  isTeamLead   Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -179,6 +233,11 @@ model User {
   notes              Note[]
   activities         Activity[]
   uploadedDocuments  CandidateDocument[]
+  benchConsultantsRecruited BenchConsultant[] @relation("BenchConsultantRecruiter")
+  benchConsultantsCreated   BenchConsultant[] @relation("BenchConsultantCreatedBy")
+  vendorRequirementsRecruited VendorRequirement[] @relation("VendorRequirementRecruiter")
+  vendorRequirementsCreated   VendorRequirement[] @relation("VendorRequirementCreatedBy")
+  vendorRequirementsConverted VendorRequirement[] @relation("VendorRequirementConvertedBy")
 }
 
 model SisterCompanySource {
@@ -332,6 +391,7 @@ model Job {
   placements  Placement[]
   noteEntries Note[]
   activities  Activity[]
+  vendorRequirements VendorRequirement[]
 
   @@unique([portalId, portalRefId])
   @@index([status])
@@ -402,6 +462,9 @@ model Candidate {
   placements  Placement[]
   noteEntries Note[]
   activities  Activity[]
+  // Optional 1:1 back-link from the Bench-Sales roster (see BenchConsultant).
+  benchConsultant BenchConsultant?
+  vendorRequirements VendorRequirement[]
 
   @@index([email])
   @@index([phone])
@@ -457,6 +520,71 @@ model CandidateDocument {
   @@index([expiresAt])
 }
 
+// Bench-Sales roster — the marketing hotlist of consultants we proactively
+// market out to vendors. Owns the "as-marketed" identity + marketing-specific
+// fields from the requirements sheet. `candidateId` is an optional 1:1 link to
+// the live ATS Candidate, created/attached on first submit; the Candidate is
+// what flows into Submission → InterviewRound → Placement. The two are NOT
+// kept in sync after linking (this row is the as-marketed snapshot; Candidate
+// is the live record) — do not add a mirror-write trigger.
+model BenchConsultant {
+  id          String   @id @default(cuid())
+  seq         Int      @unique @default(autoincrement())
+  fullName    String
+  email       String?
+  phone       String?
+  currentLocation String?
+  // Two visa fields per the sheet ("M Visa" / "A Visa") — free-text, since the
+  // M/A semantics are unconfirmed. workAuthorization mirrors Candidate's field.
+  workAuthorization String?
+  mVisa       String?
+  aVisa       String?
+  // Two experience figures per the sheet: marketed vs actual real-time.
+  marketingExpYears Decimal? @db.Decimal(4, 1)
+  realTimeExpYears  Decimal? @db.Decimal(4, 1)
+  technology  String?
+  skills      String[] @default([])
+  reference   String?
+  company     String?
+  projectType String?
+  // Lowest C2C rate the consultant will accept.
+  leastRateC2C Decimal? @db.Decimal(12, 2)
+  callType    String?
+  payrollType String?
+  relocation  Boolean  @default(false)
+  marketingStartDate DateTime?
+  // Marketing credentials — gated (canViewBenchCredentials), detail-page only,
+  // never a list column or business-export field.
+  marketingEmail    String?
+  marketingPassword String?
+  marketingNumber   String?
+  personalNumber    String?
+  priority        BenchPriority        @default(SECOND)
+  marketingStatus BenchMarketingStatus @default(ACTIVE)
+  notes       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Optional 1:1 link to the live ATS Candidate (created/linked on submit).
+  candidateId String?    @unique
+  candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  // The marketing/sales recruiter who owns this consultant.
+  recruiterId String?
+  recruiter   User?  @relation("BenchConsultantRecruiter", fields: [recruiterId], references: [id])
+  createdById String
+  createdBy   User   @relation("BenchConsultantCreatedBy", fields: [createdById], references: [id])
+
+  noteEntries Note[]
+  activities  Activity[]
+
+  @@index([priority, marketingStatus])
+  @@index([recruiterId])
+  @@index([marketingStatus])
+  @@index([fullName])
+  @@index([createdAt])
+}
+
 model Submission {
   id              String           @id @default(cuid())
   seq             Int              @unique @default(autoincrement())
@@ -466,6 +594,18 @@ model Submission {
   resumeDriveLink String?
   submissionNotes String?
   rejectionReason String?
+  // Bench-Sales fields (the "Bench Submissions" sheet). Nullable — regular
+  // submissions ignore them. Company name is derived from job.client.
+  engagement          BenchEngagement?
+  vendorRecruiterName String?
+  jobDuties           String?
+  // Bench/Vendor-Portal rate pair (the sheet's "Pay Rate" / "Bill Rate"):
+  // payRate = what we pay the consultant, billRate = what we bill the client.
+  // Separate from candidateRate (the legacy single rate) and nullable so
+  // non-bench submissions ignore them. teamLead = the sales team lead's name.
+  payRate  Decimal? @db.Decimal(12, 2)
+  billRate Decimal? @db.Decimal(12, 2)
+  teamLead String?
   // §C4 — set when the recruiter consciously submits a duplicate
   // (same candidate already submitted to this job). The DB-level
   // `@@unique([candidateId, jobId])` constraint was dropped so the
@@ -500,6 +640,8 @@ model Submission {
   replacementFor  Placement?       @relation("PlacementReplacement")
   noteEntries     Note[]
   activities      Activity[]
+  // Set when this submission was created by converting a VendorRequirement.
+  convertedFromRequirement VendorRequirement? @relation("VendorRequirementSubmission")
 
   @@index([candidateId, jobId])
   @@index([status])
@@ -539,6 +681,14 @@ model Placement {
   invoiceRef           String?
   onsiteManagerName    String?
   onsiteManagerEmail   String?
+  // Bench-Sales sheet fields (June-19 requirements "Placements" tab). All
+  // nullable + editable on the placement edit form. `placementDate` defaults to
+  // the JOINED date at auto-create; the rest are filled in by the recruiter.
+  organisation         String?   // implementation / sister company marketing the consultant
+  teamLead             String?   // "Lead" column on the sheet
+  interviewDate        DateTime? // "Date of Interview"
+  placementDate        DateTime? // "Date of Placement" (distinct from Start Date)
+  remarks              String?
   extensions           PlacementExtension[]
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
@@ -587,6 +737,9 @@ model InterviewRound {
   result         InterviewResult @default(WAITING)
   feedback       String?
   notes          String?
+  // The sheet's "Support (Y/N)" — whether a team member shadows/supports this
+  // interview (e.g. a tech buddy on the call). Defaults to false.
+  supportNeeded  Boolean         @default(false)
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
@@ -619,11 +772,14 @@ model Note {
   submission       Submission?     @relation(fields: [submissionId], references: [id], onDelete: Cascade)
   interviewRoundId String?
   interviewRound   InterviewRound? @relation(fields: [interviewRoundId], references: [id], onDelete: Cascade)
+  benchConsultantId String?
+  benchConsultant   BenchConsultant? @relation(fields: [benchConsultantId], references: [id], onDelete: Cascade)
 
   @@index([jobId])
   @@index([candidateId])
   @@index([submissionId])
   @@index([interviewRoundId])
+  @@index([benchConsultantId])
 }
 
 // Polymorphic audit entry — exactly one entity FK is set (matches entityType).
@@ -653,10 +809,81 @@ model Activity {
   submission       Submission?     @relation(fields: [submissionId], references: [id], onDelete: Cascade)
   interviewRoundId String?
   interviewRound   InterviewRound? @relation(fields: [interviewRoundId], references: [id], onDelete: Cascade)
+  benchConsultantId String?
+  benchConsultant   BenchConsultant? @relation(fields: [benchConsultantId], references: [id], onDelete: Cascade)
+  requirementId     String?
+  requirement       VendorRequirement? @relation(fields: [requirementId], references: [id], onDelete: Cascade)
 
   @@index([jobId])
   @@index([candidateId])
   @@index([submissionId])
   @@index([interviewRoundId])
+  @@index([benchConsultantId])
+  @@index([requirementId])
   @@index([createdAt])
+}
+
+// Vendor Portal Requirement lifecycle.
+enum RequirementStatus {
+  OPEN
+  CONVERTED
+  CANCELLED
+}
+
+// Vendor Portal Requirement — a pre-submission *planning* record. A team lead /
+// admin pre-decides the commercial terms of a vendor requirement (rates, C2C/W2,
+// vendor recruiter, assigned recruiter, optional target candidate); a recruiter
+// later "moves it to submission" (convertToSubmission), which creates the real
+// Submission and flips this to CONVERTED. Deliberately a SEPARATE table — it is
+// invisible to every submission analytic by construction (dashboards, reports,
+// scorecard, exports never query it). Distinct from the Job-level iLabor
+// "requisition" fields. "Company" is NOT stored — it derives from
+// candidate.currentCompany.
+model VendorRequirement {
+  id     String            @id @default(cuid())
+  seq    Int               @unique @default(autoincrement())
+  status RequirementStatus @default(OPEN)
+
+  jobId String
+  job   Job    @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  // Optional target candidate (set up front or at convert time).
+  candidateId String?
+  candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  // The marketing/sales recruiter expected to work it.
+  recruiterId String?
+  recruiter   User?   @relation("VendorRequirementRecruiter", fields: [recruiterId], references: [id])
+
+  // Commercial terms (mirror the Submission bench fields). location is explicit
+  // here (the sheet's "Location" column), defaulting from the job at create time.
+  location            String?
+  payRate             Decimal? @db.Decimal(12, 2)
+  billRate            Decimal? @db.Decimal(12, 2)
+  candidateRate       Decimal? @db.Decimal(12, 2)
+  engagement          BenchEngagement?
+  vendorRecruiterName String?
+  jobDuties           String?
+  teamLead            String?
+  submissionNotes     String?
+  // Soft pointer (no FK) to the résumé to upload — re-validated at convert.
+  candidateResumeId String?
+  resumeDriveLink   String?
+
+  // Conversion link — set when moved to a real submission.
+  convertedSubmissionId String?     @unique
+  convertedSubmission   Submission? @relation("VendorRequirementSubmission", fields: [convertedSubmissionId], references: [id], onDelete: SetNull)
+  convertedAt           DateTime?
+  convertedById         String?
+  convertedBy           User?       @relation("VendorRequirementConvertedBy", fields: [convertedById], references: [id])
+
+  createdById String
+  createdBy   User     @relation("VendorRequirementCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  activities Activity[]
+
+  @@index([status])
+  @@index([jobId])
+  @@index([candidateId])
+  @@index([recruiterId])
 }

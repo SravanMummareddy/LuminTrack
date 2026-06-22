@@ -4,6 +4,8 @@ import type { PlacementStatus } from "@/generated/prisma/enums";
 import {
   PAGE_SIZE,
   SUB_PAGE_SIZE,
+  searchTerms,
+  type DateRange,
   type SortDir,
   type SortState,
 } from "@/lib/filters";
@@ -11,8 +13,10 @@ import {
 export type PlacementListFilters = {
   q?: string;
   status?: PlacementStatus;
-  clientId?: string;
-  recruiterId?: string;
+  clientId?: string[];
+  recruiterId?: string[];
+  /** Filters on the placement start date (when the assignment began). */
+  startedRange?: DateRange;
   sort?: SortState;
   page?: number;
 };
@@ -61,14 +65,19 @@ function flattenRates<
 export async function listPlacements(filters: PlacementListFilters) {
   const where: Prisma.PlacementWhereInput = {};
   if (filters.status) where.status = filters.status;
-  if (filters.clientId) where.job = { clientId: filters.clientId };
-  if (filters.recruiterId)
-    where.submission = { submittedById: filters.recruiterId };
-  if (filters.q)
-    where.OR = [
-      { candidate: { fullName: { contains: filters.q, mode: "insensitive" } } },
-      { job: { title: { contains: filters.q, mode: "insensitive" } } },
-    ];
+  if (filters.clientId?.length) where.job = { clientId: { in: filters.clientId } };
+  if (filters.recruiterId?.length)
+    where.submission = { submittedById: { in: filters.recruiterId } };
+  if (filters.startedRange?.gte || filters.startedRange?.lte)
+    where.startDate = filters.startedRange;
+  const terms = searchTerms(filters.q);
+  if (terms.length)
+    where.AND = terms.map((t) => ({
+      OR: [
+        { candidate: { fullName: { contains: t, mode: "insensitive" } } },
+        { job: { title: { contains: t, mode: "insensitive" } } },
+      ],
+    }));
 
   const sort = filters.sort ?? PLACEMENT_DEFAULT_SORT;
   const sortFn = PLACEMENT_SORTS[sort.key] ?? PLACEMENT_SORTS.start;
@@ -93,6 +102,7 @@ export async function listPlacements(filters: PlacementListFilters) {
           id: true,
           title: true,
           client: { select: { name: true } },
+          vendor: { select: { name: true } },
         },
       },
       submission: {

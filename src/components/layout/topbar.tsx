@@ -15,6 +15,9 @@ export function Topbar({ name, role }: TopbarProps) {
       <div className="min-w-0 max-w-xs flex-1 sm:max-w-md">
         <GlobalSearch />
       </div>
+      {/* Spacer absorbs the leftover width so the user cluster pins to the far
+          right instead of sitting right after the (capped) search box. */}
+      <div className="flex-1" aria-hidden="true" />
       <div className="flex shrink-0 items-center gap-3">
         <RecentlyViewedMenu />
         <div className="hidden text-right leading-tight sm:block">

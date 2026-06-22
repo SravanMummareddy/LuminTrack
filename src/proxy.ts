@@ -40,6 +40,10 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Run on all routes except API routes, Next internals, and static files.
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\.).*)"],
+  // Run on all routes except API routes, ALL Next internals, and static files.
+  // NB: must exclude the whole `_next/` tree, not just `_next/static` +
+  // `_next/image` — otherwise the middleware runs on `/_next/webpack-hmr` and
+  // returns an HTTP response on the WebSocket upgrade, breaking Turbopack's HMR
+  // connection (and, downstream, client hydration in dev).
+  matcher: ["/((?!api|_next|favicon.ico|.*\\.).*)"],
 };
