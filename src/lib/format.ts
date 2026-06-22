@@ -51,6 +51,10 @@ export function formatBenchConsultantDisplayId(c: { seq: number }): string {
   return `BC-${String(c.seq).padStart(3, "0")}`;
 }
 
+export function formatVendorRequirementDisplayId(r: { seq: number }): string {
+  return `VPR-${String(r.seq).padStart(3, "0")}`;
+}
+
 /** Formats a years-of-experience value (Prisma Decimal or number). */
 export function formatExperience(
   value: { toString(): string } | number | null | undefined,

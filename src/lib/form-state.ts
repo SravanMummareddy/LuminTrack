@@ -9,6 +9,12 @@ export type ConfirmKind =
   | "ilabor_closed"
   | "ilabor_cap"
   | "not_assigned"
+  // Convert-a-requirement-to-submission warn+override gates (R2). Each is
+  // overridable with a single `convertOverrideReason`.
+  | "candidate_placed"
+  | "archived_resume"
+  | "zero_rates"
+  | "bill_below_pay"
   | true;
 
 /** Extra context for a paused gate, surfaced in the confirm prompt. */
