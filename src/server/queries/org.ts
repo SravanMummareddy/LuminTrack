@@ -34,7 +34,7 @@ export function listVendors() {
   });
 }
 
-import type { ContactKind } from "@/server/actions/contacts";
+import type { ContactKind } from "@/lib/contact-kinds";
 
 export function listContacts(kind: ContactKind, parentId: string) {
   const where =

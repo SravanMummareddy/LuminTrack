@@ -15,7 +15,7 @@ import {
   ContactsDialog,
   type ContactRow,
 } from "@/components/settings/contacts-dialog";
-import type { ContactKind } from "@/server/actions/contacts";
+import type { ContactKind } from "@/lib/contact-kinds";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 
 export type ContactOrg = {

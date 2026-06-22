@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarRange } from "lucide-react";
 import { DATE_PRESETS } from "@/lib/filters";
 import { Input, Select } from "@/components/ui/field";
 
@@ -34,22 +33,18 @@ export function DateRangeField({
         <label className={labelClass} htmlFor="f-preset">
           {label}
         </label>
-        <div className="relative">
-          <CalendarRange className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Select
-            id="f-preset"
-            name="preset"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            className="pl-8"
-          >
-            {DATE_PRESETS.map((p) => (
-              <option key={p.value} value={p.value}>
-                {p.label}
-              </option>
-            ))}
-          </Select>
-        </div>
+        <Select
+          id="f-preset"
+          name="preset"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+        >
+          {DATE_PRESETS.map((p) => (
+            <option key={p.value} value={p.value}>
+              {p.label}
+            </option>
+          ))}
+        </Select>
       </div>
 
       {custom && (

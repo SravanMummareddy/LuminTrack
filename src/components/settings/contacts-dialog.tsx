@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Field, Input } from "@/components/ui/field";
 import { saveContact, deleteContact } from "@/server/actions/contacts";
-import type { ContactKind } from "@/server/actions/contacts";
+import type { ContactKind } from "@/lib/contact-kinds";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
 
 export type ContactRow = {
