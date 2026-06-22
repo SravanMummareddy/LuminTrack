@@ -46,6 +46,13 @@ export const getCurrentUser = cache(async () => {
 /** Use in Server Components/Actions that require a signed-in user. */
 export async function requireUser() {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  // Redirect through the logout route rather than straight to /login: if the
+  // request carried a valid-JWT-but-dead-session cookie (e.g. the user was
+  // wiped by a reseed), the proxy considers it "authenticated" and would bounce
+  // /login back here in an infinite loop. /api/auth/logout clears the cookie
+  // first, so /login is then reachable. A cookie-less request never reaches
+  // here (the proxy redirects it to /login directly), so this only fires for a
+  // stale session — where clearing it is exactly right.
+  if (!user) redirect("/api/auth/logout");
   return user;
 }
