@@ -1,14 +1,14 @@
 import { prisma } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
 import type { RequirementStatus } from "@/generated/prisma/enums";
-import { PAGE_SIZE, type SortDir, type SortState } from "@/lib/filters";
+import { PAGE_SIZE, searchTerms, type SortDir, type SortState } from "@/lib/filters";
 
 export type VendorRequirementFilters = {
   q?: string;
   status?: RequirementStatus;
-  clientId?: string;
-  vendorId?: string;
-  recruiterId?: string;
+  clientId?: string[];
+  vendorId?: string[];
+  recruiterId?: string[];
   jobId?: string;
   sort?: SortState;
   page?: number;
@@ -74,20 +74,24 @@ function flatten<
 export async function listVendorRequirements(filters: VendorRequirementFilters) {
   const where: Prisma.VendorRequirementWhereInput = {};
   if (filters.status) where.status = filters.status;
-  if (filters.recruiterId) where.recruiterId = filters.recruiterId;
+  if (filters.recruiterId?.length)
+    where.recruiterId = { in: filters.recruiterId };
   if (filters.jobId) where.jobId = filters.jobId;
 
   const jobWhere: Prisma.JobWhereInput = {};
-  if (filters.clientId) jobWhere.clientId = filters.clientId;
-  if (filters.vendorId) jobWhere.vendorId = filters.vendorId;
+  if (filters.clientId?.length) jobWhere.clientId = { in: filters.clientId };
+  if (filters.vendorId?.length) jobWhere.vendorId = { in: filters.vendorId };
   if (Object.keys(jobWhere).length) where.job = jobWhere;
 
-  if (filters.q)
-    where.OR = [
-      { job: { title: { contains: filters.q, mode: "insensitive" } } },
-      { candidate: { fullName: { contains: filters.q, mode: "insensitive" } } },
-      { vendorRecruiterName: { contains: filters.q, mode: "insensitive" } },
-    ];
+  const terms = searchTerms(filters.q);
+  if (terms.length)
+    where.AND = terms.map((t) => ({
+      OR: [
+        { job: { title: { contains: t, mode: "insensitive" } } },
+        { candidate: { fullName: { contains: t, mode: "insensitive" } } },
+        { vendorRecruiterName: { contains: t, mode: "insensitive" } },
+      ],
+    }));
 
   const sort = filters.sort ?? REQUIREMENT_DEFAULT_SORT;
   const sortFn = REQUIREMENT_SORTS[sort.key] ?? REQUIREMENT_SORTS.created;

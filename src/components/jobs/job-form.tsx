@@ -3,6 +3,8 @@
 import { useActionState, useState } from "react";
 import Link from "next/link";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
+import { LocationInput } from "@/components/ui/location-input";
+import { SearchSelect } from "@/components/ui/search-select";
 import { Button, buttonClass } from "@/components/ui/button";
 import {
   JOB_STATUSES,
@@ -114,25 +116,22 @@ export function JobForm({
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Client" htmlFor="clientId" required error={errors.clientId}>
-          <Select
+          <SearchSelect
             id="clientId"
             name="clientId"
             value={clientValue}
-            onChange={(e) => setClientValue(e.target.value)}
-            required
-          >
-            <option value="" disabled>
-              Select a client…
-            </option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {optionLabel(c.name, c.isActive)}
-              </option>
-            ))}
-            {canCreateOrgEntities && (
-              <option value={NEW_ORG_ENTITY}>+ Add new client…</option>
-            )}
-          </Select>
+            onChange={setClientValue}
+            placeholder="Select or type a client…"
+            options={clients.map((c) => ({
+              value: c.id,
+              label: optionLabel(c.name, c.isActive),
+            }))}
+            actionOption={
+              canCreateOrgEntities
+                ? { value: NEW_ORG_ENTITY, label: "+ Add new client…" }
+                : undefined
+            }
+          />
           {isNewClient && (
             <Input
               name="newClientName"
@@ -144,25 +143,22 @@ export function JobForm({
         </Field>
 
         <Field label="Vendor" htmlFor="vendorId" required error={errors.vendorId}>
-          <Select
+          <SearchSelect
             id="vendorId"
             name="vendorId"
             value={vendorValue}
-            onChange={(e) => setVendorValue(e.target.value)}
-            required
-          >
-            <option value="" disabled>
-              Select a vendor…
-            </option>
-            {vendors.map((v) => (
-              <option key={v.id} value={v.id}>
-                {optionLabel(v.name, v.isActive)}
-              </option>
-            ))}
-            {canCreateOrgEntities && (
-              <option value={NEW_ORG_ENTITY}>+ Add new vendor…</option>
-            )}
-          </Select>
+            onChange={setVendorValue}
+            placeholder="Select or type a vendor…"
+            options={vendors.map((v) => ({
+              value: v.id,
+              label: optionLabel(v.name, v.isActive),
+            }))}
+            actionOption={
+              canCreateOrgEntities
+                ? { value: NEW_ORG_ENTITY, label: "+ Add new vendor…" }
+                : undefined
+            }
+          />
           {isNewVendor && (
             <Input
               name="newVendorName"
@@ -248,7 +244,7 @@ export function JobForm({
       </div>
 
       <Field label="Location" htmlFor="location" error={errors.location}>
-        <Input
+        <LocationInput
           id="location"
           name="location"
           defaultValue={values?.location ?? ""}
@@ -537,7 +533,7 @@ export function JobForm({
             </div>
 
             <Field label="Location" htmlFor="req_location" hint="Defaults to the job location if left blank.">
-              <Input id="req_location" name="req_location" />
+              <LocationInput id="req_location" name="req_location" />
             </Field>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

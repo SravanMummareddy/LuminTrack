@@ -156,6 +156,7 @@ SUBMITTED → RESUME_PICKED → VENDOR_SCREENING_CALL → CLIENT_INTERVIEW
 ### Settings (`/settings`)  *(admin)*
 - [ ] Settings page loads (no crash). *(recently fixed)*
 - [ ] Sources / Clients / Vendors CRUD + contacts.
+- [ ] **Settings list pagination:** Clients / Vendors / Sources tables paginate at **10 rows** with a "Showing X–Y of N" + Prev/Next footer; the search/status filter narrows before paging. *(new)*
 - [ ] Users: add/edit, the **Team lead** checkbox.
 - [ ] Export: Excel (business/full) + JSON backup; export history.
 - [ ] Audit log: filter by action/user; requirement rows link to `/vendor-portal/:id`.
@@ -176,8 +177,20 @@ These are the items changed most recently — quick targeted re-tests:
 - [ ] **Settings crash fixed:** `/settings` opens without "Something went wrong".
 - [ ] **Placements hydration:** `/placements` loads with no console error even if you've reordered columns.
 - [ ] **Date range icon:** Reports/Recruiters date filter looks clean.
+- [ ] **NEW pill filter bar (all list pages + Reports/Recruiters/Dashboard analytics):** filters are now **pills** instead of a big filter card. **All** filters show inline and wrap to the next line only when the row runs out of room (no "More" button). Click a pill → small popover → **picking a value applies immediately** (no Apply button). Active filters turn **indigo** and show the value with an **✕** to clear. A **"Clear all"** appears when any filter is set. *(redesigned)*
+  - [ ] **Search chips (stackable):** type a term + **Enter** → a chip appears (🔍 term ✕) and the box clears. Type **another** term + Enter → a second chip; results now match **both** terms (AND), narrowing further. Remove any single term with its ✕, or "Clear all". *(new)*
+  - [ ] Long lists (Client / Vendor / Recruiter) have a **search box inside the popover** — type to filter, click to pick.
+  - [ ] **Multi-select** on Client / Vendor / Recruiter: tick several (checkboxes); the list **filters to any of them** (OR), the pill shows e.g. "Client: 3 selected", and "Clear selection" resets it. *(new)*
+  - [ ] **Top 8**: a long unsearched list shows the first ~8 (selected ones first) with a "+N more — type to narrow" hint; typing reveals the rest. *(new)*
+  - [ ] Wider popover — long client names show on one line (full name on hover). *(new)*
+  - [ ] **Date** pill → presets; "Custom range" reveals From/To + "Apply dates".
+  - [ ] **Search box**: type and press **Enter** to apply.
+  - [ ] **Submissions "Mine, stale >7d"** is now a pill toggle in the same bar (click to toggle on/off).
+  - [ ] Defaults still hold: Placements pill shows **Active**, Bench shows **On bench**, Vendor Portal shows **Open** — clearing returns to those.
 - [ ] **Source manual entry:** Add-job → Source → "Other" → type a name right under the dropdown.
-- [ ] **Inline add client/vendor:** Add-job (as admin) → "+ Add new client/vendor" → type a name → job links to the created/reused record.
+- [ ] **Searchable Client/Vendor:** Add-job → Client (or Vendor) is now a **type-to-filter dropdown** (not a long native select) — type part of a name to narrow; ↑/↓/Enter to pick. *(new)*
+- [ ] **Inline add client/vendor:** in that dropdown, the **bottom row is "+ Add new client/vendor…"** (admin-only) → pick it → a name box appears → type a name → job links to the created/reused record. (Case-insensitive reuse, so "acme corp" reuses "Acme Corp".)
+- [ ] **Location autocomplete:** Add-job → **Location** → type a city (e.g. "dall", "new yo") → `City, ST` suggestions appear plus Remote/Hybrid/Onsite. Still free text — anything unlisted ("Hyderabad", "Remote — EST") types through. Same on the Vendor Requirement form's Location. *(new)*
 - [ ] **Interview support flag:** badge shows on submission round cards + candidate history.
 - [ ] **Interview round handle:** `SUB-### · Rn` on the Interviews list.
 - [ ] **Vendor Portal Requirements (R0–R5):** full create → edit → move-to-submission flow.

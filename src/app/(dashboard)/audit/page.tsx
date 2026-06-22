@@ -82,7 +82,7 @@ export default async function AuditPage({
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div className="space-y-5">
       <PageHeader
         title="Audit log"
         description="Org-wide activity across jobs, candidates, submissions, and interview rounds. Admin only."

@@ -3,6 +3,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import {
   SUB_PAGE_SIZE as PAGE_SIZE,
   PAGE_SIZE as LIST_PAGE_SIZE,
+  searchTerms,
   type DateRange,
   type SortDir,
   type SortState,
@@ -113,7 +114,7 @@ export type CandidateInterviewGroup = Awaited<
 
 export type InterviewListFilters = {
   q?: string;
-  recruiterId?: string;
+  recruiterId?: string[];
   scheduledRange?: DateRange;
   sort?: SortState;
   page?: number;
@@ -140,26 +141,27 @@ export async function listInterviews(filters: InterviewListFilters) {
   const where: Prisma.InterviewRoundWhereInput = { scheduledAt: { not: null } };
   if (filters.scheduledRange?.gte || filters.scheduledRange?.lte)
     where.scheduledAt = { not: null, ...filters.scheduledRange };
-  if (filters.recruiterId)
-    where.submission = { submittedById: filters.recruiterId };
-  if (filters.q)
-    where.OR = [
-      {
-        submission: {
-          candidate: { fullName: { contains: filters.q, mode: "insensitive" } },
+  if (filters.recruiterId?.length)
+    where.submission = { submittedById: { in: filters.recruiterId } };
+  const terms = searchTerms(filters.q);
+  if (terms.length)
+    where.AND = terms.map((t) => ({
+      OR: [
+        {
+          submission: {
+            candidate: { fullName: { contains: t, mode: "insensitive" } },
+          },
         },
-      },
-      {
-        submission: {
-          job: { title: { contains: filters.q, mode: "insensitive" } },
+        {
+          submission: { job: { title: { contains: t, mode: "insensitive" } } },
         },
-      },
-      {
-        submission: {
-          job: { client: { name: { contains: filters.q, mode: "insensitive" } } },
+        {
+          submission: {
+            job: { client: { name: { contains: t, mode: "insensitive" } } },
+          },
         },
-      },
-    ];
+      ],
+    }));
 
   const sort = filters.sort ?? INTERVIEW_DEFAULT_SORT;
   const sortFn = INTERVIEW_SORTS[sort.key] ?? INTERVIEW_SORTS.date;

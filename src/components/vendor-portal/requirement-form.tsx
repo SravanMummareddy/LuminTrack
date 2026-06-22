@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useState } from "react";
 import Link from "next/link";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
+import { LocationInput } from "@/components/ui/location-input";
 import { Button, buttonClass } from "@/components/ui/button";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 import { BENCH_ENGAGEMENTS, BENCH_ENGAGEMENT_LABEL } from "@/lib/labels";
@@ -172,7 +173,7 @@ export function RequirementForm({
           error={errors.location}
           hint={job.location ? `Job location: ${job.location}` : undefined}
         >
-          <Input
+          <LocationInput
             id="location"
             name="location"
             value={fields.location}

@@ -23,7 +23,7 @@ import {
   listUsers,
   listActiveRecruiterOptions,
 } from "@/server/queries/org";
-import { parseDateRange, parseSort, parsePage, PAGE_SIZE } from "@/lib/filters";
+import { parseDateRange, parseSort, parsePage, parseList, PAGE_SIZE } from "@/lib/filters";
 import { JOB_STATUSES } from "@/lib/labels";
 import type { JobStatus } from "@/generated/prisma/enums";
 
@@ -52,10 +52,10 @@ export default async function JobsPage({
 
   const current = {
     q: clean(sp.q),
-    clientId: clean(sp.clientId),
-    vendorId: clean(sp.vendorId),
+    clientId: parseList(sp.clientId),
+    vendorId: parseList(sp.vendorId),
     sisterCompanySourceId: clean(sp.sisterCompanySourceId),
-    recruiterId: clean(sp.recruiterId),
+    recruiterId: parseList(sp.recruiterId),
     status: clean(sp.status),
     location: clean(sp.location),
     source: clean(sp.source),
@@ -150,7 +150,7 @@ export default async function JobsPage({
   );
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div className="space-y-5">
       <PageHeader title="Jobs" description="All job requirements and their pipelines.">
         {currentUser?.role === "ADMIN" ? (
           <>
@@ -202,7 +202,6 @@ export default async function JobsPage({
       ) : null}
 
       <JobFilters
-        current={current}
         clients={clients}
         vendors={vendors}
         sources={sources}

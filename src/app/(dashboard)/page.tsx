@@ -186,7 +186,7 @@ export default async function DashboardPage({
   const scope: "me" | "org" =
     current.scope ?? (user?.role === "ADMIN" ? "org" : "me");
   const effectiveFilters =
-    scope === "me" && user ? { ...filters, recruiterId: user.id } : filters;
+    scope === "me" && user ? { ...filters, recruiterId: [user.id] } : filters;
 
   const [
     data,
@@ -364,7 +364,6 @@ export default async function DashboardPage({
       ) : null}
 
       <AnalyticsFilters
-        current={current}
         basePath="/"
         clients={clients}
         vendors={vendors}

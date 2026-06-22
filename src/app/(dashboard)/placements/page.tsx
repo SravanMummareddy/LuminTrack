@@ -10,7 +10,7 @@ import {
 } from "@/server/queries/placements";
 import { listClients, listUsers } from "@/server/queries/org";
 import { PlacementsFilters } from "@/components/placements/placements-filters";
-import { parseSort, parsePage, parseDateRange, PAGE_SIZE } from "@/lib/filters";
+import { parseSort, parsePage, parseDateRange, parseList, PAGE_SIZE } from "@/lib/filters";
 import { PLACEMENT_STATUSES } from "@/lib/labels";
 import { requireUser } from "@/lib/session";
 import type { PlacementStatus } from "@/generated/prisma/enums";
@@ -43,8 +43,8 @@ export default async function PlacementsPage({
     // Default to ACTIVE — the most useful view by far. `status=all` explicitly
     // means every status; absence means the ACTIVE default.
     status: sp.status !== undefined ? clean(sp.status) : "ACTIVE",
-    clientId: clean(sp.clientId),
-    recruiterId: clean(sp.recruiterId),
+    clientId: parseList(sp.clientId),
+    recruiterId: parseList(sp.recruiterId),
     preset: clean(sp.preset),
     from: clean(sp.from),
     to: clean(sp.to),
@@ -101,11 +101,7 @@ export default async function PlacementsPage({
         />
       </div>
 
-      <PlacementsFilters
-        current={current}
-        clients={clients}
-        recruiters={recruiters}
-      />
+      <PlacementsFilters clients={clients} recruiters={recruiters} />
 
       {total === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">

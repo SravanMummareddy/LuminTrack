@@ -196,7 +196,7 @@ export async function AnalyticsTab({
 }: {
   searchParams: SearchParams;
 }) {
-  const { current, filters } = parseAnalyticsParams(sp);
+  const { filters } = parseAnalyticsParams(sp);
   const ojobsPage = parsePage(Array.isArray(sp.ojobs) ? sp.ojobs[0] : sp.ojobs);
   const ragingPage = parsePage(
     Array.isArray(sp.raging) ? sp.raging[0] : sp.raging,
@@ -242,7 +242,6 @@ export async function AnalyticsTab({
   return (
     <>
       <AnalyticsFilters
-        current={current}
         basePath="/reports"
         clients={clients}
         vendors={vendors}

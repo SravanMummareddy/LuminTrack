@@ -1,7 +1,4 @@
-import { Select } from "@/components/ui/field";
-import { FilterBar, type FilterChip } from "@/components/ui/filter-bar";
-import { DateRangeField } from "@/components/ui/date-range-field";
-import { DATE_PRESETS } from "@/lib/filters";
+import { FilterBar, type FilterDef } from "@/components/ui/filter-bar";
 import {
   JOB_STATUSES,
   JOB_STATUS_LABEL,
@@ -9,20 +6,16 @@ import {
   SUBMISSION_STATUS_LABEL,
   OTHER_SOURCE,
 } from "@/lib/labels";
-import type { JobStatus, SubmissionStatus } from "@/generated/prisma/enums";
-import type { AnalyticsParamState } from "@/lib/analytics";
 
 type Option = { id: string; name: string };
 
-const labelClass = "mb-1 block text-xs font-medium text-slate-500";
-
 /**
- * Shared analytics filter bar for the Dashboard, Reports, and Recruiters pages,
- * rendered through the shared FilterBar: date range + recruiter stay visible,
- * the rest collapse behind "Filters". `showStatusFilters` is off for Recruiters.
+ * Shared analytics filters for the Dashboard, Reports, and Recruiters pages,
+ * rendered as the shared pill `FilterBar`. Date + recruiter show as pills; the
+ * rest live under "More". `showStatusFilters` is off for Recruiters;
+ * `showRecruiterFilter` is off on the recruiter detail page.
  */
 export function AnalyticsFilters({
-  current,
   basePath,
   clients,
   vendors,
@@ -31,7 +24,6 @@ export function AnalyticsFilters({
   showStatusFilters = true,
   showRecruiterFilter = true,
 }: {
-  current: AnalyticsParamState;
   basePath: string;
   clients: Option[];
   vendors: Option[];
@@ -41,180 +33,79 @@ export function AnalyticsFilters({
   /** Off for the recruiter detail page, which is already scoped to one recruiter. */
   showRecruiterFilter?: boolean;
 }) {
-  const clientName = clients.find((c) => c.id === current.clientId)?.name;
-  const vendorName = vendors.find((v) => v.id === current.vendorId)?.name;
-  const sourceName =
-    current.sisterCompanySourceId === OTHER_SOURCE
-      ? "Other (manual)"
-      : sources.find((s) => s.id === current.sisterCompanySourceId)?.name;
-  const recruiterName = recruiters.find(
-    (r) => r.id === current.recruiterId,
-  )?.fullName;
-  const presetLabel =
-    current.preset && current.preset !== "all"
-      ? DATE_PRESETS.find((p) => p.value === current.preset)?.label
-      : undefined;
+  const filters: FilterDef[] = [{ kind: "date", label: "Date range", primary: true }];
 
-  const chips: FilterChip[] = [];
-  if (presetLabel)
-    chips.push({ keys: ["preset", "from", "to"], label: `Date: ${presetLabel}` });
-  if (showRecruiterFilter && recruiterName)
-    chips.push({ keys: ["recruiterId"], label: `Recruiter: ${recruiterName}` });
-  if (clientName)
-    chips.push({ keys: ["clientId"], label: `Client: ${clientName}` });
-  if (vendorName)
-    chips.push({ keys: ["vendorId"], label: `Vendor: ${vendorName}` });
-  if (sourceName)
-    chips.push({
-      keys: ["sisterCompanySourceId"],
-      label: `Source: ${sourceName}`,
-    });
-  if (showStatusFilters && current.jobStatus)
-    chips.push({
-      keys: ["jobStatus"],
-      label: `Job status: ${JOB_STATUS_LABEL[current.jobStatus as JobStatus] ?? current.jobStatus}`,
-    });
-  if (showStatusFilters && current.submissionStatus)
-    chips.push({
-      keys: ["submissionStatus"],
-      label: `Submission status: ${SUBMISSION_STATUS_LABEL[current.submissionStatus as SubmissionStatus] ?? current.submissionStatus}`,
+  if (showRecruiterFilter)
+    filters.push({
+      kind: "select",
+      param: "recruiterId",
+      label: "Recruiter",
+      primary: true,
+      searchable: true,
+      multi: true,
+      options: [
+        { value: "", label: "All recruiters" },
+        ...recruiters.map((r) => ({ value: r.id, label: r.fullName })),
+      ],
     });
 
-  const advancedActiveCount =
-    (current.clientId ? 1 : 0) +
-    (current.vendorId ? 1 : 0) +
-    (current.sisterCompanySourceId ? 1 : 0) +
-    (showStatusFilters && current.jobStatus ? 1 : 0) +
-    (showStatusFilters && current.submissionStatus ? 1 : 0);
-
-  const primary = (
-    <>
-      <DateRangeField
-        label="Date range"
-        preset={current.preset}
-        from={current.from}
-        to={current.to}
-      />
-      {showRecruiterFilter && (
-        <div className="sm:w-52">
-          <label className={labelClass} htmlFor="f-recruiter">
-            Recruiter
-          </label>
-          <Select
-            id="f-recruiter"
-            name="recruiterId"
-            defaultValue={current.recruiterId ?? ""}
-          >
-            <option value="">All recruiters</option>
-            {recruiters.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.fullName}
-              </option>
-            ))}
-          </Select>
-        </div>
-      )}
-    </>
+  filters.push(
+    {
+      kind: "select",
+      param: "clientId",
+      label: "Client",
+      searchable: true,
+      multi: true,
+      options: [
+        { value: "", label: "All clients" },
+        ...clients.map((c) => ({ value: c.id, label: c.name })),
+      ],
+    },
+    {
+      kind: "select",
+      param: "vendorId",
+      label: "Vendor",
+      searchable: true,
+      multi: true,
+      options: [
+        { value: "", label: "All vendors" },
+        ...vendors.map((v) => ({ value: v.id, label: v.name })),
+      ],
+    },
+    {
+      kind: "select",
+      param: "sisterCompanySourceId",
+      label: "Source",
+      searchable: true,
+      options: [
+        { value: "", label: "All sources" },
+        ...sources.map((s) => ({ value: s.id, label: s.name })),
+        { value: OTHER_SOURCE, label: "Other (manual)" },
+      ],
+    },
   );
 
-  const advanced = (
-    <>
-      <div>
-        <label className={labelClass} htmlFor="f-client">
-          Client
-        </label>
-        <Select id="f-client" name="clientId" defaultValue={current.clientId ?? ""}>
-          <option value="">All clients</option>
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </Select>
-      </div>
+  if (showStatusFilters)
+    filters.push(
+      {
+        kind: "select",
+        param: "jobStatus",
+        label: "Job status",
+        options: [
+          { value: "", label: "All job statuses" },
+          ...JOB_STATUSES.map((s) => ({ value: s, label: JOB_STATUS_LABEL[s] })),
+        ],
+      },
+      {
+        kind: "select",
+        param: "submissionStatus",
+        label: "Submission status",
+        options: [
+          { value: "", label: "All submission statuses" },
+          ...SUBMISSION_STATUSES.map((s) => ({ value: s, label: SUBMISSION_STATUS_LABEL[s] })),
+        ],
+      },
+    );
 
-      <div>
-        <label className={labelClass} htmlFor="f-vendor">
-          Vendor
-        </label>
-        <Select id="f-vendor" name="vendorId" defaultValue={current.vendorId ?? ""}>
-          <option value="">All vendors</option>
-          {vendors.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.name}
-            </option>
-          ))}
-        </Select>
-      </div>
-
-      <div>
-        <label className={labelClass} htmlFor="f-source">
-          Source
-        </label>
-        <Select
-          id="f-source"
-          name="sisterCompanySourceId"
-          defaultValue={current.sisterCompanySourceId ?? ""}
-        >
-          <option value="">All sources</option>
-          {sources.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-          <option value={OTHER_SOURCE}>Other (manually entered)</option>
-        </Select>
-      </div>
-
-      {showStatusFilters && (
-        <>
-          <div>
-            <label className={labelClass} htmlFor="f-job-status">
-              Job status
-            </label>
-            <Select
-              id="f-job-status"
-              name="jobStatus"
-              defaultValue={current.jobStatus ?? ""}
-            >
-              <option value="">All job statuses</option>
-              {JOB_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {JOB_STATUS_LABEL[s]}
-                </option>
-              ))}
-            </Select>
-          </div>
-
-          <div>
-            <label className={labelClass} htmlFor="f-sub-status">
-              Submission status
-            </label>
-            <Select
-              id="f-sub-status"
-              name="submissionStatus"
-              defaultValue={current.submissionStatus ?? ""}
-            >
-              <option value="">All submission statuses</option>
-              {SUBMISSION_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {SUBMISSION_STATUS_LABEL[s]}
-                </option>
-              ))}
-            </Select>
-          </div>
-        </>
-      )}
-    </>
-  );
-
-  return (
-    <FilterBar
-      basePath={basePath}
-      primary={primary}
-      advanced={advanced}
-      advancedActiveCount={advancedActiveCount}
-      chips={chips}
-    />
-  );
+  return <FilterBar basePath={basePath} filters={filters} />;
 }

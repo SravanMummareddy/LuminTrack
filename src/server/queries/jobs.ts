@@ -2,7 +2,7 @@ import { prisma } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
 import type { JobStatus } from "@/generated/prisma/enums";
 import { OTHER_SOURCE } from "@/lib/labels";
-import { PAGE_SIZE, type DateRange, type SortDir, type SortState } from "@/lib/filters";
+import { PAGE_SIZE, searchTerms, type DateRange, type SortDir, type SortState } from "@/lib/filters";
 
 /**
  * Source sub-tabs on /jobs:
@@ -14,10 +14,10 @@ export type JobSource = "manual" | "randstad";
 
 export type JobListFilters = {
   q?: string;
-  clientId?: string;
-  vendorId?: string;
+  clientId?: string[];
+  vendorId?: string[];
   sisterCompanySourceId?: string;
-  recruiterId?: string;
+  recruiterId?: string[];
   status?: JobStatus;
   location?: string;
   source?: JobSource;
@@ -49,9 +49,13 @@ export const JOB_DEFAULT_SORT: SortState = { key: "created", dir: "desc" };
 export async function listJobs(filters: JobListFilters) {
   const where: Prisma.JobWhereInput = {};
 
-  if (filters.q) where.title = { contains: filters.q, mode: "insensitive" };
-  if (filters.clientId) where.clientId = filters.clientId;
-  if (filters.vendorId) where.vendorId = filters.vendorId;
+  const terms = searchTerms(filters.q);
+  if (terms.length)
+    where.AND = terms.map((t) => ({
+      title: { contains: t, mode: "insensitive" },
+    }));
+  if (filters.clientId?.length) where.clientId = { in: filters.clientId };
+  if (filters.vendorId?.length) where.vendorId = { in: filters.vendorId };
   if (filters.sisterCompanySourceId)
     // OTHER_SOURCE matches jobs with a free-text source (no managed-source FK).
     where.sisterCompanySourceId =
@@ -61,8 +65,8 @@ export async function listJobs(filters: JobListFilters) {
   if (filters.status) where.status = filters.status;
   if (filters.location)
     where.location = { contains: filters.location, mode: "insensitive" };
-  if (filters.recruiterId)
-    where.assignments = { some: { recruiterId: filters.recruiterId } };
+  if (filters.recruiterId?.length)
+    where.assignments = { some: { recruiterId: { in: filters.recruiterId } } };
   if (filters.source === "manual") where.portalId = null;
   if (filters.source === "randstad")
     where.portal = { is: { name: RANDSTAD_PORTAL_NAME } };

@@ -14,7 +14,7 @@ import {
   BENCH_DEFAULT_SORT,
 } from "@/server/queries/bench-consultants";
 import { listActiveRecruiterOptions } from "@/server/queries/org";
-import { parseSort, parsePage, PAGE_SIZE } from "@/lib/filters";
+import { parseSort, parsePage, parseList, PAGE_SIZE } from "@/lib/filters";
 import { BENCH_PRIORITIES, BENCH_MARKETING_STATUSES } from "@/lib/labels";
 import type {
   BenchPriority,
@@ -41,7 +41,7 @@ export default async function BenchRosterPage({
     q: clean(sp.q),
     priority: clean(sp.priority),
     status: statusMode,
-    recruiterId: clean(sp.recruiterId),
+    recruiterId: parseList(sp.recruiterId),
   };
 
   const sort = parseSort(
@@ -145,7 +145,7 @@ export default async function BenchRosterPage({
         </Link>
       </PageHeader>
 
-      <BenchFilters current={current} recruiters={recruiters} />
+      <BenchFilters recruiters={recruiters} />
 
       {total === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">

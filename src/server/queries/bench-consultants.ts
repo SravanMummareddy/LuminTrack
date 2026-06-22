@@ -4,7 +4,7 @@ import type {
   BenchPriority,
   BenchMarketingStatus,
 } from "@/generated/prisma/enums";
-import { PAGE_SIZE, type SortDir, type SortState } from "@/lib/filters";
+import { PAGE_SIZE, searchTerms, type SortDir, type SortState } from "@/lib/filters";
 
 export type BenchListFilters = {
   q?: string;
@@ -14,7 +14,7 @@ export type BenchListFilters = {
    *  view; placed/inactive consultants are hidden unless explicitly requested.
    *  Ignored when an explicit `marketingStatus` is set. */
   onBench?: boolean;
-  recruiterId?: string;
+  recruiterId?: string[];
   sort?: SortState;
   page?: number;
 };
@@ -59,13 +59,16 @@ export async function listBenchConsultants(filters: BenchListFilters) {
   if (filters.priority) where.priority = filters.priority;
   if (filters.marketingStatus) where.marketingStatus = filters.marketingStatus;
   else if (filters.onBench) where.marketingStatus = { in: ["ACTIVE", "PAUSED"] };
-  if (filters.recruiterId) where.recruiterId = filters.recruiterId;
-  if (filters.q)
-    where.OR = [
-      { fullName: { contains: filters.q, mode: "insensitive" } },
-      { technology: { contains: filters.q, mode: "insensitive" } },
-      { currentLocation: { contains: filters.q, mode: "insensitive" } },
-    ];
+  if (filters.recruiterId?.length) where.recruiterId = { in: filters.recruiterId };
+  const terms = searchTerms(filters.q);
+  if (terms.length)
+    where.AND = terms.map((t) => ({
+      OR: [
+        { fullName: { contains: t, mode: "insensitive" } },
+        { technology: { contains: t, mode: "insensitive" } },
+        { currentLocation: { contains: t, mode: "insensitive" } },
+      ],
+    }));
 
   const sort = filters.sort ?? BENCH_DEFAULT_SORT;
   const sortFn = BENCH_SORTS[sort.key] ?? BENCH_SORTS.priority;

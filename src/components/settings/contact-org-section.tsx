@@ -11,6 +11,7 @@ import {
   SettingsListFilter,
   type StatusFilter,
 } from "@/components/settings/settings-list-filter";
+import { useLocalPagination } from "@/components/ui/local-pager";
 import {
   ContactsDialog,
   type ContactRow,
@@ -63,6 +64,8 @@ export function ContactOrgSection({
     });
   }, [items, search, status]);
 
+  const { pageItems, pager } = useLocalPagination(filtered, 10);
+
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between">
@@ -111,7 +114,7 @@ export function ContactOrgSection({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {filtered.map((item) => (
+            {pageItems.map((item) => (
               <tr key={item.id}>
                 <Td label="Name" className="font-medium text-slate-900">
                   {item.name}
@@ -150,6 +153,8 @@ export function ContactOrgSection({
           </tbody>
         </Table>
       )}
+
+      {filtered.length > 0 && pager}
 
       <Dialog
         open={editing !== null}

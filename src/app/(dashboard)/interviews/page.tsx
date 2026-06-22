@@ -9,7 +9,7 @@ import {
   type InterviewListFilters,
 } from "@/server/queries/interviews";
 import { listActiveRecruiterOptions } from "@/server/queries/org";
-import { parseSort, parsePage, parseDateRange, PAGE_SIZE } from "@/lib/filters";
+import { parseSort, parsePage, parseDateRange, parseList, PAGE_SIZE } from "@/lib/filters";
 
 function clean(value: string | string[] | undefined): string | undefined {
   const single = Array.isArray(value) ? value[0] : value;
@@ -25,7 +25,7 @@ export default async function InterviewsPage({
   const sp = await searchParams;
   const current = {
     q: clean(sp.q),
-    recruiterId: clean(sp.recruiterId),
+    recruiterId: parseList(sp.recruiterId),
     preset: clean(sp.preset),
     from: clean(sp.from),
     to: clean(sp.to),
@@ -58,13 +58,13 @@ export default async function InterviewsPage({
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div className="space-y-5">
       <PageHeader
         title="Interviews"
         description="Every scheduled interview round across all submissions. Read-only — manage rounds on each submission."
       />
 
-      <InterviewsFilters current={current} recruiters={recruiters} />
+      <InterviewsFilters recruiters={recruiters} />
 
       {total === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">

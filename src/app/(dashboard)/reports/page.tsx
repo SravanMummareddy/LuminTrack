@@ -13,7 +13,7 @@ export default async function ReportsPage({
   const tab: ReportsTab = tabParam === "monthly" ? "monthly" : "analytics";
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div className="space-y-5">
       <PageHeader
         title="Reports & Analytics"
         description="Management analysis across jobs, submissions, recruiters, and outcomes."

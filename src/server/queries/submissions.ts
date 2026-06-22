@@ -12,6 +12,7 @@ import {
 import {
   PAGE_SIZE,
   SUB_PAGE_SIZE,
+  searchTerms,
   type DateRange,
   type SortDir,
   type SortState,
@@ -20,9 +21,9 @@ import {
 export type SubmissionListFilters = {
   q?: string;
   status?: SubmissionStatus;
-  recruiterId?: string;
-  clientId?: string;
-  vendorId?: string;
+  recruiterId?: string[];
+  clientId?: string[];
+  vendorId?: string[];
   sisterCompanySourceId?: string;
   submittedRange?: DateRange;
   // Option B "Vendor Portal" scope: only submissions to portal-sourced
@@ -123,15 +124,16 @@ export async function listSubmissions(filters: SubmissionListFilters) {
   const where: Prisma.SubmissionWhereInput = {};
 
   if (filters.status) where.status = filters.status;
-  if (filters.recruiterId) where.submittedById = filters.recruiterId;
+  if (filters.recruiterId?.length)
+    where.submittedById = { in: filters.recruiterId };
   if (filters.submittedRange?.gte || filters.submittedRange?.lte)
     where.submittedAt = filters.submittedRange;
 
   const job: Prisma.JobWhereInput = {};
   if (filters.vendorPortalOnly)
     job.portal = { is: { name: RANDSTAD_PORTAL_NAME } };
-  if (filters.clientId) job.clientId = filters.clientId;
-  if (filters.vendorId) job.vendorId = filters.vendorId;
+  if (filters.clientId?.length) job.clientId = { in: filters.clientId };
+  if (filters.vendorId?.length) job.vendorId = { in: filters.vendorId };
   if (filters.sisterCompanySourceId)
     // OTHER_SOURCE matches jobs with a free-text source (no managed-source FK).
     job.sisterCompanySourceId =
@@ -140,11 +142,14 @@ export async function listSubmissions(filters: SubmissionListFilters) {
         : filters.sisterCompanySourceId;
   if (Object.keys(job).length) where.job = job;
 
-  if (filters.q)
-    where.OR = [
-      { candidate: { fullName: { contains: filters.q, mode: "insensitive" } } },
-      { job: { title: { contains: filters.q, mode: "insensitive" } } },
-    ];
+  const terms = searchTerms(filters.q);
+  if (terms.length)
+    where.AND = terms.map((t) => ({
+      OR: [
+        { candidate: { fullName: { contains: t, mode: "insensitive" } } },
+        { job: { title: { contains: t, mode: "insensitive" } } },
+      ],
+    }));
 
   // "Mine, stale >7d" — narrow to the acting user's early-pipeline submissions;
   // the >7-days-in-stage cut needs daysInStage, so it's applied in memory below.

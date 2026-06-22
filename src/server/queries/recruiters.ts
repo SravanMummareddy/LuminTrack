@@ -9,8 +9,8 @@ import { PAGE_SIZE, SUB_PAGE_SIZE, type SortState } from "@/lib/filters";
 /** Client/vendor/source filter for a job — used for assignment counts. */
 function jobOrgWhere(f: AnalyticsFilters): Prisma.JobWhereInput {
   const where: Prisma.JobWhereInput = {};
-  if (f.clientId) where.clientId = f.clientId;
-  if (f.vendorId) where.vendorId = f.vendorId;
+  if (f.clientId?.length) where.clientId = { in: f.clientId };
+  if (f.vendorId?.length) where.vendorId = { in: f.vendorId };
   if (f.sisterCompanySourceId)
     where.sisterCompanySourceId =
       f.sisterCompanySourceId === OTHER_SOURCE ? null : f.sisterCompanySourceId;

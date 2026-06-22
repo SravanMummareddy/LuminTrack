@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Pagination } from "@/components/ui/pagination";
 import { buttonClass } from "@/components/ui/button";
 import { VendorRequirementsTable } from "@/components/vendor-portal/vendor-requirements-table";
+import { FilterBar, type FilterDef } from "@/components/ui/filter-bar";
 import { getCurrentUser } from "@/lib/session";
 import { canManageRequirements } from "@/lib/permissions";
 import {
@@ -17,7 +18,7 @@ import {
   listVendors,
   listActiveRecruiterOptions,
 } from "@/server/queries/org";
-import { parseSort, parsePage, PAGE_SIZE } from "@/lib/filters";
+import { parseSort, parsePage, parseList, PAGE_SIZE } from "@/lib/filters";
 import { REQUIREMENT_STATUSES, REQUIREMENT_STATUS_LABEL } from "@/lib/labels";
 import type { RequirementStatus } from "@/generated/prisma/enums";
 
@@ -47,9 +48,9 @@ export default async function VendorPortalPage({
   const current = {
     q: clean(sp.q),
     status: clean(sp.status) ?? "OPEN",
-    clientId: clean(sp.clientId),
-    vendorId: clean(sp.vendorId),
-    recruiterId: clean(sp.recruiterId),
+    clientId: parseList(sp.clientId),
+    vendorId: parseList(sp.vendorId),
+    recruiterId: parseList(sp.recruiterId),
   };
 
   const sort = parseSort(
@@ -82,7 +83,7 @@ export default async function VendorPortalPage({
   const canManage = canManageRequirements(user ?? undefined);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <PageHeader
           title="Vendor Portal Requirements"
@@ -97,7 +98,6 @@ export default async function VendorPortalPage({
       </div>
 
       <RequirementFilters
-        current={current}
         clients={clients}
         vendors={vendors}
         recruiters={recruiters}
@@ -138,111 +138,67 @@ export default async function VendorPortalPage({
 }
 
 function RequirementFilters({
-  current,
   clients,
   vendors,
   recruiters,
 }: {
-  current: {
-    q?: string;
-    status: string;
-    clientId?: string;
-    vendorId?: string;
-    recruiterId?: string;
-  };
   clients: { id: string; name: string }[];
   vendors: { id: string; name: string }[];
   recruiters: { id: string; fullName: string }[];
 }) {
+  const filters: FilterDef[] = [
+    {
+      kind: "select",
+      param: "status",
+      label: "Status",
+      primary: true,
+      defaultValue: "OPEN",
+      options: [
+        { value: "ALL", label: "All" },
+        ...REQUIREMENT_STATUSES.map((s) => ({ value: s, label: REQUIREMENT_STATUS_LABEL[s] })),
+      ],
+    },
+    {
+      kind: "select",
+      param: "clientId",
+      label: "Client",
+      primary: true,
+      searchable: true,
+      multi: true,
+      options: [
+        { value: "", label: "All clients" },
+        ...clients.map((c) => ({ value: c.id, label: c.name })),
+      ],
+    },
+    {
+      kind: "select",
+      param: "vendorId",
+      label: "Vendor",
+      searchable: true,
+      multi: true,
+      options: [
+        { value: "", label: "All vendors" },
+        ...vendors.map((v) => ({ value: v.id, label: v.name })),
+      ],
+    },
+    {
+      kind: "select",
+      param: "recruiterId",
+      label: "Recruiter",
+      searchable: true,
+      multi: true,
+      options: [
+        { value: "", label: "All recruiters" },
+        ...recruiters.map((r) => ({ value: r.id, label: r.fullName })),
+      ],
+    },
+  ];
+
   return (
-    <form
-      method="get"
-      className="grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-5"
-    >
-      <label className="block">
-        <span className="mb-1 block text-xs font-medium text-slate-600">Search</span>
-        <input
-          type="search"
-          name="q"
-          defaultValue={current.q ?? ""}
-          placeholder="Job, candidate, vendor recruiter"
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-        />
-      </label>
-      <label className="block">
-        <span className="mb-1 block text-xs font-medium text-slate-600">Status</span>
-        <select
-          name="status"
-          defaultValue={current.status}
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-        >
-          <option value="ALL">All</option>
-          {REQUIREMENT_STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {REQUIREMENT_STATUS_LABEL[s]}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="block">
-        <span className="mb-1 block text-xs font-medium text-slate-600">Client</span>
-        <select
-          name="clientId"
-          defaultValue={current.clientId ?? ""}
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-        >
-          <option value="">All</option>
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="block">
-        <span className="mb-1 block text-xs font-medium text-slate-600">Vendor</span>
-        <select
-          name="vendorId"
-          defaultValue={current.vendorId ?? ""}
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-        >
-          <option value="">All</option>
-          {vendors.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="block">
-        <span className="mb-1 block text-xs font-medium text-slate-600">Recruiter</span>
-        <select
-          name="recruiterId"
-          defaultValue={current.recruiterId ?? ""}
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-        >
-          <option value="">All</option>
-          {recruiters.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.fullName}
-            </option>
-          ))}
-        </select>
-      </label>
-      <div className="sm:col-span-5 flex justify-end gap-2">
-        <Link
-          href="/vendor-portal"
-          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50"
-        >
-          Reset
-        </Link>
-        <button
-          type="submit"
-          className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
-        >
-          Apply
-        </button>
-      </div>
-    </form>
+    <FilterBar
+      basePath="/vendor-portal"
+      search={{ param: "q", placeholder: "Job, candidate, vendor recruiter" }}
+      filters={filters}
+    />
   );
 }

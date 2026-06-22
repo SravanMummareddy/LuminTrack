@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { LinkButton } from "@/components/ui/button";
@@ -18,7 +17,7 @@ import {
   listSisterCompanies,
   listUsers,
 } from "@/server/queries/org";
-import { parseDateRange, parseSort, parsePage, PAGE_SIZE } from "@/lib/filters";
+import { parseDateRange, parseSort, parsePage, parseList, PAGE_SIZE } from "@/lib/filters";
 import { SUBMISSION_STATUSES } from "@/lib/labels";
 import type { SubmissionStatus } from "@/generated/prisma/enums";
 
@@ -47,9 +46,9 @@ export default async function SubmissionsPage({
   const current = {
     q: clean(sp.q),
     status: clean(sp.status),
-    recruiterId: clean(sp.recruiterId),
-    clientId: clean(sp.clientId),
-    vendorId: clean(sp.vendorId),
+    recruiterId: parseList(sp.recruiterId),
+    clientId: parseList(sp.clientId),
+    vendorId: parseList(sp.vendorId),
     sisterCompanySourceId: clean(sp.sisterCompanySourceId),
     preset: clean(sp.preset),
     from: clean(sp.from),
@@ -126,19 +125,8 @@ export default async function SubmissionsPage({
       mineStale,
   );
 
-  // "Mine, stale >7d" toggle. It's a one-click preset that lives alongside (not
-  // inside) the GET filter form, so it preserves the other active params and
-  // resets to page 1. Submitting the main filter form clears it — intended.
-  const toggleParams = new URLSearchParams();
-  for (const [k, v] of Object.entries(current))
-    if (v) toggleParams.set(k, v);
-  if (!mineStale) toggleParams.set("mineStale", "1");
-  const mineStaleHref = `/submissions${
-    toggleParams.toString() ? `?${toggleParams.toString()}` : ""
-  }`;
-
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div className="space-y-5">
       <PageHeader
         title={vendorPortal ? "Vendor Portal" : "Submissions"}
         description={
@@ -178,32 +166,11 @@ export default async function SubmissionsPage({
       </nav>
 
       <SubmissionFilters
-        current={current}
         clients={clients}
         vendors={vendors}
         sources={sources}
         recruiters={recruiters}
       />
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Link
-          href={mineStaleHref}
-          aria-pressed={mineStale}
-          className={
-            mineStale
-              ? "inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800"
-              : "inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
-          }
-        >
-          Mine, stale &gt;7d
-          {mineStale && <span aria-hidden>✕</span>}
-        </Link>
-        {mineStale && (
-          <span className="text-xs text-slate-400">
-            Your early-pipeline submissions sitting in a stage over 7 days.
-          </span>
-        )}
-      </div>
 
       {total === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">
