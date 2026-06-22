@@ -81,7 +81,7 @@ export default async function PlacementsPage({
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
+    <div className="space-y-5">
       <PageHeader
         title="Placements"
         description="Candidates currently working an assignment. Created automatically when a submission's status flips to Joined."
