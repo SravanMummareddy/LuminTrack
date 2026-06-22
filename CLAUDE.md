@@ -12,6 +12,26 @@ timeline, and recruiter performance. Replaces a manual Excel/Word process.
 "Remaining work" summary — start there before grepping the audit sections).
 **Future enhancements (large multi-session items):** [`ENHANCEMENTS.md`](./ENHANCEMENTS.md).
 
+## ✅ Vendor Portal Requirements (R0–R5) — SHIPPED 2026-06-22 (on `bench-sales-build` / PR #31)
+
+A pre-submission **planning layer**: a team-lead/admin scopes a vendor
+requirement's commercial terms; a recruiter later "moves it to a submission"
+(prefilled + editable), creating the real Submission. Modeled as a **separate
+`VendorRequirement` table** (not Submission+status) so it's invisible to all
+submission analytics by construction. **Team lead = `User.isTeamLead` flag**
+(not a 3rd role); `canManageRequirements = ADMIN || isTeamLead`. Convert reuses an
+extracted `createSubmissionRecord(tx, …)` (`src/server/submission-create.ts`) via
+an idempotent OPEN→CONVERTED claim + a `ConvertGate` sentinel rollback so a
+shared gate (duplicate/iLabor) never orphans a submission. Display id `VPR-###`.
+Key files: `src/app/(dashboard)/vendor-portal/{page,new,[id],[id]/edit,[id]/convert}`,
+`src/components/vendor-portal/*`, `src/server/{actions,queries}/requirements.ts`,
+`src/server/team-lead.ts`. Nav "Vendor Portal" → "Vendor Portal Requirements";
+the old `/jobs?source=randstad` tab relabeled "iLabor Requisitions". Job-create
+form has an optional "plan a requirement" section; job detail + dashboard surface
+them. Full detail + the resume marker: the plan file's "🟢 PROGRESS" block.
+**Owner to-do:** reseed (`npx tsx prisma/seed-demo.ts`) → restart → re-login;
+real-browser eyeball; `git push`.
+
 ## 🚧 Current work — Lifecycle bench + reseed + Vendor Portal tab + filter redesign (2026-06-21, on `bench-sales-build` / PR #31)
 
 Four phases, all shipped to the branch (green CI). Plan:
