@@ -10,6 +10,51 @@ short instead of long.
 
 ---
 
+## 2026-06-22 · "localhost is unable to open" — a `/` ⇄ `/login` redirect loop after a reseed
+
+**Situation.** Right after shipping the Vendor Portal Requirements feature, the
+owner started `npm run dev` and couldn't open `localhost:3000`. The server log
+was a wall of identical `GET / 307` lines — dozens of them — and conspicuously
+**no `/login` and no `_next` asset requests**. The browser eventually showed
+"localhost is unable to open" (ERR_TOO_MANY_REDIRECTS). The dev server itself was
+healthy (`Ready in 209ms`), so it wasn't a crash.
+
+**Diagnosis.** `curl -sI /` returned `307 → /login` and `curl /login` returned
+`200` — following redirects gave exactly **one** hop and no loop. So *server-side
+with no cookie there is no loop*; the trap needed a cookie. Reading the two auth
+layers side by side exposed the disagreement: `proxy.ts` calls
+`verifySessionToken`, which **only checks the JWT signature — never the DB**,
+while `getCurrentUser` does `prisma.user.findUnique` and also requires
+`isActive`. The owner had just reseeded (the feature's documented "reseed" step),
+which wiped + recreated every user with **new IDs**. Their browser still held a
+validly-signed JWT for a *dead* user id. So: proxy sees a good JWT → "authed" →
+lets `/` through and bounces `/login → /`; the page's `requireUser` hits the DB,
+finds no user → bounces `/ → /login`; repeat forever. Only `GET /` showed in the
+log because the browser **cached the `/login` hop** while the un-cacheable `/`
+kept hitting the server — the missing `/login` lines were the clue, not noise.
+
+**Fix.** `requireUser()` now redirects a missing-user request to a new
+`GET /api/auth/logout` Route Handler that **deletes the session cookie** before
+redirecting to `/login`. The cookie can only be cleared in a Route Handler (an
+RSC render can't mutate cookies), and `/api/*` is excluded from the proxy matcher,
+so the logout hop isn't intercepted. A cookie-less request never reaches
+`requireUser` (the proxy sends it straight to `/login`), so this path fires *only*
+for a stale session — exactly when clearing it is correct. Verified:
+`GET /api/auth/logout → 307 /login` with `Set-Cookie: lumintrack_session=;
+Expires=1970`.
+
+**Lesson.** When two layers both gate auth, they must agree on *what
+"authenticated" means* — here the edge (JWT-valid) and the page (user-exists-and-
+active) diverged, and the gap only opened under a real-world event (a reseed /
+user deletion) that invalidates the user without invalidating the token. The
+debugging unlock was reproducing with `curl` to separate "server loops" from
+"browser loops": once `curl` proved the server did **not** loop without a cookie,
+the cause had to be a cookie the server trusts more than it should. And the
+absence of `/login` in the log (browser cache) was the tell for which leg of the
+loop was which.
+
+---
+
 ## 2026-06-21 · "Nothing on the page is clickable" — every `/_next/static/chunks/*` 404ing
 
 **Situation.** Mid filter-redesign, live-verifying the new Placements filter via
