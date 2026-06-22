@@ -7,6 +7,7 @@ import { SortableHeader } from "@/components/ui/sortable-header";
 import { MobileSort } from "@/components/ui/mobile-sort";
 import { Badge } from "@/components/ui/badge";
 import { ColumnsMenu } from "@/components/ui/columns-menu";
+import { Pagination } from "@/components/ui/pagination";
 import {
   BENCH_PRIORITY_LABEL,
   BENCH_PRIORITY_TONE,
@@ -221,16 +222,33 @@ const DEFAULTS: ColumnPrefs = {
   order: COLUMNS.map((c) => c.key),
 };
 
+/** One priority group rendered as its own paginated section. S.No restarts at
+ *  the group's own page offset, so High and Second each number from 1. */
+export type BenchGroup = {
+  priority: BenchListRow["priority"];
+  rows: BenchListRow[];
+  pageOffset: number;
+  page: number;
+  totalPages: number;
+  total: number;
+  paramKey: string;
+};
+
 export function BenchRosterTable({
-  rows,
+  rows = [],
   pageOffset = 0,
   groupByPriority = false,
+  groups,
 }: {
-  rows: BenchListRow[];
+  rows?: BenchListRow[];
   pageOffset?: number;
   /** When sorted by priority (the default), render High/Second section headers
-   *  — but only while the Priority column itself is hidden, to match the sheet. */
+   *  — but only while the Priority column itself is hidden, to match the sheet.
+   *  Only applies to the flat (`rows`) path. */
   groupByPriority?: boolean;
+  /** When provided, render each priority group as its own section with its own
+   *  pagination (independent High/Second paging). Takes precedence over `rows`. */
+  groups?: BenchGroup[];
 }) {
   const [prefs, setPrefs] = useColumnPrefs(
     STORAGE_KEY,
@@ -246,11 +264,13 @@ export function BenchRosterTable({
   const showGroups =
     groupByPriority && !visibleCols.some((c) => c.key === "priority");
 
+  const isEmpty = groups ? groups.length === 0 : rows.length === 0;
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs text-slate-500" suppressHydrationWarning>
-          {rows.length === 0
+          {isEmpty
             ? null
             : `Showing ${visibleCols.length} of ${COLUMNS.length} columns`}
         </p>
@@ -272,61 +292,116 @@ export function BenchRosterTable({
           }))}
       />
 
-      <Table>
-        <thead className="border-b border-slate-200 bg-slate-50">
-          <tr>
-            {visibleCols.map((c) =>
-              c.sortKey ? (
-                <SortableHeader
-                  key={c.key}
-                  column={c.sortKey}
-                  label={c.label}
-                  align={c.align}
-                  defaultDir={c.sortDefaultDir}
-                />
-              ) : (
-                <Th
-                  key={c.key}
-                  className={c.align === "right" ? "text-right" : ""}
-                >
-                  {c.label}
-                </Th>
-              ),
-            )}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {rows.map((row, idx) => {
-            const showHeader =
-              showGroups && (idx === 0 || rows[idx - 1].priority !== row.priority);
-            return (
-              <Fragment key={row.id}>
-                {showHeader && (
-                  <tr className="bg-slate-50">
-                    <td
-                      colSpan={visibleCols.length}
-                      className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500"
-                    >
-                      {BENCH_PRIORITY_LABEL[row.priority]}
-                    </td>
-                  </tr>
-                )}
-                <tr className="hover:bg-slate-50">
-                  {visibleCols.map((c) => (
-                    <RenderCell
-                      key={c.key}
-                      column={c}
-                      row={row}
-                      rowNumber={pageOffset + idx + 1}
-                    />
-                  ))}
-                </tr>
-              </Fragment>
-            );
-          })}
-        </tbody>
-      </Table>
+      {groups ? (
+        groups.map((g) => (
+          <div key={g.priority} className="space-y-3">
+            <RosterRows
+              rows={g.rows}
+              pageOffset={g.pageOffset}
+              visibleCols={visibleCols}
+              sectionLabel={BENCH_PRIORITY_LABEL[g.priority]}
+            />
+            <Pagination
+              page={g.page}
+              totalPages={g.totalPages}
+              total={g.total}
+              paramKey={g.paramKey}
+            />
+          </div>
+        ))
+      ) : (
+        <RosterRows
+          rows={rows}
+          pageOffset={pageOffset}
+          visibleCols={visibleCols}
+          inlineGroups={showGroups}
+        />
+      )}
     </div>
+  );
+}
+
+/** Renders the table head + body for a set of rows. `sectionLabel` prepends a
+ *  single group header (used in per-group paginated mode); `inlineGroups`
+ *  inserts a header row whenever the priority changes (the flat default view). */
+function RosterRows({
+  rows,
+  pageOffset,
+  visibleCols,
+  sectionLabel,
+  inlineGroups = false,
+}: {
+  rows: BenchListRow[];
+  pageOffset: number;
+  visibleCols: Column[];
+  sectionLabel?: string;
+  inlineGroups?: boolean;
+}) {
+  return (
+    <Table>
+      <thead className="border-b border-slate-200 bg-slate-50">
+        <tr>
+          {visibleCols.map((c) =>
+            c.sortKey ? (
+              <SortableHeader
+                key={c.key}
+                column={c.sortKey}
+                label={c.label}
+                align={c.align}
+                defaultDir={c.sortDefaultDir}
+              />
+            ) : (
+              <Th
+                key={c.key}
+                className={c.align === "right" ? "text-right" : ""}
+              >
+                {c.label}
+              </Th>
+            ),
+          )}
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-slate-100">
+        {sectionLabel && (
+          <tr className="bg-slate-50">
+            <td
+              colSpan={visibleCols.length}
+              className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500"
+            >
+              {sectionLabel}
+            </td>
+          </tr>
+        )}
+        {rows.map((row, idx) => {
+          const showHeader =
+            inlineGroups && (idx === 0 || rows[idx - 1].priority !== row.priority);
+          return (
+            <Fragment key={row.id}>
+              {showHeader && (
+                <tr className="bg-slate-50">
+                  <td
+                    colSpan={visibleCols.length}
+                    className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500"
+                  >
+                    {BENCH_PRIORITY_LABEL[row.priority]}
+                  </td>
+                </tr>
+              )}
+              <tr className="hover:bg-slate-50">
+                {visibleCols.map((c) => (
+                  <RenderCell
+                    key={c.key}
+                    column={c}
+                    row={row}
+                    rowNumber={pageOffset + idx + 1}
+                  />
+                ))}
+              </tr>
+            </Fragment>
+          );
+        })}
+      </tbody>
+    </Table>
   );
 }
 
