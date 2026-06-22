@@ -142,7 +142,7 @@ export function JobForm({
           label="Source"
           htmlFor="sisterCompanySourceId"
           required
-          error={errors.sisterCompanySourceId}
+          error={errors.sisterCompanySourceId ?? errors.sourceOther}
         >
           <Select
             id="sisterCompanySourceId"
@@ -161,6 +161,18 @@ export function JobForm({
             ))}
             <option value={OTHER_SOURCE}>Other — enter manually</option>
           </Select>
+          {/* The manual-entry box sits directly under the dropdown so it's
+              obviously the thing to fill in once "Other" is picked. */}
+          {isOtherSource && (
+            <Input
+              id="sourceOther"
+              name="sourceOther"
+              defaultValue={values?.sourceOther ?? ""}
+              placeholder="Type the source name (e.g. LinkedIn, referral)"
+              className="mt-2"
+              autoFocus
+            />
+          )}
         </Field>
 
         <Field label="Status" htmlFor="status" error={errors.status}>
@@ -199,22 +211,6 @@ export function JobForm({
           />
         </Field>
       </div>
-
-      {isOtherSource && (
-        <Field
-          label="Source name"
-          htmlFor="sourceOther"
-          required
-          error={errors.sourceOther}
-        >
-          <Input
-            id="sourceOther"
-            name="sourceOther"
-            defaultValue={values?.sourceOther ?? ""}
-            placeholder="e.g. LinkedIn, referral, direct application"
-          />
-        </Field>
-      )}
 
       <Field label="Location" htmlFor="location" error={errors.location}>
         <Input
