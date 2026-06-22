@@ -165,6 +165,12 @@ const CLIENT_NAMES = [
   "Boeing",
   "Wells Fargo",
   "Cisco Systems",
+  "Bank of America",
+  "AT&T",
+  "Pfizer",
+  "Caterpillar",
+  "American Express",
+  "Lockheed Martin",
 ];
 const VENDOR_NAMES = [
   "ABC Staffing",
@@ -175,6 +181,12 @@ const VENDOR_NAMES = [
   "Cognizant",
   "Collabera",
   "Mastech Digital",
+  "Kforce",
+  "Robert Half",
+  "Randstad Technologies",
+  "Judge Group",
+  "Artech",
+  "Diverse Lynx",
 ];
 
 const JOB_TITLES = [
