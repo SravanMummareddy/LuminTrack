@@ -60,6 +60,7 @@ export default async function AuditPage({
         jobId: true,
         candidateId: true,
         submissionId: true,
+        requirementId: true,
       },
     }),
     prisma.activity.count({ where }),
@@ -76,6 +77,7 @@ export default async function AuditPage({
     if (r.submissionId) return `/submissions/${r.submissionId}`;
     if (r.candidateId) return `/candidates/${r.candidateId}`;
     if (r.jobId) return `/jobs/${r.jobId}`;
+    if (r.requirementId) return `/vendor-portal/${r.requirementId}`;
     return null;
   }
 

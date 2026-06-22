@@ -127,12 +127,14 @@ type RosterUser = {
   role: "ADMIN" | "RECRUITER";
   empId: string;
   teamLabel: string;
+  /** Team leads can manage Vendor Portal Requirements — one per team. */
+  isTeamLead?: boolean;
 };
 const USER_ROSTER: RosterUser[] = [
-  // ── Admins / managers ──
-  { fullName: "Sriman Udugula", email: ADMIN_LOGIN, role: "ADMIN", empId: "INC105", teamLabel: TEAM_A },
+  // ── Admins / managers ── (one team-lead per team: Sriman → A, Deepa → B)
+  { fullName: "Sriman Udugula", email: ADMIN_LOGIN, role: "ADMIN", empId: "INC105", teamLabel: TEAM_A, isTeamLead: true },
   { fullName: "Vikram Reddy", email: "vikram@lumintrack.com", role: "ADMIN", empId: "INC112", teamLabel: TEAM_A },
-  { fullName: "Deepa Nair", email: "deepa@lumintrack.com", role: "ADMIN", empId: "TK2204", teamLabel: TEAM_B },
+  { fullName: "Deepa Nair", email: "deepa@lumintrack.com", role: "ADMIN", empId: "TK2204", teamLabel: TEAM_B, isTeamLead: true },
   // ── Recruiters — real (from the sheet's Monthly Performance tab) ──
   { fullName: "Hrishikesh Batta", email: "hrishikesh@lumintrack.com", role: "RECRUITER", empId: "TK2090", teamLabel: TEAM_A },
   { fullName: "Sameer Shaik", email: "sameer@lumintrack.com", role: "RECRUITER", empId: "TK2161", teamLabel: TEAM_A },
@@ -474,6 +476,8 @@ async function main() {
   // Candidate, so they clear before either.
   await prisma.activity.deleteMany();
   await prisma.note.deleteMany();
+  // VendorRequirement holds Restrict FKs to Job — must go before jobs/candidates.
+  await prisma.vendorRequirement.deleteMany();
   await prisma.placementExtension.deleteMany();
   await prisma.placement.deleteMany();
   await prisma.interviewRound.deleteMany();
@@ -496,7 +500,12 @@ async function main() {
   const passwordHash = await bcrypt.hash(SHARED_PASSWORD, 10);
   const adminCreatedAt = new Date(WINDOW_START.getTime() - 5 * DAY);
 
-  const allUsers: { id: string; fullName: string; role: string }[] = [];
+  const allUsers: {
+    id: string;
+    fullName: string;
+    role: string;
+    teamLabel: string | null;
+  }[] = [];
   for (const u of USER_ROSTER) {
     const created = await prisma.user.create({
       data: {
@@ -506,10 +515,11 @@ async function main() {
         role: u.role,
         empId: u.empId,
         teamLabel: u.teamLabel,
+        isTeamLead: u.isTeamLead ?? false,
         createdAt: adminCreatedAt,
         updatedAt: adminCreatedAt,
       },
-      select: { id: true, fullName: true, role: true },
+      select: { id: true, fullName: true, role: true, teamLabel: true },
     });
     allUsers.push(created);
   }
@@ -1332,6 +1342,73 @@ async function main() {
     });
   }
 
+  // ── Vendor portal requirements (the planning queue) ──
+  // Mostly OPEN (the requisitions a team lead has scoped, waiting for a
+  // recruiter to move them to a submission) plus a couple CANCELLED so the
+  // status filter has something to do. Team lead is derived from the assigned
+  // recruiter's team (Sriman → TEAM_A, Deepa → TEAM_B).
+  console.log("Creating vendor portal requirements…");
+  const teamLeadByLabel = new Map<string, string>();
+  for (const u of USER_ROSTER) {
+    if (u.isTeamLead) teamLeadByLabel.set(u.teamLabel, u.fullName);
+  }
+  let requirementCount = 0;
+  for (let i = 0; i < 14; i++) {
+    const job = pick(jobs);
+    const recruiter = pick(recruiters);
+    // ~70% already have a candidate picked; the rest are candidate-less plans.
+    const candidate = chance(0.7) ? pick(candidates) : null;
+    const status = weighted<"OPEN" | "CANCELLED">([
+      ["OPEN", 11],
+      ["CANCELLED", 3],
+    ]);
+    const payRate = job.candidateRate - randInt(0, 6);
+    const billRate = job.candidateRate + randInt(10, 30);
+    const createdAt = randDate(
+      new Date(NOW.getTime() - 30 * DAY),
+      new Date(NOW.getTime() - 1 * DAY),
+    );
+    const requirement = await prisma.vendorRequirement.create({
+      data: {
+        jobId: job.id,
+        candidateId: candidate?.id ?? null,
+        recruiterId: recruiter.id,
+        location: pick(LOCATIONS),
+        payRate,
+        billRate,
+        candidateRate: job.candidateRate,
+        engagement: chance(0.6) ? "C2C" : "W2",
+        vendorRecruiterName: chance(0.5) ? pick(VENDOR_RECRUITER_NAMES) : null,
+        teamLead: teamLeadByLabel.get(recruiter.teamLabel ?? "") ?? null,
+        submissionNotes: chance(0.4) ? pick(CANDIDATE_NOTES) : null,
+        status,
+        createdById: admin.id,
+        createdAt,
+        updatedAt: createdAt,
+      },
+      select: { id: true },
+    });
+    requirementCount++;
+    activityRows.push({
+      entityType: "REQUIREMENT",
+      action: "REQUIREMENT_CREATED",
+      description: `Vendor requirement created for "${job.title}"`,
+      performedById: admin.id,
+      requirementId: requirement.id,
+      createdAt,
+    });
+    if (status === "CANCELLED") {
+      activityRows.push({
+        entityType: "REQUIREMENT",
+        action: "REQUIREMENT_CANCELLED",
+        description: "Vendor requirement cancelled",
+        performedById: admin.id,
+        requirementId: requirement.id,
+        createdAt: new Date(createdAt.getTime() + 2 * DAY),
+      });
+    }
+  }
+
   // ── Candidate documents (with a spread of expiry dates) ──
   // Exercises the expiry pills + the dashboard "Documents expiring (30 days)"
   // banner: some are already expired, some expire within 30 days, some far out.
@@ -1472,6 +1549,7 @@ async function main() {
   console.log(`  Jobs:         ${jobs.length}`);
   console.log(`  Candidates:   ${candidates.length}`);
   console.log(`  Bench consultants: ${benchCount} (linked 1:1 to candidates)`);
+  console.log(`  Vendor requirements: ${requirementCount}`);
   console.log(`  Candidate documents: ${docCount}`);
   console.log(`  Resumes:      ${resumeCount}`);
   console.log(`  Submissions:  ${submissionCount}`);
