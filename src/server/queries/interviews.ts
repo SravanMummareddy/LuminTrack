@@ -95,6 +95,7 @@ export async function getCandidateInterviewsGroupedByJob(
           interviewerName: true,
           scheduledAt: true,
           result: true,
+          supportNeeded: true,
           feedback: true,
         },
       },
@@ -178,6 +179,7 @@ export async function listInterviews(filters: InterviewListFilters) {
     take: LIST_PAGE_SIZE,
     select: {
       id: true,
+      roundOrder: true,
       roundName: true,
       interviewType: true,
       scheduledAt: true,
@@ -186,6 +188,7 @@ export async function listInterviews(filters: InterviewListFilters) {
       submission: {
         select: {
           id: true,
+          seq: true,
           candidate: {
             select: { id: true, fullName: true, skills: true, featuredSkills: true },
           },

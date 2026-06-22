@@ -167,6 +167,10 @@ export const SUBMISSION_STAGE_INDEX: Record<SubmissionStatus, number> = {
 /** Select sentinel for a manually-typed job source (vs. a managed source FK). */
 export const OTHER_SOURCE = "__OTHER__";
 
+/** Select sentinel for "+ Add new" client/vendor inline on the job form. The
+ *  action resolves it to a created-or-reused entity by name (admin-only). */
+export const NEW_ORG_ENTITY = "__NEW_ORG__";
+
 /**
  * A job's display source — managed source name, free-text fallback, or the
  * external portal name if the job was imported (e.g. "Randstad iLabor").

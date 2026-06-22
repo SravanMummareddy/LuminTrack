@@ -9,8 +9,27 @@ import { deriveTeamLead } from "@/server/team-lead";
 import { canManageRequirements } from "@/lib/permissions";
 import { jobSchema, JOB_STATUS_VALUES } from "@/lib/validation/job";
 import { toFieldErrors } from "@/lib/validation/common";
-import { JOB_STATUS_LABEL, OTHER_SOURCE } from "@/lib/labels";
+import { JOB_STATUS_LABEL, OTHER_SOURCE, NEW_ORG_ENTITY } from "@/lib/labels";
 import type { FormState } from "@/lib/form-state";
+import type { Prisma } from "@/generated/prisma/client";
+
+/** Resolve a "+ Add new client/vendor" sentinel to an id: reuse a case-
+ *  insensitive name match if one exists, else create the record. Mirrors the
+ *  iLabor importer's create-if-missing so "Acme" and "ACME" don't fork. */
+async function findOrCreateClient(tx: Prisma.TransactionClient, name: string) {
+  const existing = await tx.client.findFirst({
+    where: { name: { equals: name, mode: "insensitive" } },
+    select: { id: true },
+  });
+  return existing ?? (await tx.client.create({ data: { name }, select: { id: true } }));
+}
+async function findOrCreateVendor(tx: Prisma.TransactionClient, name: string) {
+  const existing = await tx.vendor.findFirst({
+    where: { name: { equals: name, mode: "insensitive" } },
+    select: { id: true },
+  });
+  return existing ?? (await tx.vendor.create({ data: { name }, select: { id: true } }));
+}
 
 /**
  * Reads the optional "also plan a vendor requirement" section of the job-create
@@ -100,6 +119,22 @@ export async function createJob(
   const d = parsed.data;
   const isOtherSource = d.sisterCompanySourceId === OTHER_SOURCE;
 
+  // Inline "+ Add new client/vendor" — admin-only (matches Settings org writes).
+  const canCreateOrg = user.role === "ADMIN";
+  const newClientName = String(formData.get("newClientName") ?? "").trim();
+  const newVendorName = String(formData.get("newVendorName") ?? "").trim();
+  const wantNewClient = d.clientId === NEW_ORG_ENTITY;
+  const wantNewVendor = d.vendorId === NEW_ORG_ENTITY;
+  if ((wantNewClient || wantNewVendor) && !canCreateOrg)
+    return { error: "Only admins can add a new client or vendor." };
+  const orgErrors: Record<string, string> = {};
+  if (wantNewClient && !newClientName)
+    orgErrors.clientId = "Enter the new client name.";
+  if (wantNewVendor && !newVendorName)
+    orgErrors.vendorId = "Enter the new vendor name.";
+  if (Object.keys(orgErrors).length)
+    return { error: "Please fix the highlighted fields.", fieldErrors: orgErrors };
+
   // Optional "plan a vendor requirement" section — only admins / team leads can
   // create requirements, so a non-privileged POST of req_ fields is ignored.
   // Resolve the team lead before the tx (it reads the recruiter's team).
@@ -111,11 +146,19 @@ export async function createJob(
     : null;
 
   const job = await prisma.$transaction(async (tx) => {
+    // Resolve inline-added client/vendor first (create-or-reuse by name).
+    const clientId = wantNewClient
+      ? (await findOrCreateClient(tx, newClientName)).id
+      : d.clientId;
+    const vendorId = wantNewVendor
+      ? (await findOrCreateVendor(tx, newVendorName)).id
+      : d.vendorId;
+
     const created = await tx.job.create({
       data: {
         title: d.title,
-        clientId: d.clientId,
-        vendorId: d.vendorId,
+        clientId,
+        vendorId,
         sisterCompanySourceId: isOtherSource ? null : d.sisterCompanySourceId,
         sourceOther: isOtherSource ? (d.sourceOther ?? null) : null,
         status: d.status,

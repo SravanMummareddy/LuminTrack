@@ -92,9 +92,14 @@ export function CandidateInterviewsGrouped({
                       <p className="text-sm font-medium text-slate-800">
                         R{r.roundOrder} · {r.roundName}
                       </p>
-                      <Badge tone={INTERVIEW_RESULT_TONE[r.result]}>
-                        {INTERVIEW_RESULT_LABEL[r.result]}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        {r.supportNeeded && (
+                          <Badge tone="indigo">Support needed</Badge>
+                        )}
+                        <Badge tone={INTERVIEW_RESULT_TONE[r.result]}>
+                          {INTERVIEW_RESULT_LABEL[r.result]}
+                        </Badge>
+                      </div>
                     </div>
                     <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
                       <RoundItem label="Type">

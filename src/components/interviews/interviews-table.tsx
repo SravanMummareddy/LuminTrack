@@ -7,7 +7,7 @@ import {
   INTERVIEW_RESULT_LABEL,
   INTERVIEW_RESULT_TONE,
 } from "@/lib/labels";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatSubmissionDisplayId } from "@/lib/format";
 import type { InterviewListRow } from "@/server/queries/interviews";
 
 function technology(c: InterviewListRow["submission"]["candidate"]): string {
@@ -73,6 +73,9 @@ export function InterviewsTable({
                 </Link>
                 <span className="ml-1 text-xs text-slate-400">
                   · {INTERVIEW_TYPE_LABEL[r.interviewType]}
+                </span>
+                <span className="mt-0.5 block font-mono text-[11px] text-slate-400">
+                  {formatSubmissionDisplayId(r.submission)} · R{r.roundOrder}
                 </span>
               </Td>
               <Td label="Support" secondary>

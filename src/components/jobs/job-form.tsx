@@ -8,6 +8,7 @@ import {
   JOB_STATUSES,
   JOB_STATUS_LABEL,
   OTHER_SOURCE,
+  NEW_ORG_ENTITY,
   WORK_MODES,
   WORK_MODE_LABEL,
   JOB_PRIORITIES,
@@ -66,6 +67,7 @@ export function JobForm({
   values,
   submitLabel,
   canManageRequirements = false,
+  canCreateOrgEntities = false,
 }: {
   action: JobAction;
   clients: Option[];
@@ -76,6 +78,8 @@ export function JobForm({
   submitLabel: string;
   /** Show the optional "plan a vendor requirement" section (create mode only). */
   canManageRequirements?: boolean;
+  /** Allow adding a new client/vendor inline (admins only). */
+  canCreateOrgEntities?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(action, EMPTY_FORM_STATE);
   const errors = state.fieldErrors ?? {};
@@ -93,6 +97,13 @@ export function JobForm({
   );
   const isOtherSource = sourceValue === OTHER_SOURCE;
 
+  // Client / Vendor are controlled so picking "+ Add new…" can reveal a name
+  // box inline (resolved to a created-or-reused record by the action).
+  const [clientValue, setClientValue] = useState(values?.clientId ?? "");
+  const [vendorValue, setVendorValue] = useState(values?.vendorId ?? "");
+  const isNewClient = clientValue === NEW_ORG_ENTITY;
+  const isNewVendor = vendorValue === NEW_ORG_ENTITY;
+
   return (
     <form action={formAction} className="space-y-5">
       {values && <input type="hidden" name="id" value={values.id} />}
@@ -106,7 +117,8 @@ export function JobForm({
           <Select
             id="clientId"
             name="clientId"
-            defaultValue={values?.clientId ?? ""}
+            value={clientValue}
+            onChange={(e) => setClientValue(e.target.value)}
             required
           >
             <option value="" disabled>
@@ -117,14 +129,26 @@ export function JobForm({
                 {optionLabel(c.name, c.isActive)}
               </option>
             ))}
+            {canCreateOrgEntities && (
+              <option value={NEW_ORG_ENTITY}>+ Add new client…</option>
+            )}
           </Select>
+          {isNewClient && (
+            <Input
+              name="newClientName"
+              placeholder="Type the new client name"
+              className="mt-2"
+              autoFocus
+            />
+          )}
         </Field>
 
         <Field label="Vendor" htmlFor="vendorId" required error={errors.vendorId}>
           <Select
             id="vendorId"
             name="vendorId"
-            defaultValue={values?.vendorId ?? ""}
+            value={vendorValue}
+            onChange={(e) => setVendorValue(e.target.value)}
             required
           >
             <option value="" disabled>
@@ -135,7 +159,18 @@ export function JobForm({
                 {optionLabel(v.name, v.isActive)}
               </option>
             ))}
+            {canCreateOrgEntities && (
+              <option value={NEW_ORG_ENTITY}>+ Add new vendor…</option>
+            )}
           </Select>
+          {isNewVendor && (
+            <Input
+              name="newVendorName"
+              placeholder="Type the new vendor name"
+              className="mt-2"
+              autoFocus
+            />
+          )}
         </Field>
 
         <Field

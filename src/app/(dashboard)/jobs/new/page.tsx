@@ -31,6 +31,7 @@ export default async function NewJobPage() {
           recruiters={recruiters}
           submitLabel="Create job"
           canManageRequirements={canManageRequirements(user ?? undefined)}
+          canCreateOrgEntities={user?.role === "ADMIN"}
         />
       </div>
     </div>
