@@ -11,6 +11,7 @@ import type {
   BenchPriority,
   BenchMarketingStatus,
   BenchEngagement,
+  RequirementStatus,
 } from "@/generated/prisma/enums";
 
 /** Display order for job statuses across filters, forms, and the pipeline. */
@@ -405,4 +406,22 @@ export const BENCH_ENGAGEMENTS: BenchEngagement[] = ["C2C", "W2"];
 export const BENCH_ENGAGEMENT_LABEL: Record<BenchEngagement, string> = {
   C2C: "C2C",
   W2: "W2",
+};
+
+// ─── Vendor Portal Requirements ──────────────────────────────────────────────
+
+export const REQUIREMENT_STATUSES: RequirementStatus[] = [
+  "OPEN",
+  "CONVERTED",
+  "CANCELLED",
+];
+export const REQUIREMENT_STATUS_LABEL: Record<RequirementStatus, string> = {
+  OPEN: "Open",
+  CONVERTED: "Converted",
+  CANCELLED: "Cancelled",
+};
+export const REQUIREMENT_STATUS_TONE: Record<RequirementStatus, BadgeTone> = {
+  OPEN: "green",
+  CONVERTED: "blue",
+  CANCELLED: "slate",
 };

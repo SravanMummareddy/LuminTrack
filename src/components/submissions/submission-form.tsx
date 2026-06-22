@@ -62,9 +62,22 @@ type Fields = {
   // Set only when a gate (duplicate / iLabor) paused the submit.
   overridePreset: string;
   overrideNote: string;
+  // Set only in convert mode when a convert-warn gate (candidate placed,
+  // archived résumé, zero rates, bill < pay) paused the move. Any non-empty
+  // value clears all four; latched so it rides through a follow-up gate.
+  convertReason: string;
 };
 
 const NEW_RESUME = "__new__";
+
+// Convert-only warn gates — cleared by a single free-text `convertOverrideReason`
+// (vs. the duplicate/iLabor gates which take a preset reason).
+const CONVERT_OVERRIDE_GATES = [
+  "candidate_placed",
+  "archived_resume",
+  "zero_rates",
+  "bill_below_pay",
+];
 
 export function SubmissionForm({
   action,
@@ -77,6 +90,8 @@ export function SubmissionForm({
   defaultRecruiterId,
   defaultCandidateRate,
   cancelHref,
+  requirementId,
+  prefill,
 }: {
   action: SubmissionAction;
   mode: Mode;
@@ -92,7 +107,16 @@ export function SubmissionForm({
   defaultRecruiterId: string;
   defaultCandidateRate: string;
   cancelHref: string;
+  /**
+   * Convert mode — when set, this form moves a Vendor Portal Requirement to a
+   * real submission. Renders a hidden `requirementId`, prefills the bench fields
+   * from the requirement, and surfaces the convert-only warn gates.
+   */
+  requirementId?: string;
+  /** Initial field values (convert mode prefill — engagement, rates, etc.). */
+  prefill?: Partial<Fields>;
 }) {
+  const isConvert = requirementId != null;
   const [state, formAction, pending] = useActionState(action, EMPTY_FORM_STATE);
   // Inputs are controlled — a gate (duplicate / not-assigned / iLabor) returns
   // without redirecting, and React 19 would otherwise reset uncontrolled fields.
@@ -113,6 +137,8 @@ export function SubmissionForm({
     teamLead: "",
     overridePreset: "",
     overrideNote: "",
+    convertReason: "",
+    ...prefill,
   });
   // Surfaced after a candidate switch clears a résumé pick, so the wipe isn't
   // silent (it used to vanish a freshly-typed Drive link with no warning).
@@ -216,12 +242,30 @@ export function SubmissionForm({
 
   const gate = state.needsConfirm;
   const isGate = gate !== undefined && gate !== true;
+  // Convert-only warn gates (candidate placed / archived résumé / zero rates /
+  // bill < pay) take a single free-text reason, not a preset.
+  const isConvertGate =
+    typeof gate === "string" && CONVERT_OVERRIDE_GATES.includes(gate);
+  // The preset-reason gates (duplicate / iLabor closed / iLabor cap).
+  const isReasonGate = isGate && !isConvertGate && gate !== "not_assigned";
 
   return (
     <form action={formAction} className="space-y-5">
       <input type="hidden" name="jobId" value={effectiveJobId} />
       <input type="hidden" name="candidateId" value={effectiveCandidateId} />
       <input type="hidden" name="submittedById" value={fields.submittedById} />
+      {isConvert && (
+        <input type="hidden" name="requirementId" value={requirementId} />
+      )}
+      {/* Latched once provided so it rides through a follow-up duplicate/iLabor
+          gate (which would otherwise re-fire all the convert-warn gates). */}
+      {isConvert && fields.convertReason.trim() !== "" && (
+        <input
+          type="hidden"
+          name="convertOverrideReason"
+          value={fields.convertReason}
+        />
+      )}
       {/* Persisted across gate transitions once the recruiter has claimed —
           see claimIntent above. Carries the self-claim through a second gate. */}
       {claimIntent && <input type="hidden" name="claim" value="1" />}
@@ -500,8 +544,28 @@ export function SubmissionForm({
         </div>
       )}
 
+      {/* Convert-only warn gates: a single free-text "why convert anyway". */}
+      {isConvertGate && (
+        <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3">
+          <p className="text-sm text-amber-800">{state.error}</p>
+          <Field
+            label="Reason for moving anyway"
+            htmlFor="convertReason"
+            required
+            hint="Captured on the requirement's timeline."
+          >
+            <Textarea
+              id="convertReason"
+              rows={2}
+              value={fields.convertReason}
+              onChange={set("convertReason")}
+            />
+          </Field>
+        </div>
+      )}
+
       {/* Duplicate / iLabor gates: a preset reason + optional note. */}
-      {isGate && gate !== "not_assigned" && (() => {
+      {isReasonGate && (() => {
         // The gate kind comes typed from the server (no error-string sniffing).
         // Duplicate overrides and iLabor overrides are recorded under different
         // audit fields, so the composed reason goes to the matching field name.
@@ -587,8 +651,12 @@ export function SubmissionForm({
             : gate === "not_assigned"
               ? "Claim this job & submit"
               : isGate
-                ? "Submit anyway"
-                : "Submit candidate"}
+                ? isConvert
+                  ? "Move anyway"
+                  : "Submit anyway"
+                : isConvert
+                  ? "Move to submission"
+                  : "Submit candidate"}
         </Button>
       </div>
     </form>
