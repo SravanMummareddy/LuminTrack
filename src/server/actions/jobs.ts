@@ -5,10 +5,44 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/lib/session";
 import { logActivity } from "@/server/activity";
+import { deriveTeamLead } from "@/server/team-lead";
+import { canManageRequirements } from "@/lib/permissions";
 import { jobSchema, JOB_STATUS_VALUES } from "@/lib/validation/job";
 import { toFieldErrors } from "@/lib/validation/common";
 import { JOB_STATUS_LABEL, OTHER_SOURCE } from "@/lib/labels";
 import type { FormState } from "@/lib/form-state";
+
+/**
+ * Reads the optional "also plan a vendor requirement" section of the job-create
+ * form. Returns null unless the section's checkbox is ticked. Fields are
+ * `req_`-prefixed so they never collide with the job's own location/rate fields.
+ */
+function readRequirementSection(formData: FormData) {
+  if (formData.get("createRequirement") == null) return null;
+  const str = (k: string): string | null => {
+    const v = String(formData.get(k) ?? "").trim();
+    return v ? v : null;
+  };
+  const num = (k: string): number | null => {
+    const raw = String(formData.get(k) ?? "").trim();
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  };
+  const engagementRaw = str("req_engagement");
+  const engagement: "C2C" | "W2" | null =
+    engagementRaw === "C2C" ? "C2C" : engagementRaw === "W2" ? "W2" : null;
+  return {
+    recruiterId: str("req_recruiterId"),
+    location: str("req_location"),
+    payRate: num("req_payRate"),
+    billRate: num("req_billRate"),
+    candidateRate: num("req_candidateRate"),
+    engagement,
+    vendorRecruiterName: str("req_vendorRecruiterName"),
+    teamLead: str("req_teamLead"),
+  };
+}
 
 function parseSkillsCsv(raw: unknown): string[] {
   if (typeof raw !== "string") return [];
@@ -66,6 +100,16 @@ export async function createJob(
   const d = parsed.data;
   const isOtherSource = d.sisterCompanySourceId === OTHER_SOURCE;
 
+  // Optional "plan a vendor requirement" section — only admins / team leads can
+  // create requirements, so a non-privileged POST of req_ fields is ignored.
+  // Resolve the team lead before the tx (it reads the recruiter's team).
+  const reqSection = canManageRequirements(user)
+    ? readRequirementSection(formData)
+    : null;
+  const reqTeamLead = reqSection
+    ? (reqSection.teamLead ?? (await deriveTeamLead(reqSection.recruiterId)))
+    : null;
+
   const job = await prisma.$transaction(async (tx) => {
     const created = await tx.job.create({
       data: {
@@ -109,10 +153,36 @@ export async function createJob(
       performedById: user.id,
       jobId: created.id,
     });
+
+    if (reqSection) {
+      const requirement = await tx.vendorRequirement.create({
+        data: {
+          jobId: created.id,
+          recruiterId: reqSection.recruiterId,
+          location: reqSection.location ?? d.location ?? null,
+          payRate: reqSection.payRate,
+          billRate: reqSection.billRate,
+          candidateRate: reqSection.candidateRate,
+          engagement: reqSection.engagement,
+          vendorRecruiterName: reqSection.vendorRecruiterName,
+          teamLead: reqTeamLead,
+          createdById: user.id,
+        },
+      });
+      await logActivity(tx, {
+        entityType: "REQUIREMENT",
+        action: "REQUIREMENT_CREATED",
+        description: `Vendor requirement created for "${created.title}"`,
+        performedById: user.id,
+        requirementId: requirement.id,
+      });
+    }
+
     return created;
   });
 
   revalidatePath("/jobs");
+  revalidatePath("/vendor-portal");
   redirect(`/jobs/${job.id}`);
 }
 

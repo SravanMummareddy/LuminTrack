@@ -115,6 +115,34 @@ export type VendorRequirementRow = Awaited<
   ReturnType<typeof listVendorRequirements>
 >["rows"][number];
 
+/** All requirements for one job — compact rows for the job-detail sub-section.
+ *  No pagination (a job rarely has more than a handful). OPEN first. */
+export async function getRequirementsForJob(jobId: string) {
+  const rows = await prisma.vendorRequirement.findMany({
+    where: { jobId },
+    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+    select: {
+      id: true,
+      seq: true,
+      status: true,
+      payRate: true,
+      billRate: true,
+      engagement: true,
+      candidate: { select: { fullName: true } },
+      recruiter: { select: { fullName: true } },
+    },
+  });
+  return rows.map((r) => ({
+    ...r,
+    payRate: r.payRate === null ? null : Number(r.payRate),
+    billRate: r.billRate === null ? null : Number(r.billRate),
+  }));
+}
+
+export type JobRequirementRow = Awaited<
+  ReturnType<typeof getRequirementsForJob>
+>[number];
+
 export async function getVendorRequirement(id: string) {
   const row = await prisma.vendorRequirement.findUnique({
     where: { id },

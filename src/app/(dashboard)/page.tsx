@@ -23,6 +23,7 @@ import {
   formatJobDisplayId,
   formatPlacementDisplayId,
   formatSubmissionDisplayId,
+  formatVendorRequirementDisplayId,
 } from "@/lib/format";
 import {
   listClients,
@@ -202,7 +203,11 @@ export default async function DashboardPage({
     getDashboardData(effectiveFilters),
     scope === "me" && user
       ? getMyWork(user.id)
-      : Promise.resolve({ staleSubmissions: [], pendingRounds: [] }),
+      : Promise.resolve({
+          staleSubmissions: [],
+          pendingRounds: [],
+          pendingRequirements: [],
+        }),
     // "My jobs" mini-list — only relevant when the recruiter is viewing
     // their own scope. Admins on scope=org don't see this card.
     scope === "me" && user
@@ -273,6 +278,7 @@ export default async function DashboardPage({
       {(scope === "me" &&
         (myWork.staleSubmissions.length > 0 ||
           myWork.pendingRounds.length > 0 ||
+          myWork.pendingRequirements.length > 0 ||
           myAssignedJobs.length > 0)) ||
       expiringDocs.length > 0 ||
       ratesPendingPlacements.length > 0 ? (
@@ -313,6 +319,17 @@ export default async function DashboardPage({
                     href: `/submissions/${r.submission.id}`,
                     primary: `${r.submission.candidate.fullName} · R${r.roundOrder}`,
                     secondary: `${r.submission.job.title} · ${r.scheduledAt ? formatDate(r.scheduledAt) : "no date"}`,
+                  }))}
+                />
+                <MyWorkList
+                  heading={`Requirements to move (${myWork.pendingRequirements.length})`}
+                  empty="No vendor requirements waiting on you."
+                  items={myWork.pendingRequirements.map((r) => ({
+                    href: `/vendor-portal/${r.id}`,
+                    primary: `${formatVendorRequirementDisplayId(r)} · ${r.job.title}`,
+                    secondary: r.candidate
+                      ? `${r.candidate.fullName} — ready to move to a submission`
+                      : "No candidate yet",
                   }))}
                 />
               </>

@@ -6,6 +6,7 @@ import { prisma } from "@/server/db";
 import { requireUser } from "@/lib/session";
 import { canManageRequirements } from "@/lib/permissions";
 import { logActivity } from "@/server/activity";
+import { deriveTeamLead } from "@/server/team-lead";
 import {
   createSubmissionRecord,
   type CreateSubmissionResult,
@@ -18,22 +19,6 @@ import { submissionSchema } from "@/lib/validation/submission";
 import { toFieldErrors } from "@/lib/validation/common";
 import { JOB_STATUS_LABEL, CANDIDATE_STATUS_LABEL } from "@/lib/labels";
 import type { FormState } from "@/lib/form-state";
-
-/** Derives the team-lead name for a recruiter: the isTeamLead user sharing the
- *  recruiter's team label. Returns null when there's no clear lead. */
-async function deriveTeamLead(recruiterId: string | null): Promise<string | null> {
-  if (!recruiterId) return null;
-  const recruiter = await prisma.user.findUnique({
-    where: { id: recruiterId },
-    select: { teamLabel: true },
-  });
-  if (!recruiter?.teamLabel) return null;
-  const lead = await prisma.user.findFirst({
-    where: { isTeamLead: true, isActive: true, teamLabel: recruiter.teamLabel },
-    select: { fullName: true },
-  });
-  return lead?.fullName ?? null;
-}
 
 function readRequirement(formData: FormData) {
   return {
