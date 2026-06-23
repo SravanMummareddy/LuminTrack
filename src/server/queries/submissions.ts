@@ -89,6 +89,7 @@ function flattenRow(s: RawSubmissionRow) {
     candidateRate: s.candidateRate == null ? null : Number(s.candidateRate),
     payRate: s.payRate == null ? null : Number(s.payRate),
     billRate: s.billRate == null ? null : Number(s.billRate),
+    clientRate: s.clientRate == null ? null : Number(s.clientRate),
   };
 }
 
