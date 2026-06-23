@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import Link from "next/link";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { Button, buttonClass } from "@/components/ui/button";
+import { RateChainWarning } from "@/components/ui/rate-chain-warning";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 import { isLikelyDriveUrl, DRIVE_LINK_WARNING } from "@/lib/validation/resume";
 import {
@@ -512,6 +513,8 @@ export function SubmissionForm({
           <Input id="teamLead" name="teamLead" value={fields.teamLead} onChange={set("teamLead")} />
         </Field>
       </div>
+
+      <RateChainWarning rates={fields} />
 
       <Field label="Job duties" htmlFor="jobDuties" error={errors.jobDuties}>
         <Textarea
