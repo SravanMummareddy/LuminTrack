@@ -69,7 +69,13 @@ export function StatusPipeline({ status }: { status: SubmissionStatus }) {
                     : reached
                       ? "text-slate-600"
                       : "text-slate-400",
+                  i === 4 && "cursor-help",
                 )}
+                title={
+                  i === 4
+                    ? "Decision: Selected, Rejected, or On Hold"
+                    : undefined
+                }
               >
                 {label}
               </span>

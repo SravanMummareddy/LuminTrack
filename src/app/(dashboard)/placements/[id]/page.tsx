@@ -107,7 +107,7 @@ export default async function PlacementDetailPage({
     EMPLOYMENT: "Employment",
   };
 
-  const ratesPending = placement.billRate === 0 && placement.payRate === 0;
+  const ratesPending = placement.billRate === placement.payRate;
   const marginTone =
     placement.margin < 0
       ? "text-red-600"
@@ -199,6 +199,13 @@ export default async function PlacementDetailPage({
           </SummaryItem>
           <SummaryItem label="Pay">
             {canManageRates ? money(placement.payRate) : "—"}
+          </SummaryItem>
+          <SummaryItem label="Client rate">
+            {!canManageRates
+              ? "—"
+              : placement.clientRate != null
+                ? money(placement.clientRate)
+                : "—"}
           </SummaryItem>
           <SummaryItem label="Margin">
             {canManageRates ? (

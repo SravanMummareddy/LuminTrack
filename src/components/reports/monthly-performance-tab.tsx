@@ -65,7 +65,8 @@ export async function MonthlyPerformanceTab({
       <p className="text-xs text-slate-400">
         Submissions &amp; Backouts are counted on the submission date; Interviews
         on the scheduled date; Closures on the placement start date; New vendors
-        on a recruiter&apos;s first-ever submission to that vendor.
+        when the company first ever submits to a vendor (credited to whoever made
+        that first submission).
       </p>
     </div>
   );

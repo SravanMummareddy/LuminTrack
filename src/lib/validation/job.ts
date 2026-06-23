@@ -34,6 +34,7 @@ export const jobSchema = z
     sourceOther: optionalText,
     status: z.enum(JOB_STATUS_VALUES),
     location: optionalText,
+    clientRate: optionalNonNegativeNumber,
     vendorRate: optionalNonNegativeNumber,
     candidateRate: optionalNonNegativeNumber,
     description: optionalText,

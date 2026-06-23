@@ -172,8 +172,9 @@ export default async function RequirementDetailPage({
               ? BENCH_ENGAGEMENT_LABEL[requirement.engagement]
               : "—"}
           </SummaryItem>
-          <SummaryItem label="Pay rate">{formatRate(requirement.payRate)}</SummaryItem>
+          <SummaryItem label="Client rate">{formatRate(requirement.clientRate)}</SummaryItem>
           <SummaryItem label="Bill rate">{formatRate(requirement.billRate)}</SummaryItem>
+          <SummaryItem label="Pay rate">{formatRate(requirement.payRate)}</SummaryItem>
           <SummaryItem label="Candidate rate">
             {formatRate(requirement.candidateRate)}
           </SummaryItem>
@@ -227,8 +228,8 @@ export default async function RequirementDetailPage({
           </dl>
         ) : (
           <p className="text-sm text-slate-500">
-            No candidate chosen yet. Add one (Edit) before moving this to a
-            submission.
+            No candidate chosen yet — you can pick one when you move this to a
+            submission, or set it now via Edit.
           </p>
         )}
       </Card>

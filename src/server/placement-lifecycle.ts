@@ -24,6 +24,13 @@ export async function ensurePlacementOnJoined(
     candidateId: string;
     jobId: string;
     candidateRate: Prisma.Decimal | null;
+    // The bench-sales pay/bill pair from the submission, when the recruiter
+    // entered it. Preferred over candidateRate so the placement carries a real
+    // margin instead of a duplicated single rate (bill === pay → $0 margin).
+    payRate?: Prisma.Decimal | null;
+    billRate?: Prisma.Decimal | null;
+    // What the end client releases — carried through to the placement (optional).
+    clientRate?: Prisma.Decimal | null;
     candidateFullName: string;
     jobTitle: string;
     candidateStatus: string; // CandidateStatus enum value
@@ -91,9 +98,12 @@ export async function ensurePlacementOnJoined(
     return { placementId: existing.id, placementSeq: existing.seq };
   }
 
-  // Auto-create the Placement. Rates seed from the submission's candidateRate;
-  // a $0/$0 placement is acceptable and flagged in the UI as "Rates pending."
-  const seedRate = args.candidateRate ?? 0;
+  // Auto-create the Placement. Prefer the submission's real pay/bill pair so the
+  // placement carries a meaningful margin; fall back to the single candidateRate
+  // (legacy) or $0/$0, which the UI flags as "Rates pending."
+  const fallbackRate = args.candidateRate ?? 0;
+  const seedBillRate = args.billRate ?? fallbackRate;
+  const seedPayRate = args.payRate ?? fallbackRate;
   const startDate = args.eventAt ?? new Date();
   try {
     const placement = await tx.placement.create({
@@ -104,8 +114,9 @@ export async function ensurePlacementOnJoined(
         startDate,
         // "Date of Placement" defaults to the JOINED date; recruiter can edit.
         placementDate: startDate,
-        billRate: seedRate,
-        payRate: seedRate,
+        billRate: seedBillRate,
+        payRate: seedPayRate,
+        clientRate: args.clientRate ?? null,
       },
       select: { id: true, seq: true },
     });

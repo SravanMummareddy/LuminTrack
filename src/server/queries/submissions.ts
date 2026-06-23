@@ -255,6 +255,7 @@ export async function getSubmissionForEdit(id: string) {
       jobDuties: true,
       payRate: true,
       billRate: true,
+      clientRate: true,
       teamLead: true,
       submittedById: true,
       job: { select: { title: true } },

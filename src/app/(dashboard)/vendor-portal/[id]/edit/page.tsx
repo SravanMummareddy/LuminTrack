@@ -69,6 +69,7 @@ export default async function EditRequirementPage({
             payRate: rateStr(requirement.payRate),
             billRate: rateStr(requirement.billRate),
             candidateRate: rateStr(requirement.candidateRate),
+            clientRate: rateStr(requirement.clientRate),
             engagement: requirement.engagement ?? "",
             vendorRecruiterName: requirement.vendorRecruiterName ?? "",
             jobDuties: requirement.jobDuties ?? "",

@@ -73,7 +73,11 @@ export default async function SettingsPage({
     <div className="mx-auto max-w-5xl space-y-6">
       <PageHeader
         title="Settings"
-        description="Manage sources, clients, vendors, and app users."
+        description={
+          isAdmin
+            ? "Manage sources, clients, vendors, and app users."
+            : "Reference data — sources, clients, vendors, and team (read-only)."
+        }
       />
 
       {isAdmin && (

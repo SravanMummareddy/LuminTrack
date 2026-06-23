@@ -55,6 +55,7 @@ export type SubmissionRecordInput = {
   jobDuties: string | null;
   payRate: number | null;
   billRate: number | null;
+  clientRate: number | null;
   teamLead: string | null;
   /** A pre-resolved library résumé to reuse… */
   pickedResume: { id: string; driveLink: string } | null;
@@ -197,6 +198,7 @@ export async function createSubmissionRecord(
       jobDuties: input.jobDuties ?? null,
       payRate: input.payRate ?? null,
       billRate: input.billRate ?? null,
+      clientRate: input.clientRate ?? null,
       teamLead: input.teamLead ?? null,
     },
   });

@@ -39,6 +39,7 @@ function readSubmission(formData: FormData) {
     jobDuties: formData.get("jobDuties") ?? "",
     payRate: formData.get("payRate") ?? "",
     billRate: formData.get("billRate") ?? "",
+    clientRate: formData.get("clientRate") ?? "",
     teamLead: formData.get("teamLead") ?? "",
   });
 }
@@ -150,6 +151,7 @@ export async function createSubmission(
       jobDuties: d.jobDuties ?? null,
       payRate: d.payRate ?? null,
       billRate: d.billRate ?? null,
+      clientRate: d.clientRate ?? null,
       teamLead: d.teamLead ?? null,
       pickedResume,
       newResume,
@@ -204,6 +206,7 @@ function readSubmissionEdit(formData: FormData) {
     jobDuties: formData.get("jobDuties") ?? "",
     payRate: formData.get("payRate") ?? "",
     billRate: formData.get("billRate") ?? "",
+    clientRate: formData.get("clientRate") ?? "",
     teamLead: formData.get("teamLead") ?? "",
   });
 }
@@ -338,6 +341,7 @@ export async function updateSubmission(
         jobDuties: d.jobDuties ?? null,
         payRate: d.payRate ?? null,
         billRate: d.billRate ?? null,
+        clientRate: d.clientRate ?? null,
         teamLead: d.teamLead ?? null,
         ...(newSubmittedById ? { submittedById: newSubmittedById } : {}),
       },
@@ -470,6 +474,9 @@ export async function changeSubmissionStatus(
         candidateId: submission.candidateId,
         jobId: submission.jobId,
         candidateRate: submission.candidateRate,
+        payRate: submission.payRate,
+        billRate: submission.billRate,
+        clientRate: submission.clientRate,
         candidateFullName: submission.candidate.fullName,
         jobTitle: submission.job.title,
         candidateStatus: submission.candidate.status,

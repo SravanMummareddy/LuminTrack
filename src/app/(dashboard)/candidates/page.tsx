@@ -86,7 +86,7 @@ export default async function CandidatesPage({
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Candidates" description="All candidate profiles.">
+      <PageHeader title="Candidates" description="Every candidate profile — the full talent pool. (Bench = those actively marketed; Placements = those already working.)">
         <LinkButton href="/candidates/new">
           <Plus className="h-4 w-4" />
           Add candidate

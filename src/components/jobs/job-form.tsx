@@ -32,6 +32,7 @@ export type JobFormValues = {
   sourceOther: string;
   status: string;
   location: string;
+  clientRate: string;
   vendorRate: string;
   candidateRate: string;
   description: string;
@@ -115,7 +116,13 @@ export function JobForm({
       </Field>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Client" htmlFor="clientId" required error={errors.clientId}>
+        <Field
+          label="Client"
+          htmlFor="clientId"
+          required
+          error={errors.clientId}
+          hint="The end company where the consultant will work."
+        >
           <SearchSelect
             id="clientId"
             name="clientId"
@@ -142,7 +149,13 @@ export function JobForm({
           )}
         </Field>
 
-        <Field label="Vendor" htmlFor="vendorId" required error={errors.vendorId}>
+        <Field
+          label="Vendor"
+          htmlFor="vendorId"
+          required
+          error={errors.vendorId}
+          hint="The staffing vendor we work through (e.g. Randstad)."
+        >
           <SearchSelect
             id="vendorId"
             name="vendorId"
@@ -174,6 +187,7 @@ export function JobForm({
           htmlFor="sisterCompanySourceId"
           required
           error={errors.sisterCompanySourceId ?? errors.sourceOther}
+          hint="Where this job came from — a job board, referral, or contact."
         >
           <Select
             id="sisterCompanySourceId"
@@ -216,7 +230,28 @@ export function JobForm({
           </Select>
         </Field>
 
-        <Field label="Vendor rate" htmlFor="vendorRate" error={errors.vendorRate}>
+        <Field
+          label="Client rate"
+          htmlFor="clientRate"
+          error={errors.clientRate}
+          hint="$/hr the end client releases (optional — often not disclosed)."
+        >
+          <Input
+            id="clientRate"
+            name="clientRate"
+            type="number"
+            min="0"
+            step="0.01"
+            defaultValue={values?.clientRate ?? ""}
+          />
+        </Field>
+
+        <Field
+          label="Vendor rate"
+          htmlFor="vendorRate"
+          error={errors.vendorRate}
+          hint="$/hr the vendor releases to us — our bill side."
+        >
           <Input
             id="vendorRate"
             name="vendorRate"
@@ -231,6 +266,7 @@ export function JobForm({
           label="Candidate rate"
           htmlFor="candidateRate"
           error={errors.candidateRate}
+          hint="$/hr target for the candidate — prefills the submission."
         >
           <Input
             id="candidateRate"
@@ -536,12 +572,15 @@ export function JobForm({
               <LocationInput id="req_location" name="req_location" />
             </Field>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Field label="Pay rate" htmlFor="req_payRate">
-                <Input id="req_payRate" name="req_payRate" type="number" min="0" step="0.01" inputMode="decimal" />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <Field label="Client rate" htmlFor="req_clientRate">
+                <Input id="req_clientRate" name="req_clientRate" type="number" min="0" step="0.01" inputMode="decimal" />
               </Field>
               <Field label="Bill rate" htmlFor="req_billRate">
                 <Input id="req_billRate" name="req_billRate" type="number" min="0" step="0.01" inputMode="decimal" />
+              </Field>
+              <Field label="Pay rate" htmlFor="req_payRate">
+                <Input id="req_payRate" name="req_payRate" type="number" min="0" step="0.01" inputMode="decimal" />
               </Field>
               <Field label="Candidate rate" htmlFor="req_candidateRate">
                 <Input id="req_candidateRate" name="req_candidateRate" type="number" min="0" step="0.01" inputMode="decimal" />
