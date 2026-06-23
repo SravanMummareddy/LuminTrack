@@ -238,6 +238,7 @@ export async function convertRequirementToSubmission(
     jobDuties: formData.get("jobDuties") ?? "",
     payRate: formData.get("payRate") ?? "",
     billRate: formData.get("billRate") ?? "",
+    clientRate: formData.get("clientRate") ?? "",
     teamLead: formData.get("teamLead") ?? "",
   });
   if (!parsed.success)
