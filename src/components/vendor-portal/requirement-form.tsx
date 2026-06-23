@@ -23,6 +23,7 @@ type Fields = {
   payRate: string;
   billRate: string;
   candidateRate: string;
+  clientRate: string;
   engagement: string;
   vendorRecruiterName: string;
   jobDuties: string;
@@ -38,6 +39,7 @@ const EMPTY_FIELDS: Fields = {
   payRate: "",
   billRate: "",
   candidateRate: "",
+  clientRate: "",
   engagement: "",
   vendorRecruiterName: "",
   jobDuties: "",
@@ -203,7 +205,31 @@ export function RequirementForm({
         </Field>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Field label="Client rate" htmlFor="clientRate" error={errors.clientRate} hint="$/hr the end client releases (optional).">
+          <Input
+            id="clientRate"
+            name="clientRate"
+            type="number"
+            min="0"
+            step="0.01"
+            inputMode="decimal"
+            value={fields.clientRate}
+            onChange={set("clientRate")}
+          />
+        </Field>
+        <Field label="Bill rate" htmlFor="billRate" error={errors.billRate} hint="$/hr the vendor releases to us.">
+          <Input
+            id="billRate"
+            name="billRate"
+            type="number"
+            min="0"
+            step="0.01"
+            inputMode="decimal"
+            value={fields.billRate}
+            onChange={set("billRate")}
+          />
+        </Field>
         <Field label="Pay rate" htmlFor="payRate" error={errors.payRate} hint="$/hr to the consultant.">
           <Input
             id="payRate"
@@ -214,18 +240,6 @@ export function RequirementForm({
             inputMode="decimal"
             value={fields.payRate}
             onChange={set("payRate")}
-          />
-        </Field>
-        <Field label="Bill rate" htmlFor="billRate" error={errors.billRate} hint="$/hr to the client.">
-          <Input
-            id="billRate"
-            name="billRate"
-            type="number"
-            min="0"
-            step="0.01"
-            inputMode="decimal"
-            value={fields.billRate}
-            onChange={set("billRate")}
           />
         </Field>
         <Field

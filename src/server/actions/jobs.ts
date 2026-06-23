@@ -57,6 +57,7 @@ function readRequirementSection(formData: FormData) {
     payRate: num("req_payRate"),
     billRate: num("req_billRate"),
     candidateRate: num("req_candidateRate"),
+    clientRate: num("req_clientRate"),
     engagement,
     vendorRecruiterName: str("req_vendorRecruiterName"),
     teamLead: str("req_teamLead"),
@@ -84,6 +85,7 @@ function readJob(formData: FormData) {
     sourceOther: formData.get("sourceOther") ?? "",
     status: formData.get("status") ?? "OPEN",
     location: formData.get("location") ?? "",
+    clientRate: formData.get("clientRate") ?? "",
     vendorRate: formData.get("vendorRate") ?? "",
     candidateRate: formData.get("candidateRate") ?? "",
     description: formData.get("description") ?? "",
@@ -163,6 +165,7 @@ export async function createJob(
         sourceOther: isOtherSource ? (d.sourceOther ?? null) : null,
         status: d.status,
         location: d.location ?? null,
+        clientRate: d.clientRate ?? null,
         vendorRate: d.vendorRate ?? null,
         candidateRate: d.candidateRate ?? null,
         description: d.description ?? null,
@@ -206,6 +209,7 @@ export async function createJob(
           payRate: reqSection.payRate,
           billRate: reqSection.billRate,
           candidateRate: reqSection.candidateRate,
+          clientRate: reqSection.clientRate,
           engagement: reqSection.engagement,
           vendorRecruiterName: reqSection.vendorRecruiterName,
           teamLead: reqTeamLead,
@@ -269,6 +273,7 @@ export async function updateJob(
   );
   compare("status", existing.status, d.status);
   compare("location", existing.location, d.location);
+  compare("client rate", existing.clientRate?.toString(), d.clientRate);
   compare("vendor rate", existing.vendorRate?.toString(), d.vendorRate);
   compare("candidate rate", existing.candidateRate?.toString(), d.candidateRate);
   compare("description", existing.description, d.description);
@@ -327,6 +332,7 @@ export async function updateJob(
         sourceOther: nextSourceOther,
         status: d.status,
         location: d.location ?? null,
+        clientRate: d.clientRate ?? null,
         vendorRate: d.vendorRate ?? null,
         candidateRate: d.candidateRate ?? null,
         description: d.description ?? null,

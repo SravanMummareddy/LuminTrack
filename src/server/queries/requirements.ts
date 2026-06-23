@@ -61,6 +61,7 @@ function flatten<
     payRate: Prisma.Decimal | null;
     billRate: Prisma.Decimal | null;
     candidateRate: Prisma.Decimal | null;
+    clientRate?: Prisma.Decimal | null;
   },
 >(r: T) {
   return {
@@ -68,6 +69,7 @@ function flatten<
     payRate: r.payRate === null ? null : Number(r.payRate),
     billRate: r.billRate === null ? null : Number(r.billRate),
     candidateRate: r.candidateRate === null ? null : Number(r.candidateRate),
+    clientRate: r.clientRate == null ? null : Number(r.clientRate),
   };
 }
 

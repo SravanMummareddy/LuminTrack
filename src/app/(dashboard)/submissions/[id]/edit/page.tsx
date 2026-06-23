@@ -66,6 +66,7 @@ export default async function EditSubmissionPage({
             jobDuties: submission.jobDuties ?? "",
             payRate: submission.payRate?.toString() ?? "",
             billRate: submission.billRate?.toString() ?? "",
+            clientRate: submission.clientRate?.toString() ?? "",
             teamLead: submission.teamLead ?? "",
             submittedById: submission.submittedById,
           }}

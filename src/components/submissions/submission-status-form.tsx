@@ -179,17 +179,24 @@ export function SubmissionStatusForm({
       )}
 
       {showActualJoin && (
-        <div className="w-56">
-          <label htmlFor="actualJoinDate" className={labelClass}>
-            Actual join date
-          </label>
-          <Input
-            id="actualJoinDate"
-            name="actualJoinDate"
-            type="date"
-            value={actualJoinDate}
-            onChange={(e) => setActualJoinDate(e.target.value)}
-          />
+        <div className="space-y-2">
+          <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+            Saving as <strong>Joined</strong> creates a placement and marks the
+            candidate (and any linked bench profile) <strong>Placed</strong>. Set
+            the placement&apos;s bill/pay rates afterward on the placement page.
+          </p>
+          <div className="w-56">
+            <label htmlFor="actualJoinDate" className={labelClass}>
+              Actual join date
+            </label>
+            <Input
+              id="actualJoinDate"
+              name="actualJoinDate"
+              type="date"
+              value={actualJoinDate}
+              onChange={(e) => setActualJoinDate(e.target.value)}
+            />
+          </div>
         </div>
       )}
 

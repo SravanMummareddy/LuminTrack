@@ -79,6 +79,10 @@ export default async function PlacementsPage({
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  // Rate-derived aggregates are admin-only — the per-row Bill/Pay/Margin are
+  // masked for non-admins (except their own placements), so the org-wide weekly
+  // margin must be hidden too or it leaks the sum of numbers they can't see.
+  const isAdmin = user.role === "ADMIN";
 
   return (
     <div className="space-y-5">
@@ -92,8 +96,8 @@ export default async function PlacementsPage({
         <SummaryStat label="Active placements" value={String(summary.activeCount)} />
         <SummaryStat
           label="Weekly margin (active)"
-          value={formatMoney(summary.weeklyMargin)}
-          hint="bill − pay × 40 h"
+          value={isAdmin ? formatMoney(summary.weeklyMargin) : "—"}
+          hint={isAdmin ? "bill − pay × 40 h" : "Visible to admins"}
         />
         <SummaryStat
           label="Ending in next 14 days"

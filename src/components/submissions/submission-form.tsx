@@ -58,6 +58,7 @@ type Fields = {
   jobDuties: string;
   payRate: string;
   billRate: string;
+  clientRate: string;
   teamLead: string;
   // Set only when a gate (duplicate / iLabor) paused the submit.
   overridePreset: string;
@@ -134,6 +135,7 @@ export function SubmissionForm({
     jobDuties: "",
     payRate: "",
     billRate: "",
+    clientRate: "",
     teamLead: "",
     overridePreset: "",
     overrideNote: "",
@@ -380,6 +382,7 @@ export function SubmissionForm({
           label="Candidate rate"
           htmlFor="candidateRate"
           error={errors.candidateRate}
+          hint="Headline rate for this candidate (shown on the submission, used in reports). Pay & Bill rate below drive placement margin."
         >
           <Input
             id="candidateRate"
@@ -495,12 +498,15 @@ export function SubmissionForm({
         </Field>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Field label="Pay rate" htmlFor="payRate" error={errors.payRate} hint="$/hr we pay the consultant.">
           <Input id="payRate" name="payRate" type="number" min="0" step="0.01" inputMode="decimal" value={fields.payRate} onChange={set("payRate")} />
         </Field>
-        <Field label="Bill rate" htmlFor="billRate" error={errors.billRate} hint="$/hr we bill the client.">
+        <Field label="Bill rate" htmlFor="billRate" error={errors.billRate} hint="$/hr the vendor releases to us.">
           <Input id="billRate" name="billRate" type="number" min="0" step="0.01" inputMode="decimal" value={fields.billRate} onChange={set("billRate")} />
+        </Field>
+        <Field label="Client rate" htmlFor="clientRate" error={errors.clientRate} hint="$/hr the end client releases (optional).">
+          <Input id="clientRate" name="clientRate" type="number" min="0" step="0.01" inputMode="decimal" value={fields.clientRate} onChange={set("clientRate")} />
         </Field>
         <Field label="Team lead" htmlFor="teamLead" error={errors.teamLead}>
           <Input id="teamLead" name="teamLead" value={fields.teamLead} onChange={set("teamLead")} />

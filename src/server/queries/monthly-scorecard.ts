@@ -22,8 +22,10 @@ import { prisma } from "@/server/db";
  *  - Submissions  — submissions by the recruiter, bucketed on `submittedAt`.
  *  - Interviews   — interview rounds whose submission belongs to the recruiter,
  *                   bucketed on the round's `scheduledAt`.
- *  - New vendors  — the recruiter's *first-ever* submission to a job with a
- *                   given vendor; counts once, in the week of that first submit.
+ *  - New vendors  — a vendor new to the *whole company*: the first time anyone
+ *                   ever submitted to a job with that vendor. Counts once, in the
+ *                   week of that company-first submit, credited to whoever made
+ *                   it (no credit shows if that person isn't a listed recruiter).
  *  - Closures     — placements whose submission belongs to the recruiter,
  *                   bucketed on the placement `startDate` (the join/closure).
  *  - Backouts     — submissions now in BACKED_OUT, bucketed on `submittedAt`
@@ -154,11 +156,11 @@ export async function getMonthlyScorecard({
           submission: { select: { submittedById: true } },
         },
       }),
-      // Every submission ever (for these recruiters) — needed to find each
-      // recruiter×vendor *first* use. Small team, so the full scan is cheap;
-      // ordered ascending so the first row per pair is the earliest.
+      // Every submission ever, COMPANY-WIDE (not filtered by recruiter/team) —
+      // needed to find each vendor's *company-first* use. Small dataset, so the
+      // full scan is cheap; ordered ascending so the first row per vendor is the
+      // earliest submission to it by anyone.
       prisma.submission.findMany({
-        where: { submittedBy: recruiterWhere },
         select: {
           submittedById: true,
           submittedAt: true,
@@ -205,15 +207,16 @@ export async function getMonthlyScorecard({
     bump(p.submission.submittedById, p.startDate, "closures");
   }
 
-  // First-use per recruiter×vendor across all history; count the first hit if
-  // it falls inside this month.
+  // Company-first use per vendor across all history; if that first-ever submit
+  // falls inside this month, credit the recruiter who made it. bump() no-ops
+  // when the submitter isn't a listed recruiter (e.g. an admin or another team),
+  // so a vendor already "claimed" company-wide never re-counts here.
   const firstSeen = new Set<string>();
   for (const s of vendorHistory) {
     const vendorId = s.job.vendorId;
     if (!vendorId) continue;
-    const key = `${s.submittedById}|${vendorId}`;
-    if (firstSeen.has(key)) continue;
-    firstSeen.add(key);
+    if (firstSeen.has(vendorId)) continue;
+    firstSeen.add(vendorId);
     if (s.submittedAt >= monthStart && s.submittedAt < nextMonthStart) {
       bump(s.submittedById, s.submittedAt, "newVendors");
     }

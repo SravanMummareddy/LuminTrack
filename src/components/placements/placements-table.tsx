@@ -168,8 +168,10 @@ const COLUMNS: Column[] = [
             —
           </Td>
         );
-      // Rates-pending placements (0/0) get a clear flag instead of $0 margin.
-      const ratesPending = p.billRate === 0 && p.payRate === 0;
+      // Rates-pending placements get a clear flag instead of a misleading $0
+      // margin. This covers both an untouched 0/0 placement and the auto-create
+      // seed where bill === pay (a duplicated single rate, never a real spread).
+      const ratesPending = p.billRate === p.payRate;
       if (ratesPending)
         return (
           <Td label="Margin" className="text-right">

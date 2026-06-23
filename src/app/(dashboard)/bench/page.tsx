@@ -138,7 +138,7 @@ export default async function BenchRosterPage({
     <div className="space-y-5">
       <PageHeader
         title="Bench"
-        description="Roster of consultants being marketed out to vendors."
+        description="Consultants actively looking — being marketed out to vendors. (A subset of Candidates; they move to Placements once working.)"
       >
         <Link href="/bench/new" className={buttonClass()}>
           Add consultant

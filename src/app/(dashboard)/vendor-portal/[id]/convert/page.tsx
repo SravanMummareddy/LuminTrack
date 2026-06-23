@@ -75,6 +75,7 @@ export default async function ConvertRequirementPage({
             jobDuties: requirement.jobDuties ?? "",
             payRate: rateStr(requirement.payRate),
             billRate: rateStr(requirement.billRate),
+            clientRate: rateStr(requirement.clientRate),
             teamLead: requirement.teamLead ?? "",
             submissionNotes: requirement.submissionNotes ?? "",
           }}

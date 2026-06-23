@@ -28,6 +28,7 @@ export const placementUpdateSchema = z.object({
   // updated, so non-rate edits don't accidentally zero the rates.
   billRate: optionalNonNegativeNumber,
   payRate: optionalNonNegativeNumber,
+  clientRate: optionalNonNegativeNumber,
   startDate: z.coerce.date(),
   endDate: optionalDateTime,
   clientPoNumber: optionalText,

@@ -46,6 +46,7 @@ export async function updatePlacement(
     id: formData.get("id") ?? "",
     billRate: formData.get("billRate") ?? "",
     payRate: formData.get("payRate") ?? "",
+    clientRate: formData.get("clientRate") ?? "",
     startDate: formData.get("startDate") ?? "",
     endDate: formData.get("endDate") ?? "",
     clientPoNumber: formData.get("clientPoNumber") ?? "",
@@ -118,6 +119,14 @@ export async function updatePlacement(
         d.payRate.toString(),
       );
       data.payRate = d.payRate;
+    }
+    if (d.clientRate !== undefined) {
+      compare(
+        `client rate ${fmtRate(existing.clientRate ?? null)} → ${fmtRate(d.clientRate)}`,
+        existing.clientRate?.toString() ?? "",
+        d.clientRate.toString(),
+      );
+      data.clientRate = d.clientRate;
     }
   }
 

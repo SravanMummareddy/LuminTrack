@@ -42,10 +42,15 @@ export const PLACEMENT_DEFAULT_SORT: SortState = {
 /** Flatten a Prisma Placement row's Decimal rates for the RSC→Client boundary,
  *  and pre-compute margin so Client Components don't repeat the math. */
 function flattenRates<
-  T extends { billRate: Prisma.Decimal; payRate: Prisma.Decimal },
->(p: T): Omit<T, "billRate" | "payRate"> & {
+  T extends {
+    billRate: Prisma.Decimal;
+    payRate: Prisma.Decimal;
+    clientRate?: Prisma.Decimal | null;
+  },
+>(p: T): Omit<T, "billRate" | "payRate" | "clientRate"> & {
   billRate: number;
   payRate: number;
+  clientRate: number | null;
   margin: number;
   marginPct: number | null;
 } {
@@ -56,6 +61,7 @@ function flattenRates<
     ...p,
     billRate: bill,
     payRate: pay,
+    clientRate: p.clientRate == null ? null : Number(p.clientRate),
     margin,
     // Margin % is undefined when bill is 0 (rates-pending placement).
     marginPct: bill > 0 ? (margin / bill) * 100 : null,

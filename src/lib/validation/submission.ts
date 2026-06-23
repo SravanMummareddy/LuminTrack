@@ -56,9 +56,11 @@ const benchFields = {
   ),
   vendorRecruiterName: optionalText,
   jobDuties: optionalText,
-  // The sheet's Pay Rate / Bill Rate pair + Team lead.
+  // The sheet's Pay Rate / Bill Rate pair + Team lead. clientRate = what the end
+  // client releases (optional).
   payRate: optionalNonNegativeNumber,
   billRate: optionalNonNegativeNumber,
+  clientRate: optionalNonNegativeNumber,
   teamLead: optionalText,
 };
 
