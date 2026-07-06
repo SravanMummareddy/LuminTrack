@@ -366,11 +366,11 @@ export default async function DashboardPage({
           tooltip="All submissions in the filter window, regardless of status."
         />
         <StatCard
-          label="Interviews"
+          label="Interview rounds"
           value={data.interviewCount}
           icon={CalendarCheck}
           tone="blue"
-          tooltip="Total interview rounds across all in-window submissions."
+          tooltip="Total interview rounds across all in-window submissions. (Reports counts distinct candidates who reached an interview, so that figure is lower.)"
         />
         <StatCard
           label="Selected"

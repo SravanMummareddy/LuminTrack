@@ -94,6 +94,7 @@ export default async function NewRequirementPage({
         seq: true,
         portalRefId: true,
         location: true,
+        clientRate: true,
         client: { select: { name: true } },
       },
     }),
@@ -132,7 +133,12 @@ export default async function NewRequirementPage({
             fullName: r.fullName,
             isActive: r.isActive,
           }))}
-          defaults={{ location: job.location ?? "" }}
+          defaults={{
+            location: job.location ?? "",
+            // Carry the job's Client rate into the requirement (editable) so it
+            // isn't re-typed by hand — the rate chain starts on the Job.
+            clientRate: job.clientRate != null ? String(job.clientRate) : "",
+          }}
           cancelHref="/vendor-portal"
         />
       </div>
