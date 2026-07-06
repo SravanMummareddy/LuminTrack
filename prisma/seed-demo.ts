@@ -677,6 +677,7 @@ async function main() {
     title: string;
     createdAt: Date;
     candidateRate: number;
+    clientRate: number | null;
     assigneeIds: string[];
   }[] = [];
 
@@ -697,6 +698,10 @@ async function main() {
     const status = weighted(JOB_STATUS_W);
     const vendorRate = randInt(75, 150);
     const candidateRate = vendorRate - randInt(8, 22);
+    // Client rate sits at the top of the chain (Client >= Bill >= Pay). Set on
+    // ~80% of jobs; the vendor leaves it undisclosed on the rest (nullable).
+    // +30..55 over candidate rate keeps it above any generated bill rate.
+    const clientRate = chance(0.8) ? candidateRate + randInt(30, 55) : null;
     const creator = chance(0.7) ? admin : pick(recruiters);
     const client = pick(clients);
     // ~35% come from the Randstad iLabor vendor portal; those carry a portal
@@ -709,6 +714,7 @@ async function main() {
         location: pick(LOCATIONS),
         vendorRate,
         candidateRate,
+        clientRate,
         status,
         description: `${title} opening at ${client.name}. ${randInt(
           4,
@@ -794,6 +800,7 @@ async function main() {
       title,
       createdAt,
       candidateRate,
+      clientRate,
       assigneeIds: assignees.map((r) => r.id),
     });
   }
@@ -1073,6 +1080,8 @@ async function main() {
         submittedById,
         status: finalStatus,
         candidateRate: job.candidateRate + randInt(-5, 6),
+        clientRate: job.clientRate, // carried down the chain from the job
+
         rejectionReason:
           finalStatus === "REJECTED" ? pick(REJECTION_REASONS) : null,
         submissionNotes: chance(0.4) ? pick(SUBMISSION_NOTES) : null,
@@ -1458,6 +1467,7 @@ async function main() {
         payRate,
         billRate,
         candidateRate: job.candidateRate,
+        clientRate: job.clientRate, // carried from the job (Client >= Bill >= Pay)
         engagement: chance(0.6) ? "C2C" : "W2",
         vendorRecruiterName: chance(0.5) ? pick(VENDOR_RECRUITER_NAMES) : null,
         teamLead: teamLeadByLabel.get(recruiter.teamLabel ?? "") ?? null,
