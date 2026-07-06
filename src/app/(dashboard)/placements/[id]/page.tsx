@@ -205,7 +205,7 @@ export default async function PlacementDetailPage({
               ? "—"
               : placement.clientRate != null
                 ? money(placement.clientRate)
-                : "—"}
+                : "Undisclosed"}
           </SummaryItem>
           <SummaryItem label="Margin">
             {canManageRates ? (

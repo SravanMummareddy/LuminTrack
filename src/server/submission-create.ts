@@ -62,6 +62,9 @@ export type SubmissionRecordInput = {
   /** Override reasons — empty string means "not provided" (gate still blocks). */
   duplicateReason: string;
   ilaborOverrideReason: string;
+  /** Free-text reason logged when the recruiter saves past a broken rate chain.
+   *  The gate itself lives in the calling action; this only records it. */
+  rateOverrideReason?: string;
   /** Pre-loaded job signal fields driving the iLabor gates + audit text. */
   job: {
     id: string;
@@ -189,6 +192,8 @@ export async function createSubmissionRecord(
   if (existing) notes.push(`duplicate:${input.duplicateReason}`);
   if (input.ilaborOverrideReason)
     notes.push(`ilabor-override:${input.ilaborOverrideReason}`);
+  if (input.rateOverrideReason)
+    notes.push(`rate-override:${input.rateOverrideReason}`);
   const description = existing
     ? `${input.candidateFullName} re-submitted to "${input.job.title}" (duplicate override: ${input.duplicateReason})`
     : input.ilaborOverrideReason

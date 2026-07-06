@@ -275,7 +275,11 @@ export function SubmissionForm({
   const isConvertGate =
     typeof gate === "string" && CONVERT_OVERRIDE_GATES.includes(gate);
   // The preset-reason gates (duplicate / iLabor closed / iLabor cap).
-  const isReasonGate = isGate && !isConvertGate && gate !== "not_assigned";
+  const isReasonGate =
+    isGate &&
+    !isConvertGate &&
+    gate !== "not_assigned" &&
+    gate !== "rate_chain";
 
   return (
     <form action={formAction} className="space-y-5">
@@ -560,6 +564,39 @@ export function SubmissionForm({
             so you own it going forward. Admins can reassign later.
           </p>
           <input type="hidden" name="claim" value="1" />
+        </div>
+      )}
+
+      {/* Rate-chain soft block: show the broken rungs + require a free-text
+          reason (owner: "soft block" — a save the recruiter can override). */}
+      {gate === "rate_chain" && (
+        <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3">
+          <p className="text-sm font-medium text-amber-800">{state.error}</p>
+          {state.confirmData?.warnings?.length ? (
+            <ul className="list-disc space-y-0.5 pl-5 text-sm text-amber-800">
+              {state.confirmData.warnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          ) : null}
+          <input
+            type="hidden"
+            name="rateOverrideReason"
+            value={fields.overrideNote}
+          />
+          <Field
+            label="Reason for saving anyway"
+            htmlFor="overrideNote"
+            required
+            hint="Captured on the submission's audit trail."
+          >
+            <Textarea
+              id="overrideNote"
+              rows={2}
+              value={fields.overrideNote}
+              onChange={set("overrideNote")}
+            />
+          </Field>
         </div>
       )}
 

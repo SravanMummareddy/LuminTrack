@@ -187,11 +187,9 @@ export default async function SubmissionDetailPage({
               {formatRate(submission.billRate)}
             </SummaryItem>
           ) : null}
-          {submission.clientRate != null ? (
-            <SummaryItem label="Client rate">
-              {formatRate(submission.clientRate)}
-            </SummaryItem>
-          ) : null}
+          <SummaryItem label="Client rate">
+            {formatRate(submission.clientRate, "Undisclosed")}
+          </SummaryItem>
           {submission.teamLead ? (
             <SummaryItem label="Team lead">{submission.teamLead}</SummaryItem>
           ) : null}

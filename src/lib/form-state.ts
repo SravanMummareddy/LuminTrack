@@ -15,6 +15,9 @@ export type ConfirmKind =
   | "archived_resume"
   | "zero_rates"
   | "bill_below_pay"
+  // Soft block on save when the rate chain is broken (pay>bill, bill/pay>client).
+  // Overridable with a free-text `rateOverrideReason`.
+  | "rate_chain"
   | true;
 
 /** Extra context for a paused gate, surfaced in the confirm prompt. */
@@ -27,6 +30,8 @@ export type ConfirmData = {
   existingSubmissionId?: string;
   /** The job's display id, for the not-assigned / claim prompt. */
   jobDisplayId?: string;
+  /** The specific broken-rate-chain warnings, for the rate_chain gate. */
+  warnings?: string[];
 };
 
 /** Shared return shape for form-backed Server Actions used with `useActionState`. */

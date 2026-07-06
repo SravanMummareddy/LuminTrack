@@ -15,10 +15,11 @@ export function formatTime(date: Date | string): string {
 /** Formats a numeric rate (Prisma Decimal, number, or string) as USD per hour. */
 export function formatRate(
   value: { toString(): string } | number | string | null | undefined,
+  emptyLabel = "—",
 ): string {
-  if (value === null || value === undefined || value === "") return "—";
+  if (value === null || value === undefined || value === "") return emptyLabel;
   const n = typeof value === "number" ? value : Number(value.toString());
-  if (Number.isNaN(n)) return "—";
+  if (Number.isNaN(n)) return emptyLabel;
   return `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}/hr`;
 }
 

@@ -16,6 +16,7 @@ import {
 } from "@/lib/validation/submission";
 import { toFieldErrors } from "@/lib/validation/common";
 import { SUBMISSION_STATUS_LABEL } from "@/lib/labels";
+import { rateChainWarnings } from "@/lib/rates";
 import type { FormState } from "@/lib/form-state";
 import {
   ensurePlacementOnJoined,
@@ -98,6 +99,25 @@ export async function createSubmission(
     }
   }
 
+  // Rate-chain soft block (owner: "soft block"). If the entered rates break the
+  // chain (pay>bill, bill/pay>client), pause and require an explicit reason — the
+  // recruiter can still save, it's just not silent. Blank rates never trip it.
+  const rateOverrideReason = String(
+    formData.get("rateOverrideReason") ?? "",
+  ).trim();
+  const rateWarnings = rateChainWarnings({
+    payRate: d.payRate,
+    billRate: d.billRate,
+    clientRate: d.clientRate,
+  });
+  if (rateWarnings.length > 0 && !rateOverrideReason) {
+    return {
+      needsConfirm: "rate_chain",
+      confirmData: { warnings: rateWarnings },
+      error: "These rates break the rate chain. Add a reason to save anyway.",
+    };
+  }
+
   // §C4 — duplicate-submission check moved out of the DB to the action so
   // recruiters can override with a reason (e.g. role was rebooted, prior
   // submission was cancelled). The DB unique constraint was dropped in
@@ -148,6 +168,7 @@ export async function createSubmission(
       pickedResume,
       duplicateReason,
       ilaborOverrideReason,
+      rateOverrideReason,
       job,
       candidateFullName: candidate.fullName,
       actor: { id: user.id, fullName: user.fullName, isAdmin },
@@ -219,6 +240,23 @@ export async function updateSubmission(
       fieldErrors: toFieldErrors(parsed.error),
     };
   const d = parsed.data;
+
+  // Rate-chain soft block on edit — same as create: a broken chain needs a reason.
+  const rateOverrideReason = String(
+    formData.get("rateOverrideReason") ?? "",
+  ).trim();
+  const rateWarnings = rateChainWarnings({
+    payRate: d.payRate,
+    billRate: d.billRate,
+    clientRate: d.clientRate,
+  });
+  if (rateWarnings.length > 0 && !rateOverrideReason) {
+    return {
+      needsConfirm: "rate_chain",
+      confirmData: { warnings: rateWarnings },
+      error: "These rates break the rate chain. Add a reason to save anyway.",
+    };
+  }
 
   const existing = await prisma.submission.findUnique({
     where: { id: submissionId },
@@ -322,6 +360,7 @@ export async function updateSubmission(
         action: "SUBMISSION_UPDATED",
         description: `${existing.candidate.fullName} on "${existing.job.title}": submission updated (${changed.join(", ")})${reattrNote}`,
         newValue: changed.join(", "),
+        note: rateOverrideReason ? `rate-override:${rateOverrideReason}` : null,
         performedById: user.id,
         submissionId,
       });

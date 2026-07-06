@@ -114,6 +114,8 @@ export function SubmissionEditForm({
     clientRate: values.clientRate,
     teamLead: values.teamLead,
   });
+  // Free-text reason for the rate-chain soft block (see the gate below).
+  const [rateReason, setRateReason] = useState("");
   const set =
     (name: keyof Fields) =>
     (
@@ -293,7 +295,35 @@ export function SubmissionEditForm({
         />
       </Field>
 
-      {state.error && (
+      {/* Rate-chain soft block: broken rungs + a required reason to save anyway. */}
+      {state.needsConfirm === "rate_chain" && (
+        <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3">
+          <p className="text-sm font-medium text-amber-800">{state.error}</p>
+          {state.confirmData?.warnings?.length ? (
+            <ul className="list-disc space-y-0.5 pl-5 text-sm text-amber-800">
+              {state.confirmData.warnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          ) : null}
+          <input type="hidden" name="rateOverrideReason" value={rateReason} />
+          <Field
+            label="Reason for saving anyway"
+            htmlFor="rateReason"
+            required
+            hint="Captured on the submission's audit trail."
+          >
+            <Textarea
+              id="rateReason"
+              rows={2}
+              value={rateReason}
+              onChange={(e) => setRateReason(e.target.value)}
+            />
+          </Field>
+        </div>
+      )}
+
+      {state.error && state.needsConfirm !== "rate_chain" && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
           {state.error}
         </p>
@@ -307,7 +337,11 @@ export function SubmissionEditForm({
           Cancel
         </Link>
         <Button type="submit" disabled={pending}>
-          {pending ? "Saving…" : "Save changes"}
+          {pending
+            ? "Saving…"
+            : state.needsConfirm === "rate_chain"
+              ? "Save anyway"
+              : "Save changes"}
         </Button>
       </div>
     </form>

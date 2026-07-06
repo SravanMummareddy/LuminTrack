@@ -278,7 +278,7 @@ export default async function JobDetailPage({
           <SummaryItem label="Vendor">{job.vendor.name}</SummaryItem>
           <SummaryItem label="Source">{jobSourceLabel(job)}</SummaryItem>
           <SummaryItem label="Location">{job.location || "—"}</SummaryItem>
-          <SummaryItem label="Client rate">{formatRate(job.clientRate)}</SummaryItem>
+          <SummaryItem label="Client rate">{formatRate(job.clientRate, "Undisclosed")}</SummaryItem>
           <SummaryItem label="Vendor rate">{formatRate(job.vendorRate)}</SummaryItem>
           <SummaryItem label="Created by">{job.createdBy.fullName}</SummaryItem>
           <SummaryItem label="Created">{formatDate(job.createdAt)}</SummaryItem>
