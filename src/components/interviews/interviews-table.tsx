@@ -29,11 +29,14 @@ export function InterviewsTable({
           <SortableHeader column="date" label="Date of interview" defaultDir="desc" />
           <SortableHeader column="candidate" label="Candidate" />
           <SortableHeader column="client" label="Client" />
+          <Th>Vendor</Th>
+          <Th>Location</Th>
           <Th>Sales recruiter</Th>
           <Th>Technology</Th>
           <Th>Round</Th>
           <Th>Support</Th>
           <Th>Result</Th>
+          <Th>Remarks</Th>
         </tr>
       </thead>
       <tbody className="divide-y divide-slate-100">
@@ -57,6 +60,12 @@ export function InterviewsTable({
               </Td>
               <Td label="Client" secondary>
                 {r.submission.job.client.name}
+              </Td>
+              <Td label="Vendor" secondary>
+                {r.submission.job.vendor?.name ?? "—"}
+              </Td>
+              <Td label="Location" secondary>
+                {r.submission.job.location ?? "—"}
               </Td>
               <Td label="Sales recruiter" secondary>
                 {r.submission.submittedBy.fullName}
@@ -89,6 +98,18 @@ export function InterviewsTable({
                 <Badge tone={INTERVIEW_RESULT_TONE[r.result]}>
                   {INTERVIEW_RESULT_LABEL[r.result]}
                 </Badge>
+              </Td>
+              <Td label="Remarks" secondary>
+                {r.feedback ? (
+                  <span
+                    title={r.feedback}
+                    className="line-clamp-2 max-w-[16rem] text-xs text-slate-500"
+                  >
+                    {r.feedback}
+                  </span>
+                ) : (
+                  "—"
+                )}
               </Td>
             </tr>
           );

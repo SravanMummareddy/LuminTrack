@@ -102,16 +102,51 @@ export async function listJobs(filters: JobListFilters) {
     },
   });
 
+  // Per-job outcome tallies for the (hidden-by-default) Interviews / Selected /
+  // Joined columns — spec §9.2. One extra query over just this page's jobs,
+  // aggregated in memory. Interviews = interview rounds across the job's
+  // submissions; Selected / Joined = submissions currently in that status (same
+  // definition as the dashboard KPIs, so the numbers reconcile).
+  const jobIds = raw.map((j) => j.id);
+  const subStats = jobIds.length
+    ? await prisma.submission.findMany({
+        where: { jobId: { in: jobIds } },
+        select: {
+          jobId: true,
+          status: true,
+          _count: { select: { interviewRounds: true } },
+        },
+      })
+    : [];
+  const tally = new Map<
+    string,
+    { interviews: number; selected: number; joined: number }
+  >();
+  for (const id of jobIds) tally.set(id, { interviews: 0, selected: 0, joined: 0 });
+  for (const s of subStats) {
+    const t = tally.get(s.jobId);
+    if (!t) continue;
+    t.interviews += s._count.interviewRounds;
+    if (s.status === "SELECTED") t.selected += 1;
+    else if (s.status === "JOINED") t.joined += 1;
+  }
+
   // Prisma Decimal is not serializable across the Server → Client Component
   // boundary (RSC requires plain JSON values). Coerce rate fields to plain
   // numbers here, once, so downstream consumers — including <JobsTable> —
   // can treat them as primitives.
-  const rows = raw.map(({ clientRate, vendorRate, candidateRate, ...rest }) => ({
-    ...rest,
-    clientRate: clientRate != null ? Number(clientRate) : null,
-    vendorRate: vendorRate != null ? Number(vendorRate) : null,
-    candidateRate: candidateRate != null ? Number(candidateRate) : null,
-  }));
+  const rows = raw.map(({ clientRate, vendorRate, candidateRate, ...rest }) => {
+    const t = tally.get(rest.id) ?? { interviews: 0, selected: 0, joined: 0 };
+    return {
+      ...rest,
+      clientRate: clientRate != null ? Number(clientRate) : null,
+      vendorRate: vendorRate != null ? Number(vendorRate) : null,
+      candidateRate: candidateRate != null ? Number(candidateRate) : null,
+      interviewCount: t.interviews,
+      selectedCount: t.selected,
+      joinedCount: t.joined,
+    };
+  });
 
   return { rows, total, page };
 }

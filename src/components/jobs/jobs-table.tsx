@@ -160,6 +160,40 @@ const COLUMNS: Column[] = [
       </Td>
     ),
   },
+  // ─── Outcome tallies (hidden by default) — spec §9.2 ──────────────────────
+  {
+    key: "interviews",
+    label: "Interviews",
+    align: "right",
+    defaultVisible: false,
+    render: (job) => (
+      <Td label="Interviews" secondary className="text-right tabular-nums">
+        {job.interviewCount}
+      </Td>
+    ),
+  },
+  {
+    key: "selected",
+    label: "Selected",
+    align: "right",
+    defaultVisible: false,
+    render: (job) => (
+      <Td label="Selected" secondary className="text-right tabular-nums">
+        {job.selectedCount}
+      </Td>
+    ),
+  },
+  {
+    key: "joined",
+    label: "Joined",
+    align: "right",
+    defaultVisible: false,
+    render: (job) => (
+      <Td label="Joined" secondary className="text-right tabular-nums">
+        {job.joinedCount}
+      </Td>
+    ),
+  },
   {
     key: "created",
     label: "Created",

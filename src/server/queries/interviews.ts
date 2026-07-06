@@ -187,6 +187,7 @@ export async function listInterviews(filters: InterviewListFilters) {
       scheduledAt: true,
       result: true,
       supportNeeded: true,
+      feedback: true, // "Remarks" column (spreadsheet Interviews tab)
       submission: {
         select: {
           id: true,
@@ -195,7 +196,13 @@ export async function listInterviews(filters: InterviewListFilters) {
             select: { id: true, fullName: true, skills: true, featuredSkills: true },
           },
           job: {
-            select: { id: true, title: true, client: { select: { name: true } } },
+            select: {
+              id: true,
+              title: true,
+              location: true,
+              client: { select: { name: true } },
+              vendor: { select: { name: true } },
+            },
           },
           submittedBy: { select: { fullName: true } },
         },
