@@ -3,11 +3,12 @@ import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Forbidden } from "@/components/ui/forbidden";
 import { requireUser } from "@/lib/session";
+import { hasFullAccess } from "@/lib/permissions";
 import { ImportRequisitions } from "@/components/jobs/import-requisitions";
 
 export default async function ImportJobsPage() {
   const user = await requireUser();
-  if (user.role !== "ADMIN") return <Forbidden />;
+  if (!hasFullAccess(user)) return <Forbidden />;
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">

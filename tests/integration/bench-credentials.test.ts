@@ -46,7 +46,7 @@ describe.skipIf(!dbReachable)("bench credentials — admin gate (regression)", (
   beforeEach(async () => {
     await truncateAll(testPrisma);
     admin = await testPrisma.user.create({
-      data: { fullName: "Admin", email: "admin@test.local", passwordHash: "x", role: "ADMIN" },
+      data: { fullName: "Admin", email: "admin@test.local", passwordHash: "x", role: "MANAGER" },
     });
     recruiter = await testPrisma.user.create({
       data: { fullName: "Recruiter", email: "rec@test.local", passwordHash: "x", role: "RECRUITER" },

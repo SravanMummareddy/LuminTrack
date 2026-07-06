@@ -5,8 +5,9 @@ import { PageHeader } from "@/components/ui/page-header";
 import { SubmissionEditForm } from "@/components/submissions/submission-edit-form";
 import { updateSubmission } from "@/server/actions/submissions";
 import { getSubmissionForEdit } from "@/server/queries/submissions";
-import { listUsers } from "@/server/queries/org";
+import { listUsers, listTeamLeadOptions } from "@/server/queries/org";
 import { getCurrentUser } from "@/lib/session";
+import { hasFullAccess } from "@/lib/permissions";
 
 export default async function EditSubmissionPage({
   params,
@@ -22,7 +23,7 @@ export default async function EditSubmissionPage({
 
   // Admins may correct the submitting recruiter (scorecards key off it);
   // recruiters see it locked. Only fetch the picker list when it's needed.
-  const isAdmin = user?.role === "ADMIN";
+  const isAdmin = hasFullAccess(user);
   const recruiters = isAdmin
     ? (await listUsers()).map((u) => ({
         id: u.id,
@@ -30,6 +31,7 @@ export default async function EditSubmissionPage({
         isActive: u.isActive,
       }))
     : [];
+  const teamLeads = await listTeamLeadOptions();
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -55,6 +57,7 @@ export default async function EditSubmissionPage({
           recruiterName={submission.submittedBy.fullName}
           canReattribute={isAdmin}
           recruiters={recruiters}
+          teamLeads={teamLeads}
           resumes={submission.candidate.resumes}
           values={{
             resumeSelection: submission.candidateResumeId ?? "",

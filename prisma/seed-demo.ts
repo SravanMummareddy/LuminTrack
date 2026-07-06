@@ -183,24 +183,24 @@ const SHARED_PASSWORD = "LuminTrack2026!";
 const TEAM_A = "USEI-Sales IT";
 const TEAM_B = "USEI-Sales IT-2";
 
-// Real people from the June-19 spreadsheet + generated teammates. 3 admins
-// (Sriman is the team lead + 2 team managers), 8 recruiters. Everyone shares
-// SHARED_PASSWORD. Sriman is the primary admin login.
+// Real people from the June-19 spreadsheet + generated teammates. Three tiers:
+// 1 Manager (Sriman, primary login) + 2 Team Leads (one per team) + 8
+// recruiters. Managers and team leads both have full access. Everyone shares
+// SHARED_PASSWORD.
 const ADMIN_LOGIN = "sriman@lumintrack.com";
 type RosterUser = {
   fullName: string;
   email: string;
-  role: "ADMIN" | "RECRUITER";
+  role: "MANAGER" | "TEAM_LEAD" | "RECRUITER";
   empId: string;
   teamLabel: string;
-  /** Team leads can manage Vendor Portal Requirements — one per team. */
-  isTeamLead?: boolean;
 };
 const USER_ROSTER: RosterUser[] = [
-  // ── Admins / managers ── (one team-lead per team: Sriman → A, Deepa → B)
-  { fullName: "Sriman Udugula", email: ADMIN_LOGIN, role: "ADMIN", empId: "INC105", teamLabel: TEAM_A, isTeamLead: true },
-  { fullName: "Vikram Reddy", email: "vikram@lumintrack.com", role: "ADMIN", empId: "INC112", teamLabel: TEAM_A },
-  { fullName: "Deepa Nair", email: "deepa@lumintrack.com", role: "ADMIN", empId: "TK2204", teamLabel: TEAM_B, isTeamLead: true },
+  // ── Manager (full access; primary login) ──
+  { fullName: "Sriman Udugula", email: ADMIN_LOGIN, role: "MANAGER", empId: "INC105", teamLabel: TEAM_A },
+  // ── Team leads (full access; one per team, drive VPR planning) ──
+  { fullName: "Vikram Reddy", email: "vikram@lumintrack.com", role: "TEAM_LEAD", empId: "INC112", teamLabel: TEAM_A },
+  { fullName: "Deepa Nair", email: "deepa@lumintrack.com", role: "TEAM_LEAD", empId: "TK2204", teamLabel: TEAM_B },
   // ── Recruiters — real (from the sheet's Monthly Performance tab) ──
   { fullName: "Hrishikesh Batta", email: "hrishikesh@lumintrack.com", role: "RECRUITER", empId: "TK2090", teamLabel: TEAM_A },
   { fullName: "Sameer Shaik", email: "sameer@lumintrack.com", role: "RECRUITER", empId: "TK2161", teamLabel: TEAM_A },
@@ -593,7 +593,6 @@ async function main() {
         role: u.role,
         empId: u.empId,
         teamLabel: u.teamLabel,
-        isTeamLead: u.isTeamLead ?? false,
         createdAt: adminCreatedAt,
         updatedAt: adminCreatedAt,
       },
@@ -601,13 +600,13 @@ async function main() {
     });
     allUsers.push(created);
   }
-  // Sriman is the primary admin (used as createdBy / assignedBy across the seed).
+  // Sriman is the primary manager (used as createdBy / assignedBy across the seed).
   const admin = allUsers.find((u) => u.fullName === "Sriman Udugula")!;
   // Submissions/assignments are attributed to RECRUITER-role users only, so the
-  // Monthly Performance scorecard (recruiters only) reconciles. Managers (admins)
-  // show zero activity — matching Sriman's row on the sheet.
+  // Monthly Performance scorecard (recruiters only) reconciles. Managers and team
+  // leads show zero activity — matching Sriman's row on the sheet.
   const recruiters = allUsers.filter((u) => u.role === "RECRUITER");
-  const adminCount = allUsers.filter((u) => u.role === "ADMIN").length;
+  const leadCount = allUsers.filter((u) => u.role !== "RECRUITER").length;
 
   // ── Org entities ──
   console.log("Creating organisation entities…");
@@ -1441,7 +1440,7 @@ async function main() {
   console.log("Creating vendor portal requirements…");
   const teamLeadByLabel = new Map<string, string>();
   for (const u of USER_ROSTER) {
-    if (u.isTeamLead) teamLeadByLabel.set(u.teamLabel, u.fullName);
+    if (u.role === "TEAM_LEAD") teamLeadByLabel.set(u.teamLabel, u.fullName);
   }
   let requirementCount = 0;
   for (let i = 0; i < 14; i++) {
@@ -1646,7 +1645,7 @@ async function main() {
   }
 
   console.log("\nSeed complete.");
-  console.log(`  Users:        ${allUsers.length} (${adminCount} admins/managers, ${recruiters.length} recruiters)`);
+  console.log(`  Users:        ${allUsers.length} (${leadCount} managers/team leads, ${recruiters.length} recruiters)`);
   console.log(`  Jobs:         ${jobs.length}`);
   console.log(`  Candidates:   ${candidates.length}`);
   console.log(`  Bench consultants: ${benchCount} (linked 1:1 to candidates)`);

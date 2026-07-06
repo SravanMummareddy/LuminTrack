@@ -5,6 +5,7 @@ import { Forbidden } from "@/components/ui/forbidden";
 import { LinkButton } from "@/components/ui/button";
 import { Table, Th, Td } from "@/components/ui/table";
 import { requireUser } from "@/lib/session";
+import { hasFullAccess } from "@/lib/permissions";
 import { listIlaborImports, listStaleIlaborJobs } from "@/server/queries/jobs";
 import { formatDate, formatDateTime } from "@/lib/format";
 
@@ -33,7 +34,7 @@ function parseSummary(raw: string | null): SummaryShape | null {
 
 export default async function ImportsHistoryPage() {
   const user = await requireUser();
-  if (user.role !== "ADMIN") return <Forbidden />;
+  if (!hasFullAccess(user)) return <Forbidden />;
 
   const [imports, stale] = await Promise.all([
     listIlaborImports(),

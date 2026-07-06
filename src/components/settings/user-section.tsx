@@ -13,22 +13,26 @@ import {
 } from "@/components/settings/settings-list-filter";
 import { saveUser } from "@/server/actions/users";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
+import { roleLabel } from "@/lib/permissions";
+import type { UserRole } from "@/generated/prisma/enums";
 
 export type UserRow = {
   id: string;
   fullName: string;
   email: string;
-  role: "ADMIN" | "RECRUITER";
+  role: UserRole;
   isActive: boolean;
-  isTeamLead: boolean;
 };
 
 export function UserSection({
   items,
   canManage,
+  canGrantManager,
 }: {
   items: UserRow[];
   canManage: boolean;
+  /** Only a Manager may grant the Manager role or edit a Manager's account. */
+  canGrantManager: boolean;
 }) {
   const [editing, setEditing] = useState<UserRow | "new" | null>(null);
   const [search, setSearch] = useState("");
@@ -65,7 +69,7 @@ export function UserSection({
 
       {!canManage && (
         <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">
-          Only administrators can add or edit users.
+          Only managers and team leads can add or edit users.
         </p>
       )}
 
@@ -102,8 +106,8 @@ export function UserSection({
                 </Td>
                 <Td label="Email">{item.email}</Td>
                 <Td label="Role">
-                  <Badge tone={item.role === "ADMIN" ? "indigo" : "slate"}>
-                    {item.role === "ADMIN" ? "Administrator" : "Recruiter"}
+                  <Badge tone={item.role === "RECRUITER" ? "slate" : "indigo"}>
+                    {roleLabel(item.role)}
                   </Badge>
                 </Td>
                 <Td label="Status">
@@ -112,15 +116,16 @@ export function UserSection({
                   </Badge>
                 </Td>
                 <Td className="text-right">
-                  {canManage && (
-                    <button
-                      type="button"
-                      onClick={() => setEditing(item)}
-                      className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
-                    >
-                      Edit
-                    </button>
-                  )}
+                  {canManage &&
+                    (item.role !== "MANAGER" || canGrantManager) && (
+                      <button
+                        type="button"
+                        onClick={() => setEditing(item)}
+                        className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
+                      >
+                        Edit
+                      </button>
+                    )}
                 </Td>
               </tr>
             ))}
@@ -136,6 +141,7 @@ export function UserSection({
         {editing !== null && (
           <UserForm
             entity={editing === "new" ? null : editing}
+            canGrantManager={canGrantManager}
             onDone={() => setEditing(null)}
           />
         )}
@@ -146,9 +152,11 @@ export function UserSection({
 
 function UserForm({
   entity,
+  canGrantManager,
   onDone,
 }: {
   entity: UserRow | null;
+  canGrantManager: boolean;
   onDone: () => void;
 }) {
   const [state, formAction, pending] = useActionState(saveUser, EMPTY_FORM_STATE);
@@ -183,7 +191,8 @@ function UserForm({
       <Field label="Role" htmlFor="role" required error={state.fieldErrors?.role}>
         <Select id="role" name="role" defaultValue={entity?.role ?? "RECRUITER"}>
           <option value="RECRUITER">Recruiter</option>
-          <option value="ADMIN">Administrator</option>
+          <option value="TEAM_LEAD">Team Lead</option>
+          {canGrantManager && <option value="MANAGER">Manager</option>}
         </Select>
       </Field>
 
@@ -219,23 +228,6 @@ function UserForm({
           className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-200"
         />
         Active
-      </label>
-
-      <label
-        htmlFor="user-isTeamLead"
-        className="flex items-center gap-2 text-sm font-medium text-slate-700"
-      >
-        <input
-          id="user-isTeamLead"
-          type="checkbox"
-          name="isTeamLead"
-          defaultChecked={entity?.isTeamLead ?? false}
-          className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-200"
-        />
-        Team lead
-        <span className="font-normal text-slate-400">
-          — can manage Vendor Portal Requirements
-        </span>
       </label>
 
       {state.error && (

@@ -1,7 +1,7 @@
 import { prisma } from "@/server/db";
 
 /**
- * Derives the team-lead name for a recruiter: the `isTeamLead` user sharing the
+ * Derives the team-lead name for a recruiter: the TEAM_LEAD user sharing the
  * recruiter's team label. Returns null when there's no clear lead. Shared by the
  * requirement actions and the job-create requirement section.
  */
@@ -15,7 +15,7 @@ export async function deriveTeamLead(
   });
   if (!recruiter?.teamLabel) return null;
   const lead = await prisma.user.findFirst({
-    where: { isTeamLead: true, isActive: true, teamLabel: recruiter.teamLabel },
+    where: { role: "TEAM_LEAD", isActive: true, teamLabel: recruiter.teamLabel },
     select: { fullName: true },
   });
   return lead?.fullName ?? null;

@@ -5,16 +5,17 @@ import { SubmissionForm } from "@/components/submissions/submission-form";
 import { createSubmission } from "@/server/actions/submissions";
 import { listCandidateOptions } from "@/server/queries/candidates";
 import { listJobOptions } from "@/server/queries/jobs";
-import { listUsers } from "@/server/queries/org";
+import { listUsers, listTeamLeadOptions } from "@/server/queries/org";
 import { formatJobDisplayId } from "@/lib/format";
 import { requireUser } from "@/lib/session";
 
 export default async function NewOpenSubmissionPage() {
-  const [candidates, jobs, recruiters, user] = await Promise.all([
+  const [candidates, jobs, recruiters, user, teamLeads] = await Promise.all([
     listCandidateOptions(),
     listJobOptions(),
     listUsers(),
     requireUser(),
+    listTeamLeadOptions(),
   ]);
 
   const jobOptions = jobs.map((j) => ({
@@ -82,6 +83,7 @@ export default async function NewOpenSubmissionPage() {
             jobOptions={jobOptions}
             candidates={candidateOptions}
             recruiters={recruiters}
+            teamLeads={teamLeads}
             defaultRecruiterId={user.id}
             cancelHref="/submissions"
           />

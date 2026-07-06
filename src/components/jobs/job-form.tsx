@@ -67,6 +67,7 @@ export function JobForm({
   values,
   submitLabel,
   canCreateOrgEntities = false,
+  canManageRatesAndAssignment = true,
 }: {
   action: JobAction;
   clients: Option[];
@@ -75,8 +76,12 @@ export function JobForm({
   recruiters: Recruiter[];
   values?: JobFormValues;
   submitLabel: string;
-  /** Allow adding a new client/vendor inline (admins only). */
+  /** Allow adding a new client/vendor inline (managers/team leads only). */
   canCreateOrgEntities?: boolean;
+  /** Show the commercial rate fields + recruiter assignment. Recruiters may edit
+   *  basic job details but not rates or who's assigned — those are hidden for
+   *  them (and the server enforces the same). */
+  canManageRatesAndAssignment?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(action, EMPTY_FORM_STATE);
   const errors = state.fieldErrors ?? {};
@@ -229,21 +234,23 @@ export function JobForm({
           </Select>
         </Field>
 
-        <Field
-          label="Client rate"
-          htmlFor="clientRate"
-          error={errors.clientRate}
-          hint="$/hr the end client releases. Bill & pay rates are set later on the vendor requirement."
-        >
-          <Input
-            id="clientRate"
-            name="clientRate"
-            type="number"
-            min="0"
-            step="0.01"
-            defaultValue={values?.clientRate ?? ""}
-          />
-        </Field>
+        {canManageRatesAndAssignment && (
+          <Field
+            label="Client rate"
+            htmlFor="clientRate"
+            error={errors.clientRate}
+            hint="$/hr the end client releases. Bill & pay rates are set later on the vendor requirement."
+          >
+            <Input
+              id="clientRate"
+              name="clientRate"
+              type="number"
+              min="0"
+              step="0.01"
+              defaultValue={values?.clientRate ?? ""}
+            />
+          </Field>
+        )}
       </div>
 
       <Field label="Location" htmlFor="location" error={errors.location}>
@@ -280,21 +287,23 @@ export function JobForm({
               placeholder="1"
             />
           </Field>
-          <Field
-            label="Vendor rate"
-            htmlFor="vendorRate"
-            error={errors.vendorRate}
-            hint="$/hr the vendor releases to us. Usually set on the requirement instead."
-          >
-            <Input
-              id="vendorRate"
-              name="vendorRate"
-              type="number"
-              min="0"
-              step="0.01"
-              defaultValue={values?.vendorRate ?? ""}
-            />
-          </Field>
+          {canManageRatesAndAssignment && (
+            <Field
+              label="Vendor rate"
+              htmlFor="vendorRate"
+              error={errors.vendorRate}
+              hint="$/hr the vendor releases to us. Usually set on the requirement instead."
+            >
+              <Input
+                id="vendorRate"
+                name="vendorRate"
+                type="number"
+                min="0"
+                step="0.01"
+                defaultValue={values?.vendorRate ?? ""}
+              />
+            </Field>
+          )}
           <Field
             label="Position type"
             htmlFor="reqType"
@@ -472,37 +481,39 @@ export function JobForm({
         />
       </Field>
 
-      <div>
-        <span className="block text-sm font-medium text-slate-700">
-          Assigned recruiters
-        </span>
-        <p className="mt-0.5 text-xs text-slate-500">
-          Optional — you can assign later from the job detail page.
-        </p>
-        {recruiters.length === 0 ? (
-          <p className="mt-1 text-xs text-slate-500">
-            No users yet — add recruiters under Settings.
+      {canManageRatesAndAssignment && (
+        <div>
+          <span className="block text-sm font-medium text-slate-700">
+            Assigned recruiters
+          </span>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Optional — you can assign later from the job detail page.
           </p>
-        ) : (
-          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {recruiters.map((r) => (
-              <label
-                key={r.id}
-                className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700"
-              >
-                <input
-                  type="checkbox"
-                  name="recruiterIds"
-                  value={r.id}
-                  defaultChecked={assigned.has(r.id)}
-                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-200"
-                />
-                <span>{optionLabel(r.fullName, r.isActive)}</span>
-              </label>
-            ))}
-          </div>
-        )}
-      </div>
+          {recruiters.length === 0 ? (
+            <p className="mt-1 text-xs text-slate-500">
+              No users yet — add recruiters under Settings.
+            </p>
+          ) : (
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {recruiters.map((r) => (
+                <label
+                  key={r.id}
+                  className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700"
+                >
+                  <input
+                    type="checkbox"
+                    name="recruiterIds"
+                    value={r.id}
+                    defaultChecked={assigned.has(r.id)}
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-200"
+                  />
+                  <span>{optionLabel(r.fullName, r.isActive)}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {state.error && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">

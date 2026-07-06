@@ -5,6 +5,7 @@ import { Table, Th, Td } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Pagination } from "@/components/ui/pagination";
 import { requireUser } from "@/lib/session";
+import { hasFullAccess } from "@/lib/permissions";
 import { prisma } from "@/server/db";
 import { formatDateTime } from "@/lib/format";
 import { ActivityAction } from "@/generated/prisma/enums";
@@ -22,7 +23,7 @@ export default async function AuditPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const user = await requireUser();
-  if (user.role !== "ADMIN") return <Forbidden />;
+  if (!hasFullAccess(user)) return <Forbidden />;
 
   const sp = await searchParams;
   const get = (k: string) =>

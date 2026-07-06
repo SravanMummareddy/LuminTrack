@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/lib/session";
+import { canManageOrgEntities } from "@/lib/permissions";
 import { logActivity } from "@/server/activity";
 import { ensureSourceForPortal } from "@/server/portals";
 import {
@@ -428,8 +429,8 @@ export async function previewRequisitions(
   formData: FormData,
 ): Promise<IlaborImportPreviewState> {
   const user = await requireUser();
-  if (user.role !== "ADMIN") {
-    return { status: "error", error: "Only admins can import requisitions." };
+  if (!canManageOrgEntities(user)) {
+    return { status: "error", error: "Only managers and team leads can import requisitions." };
   }
 
   const envelopeResult = await readEnvelope(formData);
@@ -642,8 +643,8 @@ export async function importRequisitions(
   formData: FormData,
 ): Promise<IlaborImportResultState> {
   const user = await requireUser();
-  if (user.role !== "ADMIN") {
-    return { status: "error", error: "Only admins can import requisitions." };
+  if (!canManageOrgEntities(user)) {
+    return { status: "error", error: "Only managers and team leads can import requisitions." };
   }
 
   const envelopeResult = await readEnvelope(formData);

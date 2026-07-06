@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { startTransition, useActionState, useEffect, useRef, useState } from "react";
 import { ArrowRight, Info } from "lucide-react";
 import { Select, Textarea, Input } from "@/components/ui/field";
 import { Button, buttonClass } from "@/components/ui/button";
@@ -74,8 +74,6 @@ export function SubmissionStatusForm({
   const [showDetails, setShowDetails] = useState(false);
   const [showJump, setShowJump] = useState(false);
   const [dialog, setDialog] = useState<DialogKind | null>(null);
-  // Bumped to request a submit once the intended `target` has committed.
-  const [submitFlag, setSubmitFlag] = useState(0);
   const [celebrateKey, setCelebrateKey] = useState(0);
 
   const [state, formAction, isPending] = useActionState(
@@ -90,11 +88,6 @@ export function SubmissionStatusForm({
     // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only initial value
     setEventAt(nowDateTimeLocal());
   }, []);
-
-  // Submit once `target` (and any dialog fields) have committed to the DOM.
-  useEffect(() => {
-    if (submitFlag > 0) formRef.current?.requestSubmit();
-  }, [submitFlag]);
 
   // Confirm the save (the action revalidates instead of redirecting) and reset
   // the change-specific fields — this form is intentionally not remounted on
@@ -126,10 +119,33 @@ export function SubmissionStatusForm({
     setActualJoinDate("");
   }
 
-  /** Set the target status and fire a submit on the next commit. */
-  function submitAs(next: SubmissionStatus) {
+  /**
+   * Build the payload from the live form + current state and dispatch the action
+   * directly. The form's controls are all `type="button"`, so there is no native
+   * submitter; dispatching `formAction(FormData)` inside a transition is the
+   * reliable path (a prior `requestSubmit()`-from-effect indirection did not
+   * dispatch the React form action on click). Every field is set explicitly so
+   * the payload never depends on React having flushed the controlled hidden
+   * inputs before this runs.
+   */
+  function submitWith(next: SubmissionStatus) {
+    const form = formRef.current;
+    if (!form) return;
+    const fd = new FormData(form);
+    fd.set("id", submissionId);
+    fd.set("status", next);
+    fd.set("eventAt", eventAt);
+    fd.set("note", note);
+    fd.set("reason", reason);
+    fd.set("expectedJoinDate", expectedJoinDate);
+    fd.set("actualJoinDate", actualJoinDate);
     setTarget(next);
-    setSubmitFlag((n) => n + 1);
+    startTransition(() => formAction(fd));
+  }
+
+  /** Set the target status and dispatch the change. */
+  function submitAs(next: SubmissionStatus) {
+    submitWith(next);
   }
 
   /** Open a branch/confirm dialog for `next`, starting from clean fields. */
@@ -141,7 +157,7 @@ export function SubmissionStatusForm({
 
   function confirmDialog() {
     setDialog(null);
-    setSubmitFlag((n) => n + 1);
+    submitWith(target);
   }
 
   function cancelDialog() {
@@ -203,7 +219,7 @@ export function SubmissionStatusForm({
   const jumpShowActualJoin = target === "JOINED";
 
   return (
-    <form action={formAction} className="space-y-3">
+    <form ref={formRef} action={formAction} className="space-y-3">
       <Confetti fireKey={celebrateKey} />
       <input type="hidden" name="id" value={submissionId} />
       <input type="hidden" name="status" value={target} />
@@ -371,7 +387,7 @@ export function SubmissionStatusForm({
             <Button
               type="button"
               variant="secondary"
-              onClick={() => setSubmitFlag((n) => n + 1)}
+              onClick={() => submitWith(target)}
               disabled={isPending}
             >
               {isPending ? "Updating…" : "Update"}

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
+import { roleLabel } from "@/lib/permissions";
 import { Table, Td, cardLink } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { MobileSort } from "@/components/ui/mobile-sort";
@@ -146,9 +147,9 @@ export default async function RecruitersPage({
                     >
                       {r.fullName}
                     </Link>
-                    {r.role === "ADMIN" && (
+                    {r.role !== "RECRUITER" && (
                       <Badge tone="slate" className="ml-2">
-                        Admin
+                        {roleLabel(r.role)}
                       </Badge>
                     )}
                   </Td>

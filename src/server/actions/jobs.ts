@@ -4,6 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/lib/session";
+import {
+  canManageOrgEntities,
+  canEditJobRatesAndAssignment,
+  hasFullAccess,
+} from "@/lib/permissions";
 import { logActivity } from "@/server/activity";
 import { jobSchema, JOB_STATUS_VALUES } from "@/lib/validation/job";
 import { toFieldErrors } from "@/lib/validation/common";
@@ -85,14 +90,17 @@ export async function createJob(
   const d = parsed.data;
   const isOtherSource = d.sisterCompanySourceId === OTHER_SOURCE;
 
-  // Inline "+ Add new client/vendor" — admin-only (matches Settings org writes).
-  const canCreateOrg = user.role === "ADMIN";
+  // Inline "+ Add new client/vendor" — full-access only (matches Settings org
+  // writes). Recruiters may create jobs, but not new org entities.
+  const canCreateOrg = canManageOrgEntities(user);
   const newClientName = String(formData.get("newClientName") ?? "").trim();
   const newVendorName = String(formData.get("newVendorName") ?? "").trim();
   const wantNewClient = d.clientId === NEW_ORG_ENTITY;
   const wantNewVendor = d.vendorId === NEW_ORG_ENTITY;
   if ((wantNewClient || wantNewVendor) && !canCreateOrg)
-    return { error: "Only admins can add a new client or vendor." };
+    return {
+      error: "Only managers and team leads can add a new client or vendor.",
+    };
   const orgErrors: Record<string, string> = {};
   if (wantNewClient && !newClientName)
     orgErrors.clientId = "Enter the new client name.";
@@ -185,6 +193,22 @@ export async function updateJob(
   });
   if (!existing) return { error: "This job no longer exists." };
 
+  // Recruiters may edit basic job details + status, but NOT the commercial
+  // rates or the recruiter assignment — those are manager/team-lead only. For a
+  // recruiter, force the rate + assignment inputs back to their stored values so
+  // a hand-crafted POST can't change them (the form also hides these controls).
+  const canRates = canEditJobRatesAndAssignment(user);
+  const effClientRate = canRates
+    ? (d.clientRate ?? null)
+    : existing.clientRate != null
+      ? Number(existing.clientRate)
+      : null;
+  const effVendorRate = canRates
+    ? (d.vendorRate ?? null)
+    : existing.vendorRate != null
+      ? Number(existing.vendorRate)
+      : null;
+
   // Record which scalar fields actually changed, for a meaningful audit entry.
   const changed: string[] = [];
   const compare = (label: string, before: unknown, after: unknown) => {
@@ -200,8 +224,8 @@ export async function updateJob(
   );
   compare("status", existing.status, d.status);
   compare("location", existing.location, d.location);
-  compare("client rate", existing.clientRate?.toString(), d.clientRate);
-  compare("vendor rate", existing.vendorRate?.toString(), d.vendorRate);
+  compare("client rate", existing.clientRate?.toString(), effClientRate);
+  compare("vendor rate", existing.vendorRate?.toString(), effVendorRate);
   compare("description", existing.description, d.description);
   compare("notes", existing.notes, d.notes);
   compare("positions", existing.positions, d.positions);
@@ -233,8 +257,14 @@ export async function updateJob(
 
   const currentRecruiters = new Set(existing.assignments.map((a) => a.recruiterId));
   const desiredRecruiters = new Set(d.recruiterIds);
-  const toAdd = d.recruiterIds.filter((id) => !currentRecruiters.has(id));
-  const toRemove = [...currentRecruiters].filter((id) => !desiredRecruiters.has(id));
+  // Only full-access users may change the assignment; for recruiters the diff is
+  // forced empty so their POST can never add/remove recruiters.
+  const toAdd = canRates
+    ? d.recruiterIds.filter((id) => !currentRecruiters.has(id))
+    : [];
+  const toRemove = canRates
+    ? [...currentRecruiters].filter((id) => !desiredRecruiters.has(id))
+    : [];
 
   const affected = [...new Set([...toAdd, ...toRemove])];
   const affectedUsers = affected.length
@@ -258,8 +288,8 @@ export async function updateJob(
         sourceOther: nextSourceOther,
         status: d.status,
         location: d.location ?? null,
-        clientRate: d.clientRate ?? null,
-        vendorRate: d.vendorRate ?? null,
+        clientRate: effClientRate,
+        vendorRate: effVendorRate,
         description: d.description ?? null,
         notes: d.notes ?? null,
         positions: d.positions ?? null,
@@ -332,8 +362,11 @@ export async function assignJobRecruiters(
   recruiterIds: string[],
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const user = await requireUser();
-  if (user.role !== "ADMIN")
-    return { ok: false, error: "Only admins can change job assignments." };
+  if (!canEditJobRatesAndAssignment(user))
+    return {
+      ok: false,
+      error: "Only managers and team leads can change job assignments.",
+    };
   if (!jobId.trim()) return { ok: false, error: "Missing job reference." };
 
   // Defensive de-dup: client may send a stale checkbox state where the same

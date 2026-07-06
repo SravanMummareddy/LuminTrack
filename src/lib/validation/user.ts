@@ -4,11 +4,8 @@ import { emptyToUndefined } from "./common";
 const base = z.object({
   fullName: z.string().trim().min(1, "Full name is required.").max(120),
   email: z.email("Enter a valid email address."),
-  role: z.enum(["ADMIN", "RECRUITER"]),
+  role: z.enum(["MANAGER", "TEAM_LEAD", "RECRUITER"]),
   isActive: z.boolean(),
-  // Team-lead capability flag (can manage Vendor Portal Requirements). Not a
-  // role — a lead is otherwise a RECRUITER.
-  isTeamLead: z.boolean(),
 });
 
 const password = z.string().min(8, "Password must be at least 8 characters.");

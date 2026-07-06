@@ -84,6 +84,7 @@ export function SubmissionEditForm({
   recruiterName,
   canReattribute = false,
   recruiters = [],
+  teamLeads = [],
   resumes,
   values,
 }: {
@@ -95,6 +96,8 @@ export function SubmissionEditForm({
   /** Admins may correct the submitting recruiter; recruiters see it locked. */
   canReattribute?: boolean;
   recruiters?: RecruiterOption[];
+  /** Team-lead / manager users for the "Team lead" picker (stores the name). */
+  teamLeads?: { id: string; fullName: string }[];
   resumes: ResumeOption[];
   values: EditValues;
 }) {
@@ -141,6 +144,12 @@ export function SubmissionEditForm({
   }, [state]);
 
   const errors = state.fieldErrors ?? {};
+  // Team-lead picker — keep the saved value even if it's not a current lead.
+  const teamLeadNames = teamLeads.map((t) => t.fullName);
+  const teamLeadChoices =
+    fields.teamLead && !teamLeadNames.includes(fields.teamLead)
+      ? [fields.teamLead, ...teamLeadNames]
+      : teamLeadNames;
   const resumeChoice = fields.resumeSelection === "" ? "none" : "existing";
 
   return (
@@ -265,7 +274,12 @@ export function SubmissionEditForm({
           <Input id="clientRate" name="clientRate" type="number" min="0" step="0.01" inputMode="decimal" value={fields.clientRate} onChange={set("clientRate")} />
         </Field>
         <Field label="Team lead" htmlFor="teamLead" error={errors.teamLead}>
-          <Input id="teamLead" name="teamLead" value={fields.teamLead} onChange={set("teamLead")} />
+          <Select id="teamLead" name="teamLead" value={fields.teamLead} onChange={set("teamLead")}>
+            <option value="">—</option>
+            {teamLeadChoices.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </Select>
         </Field>
       </div>
 

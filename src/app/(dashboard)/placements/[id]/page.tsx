@@ -25,6 +25,7 @@ import {
   formatSubmissionDisplayId,
 } from "@/lib/format";
 import { requireUser } from "@/lib/session";
+import { hasFullAccess } from "@/lib/permissions";
 
 function SummaryItem({
   label,
@@ -76,7 +77,7 @@ export default async function PlacementDetailPage({
 
   // Rates editable for admins or the submitting recruiter.
   const canManageRates =
-    user.role === "ADMIN" ||
+    hasFullAccess(user) ||
     placement.submission.submittedById === user.id;
   // Anyone with placements access can extend / end (rates inside those forms
   // are gated separately).

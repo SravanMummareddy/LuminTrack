@@ -28,7 +28,9 @@ type Column = {
 };
 
 function canSeeRates(row: PlacementListRow, ctx: ViewerContext): boolean {
-  return ctx.userRole === "ADMIN" || row.submission.submittedBy.id === ctx.userId;
+  // Managers / team leads see all rates; a recruiter sees rates only on their
+  // own placements (matches the server-side canEditRates policy).
+  return ctx.userRole !== "RECRUITER" || row.submission.submittedBy.id === ctx.userId;
 }
 
 function formatMoney(value: number): string {

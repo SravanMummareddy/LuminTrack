@@ -10,6 +10,7 @@ import {
   CirclePause,
 } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
+import { hasFullAccess } from "@/lib/permissions";
 import {
   getDashboardData,
   getMyWork,
@@ -181,7 +182,7 @@ export default async function DashboardPage({
   // either user flip. When scope === "me" we force `recruiterId` to the
   // acting user (overrides any explicit recruiter filter from the bar).
   const scope: "me" | "org" =
-    current.scope ?? (user?.role === "ADMIN" ? "org" : "me");
+    current.scope ?? (hasFullAccess(user) ? "org" : "me");
   const effectiveFilters =
     scope === "me" && user ? { ...filters, recruiterId: [user.id] } : filters;
 
@@ -215,7 +216,7 @@ export default async function DashboardPage({
       : Promise.resolve([]),
     // Rates-pending only matters to admins (they own the close-out). On the
     // "me" scope or for recruiters this list is hidden — keeps the card tight.
-    user && user.role === "ADMIN" && scope === "org"
+    user && hasFullAccess(user) && scope === "org"
       ? getRatesPendingPlacements({ limit: 5 })
       : Promise.resolve([]),
     listClients(),
@@ -249,7 +250,7 @@ export default async function DashboardPage({
       {!onboarding.hasSubmissions && (
         <OnboardingChecklist
           status={onboarding}
-          isAdmin={user?.role === "ADMIN"}
+          isAdmin={hasFullAccess(user)}
         />
       )}
 

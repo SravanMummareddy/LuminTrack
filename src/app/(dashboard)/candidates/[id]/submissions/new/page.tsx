@@ -6,7 +6,7 @@ import { SubmissionForm } from "@/components/submissions/submission-form";
 import { createSubmission } from "@/server/actions/submissions";
 import { getCandidateDetail } from "@/server/queries/candidates";
 import { listJobOptions } from "@/server/queries/jobs";
-import { listUsers } from "@/server/queries/org";
+import { listUsers, listTeamLeadOptions } from "@/server/queries/org";
 import { formatJobDisplayId } from "@/lib/format";
 import { requireUser } from "@/lib/session";
 
@@ -16,11 +16,12 @@ export default async function NewCandidateSubmissionPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [candidate, jobs, recruiters, user] = await Promise.all([
+  const [candidate, jobs, recruiters, user, teamLeads] = await Promise.all([
     getCandidateDetail(id),
     listJobOptions(),
     listUsers(),
     requireUser(),
+    listTeamLeadOptions(),
   ]);
   if (!candidate) notFound();
 
@@ -74,6 +75,7 @@ export default async function NewCandidateSubmissionPage({
             }}
             jobOptions={jobOptions}
             recruiters={recruiters}
+            teamLeads={teamLeads}
             defaultRecruiterId={user.id}
             cancelHref={`/candidates/${candidate.id}`}
           />

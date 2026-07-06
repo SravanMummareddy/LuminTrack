@@ -19,6 +19,7 @@ import {
   BENCH_ENGAGEMENT_LABEL,
   SUBMISSION_STATUS_LABEL,
   SUBMISSION_STATUS_TONE,
+  JOB_STATUS_LABEL,
 } from "@/lib/labels";
 import {
   formatDate,
@@ -77,6 +78,11 @@ export default async function RequirementDetailPage({
 
   const canManage = canManageRequirements(user ?? undefined);
   const isOpen = requirement.status === "OPEN";
+  // The convert action blocks a submission when the underlying job is no longer
+  // accepting — surface that here so the recruiter isn't led to a dead-end.
+  const jobAccepting = !["CLOSED", "FILLED", "CANCELLED"].includes(
+    requirement.job.status,
+  );
   const submissions = requirement.submissions;
 
   return (
@@ -112,7 +118,7 @@ export default async function RequirementDetailPage({
           <Badge tone={REQUIREMENT_STATUS_TONE[requirement.status]}>
             {REQUIREMENT_STATUS_LABEL[requirement.status]}
           </Badge>
-          {isOpen && (
+          {isOpen && jobAccepting && (
             <Link
               href={`/vendor-portal/${requirement.id}/convert`}
               className={buttonClass("primary", "sm")}
@@ -162,6 +168,21 @@ export default async function RequirementDetailPage({
           )}
         </div>
       </header>
+
+      {isOpen && !jobAccepting && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          The job{" "}
+          <Link
+            href={`/jobs/${requirement.job.id}`}
+            className="font-medium underline"
+          >
+            {requirement.job.title}
+          </Link>{" "}
+          is <strong>{JOB_STATUS_LABEL[requirement.job.status]}</strong> and is
+          no longer accepting submissions, so this requirement can&apos;t be
+          moved to a submission. Reopen the job, or close this requirement.
+        </div>
+      )}
 
       <Card title={`Submissions (${submissions.length})`}>
         {submissions.length === 0 ? (

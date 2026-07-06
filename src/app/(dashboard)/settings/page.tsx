@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Download, History, ScrollText, FileDown } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
+import { hasFullAccess } from "@/lib/permissions";
 import { cn } from "@/lib/cn";
 import { PageHeader } from "@/components/ui/page-header";
 import { LinkButton } from "@/components/ui/button";
@@ -36,7 +37,8 @@ export default async function SettingsPage({
     : "sister-companies";
 
   const user = await getCurrentUser();
-  const isAdmin = user?.role === "ADMIN";
+  const isAdmin = hasFullAccess(user);
+  const canGrantManager = user?.role === "MANAGER";
 
   let content: React.ReactNode;
   if (tab === "sister-companies") {
@@ -66,7 +68,13 @@ export default async function SettingsPage({
       />
     );
   } else {
-    content = <UserSection items={await listUsers()} canManage={isAdmin} />;
+    content = (
+      <UserSection
+        items={await listUsers()}
+        canManage={isAdmin}
+        canGrantManager={canGrantManager}
+      />
+    );
   }
 
   return (

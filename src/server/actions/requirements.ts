@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/lib/session";
-import { canManageRequirements } from "@/lib/permissions";
+import { canManageRequirements, hasFullAccess } from "@/lib/permissions";
 import { logActivity } from "@/server/activity";
 import { deriveTeamLead } from "@/server/team-lead";
 import {
@@ -280,6 +280,9 @@ export async function convertRequirementToSubmission(
   const ilaborOverrideReason = String(
     formData.get("ilaborOverrideReason") ?? "",
   ).trim();
+  const candidateStatusOverrideReason = String(
+    formData.get("candidateStatusOverrideReason") ?? "",
+  ).trim();
 
   const requirement = await prisma.vendorRequirement.findUnique({
     where: { id: requirementId },
@@ -336,9 +339,17 @@ export async function convertRequirementToSubmission(
     return {
       error: `${candidate.fullName} has been archived — restore the candidate before converting.`,
     };
-  if (candidate.status === "NOT_INTERESTED" || candidate.status === "DO_NOT_CONTACT")
+
+  // Candidate-status soft block (warn + override) — parallels the direct-submit
+  // path. A Not-interested / Do-not-contact candidate can still be submitted
+  // with an explicit reason (captured on the audit trail).
+  const candidateBlocked =
+    candidate.status === "NOT_INTERESTED" ||
+    candidate.status === "DO_NOT_CONTACT";
+  if (candidateBlocked && !candidateStatusOverrideReason)
     return {
-      error: `${candidate.fullName} is marked "${CANDIDATE_STATUS_LABEL[candidate.status]}" — cannot convert.`,
+      needsConfirm: "candidate_status",
+      error: `${candidate.fullName} is marked "${CANDIDATE_STATUS_LABEL[candidate.status]}". Add a reason to submit anyway.`,
     };
 
   // Resolve a picked résumé up front (also drives the archived-résumé warn).
@@ -412,9 +423,10 @@ export async function convertRequirementToSubmission(
         pickedResume,
         duplicateReason,
         ilaborOverrideReason,
+        candidateStatusOverrideReason,
         job,
         candidateFullName: candidate.fullName,
-        actor: { id: user.id, fullName: user.fullName, isAdmin: user.role === "ADMIN" },
+        actor: { id: user.id, fullName: user.fullName, isAdmin: hasFullAccess(user) },
       });
       // A shared gate fired — abort so nothing partial is written.
       if (res.kind !== "created") throw new SubmitGate(res);

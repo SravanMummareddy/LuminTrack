@@ -63,7 +63,6 @@ export function listUsers() {
       email: true,
       role: true,
       isActive: true,
-      isTeamLead: true,
       createdAt: true,
     },
   });
@@ -87,6 +86,21 @@ export async function listActiveRecruiterOptions() {
     out.push({ id: r.id, fullName: r.fullName });
   }
   return out;
+}
+
+/** Team leads + managers as `{id, fullName}` for the "Team lead" picker on the
+ *  requirement + submission forms. Storing the picked name (not an id) keeps the
+ *  existing string column, but a dropdown of real users prevents the free-text
+ *  spelling drift that split one lead across several buckets. */
+export async function listTeamLeadOptions(): Promise<
+  { id: string; fullName: string }[]
+> {
+  const rows = await prisma.user.findMany({
+    where: { isActive: true, role: { in: ["MANAGER", "TEAM_LEAD"] } },
+    select: { id: true, fullName: true },
+    orderBy: { fullName: "asc" },
+  });
+  return rows.map((r) => ({ id: r.id, fullName: r.fullName }));
 }
 
 /** Distinct non-empty team labels across recruiters — powers the Monthly

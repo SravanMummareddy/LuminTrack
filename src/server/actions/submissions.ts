@@ -8,6 +8,7 @@ import type {
 } from "@/generated/prisma/enums";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/lib/session";
+import { hasFullAccess, canReattributeSubmission } from "@/lib/permissions";
 import { logActivity } from "@/server/activity";
 import {
   submissionSchema,
@@ -15,7 +16,7 @@ import {
   statusChangeSchema,
 } from "@/lib/validation/submission";
 import { toFieldErrors } from "@/lib/validation/common";
-import { SUBMISSION_STATUS_LABEL } from "@/lib/labels";
+import { SUBMISSION_STATUS_LABEL, CANDIDATE_STATUS_LABEL } from "@/lib/labels";
 import { rateChainWarnings } from "@/lib/rates";
 import type { FormState } from "@/lib/form-state";
 import {
@@ -69,7 +70,7 @@ export async function createSubmission(
     }),
     prisma.candidate.findUnique({
       where: { id: d.candidateId },
-      select: { id: true, fullName: true },
+      select: { id: true, fullName: true, status: true },
     }),
   ]);
   if (!job) return { error: "This job no longer exists." };
@@ -85,7 +86,7 @@ export async function createSubmission(
   // claim=1, which assigns the job to them (logged) in the same tx as the
   // submission. Without the claim flag we pause and prompt.
   const claim = String(formData.get("claim") ?? "") === "1";
-  const isAdmin = user.role === "ADMIN";
+  const isAdmin = hasFullAccess(user);
   if (!isAdmin) {
     const assignment = await prisma.jobAssignment.findFirst({
       where: { jobId: d.jobId, recruiterId: user.id },
@@ -115,6 +116,22 @@ export async function createSubmission(
       needsConfirm: "rate_chain",
       confirmData: { warnings: rateWarnings },
       error: "These rates break the rate chain. Add a reason to save anyway.",
+    };
+  }
+
+  // Candidate-status soft block (warn + override). Marking a candidate
+  // Not-interested / Do-not-contact shouldn't silently allow a submission, but
+  // the recruiter can proceed with a reason (matches the VPR-convert path).
+  const candidateStatusOverrideReason = String(
+    formData.get("candidateStatusOverrideReason") ?? "",
+  ).trim();
+  const candidateBlocked =
+    candidate.status === "NOT_INTERESTED" ||
+    candidate.status === "DO_NOT_CONTACT";
+  if (candidateBlocked && !candidateStatusOverrideReason) {
+    return {
+      needsConfirm: "candidate_status",
+      error: `${candidate.fullName} is marked "${CANDIDATE_STATUS_LABEL[candidate.status]}". Add a reason to submit anyway.`,
     };
   }
 
@@ -169,6 +186,7 @@ export async function createSubmission(
       duplicateReason,
       ilaborOverrideReason,
       rateOverrideReason,
+      candidateStatusOverrideReason,
       job,
       candidateFullName: candidate.fullName,
       actor: { id: user.id, fullName: user.fullName, isAdmin },
@@ -268,13 +286,18 @@ export async function updateSubmission(
   });
   if (!existing) return { error: "This submission no longer exists." };
 
-  // Admin-only re-attribution of "Submitted by". Recruiter scorecards key off
-  // submittedById, so a mis-set submitter previously had no correction path.
-  // Non-admins never reach this — the field is locked in their form.
-  const isAdmin = user.role === "ADMIN";
+  // Re-attribution of "Submitted by" is limited to full-access users
+  // (managers / team leads). Recruiter scorecards key off submittedById, so a
+  // mis-set submitter previously had no correction path. Recruiters never reach
+  // this — the field is locked in their form.
+  const canReattribute = canReattributeSubmission(user);
   let newSubmittedById: string | null = null;
   let newSubmitterName = "";
-  if (isAdmin && d.submittedById && d.submittedById !== existing.submittedById) {
+  if (
+    canReattribute &&
+    d.submittedById &&
+    d.submittedById !== existing.submittedById
+  ) {
     const target = await prisma.user.findUnique({
       where: { id: d.submittedById },
       select: { id: true, fullName: true },

@@ -28,7 +28,7 @@ const prisma = new PrismaClient({
 async function main() {
   // Pick an admin to attribute the synthetic Placement/activity rows to.
   const admin = await prisma.user.findFirst({
-    where: { role: "ADMIN", isActive: true },
+    where: { role: { in: ["MANAGER", "TEAM_LEAD"] }, isActive: true },
     select: { id: true },
     orderBy: { createdAt: "asc" },
   });

@@ -3,6 +3,8 @@ import { PageHeader } from "@/components/ui/page-header";
 import { JobForm, type JobFormValues } from "@/components/jobs/job-form";
 import { updateJob } from "@/server/actions/jobs";
 import { getJobForEdit } from "@/server/queries/jobs";
+import { getCurrentUser } from "@/lib/session";
+import { canEditJobRatesAndAssignment } from "@/lib/permissions";
 import {
   listClients,
   listVendors,
@@ -16,14 +18,16 @@ export default async function EditJobPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [job, clients, vendors, sources, recruiters] = await Promise.all([
+  const [job, clients, vendors, sources, recruiters, user] = await Promise.all([
     getJobForEdit(id),
     listClients(),
     listVendors(),
     listSisterCompanies(),
     listUsers(),
+    getCurrentUser(),
   ]);
   if (!job) notFound();
+  const canRates = canEditJobRatesAndAssignment(user);
 
   const toDateInput = (d: Date | null | undefined) =>
     d ? d.toISOString().slice(0, 10) : "";
@@ -69,6 +73,7 @@ export default async function EditJobPage({
           recruiters={recruiters}
           values={values}
           submitLabel="Save changes"
+          canManageRatesAndAssignment={canRates}
         />
       </div>
     </div>

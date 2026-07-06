@@ -25,7 +25,7 @@ try {
 async function seed() {
   const [admin, recruiter] = await Promise.all([
     testPrisma.user.create({
-      data: { fullName: "Admin", email: "admin@test.local", passwordHash: "x", role: "ADMIN" },
+      data: { fullName: "Admin", email: "admin@test.local", passwordHash: "x", role: "MANAGER" },
     }),
     testPrisma.user.create({
       data: { fullName: "Rec", email: "rec@test.local", passwordHash: "x", role: "RECRUITER" },

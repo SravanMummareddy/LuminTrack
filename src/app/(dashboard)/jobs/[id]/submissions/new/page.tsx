@@ -8,7 +8,7 @@ import { getJobSummary } from "@/server/queries/jobs";
 import { getJobSubmittedCandidateIds } from "@/server/queries/submissions";
 import { listCandidateOptions } from "@/server/queries/candidates";
 import { getOpenRequirementPrefill } from "@/server/queries/requirements";
-import { listUsers } from "@/server/queries/org";
+import { listUsers, listTeamLeadOptions } from "@/server/queries/org";
 import { formatVendorRequirementDisplayId } from "@/lib/format";
 import { requireUser } from "@/lib/session";
 
@@ -18,7 +18,7 @@ export default async function NewSubmissionPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [job, candidates, recruiters, submittedIds, user, reqPrefill] =
+  const [job, candidates, recruiters, submittedIds, user, reqPrefill, teamLeads] =
     await Promise.all([
       getJobSummary(id),
       listCandidateOptions(),
@@ -26,6 +26,7 @@ export default async function NewSubmissionPage({
       getJobSubmittedCandidateIds(id),
       requireUser(),
       getOpenRequirementPrefill(id),
+      listTeamLeadOptions(),
     ]);
   if (!job) notFound();
 
@@ -78,6 +79,7 @@ export default async function NewSubmissionPage({
             candidates={candidateOptions}
             recruiters={recruiters}
             defaultRecruiterId={user.id}
+            teamLeads={teamLeads}
             prefill={
               reqPrefill
                 ? {

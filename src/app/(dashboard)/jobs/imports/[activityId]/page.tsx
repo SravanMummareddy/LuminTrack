@@ -6,6 +6,7 @@ import { Forbidden } from "@/components/ui/forbidden";
 import { Table, Th, Td } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { requireUser } from "@/lib/session";
+import { hasFullAccess } from "@/lib/permissions";
 import { prisma } from "@/server/db";
 import { formatDateTime } from "@/lib/format";
 
@@ -31,7 +32,7 @@ export default async function ImportRunDetailPage({
   params: Promise<{ activityId: string }>;
 }) {
   const user = await requireUser();
-  if (user.role !== "ADMIN") return <Forbidden />;
+  if (!hasFullAccess(user)) return <Forbidden />;
 
   const { activityId } = await params;
 

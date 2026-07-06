@@ -3,6 +3,7 @@ import { Plus, Download, History } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { LinkButton } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/session";
+import { hasFullAccess } from "@/lib/permissions";
 import { Pagination } from "@/components/ui/pagination";
 import { JobFilters } from "@/components/jobs/job-filters";
 import { JobsTable } from "@/components/jobs/jobs-table";
@@ -116,7 +117,7 @@ export default async function JobsPage({
 
   const showLastImportBanner =
     activeSource === "randstad" &&
-    currentUser?.role === "ADMIN" &&
+    hasFullAccess(currentUser) &&
     lastImport !== null;
 
   let bannerCounts: { createdCount: number; updatedCount: number } | null = null;
@@ -152,7 +153,7 @@ export default async function JobsPage({
   return (
     <div className="space-y-5">
       <PageHeader title="Jobs" description="All job requirements and their pipelines.">
-        {currentUser?.role === "ADMIN" ? (
+        {hasFullAccess(currentUser) ? (
           <>
             <LinkButton href="/jobs/imports" variant="secondary">
               <History className="h-4 w-4" />
@@ -224,7 +225,7 @@ export default async function JobsPage({
           <JobsTable
             rows={jobs}
             pageOffset={(page - 1) * PAGE_SIZE}
-            canEditRecruiters={currentUser?.role === "ADMIN"}
+            canEditRecruiters={hasFullAccess(currentUser)}
             allRecruiters={activeRecruiters}
           />
           <Pagination page={page} totalPages={totalPages} total={total} />

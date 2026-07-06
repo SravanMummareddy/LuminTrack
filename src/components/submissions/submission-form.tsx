@@ -6,6 +6,7 @@ import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { Button, buttonClass } from "@/components/ui/button";
 import { RateChainWarning } from "@/components/ui/rate-chain-warning";
 import { uploadCandidateResume } from "@/server/actions/resumes";
+import { fetchSubmissionPrefill } from "@/server/actions/submission-prefill";
 import { RESUME_ACCEPT, resumeFileError } from "@/lib/validation/resume";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 import {
@@ -85,6 +86,7 @@ export function SubmissionForm({
   jobOptions = [],
   candidates = [],
   recruiters,
+  teamLeads = [],
   defaultRecruiterId,
   cancelHref,
   requirementId,
@@ -101,6 +103,8 @@ export function SubmissionForm({
   /** Candidate picker options — used when mode is "job-locked" or "open". */
   candidates?: CandidateOption[];
   recruiters: Recruiter[];
+  /** Team-lead / manager users for the "Team lead" picker (stores the name). */
+  teamLeads?: { id: string; fullName: string }[];
   defaultRecruiterId: string;
   cancelHref: string;
   /**
@@ -184,6 +188,7 @@ export function SubmissionForm({
   const [uploadLabel, setUploadLabel] = useState("");
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadPending, startUpload] = useTransition();
+  const [, startPrefill] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const resetUpload = () => {
@@ -250,6 +255,23 @@ export function SubmissionForm({
       ...f,
       jobId: nextJobId,
     }));
+    // Prefill the commercial terms from the job's OPEN vendor requirement, so
+    // the open / candidate-locked entry points behave like the job page + the
+    // convert flow (rates flow down instead of being re-typed).
+    if (!nextJobId) return;
+    startPrefill(async () => {
+      const p = await fetchSubmissionPrefill(nextJobId);
+      if (!p) return;
+      setFields((f) => ({
+        ...f,
+        payRate: p.payRate,
+        billRate: p.billRate,
+        clientRate: p.clientRate,
+        engagement: p.engagement,
+        vendorRecruiterName: p.vendorRecruiterName,
+        teamLead: p.teamLead,
+      }));
+    });
   };
 
   const errors = state.fieldErrors ?? {};
@@ -279,7 +301,86 @@ export function SubmissionForm({
     isGate &&
     !isConvertGate &&
     gate !== "not_assigned" &&
-    gate !== "rate_chain";
+    gate !== "rate_chain" &&
+    gate !== "candidate_status";
+
+  // The commercial-terms block (engagement, vendor recruiter, rates, team lead,
+  // job duties). In convert mode these are already prefilled from the VPR, so we
+  // show a read-only summary and tuck the editable fields behind "Edit terms";
+  // in the other modes they render inline. The inputs are always mounted (even
+  // inside a collapsed <details>), so they always post.
+  const money = (v: string) => (v && v.trim() !== "" ? `$${v}` : "—");
+  const engagementLabel = fields.engagement
+    ? BENCH_ENGAGEMENT_LABEL[
+        fields.engagement as keyof typeof BENCH_ENGAGEMENT_LABEL
+      ]
+    : "—";
+  // Team-lead picker options. Keep the currently-saved value even if it isn't a
+  // current lead (e.g. a legacy free-text name) so the selection never drops.
+  const teamLeadNames = teamLeads.map((t) => t.fullName);
+  const teamLeadChoices =
+    fields.teamLead && !teamLeadNames.includes(fields.teamLead)
+      ? [fields.teamLead, ...teamLeadNames]
+      : teamLeadNames;
+  const commercialTermsFields = (
+    <>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="Engagement" htmlFor="engagement" error={errors.engagement} hint="Bench/W2 — for bench-sales submissions.">
+          <Select
+            id="engagement"
+            name="engagement"
+            value={fields.engagement}
+            onChange={set("engagement")}
+          >
+            <option value="">—</option>
+            {BENCH_ENGAGEMENTS.map((e) => (
+              <option key={e} value={e}>{BENCH_ENGAGEMENT_LABEL[e]}</option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Vendor recruiter name" htmlFor="vendorRecruiterName" error={errors.vendorRecruiterName}>
+          <Input
+            id="vendorRecruiterName"
+            name="vendorRecruiterName"
+            value={fields.vendorRecruiterName}
+            onChange={set("vendorRecruiterName")}
+          />
+        </Field>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Field label="Pay rate" htmlFor="payRate" error={errors.payRate} hint="$/hr we pay the consultant.">
+          <Input id="payRate" name="payRate" type="number" min="0" step="0.01" inputMode="decimal" value={fields.payRate} onChange={set("payRate")} />
+        </Field>
+        <Field label="Bill rate" htmlFor="billRate" error={errors.billRate} hint="$/hr the vendor releases to us.">
+          <Input id="billRate" name="billRate" type="number" min="0" step="0.01" inputMode="decimal" value={fields.billRate} onChange={set("billRate")} />
+        </Field>
+        <Field label="Client rate" htmlFor="clientRate" error={errors.clientRate} hint="$/hr the end client releases (optional).">
+          <Input id="clientRate" name="clientRate" type="number" min="0" step="0.01" inputMode="decimal" value={fields.clientRate} onChange={set("clientRate")} />
+        </Field>
+        <Field label="Team lead" htmlFor="teamLead" error={errors.teamLead}>
+          <Select id="teamLead" name="teamLead" value={fields.teamLead} onChange={set("teamLead")}>
+            <option value="">—</option>
+            {teamLeadChoices.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </Select>
+        </Field>
+      </div>
+
+      <RateChainWarning rates={fields} />
+
+      <Field label="Job duties" htmlFor="jobDuties" error={errors.jobDuties}>
+        <Textarea
+          id="jobDuties"
+          name="jobDuties"
+          rows={3}
+          value={fields.jobDuties}
+          onChange={set("jobDuties")}
+        />
+      </Field>
+    </>
+  );
 
   return (
     <form action={formAction} className="space-y-5">
@@ -489,56 +590,51 @@ export function SubmissionForm({
           ))}
       </Field>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Engagement" htmlFor="engagement" error={errors.engagement} hint="Bench/W2 — for bench-sales submissions.">
-          <Select
-            id="engagement"
-            name="engagement"
-            value={fields.engagement}
-            onChange={set("engagement")}
-          >
-            <option value="">—</option>
-            {BENCH_ENGAGEMENTS.map((e) => (
-              <option key={e} value={e}>{BENCH_ENGAGEMENT_LABEL[e]}</option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Vendor recruiter name" htmlFor="vendorRecruiterName" error={errors.vendorRecruiterName}>
-          <Input
-            id="vendorRecruiterName"
-            name="vendorRecruiterName"
-            value={fields.vendorRecruiterName}
-            onChange={set("vendorRecruiterName")}
-          />
-        </Field>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Field label="Pay rate" htmlFor="payRate" error={errors.payRate} hint="$/hr we pay the consultant.">
-          <Input id="payRate" name="payRate" type="number" min="0" step="0.01" inputMode="decimal" value={fields.payRate} onChange={set("payRate")} />
-        </Field>
-        <Field label="Bill rate" htmlFor="billRate" error={errors.billRate} hint="$/hr the vendor releases to us.">
-          <Input id="billRate" name="billRate" type="number" min="0" step="0.01" inputMode="decimal" value={fields.billRate} onChange={set("billRate")} />
-        </Field>
-        <Field label="Client rate" htmlFor="clientRate" error={errors.clientRate} hint="$/hr the end client releases (optional).">
-          <Input id="clientRate" name="clientRate" type="number" min="0" step="0.01" inputMode="decimal" value={fields.clientRate} onChange={set("clientRate")} />
-        </Field>
-        <Field label="Team lead" htmlFor="teamLead" error={errors.teamLead}>
-          <Input id="teamLead" name="teamLead" value={fields.teamLead} onChange={set("teamLead")} />
-        </Field>
-      </div>
-
-      <RateChainWarning rates={fields} />
-
-      <Field label="Job duties" htmlFor="jobDuties" error={errors.jobDuties}>
-        <Textarea
-          id="jobDuties"
-          name="jobDuties"
-          rows={3}
-          value={fields.jobDuties}
-          onChange={set("jobDuties")}
-        />
-      </Field>
+      {isConvert ? (
+        <div className="space-y-2">
+          <div className="rounded-md border border-slate-200 bg-slate-50/60 p-3">
+            <p className="text-xs font-medium text-slate-500">
+              Commercial terms — carried from the requirement
+            </p>
+            <dl className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-3">
+              <div>
+                <dt className="text-xs text-slate-500">Pay rate</dt>
+                <dd className="font-medium text-slate-800">{money(fields.payRate)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-500">Bill rate</dt>
+                <dd className="font-medium text-slate-800">{money(fields.billRate)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-500">Client rate</dt>
+                <dd className="font-medium text-slate-800">{money(fields.clientRate)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-500">Engagement</dt>
+                <dd className="font-medium text-slate-800">{engagementLabel}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-500">Team lead</dt>
+                <dd className="font-medium text-slate-800">{fields.teamLead || "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-500">Vendor recruiter</dt>
+                <dd className="font-medium text-slate-800">
+                  {fields.vendorRecruiterName || "—"}
+                </dd>
+              </div>
+            </dl>
+          </div>
+          <details className="rounded-md border border-slate-200 px-3 py-2">
+            <summary className="cursor-pointer text-sm font-medium text-indigo-600">
+              Edit terms
+            </summary>
+            <div className="mt-3 space-y-4">{commercialTermsFields}</div>
+          </details>
+        </div>
+      ) : (
+        commercialTermsFields
+      )}
 
       <Field
         label="Submission notes"
@@ -586,6 +682,33 @@ export function SubmissionForm({
           />
           <Field
             label="Reason for saving anyway"
+            htmlFor="overrideNote"
+            required
+            hint="Captured on the submission's audit trail."
+          >
+            <Textarea
+              id="overrideNote"
+              rows={2}
+              value={fields.overrideNote}
+              onChange={set("overrideNote")}
+            />
+          </Field>
+        </div>
+      )}
+
+      {/* Candidate-status soft block (Not-interested / Do-not-contact): a
+          free-text reason to submit anyway. Fires on both the direct-submit and
+          the VPR-convert paths. */}
+      {gate === "candidate_status" && (
+        <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3">
+          <p className="text-sm font-medium text-amber-800">{state.error}</p>
+          <input
+            type="hidden"
+            name="candidateStatusOverrideReason"
+            value={fields.overrideNote}
+          />
+          <Field
+            label="Reason for submitting anyway"
             htmlFor="overrideNote"
             required
             hint="Captured on the submission's audit trail."

@@ -154,9 +154,14 @@ export async function getMyWork(userId: string) {
       },
     }),
     // OPEN vendor requirements assigned to this recruiter — planning records
-    // waiting to be moved to a submission.
+    // waiting to be moved to a submission. Only surface ones whose job is still
+    // accepting, so the card never points the recruiter at a convert dead-end.
     prisma.vendorRequirement.findMany({
-      where: { recruiterId: userId, status: "OPEN" },
+      where: {
+        recruiterId: userId,
+        status: "OPEN",
+        job: { status: { notIn: ["CLOSED", "FILLED", "CANCELLED"] } },
+      },
       orderBy: { createdAt: "asc" },
       take: 10,
       select: {

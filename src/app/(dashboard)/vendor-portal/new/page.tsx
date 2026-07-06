@@ -6,7 +6,7 @@ import { RequirementForm } from "@/components/vendor-portal/requirement-form";
 import { createVendorRequirement } from "@/server/actions/requirements";
 import { listCandidateOptions } from "@/server/queries/candidates";
 import { listJobOptions } from "@/server/queries/jobs";
-import { listUsers } from "@/server/queries/org";
+import { listUsers, listTeamLeadOptions } from "@/server/queries/org";
 import { prisma } from "@/server/db";
 import { getCurrentUser } from "@/lib/session";
 import { canManageRequirements } from "@/lib/permissions";
@@ -85,7 +85,7 @@ export default async function NewRequirementPage({
   }
 
   // Step 2 — job chosen: the requirement form.
-  const [job, candidates, recruiters] = await Promise.all([
+  const [job, candidates, recruiters, teamLeads] = await Promise.all([
     prisma.job.findUnique({
       where: { id: jobId },
       select: {
@@ -95,11 +95,13 @@ export default async function NewRequirementPage({
         portalRefId: true,
         location: true,
         clientRate: true,
+        vendorRate: true,
         client: { select: { name: true } },
       },
     }),
     listCandidateOptions(),
     listUsers(),
+    listTeamLeadOptions(),
   ]);
   if (!job) redirect("/vendor-portal/new");
 
@@ -133,11 +135,15 @@ export default async function NewRequirementPage({
             fullName: r.fullName,
             isActive: r.isActive,
           }))}
+          teamLeads={teamLeads}
           defaults={{
             location: job.location ?? "",
             // Carry the job's Client rate into the requirement (editable) so it
             // isn't re-typed by hand — the rate chain starts on the Job.
             clientRate: job.clientRate != null ? String(job.clientRate) : "",
+            // The job's Vendor rate is the job-level bill rate — seed the
+            // requirement's Bill rate from it (editable per-candidate).
+            billRate: job.vendorRate != null ? String(job.vendorRate) : "",
           }}
           cancelHref="/vendor-portal"
         />

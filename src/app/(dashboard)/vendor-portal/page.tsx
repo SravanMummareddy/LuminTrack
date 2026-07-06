@@ -87,7 +87,7 @@ export default async function VendorPortalPage({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <PageHeader
           title="Vendor Portal Requirements"
-          description="Planned vendor requirements — commercial terms decided up front, then moved to a submission."
+          description="Your team's planning records — commercial terms decided up front, then moved to a submission. (Separate from imported iLabor requisitions, which live under Jobs.)"
         />
         {canManage && (
           <Link href="/vendor-portal/new" className={buttonClass("primary")}>

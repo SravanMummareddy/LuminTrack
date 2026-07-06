@@ -7,7 +7,7 @@ import { convertRequirementToSubmission } from "@/server/actions/requirements";
 import { getVendorRequirement } from "@/server/queries/requirements";
 import { getJobSubmittedCandidateIds } from "@/server/queries/submissions";
 import { listCandidateOptions } from "@/server/queries/candidates";
-import { listUsers } from "@/server/queries/org";
+import { listUsers, listTeamLeadOptions } from "@/server/queries/org";
 import { requireUser } from "@/lib/session";
 import { formatVendorRequirementDisplayId } from "@/lib/format";
 
@@ -26,10 +26,11 @@ export default async function ConvertRequirementPage({
   if (!requirement) notFound();
   if (requirement.status !== "OPEN") redirect(`/vendor-portal/${id}`);
 
-  const [candidates, recruiters, submittedIds] = await Promise.all([
+  const [candidates, recruiters, submittedIds, teamLeads] = await Promise.all([
     listCandidateOptions(),
     listUsers(),
     getJobSubmittedCandidateIds(requirement.job.id),
+    listTeamLeadOptions(),
   ]);
 
   const submitted = new Set(submittedIds);
@@ -65,6 +66,7 @@ export default async function ConvertRequirementPage({
           job={{ id: requirement.job.id, title: requirement.job.title }}
           candidates={candidateOptions}
           recruiters={recruiters}
+          teamLeads={teamLeads}
           defaultRecruiterId={requirement.recruiterId ?? user.id}
           requirementId={requirement.id}
           prefill={{

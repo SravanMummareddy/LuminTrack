@@ -58,6 +58,7 @@ export function RequirementForm({
   job,
   candidates,
   recruiters,
+  teamLeads = [],
   defaults,
   cancelHref,
 }: {
@@ -74,6 +75,8 @@ export function RequirementForm({
   };
   candidates: CandidateOption[];
   recruiters: Recruiter[];
+  /** Team-lead / manager users for the "Team lead" picker (stores the name). */
+  teamLeads?: { id: string; fullName: string }[];
   defaults?: Partial<Fields>;
   cancelHref: string;
 }) {
@@ -101,6 +104,12 @@ export function RequirementForm({
       setFields((f) => ({ ...f, [name]: e.target.value }));
 
   const errors = state.fieldErrors ?? {};
+  // Team-lead picker — keep the saved value even if it's not a current lead.
+  const teamLeadNames = teamLeads.map((t) => t.fullName);
+  const teamLeadChoices =
+    fields.teamLead && !teamLeadNames.includes(fields.teamLead)
+      ? [fields.teamLead, ...teamLeadNames]
+      : teamLeadNames;
 
   return (
     <form action={formAction} className="space-y-5">
@@ -259,12 +268,17 @@ export function RequirementForm({
           error={errors.teamLead}
           hint="Leave blank to auto-fill from the recruiter's team lead."
         >
-          <Input
+          <Select
             id="teamLead"
             name="teamLead"
             value={fields.teamLead}
             onChange={set("teamLead")}
-          />
+          >
+            <option value="">—</option>
+            {teamLeadChoices.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </Select>
         </Field>
       </div>
 

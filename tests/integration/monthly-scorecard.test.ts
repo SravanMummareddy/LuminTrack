@@ -41,7 +41,7 @@ const JUNE = { year: 2026, monthIndex: 5 }; // June 2026 â€” Jun 1 is a Monday â
  */
 async function seedScorecard() {
   const admin = await testPrisma.user.create({
-    data: { fullName: "Admin", email: "admin@s.local", passwordHash: "x", role: "ADMIN" },
+    data: { fullName: "Admin", email: "admin@s.local", passwordHash: "x", role: "MANAGER" },
   });
   const recA = await testPrisma.user.create({
     data: { fullName: "Rec A", email: "a@s.local", passwordHash: "x", role: "RECRUITER", empId: "EMP-101", teamLabel: "Alpha" },

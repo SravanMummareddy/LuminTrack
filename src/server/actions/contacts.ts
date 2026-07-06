@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/lib/session";
+import { canManageOrgEntities } from "@/lib/permissions";
 import { toFieldErrors } from "@/lib/validation/common";
 import type { FormState } from "@/lib/form-state";
 import { CONTACT_KINDS, type ContactKind } from "@/lib/contact-kinds";
@@ -39,8 +40,8 @@ const contactSchema = z.object({
 
 async function requireAdmin(): Promise<FormState | { ok: true }> {
   const actor = await requireUser();
-  if (actor.role !== "ADMIN")
-    return { error: "Only admins can manage contacts." };
+  if (!canManageOrgEntities(actor))
+    return { error: "Only managers and team leads can manage contacts." };
   return { ok: true };
 }
 

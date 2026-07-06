@@ -13,7 +13,8 @@ datasource db {
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
 enum UserRole {
-  ADMIN
+  MANAGER
+  TEAM_LEAD
   RECRUITER
 }
 
@@ -216,11 +217,6 @@ model User {
   // Free-text team label (e.g. "USEI-Sales IT") used to group the scorecard.
   // v1 placeholder — normalize to a Team model later.
   teamLabel    String?
-  // Team-lead capability flag. A lead is a RECRUITER in every existing role
-  // check (assignment gate, scorecard, listings) EXCEPT it can manage Vendor
-  // Portal Requirements (canManageRequirements). Cheaper than a 3rd role, which
-  // would ripple through every `role ===` branch.
-  isTeamLead   Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

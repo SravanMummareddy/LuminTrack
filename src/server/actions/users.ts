@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma, isUniqueConstraintError } from "@/server/db";
 import { requireUser } from "@/lib/session";
 import { hashPassword } from "@/lib/password";
+import { canManageUsers, hasFullAccess } from "@/lib/permissions";
 import { userCreateSchema, userUpdateSchema } from "@/lib/validation/user";
 import { toFieldErrors } from "@/lib/validation/common";
 import type { FormState } from "@/lib/form-state";
@@ -13,8 +14,8 @@ export async function saveUser(
   formData: FormData,
 ): Promise<FormState> {
   const actor = await requireUser();
-  if (actor.role !== "ADMIN")
-    return { error: "Only administrators can manage users." };
+  if (!canManageUsers(actor))
+    return { error: "Only managers and team leads can manage users." };
 
   const id = String(formData.get("id") ?? "").trim();
   const raw = {
@@ -22,7 +23,6 @@ export async function saveUser(
     email: formData.get("email") ?? "",
     role: formData.get("role") ?? "RECRUITER",
     isActive: formData.get("isActive") != null,
-    isTeamLead: formData.get("isTeamLead") != null,
     password: formData.get("password") ?? "",
   };
   const parsed = id
@@ -30,12 +30,32 @@ export async function saveUser(
     : userCreateSchema.safeParse(raw);
   if (!parsed.success) return { fieldErrors: toFieldErrors(parsed.error) };
 
-  // An admin must not be able to lock themselves out of the app.
+  // Governance: only a Manager may grant the Manager role or edit an existing
+  // Manager's account. Team leads can manage recruiters and team leads (and
+  // grant the Team Lead role) but cannot escalate anyone — including
+  // themselves — to Manager.
+  const actorIsManager = actor.role === "MANAGER";
+  if (!actorIsManager) {
+    if (parsed.data.role === "MANAGER")
+      return { error: "Only managers can grant the Manager role." };
+    if (id) {
+      const target = await prisma.user.findUnique({
+        where: { id },
+        select: { role: true },
+      });
+      if (target?.role === "MANAGER")
+        return { error: "Only managers can edit a manager's account." };
+    }
+  }
+
+  // A full-access user must not be able to lock themselves out of the app.
   if (id && id === actor.id) {
     if (!parsed.data.isActive)
       return { error: "You cannot deactivate your own account." };
-    if (parsed.data.role !== "ADMIN")
-      return { error: "You cannot remove your own admin role." };
+    if (!hasFullAccess({ role: parsed.data.role }))
+      return {
+        error: "You cannot remove your own manager/team-lead role.",
+      };
   }
 
   const fields = {
@@ -43,7 +63,6 @@ export async function saveUser(
     email: parsed.data.email.toLowerCase(),
     role: parsed.data.role,
     isActive: parsed.data.isActive,
-    isTeamLead: parsed.data.isTeamLead,
   };
 
   try {

@@ -18,6 +18,10 @@ export type ConfirmKind =
   // Soft block on save when the rate chain is broken (pay>bill, bill/pay>client).
   // Overridable with a free-text `rateOverrideReason`.
   | "rate_chain"
+  // Soft block when the candidate is marked Not-interested / Do-not-contact.
+  // Overridable with a free-text `candidateStatusOverrideReason` (both the
+  // direct-submit and VPR-convert paths).
+  | "candidate_status"
   | true;
 
 /** Extra context for a paused gate, surfaced in the confirm prompt. */

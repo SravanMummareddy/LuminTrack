@@ -1,4 +1,5 @@
 import { getCurrentUser } from "@/lib/session";
+import { hasFullAccess } from "@/lib/permissions";
 import { prisma } from "@/server/db";
 import { logActivity } from "@/server/activity";
 
@@ -39,7 +40,7 @@ export async function GET(
 ): Promise<Response> {
   const user = await getCurrentUser();
   if (!user) return new Response("Unauthorized", { status: 401 });
-  if (user.role !== "ADMIN") return new Response("Forbidden", { status: 403 });
+  if (!hasFullAccess(user)) return new Response("Forbidden", { status: 403 });
 
   const { id } = await context.params;
   const url = new URL(req.url);
