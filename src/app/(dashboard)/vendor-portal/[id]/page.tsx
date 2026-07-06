@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Pencil, Send, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Pencil, Send, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
 import { ConfirmSubmit } from "@/components/ui/confirm-dialog";
@@ -8,14 +8,20 @@ import { ActivityTimeline } from "@/components/timeline/activity-timeline";
 import {
   getVendorRequirement,
 } from "@/server/queries/requirements";
-import { cancelVendorRequirement } from "@/server/actions/requirements";
+import {
+  cancelVendorRequirement,
+  closeVendorRequirement,
+} from "@/server/actions/requirements";
 import { getTimelineFor } from "@/server/queries/timeline";
 import {
   REQUIREMENT_STATUS_LABEL,
   REQUIREMENT_STATUS_TONE,
   BENCH_ENGAGEMENT_LABEL,
+  SUBMISSION_STATUS_LABEL,
+  SUBMISSION_STATUS_TONE,
 } from "@/lib/labels";
 import {
+  formatDate,
   formatRate,
   formatVendorRequirementDisplayId,
   formatSubmissionDisplayId,
@@ -71,7 +77,7 @@ export default async function RequirementDetailPage({
 
   const canManage = canManageRequirements(user ?? undefined);
   const isOpen = requirement.status === "OPEN";
-  const canConvert = isOpen && requirement.candidate != null;
+  const submissions = requirement.submissions;
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
@@ -106,13 +112,13 @@ export default async function RequirementDetailPage({
           <Badge tone={REQUIREMENT_STATUS_TONE[requirement.status]}>
             {REQUIREMENT_STATUS_LABEL[requirement.status]}
           </Badge>
-          {canConvert && (
+          {isOpen && (
             <Link
               href={`/vendor-portal/${requirement.id}/convert`}
               className={buttonClass("primary", "sm")}
             >
               <Send className="h-4 w-4" />
-              Move to submission
+              Submit a candidate
             </Link>
           )}
           {isOpen && canManage && (
@@ -124,6 +130,20 @@ export default async function RequirementDetailPage({
                 <Pencil className="h-4 w-4" />
                 Edit
               </Link>
+              <ConfirmSubmit
+                action={closeVendorRequirement}
+                fields={{ id: requirement.id }}
+                title="Close this requirement?"
+                description="It will be marked closed and stop accepting new submissions. The submissions already made against it are kept."
+                confirmLabel="Close requirement"
+                trigger={
+                  <span className="inline-flex items-center gap-1.5">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Close
+                  </span>
+                }
+                triggerClassName={buttonClass("secondary", "sm")}
+              />
               <ConfirmSubmit
                 action={cancelVendorRequirement}
                 fields={{ id: requirement.id }}
@@ -143,18 +163,42 @@ export default async function RequirementDetailPage({
         </div>
       </header>
 
-      {requirement.status === "CONVERTED" && requirement.convertedSubmission && (
-        <section className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-          Moved to submission{" "}
-          <Link
-            href={`/submissions/${requirement.convertedSubmission.id}`}
-            className="font-medium text-blue-700 underline"
-          >
-            {formatSubmissionDisplayId(requirement.convertedSubmission)}
-          </Link>
-          {requirement.convertedBy ? ` by ${requirement.convertedBy.fullName}` : ""}.
-        </section>
-      )}
+      <Card title={`Submissions (${submissions.length})`}>
+        {submissions.length === 0 ? (
+          <p className="text-sm text-slate-500">
+            No candidates submitted against this requirement yet.
+            {isOpen ? ' Use "Submit a candidate" above to add one.' : ""}
+          </p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {submissions.map((s) => (
+              <li
+                key={s.id}
+                className="flex flex-wrap items-center justify-between gap-2 py-2 first:pt-0 last:pb-0"
+              >
+                <div className="min-w-0">
+                  <Link
+                    href={`/submissions/${s.id}`}
+                    className="font-medium text-indigo-600 hover:underline"
+                  >
+                    {s.candidate?.fullName ?? "—"}
+                  </Link>
+                  <span className="ml-2 font-mono text-xs text-slate-400">
+                    {formatSubmissionDisplayId(s)}
+                  </span>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {s.submittedBy?.fullName ?? "—"}
+                    {s.submittedAt ? ` · ${formatDate(s.submittedAt)}` : ""}
+                  </p>
+                </div>
+                <Badge tone={SUBMISSION_STATUS_TONE[s.status]}>
+                  {SUBMISSION_STATUS_LABEL[s.status]}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
 
       <Card title="Requirement">
         <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -210,20 +254,6 @@ export default async function RequirementDetailPage({
             </SummaryItem>
             <SummaryItem label="Phone">
               {requirement.candidate.phone ?? "—"}
-            </SummaryItem>
-            <SummaryItem label="Résumé">
-              {requirement.resumeDriveLink ? (
-                <a
-                  href={requirement.resumeDriveLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-indigo-600 hover:underline"
-                >
-                  View résumé
-                </a>
-              ) : (
-                "—"
-              )}
             </SummaryItem>
           </dl>
         ) : (

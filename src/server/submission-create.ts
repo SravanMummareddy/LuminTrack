@@ -57,10 +57,9 @@ export type SubmissionRecordInput = {
   billRate: number | null;
   clientRate: number | null;
   teamLead: string | null;
-  /** A pre-resolved library résumé to reuse… */
-  pickedResume: { id: string; driveLink: string } | null;
-  /** …or a brand-new one to create + snapshot (mutually exclusive). */
-  newResume: { label: string; link: string } | null;
+  /** A pre-resolved library résumé to reuse — its uploaded blob URL is snapshot
+   *  onto the submission. */
+  pickedResume: { id: string; blobUrl: string | null } | null;
   /** Override reasons — empty string means "not provided" (gate still blocks). */
   duplicateReason: string;
   ilaborOverrideReason: string;
@@ -157,29 +156,13 @@ export async function createSubmissionRecord(
     }
   }
 
-  // Settle the résumé: an existing library entry, a new one, or none.
+  // Settle the résumé: an existing library entry or none. Snapshot its blob URL
+  // so the submission's record survives the library row being edited/archived.
   let candidateResumeId: string | null = null;
-  let resumeSnapshot: string | null = null;
+  let blobSnapshot: string | null = null;
   if (input.pickedResume) {
     candidateResumeId = input.pickedResume.id;
-    resumeSnapshot = input.pickedResume.driveLink;
-  } else if (input.newResume) {
-    const newResume = await tx.candidateResume.create({
-      data: {
-        candidateId: input.candidateId,
-        label: input.newResume.label,
-        driveLink: input.newResume.link,
-      },
-    });
-    candidateResumeId = newResume.id;
-    resumeSnapshot = newResume.driveLink;
-    await logActivity(tx, {
-      entityType: "CANDIDATE",
-      action: "RESUME_UPDATED",
-      description: `Resume "${newResume.label}" added`,
-      performedById: input.actor.id,
-      candidateId: input.candidateId,
-    });
+    blobSnapshot = input.pickedResume.blobUrl;
   }
 
   const created = await tx.submission.create({
@@ -189,8 +172,8 @@ export async function createSubmissionRecord(
       submittedById: input.submittedById,
       candidateRate: input.candidateRate ?? null,
       candidateResumeId,
-      // Snapshot the link used so it survives résumé edits/deletes.
-      resumeDriveLink: resumeSnapshot,
+      // Snapshot the résumé's blob URL so it survives library edits/deletes.
+      resumeBlobUrl: blobSnapshot,
       submissionNotes: input.submissionNotes ?? null,
       duplicateReason: existing ? input.duplicateReason : null,
       engagement: input.engagement ?? null,

@@ -259,7 +259,7 @@ export function listCandidateOptions() {
       resumes: {
         where: { isActive: true },
         orderBy: { createdAt: "asc" },
-        select: { id: true, label: true, driveLink: true },
+        select: { id: true, label: true },
       },
     },
   });

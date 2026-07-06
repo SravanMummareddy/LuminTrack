@@ -5,8 +5,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -93,42 +91,6 @@ export function BarChartCard({
             ))}
           </Bar>
         </BarChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-/** Donut chart — the page renders its own legend with counts alongside it. */
-export function DonutChartCard({
-  data,
-  height = 220,
-}: {
-  data: ChartDatum[];
-  height?: number;
-}) {
-  if (allZero(data)) return <EmptyChart height={height} />;
-  const visible = data.filter((d) => d.value > 0);
-
-  return (
-    <div style={{ width: "100%", height, minWidth: 0 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-            data={visible}
-            dataKey="value"
-            nameKey="label"
-            cx="50%"
-            cy="50%"
-            innerRadius={52}
-            outerRadius={88}
-            paddingAngle={2}
-          >
-            {visible.map((d, i) => (
-              <Cell key={i} fill={d.color ?? DEFAULT_COLOR} />
-            ))}
-          </Pie>
-          <Tooltip contentStyle={tooltipStyle} />
-        </PieChart>
       </ResponsiveContainer>
     </div>
   );

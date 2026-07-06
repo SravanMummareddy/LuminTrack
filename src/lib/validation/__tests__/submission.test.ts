@@ -41,22 +41,13 @@ describe("submissionSchema — résumé choice cross-field rules", () => {
     ).toBe(true);
   });
 
-  it("'new' requires both a label and a valid Drive link", () => {
+  it("'existing' requires a candidateResumeId", () => {
     expect(
       submissionSchema.safeParse({
         ...baseCreate,
-        resumeChoice: "new",
-        newResumeLabel: "Resume v2",
+        resumeChoice: "existing",
       }).success,
-    ).toBe(false); // missing link
-    expect(
-      submissionSchema.safeParse({
-        ...baseCreate,
-        resumeChoice: "new",
-        newResumeLabel: "Resume v2",
-        newResumeLink: "https://drive.google.com/file/d/abc",
-      }).success,
-    ).toBe(true);
+    ).toBe(false); // missing candidateResumeId
   });
 
   it("an unknown resumeChoice falls back to 'none' (never throws)", () => {

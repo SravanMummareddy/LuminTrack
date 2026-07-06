@@ -1,13 +1,11 @@
 import { prisma } from "@/server/db";
 import {
-  AGING_BUCKETS,
-  agingBucket,
   buildJobWhere,
   buildSubmissionWhere,
   daysSince,
   type AnalyticsFilters,
 } from "@/lib/analytics";
-import { JOB_STATUSES, SUBMISSION_STATUSES, jobSourceLabel } from "@/lib/labels";
+import { SUBMISSION_STATUSES } from "@/lib/labels";
 import type { JobStatus, SubmissionStatus } from "@/generated/prisma/enums";
 
 /**
@@ -21,9 +19,6 @@ export async function getDashboardData(filters: AnalyticsFilters) {
       where: buildJobWhere(filters),
       select: {
         status: true,
-        createdAt: true,
-        sisterCompanySource: { select: { name: true } },
-        sourceOther: true,
         _count: { select: { assignments: true } },
       },
     }),
@@ -43,22 +38,6 @@ export async function getDashboardData(filters: AnalyticsFilters) {
   ]);
 
   // ── Jobs ──
-  const jobsByStatus = JOB_STATUSES.map((status) => ({
-    status,
-    count: jobs.filter((j) => j.status === status).length,
-  }));
-
-  const sourceMap = new Map<string, { name: string; count: number }>();
-  for (const job of jobs) {
-    const name = jobSourceLabel(job);
-    const entry = sourceMap.get(name) ?? { name, count: 0 };
-    entry.count += 1;
-    sourceMap.set(name, entry);
-  }
-  const jobsBySource = [...sourceMap.values()].sort(
-    (a, b) => b.count - a.count,
-  );
-
   // "Active" = OPEN/ON_HOLD jobs that have at least one recruiter assigned.
   // Excludes bulk-imported iLabor reqs no one has picked up yet.
   // `openJobs`/`onHoldJobs` mirror the same assigned-only scope so the
@@ -68,19 +47,6 @@ export async function getDashboardData(filters: AnalyticsFilters) {
   const activeJobs = jobs.filter(isActive).length;
   const openJobs = jobs.filter((j) => isActive(j) && j.status === "OPEN").length;
   const onHoldJobs = jobs.filter((j) => isActive(j) && j.status === "ON_HOLD").length;
-
-  // Open-job aging — OPEN and ON_HOLD jobs only.
-  const agingCounts: Record<string, number> = {};
-  for (const bucket of AGING_BUCKETS) agingCounts[bucket] = 0;
-  for (const job of jobs) {
-    if (job.status === "OPEN" || job.status === "ON_HOLD") {
-      agingCounts[agingBucket(daysSince(job.createdAt))] += 1;
-    }
-  }
-  const aging = AGING_BUCKETS.map((bucket) => ({
-    bucket,
-    count: agingCounts[bucket],
-  }));
 
   // ── Submissions ──
   const submissionsByStatus = SUBMISSION_STATUSES.map((status) => ({
@@ -116,13 +82,9 @@ export async function getDashboardData(filters: AnalyticsFilters) {
     });
 
   return {
-    totalJobs: jobs.length,
     activeJobs,
     openJobs,
     onHoldJobs,
-    jobsByStatus,
-    jobsBySource,
-    aging,
     totalSubmissions: submissions.length,
     submissionsByStatus,
     interviewCount,

@@ -215,27 +215,6 @@ const COLUMNS: Column[] = [
       </Td>
     ),
   },
-  {
-    key: "resume",
-    label: "Résumé",
-    defaultVisible: false,
-    render: (r) => (
-      <Td label="Résumé" secondary>
-        {r.resumeDriveLink ? (
-          <a
-            href={r.resumeDriveLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`${cardLinkRaise} text-indigo-600 hover:underline`}
-          >
-            View
-          </a>
-        ) : (
-          "—"
-        )}
-      </Td>
-    ),
-  },
 ];
 
 const STORAGE_KEY = "lumintrack.vendorRequirements.columns";

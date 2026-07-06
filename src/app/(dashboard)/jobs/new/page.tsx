@@ -8,7 +8,6 @@ import {
   listUsers,
 } from "@/server/queries/org";
 import { getCurrentUser } from "@/lib/session";
-import { canManageRequirements } from "@/lib/permissions";
 
 export default async function NewJobPage() {
   const [clients, vendors, sources, recruiters, user] = await Promise.all([
@@ -30,7 +29,6 @@ export default async function NewJobPage() {
           sources={sources}
           recruiters={recruiters}
           submitLabel="Create job"
-          canManageRequirements={canManageRequirements(user ?? undefined)}
           canCreateOrgEntities={user?.role === "ADMIN"}
         />
       </div>

@@ -44,6 +44,9 @@ export type FormState = {
    * — the app previously gave no feedback on these silent writes.
    */
   toast?: { title: string; description?: string };
+  /** The résumé just created by an upload action — lets a caller (e.g. the
+   *  submission form's inline upload) select it immediately. */
+  createdResume?: { id: string; label: string };
 };
 
 export const EMPTY_FORM_STATE: FormState = {};

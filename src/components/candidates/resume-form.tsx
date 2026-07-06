@@ -1,22 +1,27 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect } from "react";
 import { Field, Input } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
 import {
-  createCandidateResume,
+  uploadCandidateResume,
   updateCandidateResume,
 } from "@/server/actions/resumes";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
-import { isLikelyDriveUrl, DRIVE_LINK_WARNING } from "@/lib/validation/resume";
+import { RESUME_ACCEPT, RESUME_MAX_BYTES } from "@/lib/validation/resume";
 
 export type ResumeData = {
   id: string;
   label: string;
-  driveLink: string;
 };
 
-/** Add / edit dialog form for a candidate's saved résumé. */
+const MAX_MB = Math.round(RESUME_MAX_BYTES / (1024 * 1024));
+
+/**
+ * Add / edit dialog form for a candidate's résumé. "Add" uploads a file to
+ * private Blob (label + file); "Edit" only renames it — the uploaded file can't
+ * be swapped in place, so re-upload for a new version.
+ */
 export function ResumeForm({
   candidateId,
   resume,
@@ -26,8 +31,9 @@ export function ResumeForm({
   resume?: ResumeData;
   onDone: () => void;
 }) {
+  const isEdit = Boolean(resume);
   const [state, formAction, pending] = useActionState(
-    resume ? updateCandidateResume : createCandidateResume,
+    isEdit ? updateCandidateResume : uploadCandidateResume,
     EMPTY_FORM_STATE,
   );
 
@@ -36,8 +42,6 @@ export function ResumeForm({
   }, [state.ok, onDone]);
 
   const errors = state.fieldErrors ?? {};
-  const [driveLink, setDriveLink] = useState(resume?.driveLink ?? "");
-  const showDriveWarning = !isLikelyDriveUrl(driveLink);
 
   return (
     <form action={formAction} className="space-y-4">
@@ -54,26 +58,24 @@ export function ResumeForm({
         />
       </Field>
 
-      <Field
-        label="Resume — Google Drive link"
-        htmlFor="driveLink"
-        required
-        hint="Paste a shared Drive link; it previews on the candidate page."
-        error={errors.driveLink}
-      >
-        <Input
-          id="driveLink"
-          name="driveLink"
-          type="url"
-          value={driveLink}
-          onChange={(e) => setDriveLink(e.target.value)}
-          placeholder="https://drive.google.com/file/d/…"
+      {!isEdit && (
+        <Field
+          label="Resume file"
+          htmlFor="file"
           required
-        />
-        {showDriveWarning && (
-          <p className="mt-1 text-xs text-amber-700">{DRIVE_LINK_WARNING}</p>
-        )}
-      </Field>
+          hint={`PDF or Word document (.pdf, .doc, .docx), up to ${MAX_MB} MB.`}
+          error={errors.file}
+        >
+          <input
+            id="file"
+            name="file"
+            type="file"
+            accept={RESUME_ACCEPT}
+            required
+            className="block w-full rounded-md border border-slate-300 text-sm text-slate-700 file:mr-3 file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+          />
+        </Field>
+      )}
 
       {state.error && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -86,7 +88,13 @@ export function ResumeForm({
           Cancel
         </Button>
         <Button type="submit" disabled={pending}>
-          {pending ? "Saving…" : resume ? "Save changes" : "Add resume"}
+          {pending
+            ? isEdit
+              ? "Saving…"
+              : "Uploading…"
+            : isEdit
+              ? "Save changes"
+              : "Upload resume"}
         </Button>
       </div>
     </form>

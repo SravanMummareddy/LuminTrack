@@ -227,7 +227,7 @@ const COLUMNS: Column[] = [
     label: "Submitted resume",
     defaultVisible: false,
     render: (s) => {
-      const link = s.candidateResume?.driveLink ?? s.resumeDriveLink;
+      const link = s.candidateResumeId ? `/api/resumes/${s.candidateResumeId}` : null;
       const label = s.candidateResume?.label ?? (link ? "Resume" : null);
       return (
         <Td label="Submitted resume" secondary>

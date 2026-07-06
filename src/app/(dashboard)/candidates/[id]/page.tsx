@@ -339,7 +339,8 @@ export default async function CandidateDetailPage({
         resumes={candidate.resumes.map((r) => ({
           id: r.id,
           label: r.label,
-          driveLink: r.driveLink,
+          hasFile: r.blobPathname != null,
+          contentType: r.contentType,
           isActive: r.isActive,
           submissionCount: r._count.submissions,
         }))}
@@ -352,7 +353,6 @@ export default async function CandidateDetailPage({
           id: d.id,
           category: d.category,
           label: d.label,
-          driveLink: d.driveLink,
           issuedAt: d.issuedAt,
           expiresAt: d.expiresAt,
           notes: d.notes,

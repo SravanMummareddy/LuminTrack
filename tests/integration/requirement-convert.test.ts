@@ -135,7 +135,7 @@ describe.skipIf(!dbReachable)("vendor requirement actions", () => {
     expect(await testPrisma.vendorRequirement.count()).toBe(1);
   });
 
-  it("converts an OPEN requirement into a submission (with auto-claim)", async () => {
+  it("submits a candidate against an OPEN requirement (VPR stays open, submission links back)", async () => {
     const req = await makeRequirement(ctx);
     mockedRequireUser.mockResolvedValue(ctx.recruiter as never);
 
@@ -143,31 +143,60 @@ describe.skipIf(!dbReachable)("vendor requirement actions", () => {
 
     const submissions = await testPrisma.submission.findMany();
     expect(submissions).toHaveLength(1);
+    // 1:many — the submission points at the VPR, and the VPR stays OPEN.
+    expect(submissions[0].vendorRequirementId).toBe(req.id);
     const reloaded = await testPrisma.vendorRequirement.findUnique({ where: { id: req.id } });
-    expect(reloaded?.status).toBe("CONVERTED");
-    expect(reloaded?.convertedSubmissionId).toBe(submissions[0].id);
-    expect(reloaded?.convertedById).toBe(ctx.recruiter.id);
+    expect(reloaded?.status).toBe("OPEN");
 
-    // Auto-claim: the converting recruiter is now assigned to the job.
+    // Auto-claim: the submitting recruiter is now assigned to the job.
     const assignment = await testPrisma.jobAssignment.findFirst({
       where: { jobId: ctx.job.id, recruiterId: ctx.recruiter.id },
     });
     expect(assignment).not.toBeNull();
 
-    const converted = await testPrisma.activity.findFirst({
+    const logged = await testPrisma.activity.findFirst({
       where: { action: "REQUIREMENT_CONVERTED", requirementId: req.id },
     });
-    expect(converted).not.toBeNull();
+    expect(logged).not.toBeNull();
   });
 
-  it("is idempotent on double-convert (no second submission)", async () => {
+  it("accepts multiple candidates against the same OPEN requirement", async () => {
+    const req = await makeRequirement(ctx);
+    mockedRequireUser.mockResolvedValue(ctx.recruiter as never);
+
+    // A second candidate to submit against the same requirement.
+    const cand2 = await testPrisma.candidate.create({
+      data: {
+        fullName: "Cand Two",
+        status: "AVAILABLE",
+        createdBy: { connect: { id: ctx.admin.id } },
+      },
+    });
+
+    await convertRequirementToSubmission({}, convertForm(req.id, ctx));
+    await convertRequirementToSubmission(
+      {},
+      convertForm(req.id, ctx, { candidateId: cand2.id }),
+    );
+
+    const linked = await testPrisma.submission.findMany({
+      where: { vendorRequirementId: req.id },
+    });
+    expect(linked).toHaveLength(2);
+    const reloaded = await testPrisma.vendorRequirement.findUnique({ where: { id: req.id } });
+    expect(reloaded?.status).toBe("OPEN");
+  });
+
+  it("flags a duplicate when the same candidate is submitted twice", async () => {
     const req = await makeRequirement(ctx);
     mockedRequireUser.mockResolvedValue(ctx.recruiter as never);
 
     await convertRequirementToSubmission({}, convertForm(req.id, ctx));
     const second = await convertRequirementToSubmission({}, convertForm(req.id, ctx));
 
-    expect(second.error).toMatch(/already (been )?converted/i);
+    // The per-(candidate, job) duplicate gate fires instead of silently
+    // creating a second identical submission.
+    expect(second.needsConfirm).toBe("duplicate");
     expect(await testPrisma.submission.count()).toBe(1);
   });
 

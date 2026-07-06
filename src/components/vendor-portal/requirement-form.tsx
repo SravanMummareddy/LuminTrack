@@ -29,7 +29,6 @@ type Fields = {
   jobDuties: string;
   teamLead: string;
   submissionNotes: string;
-  resumeDriveLink: string;
 };
 
 const EMPTY_FIELDS: Fields = {
@@ -45,7 +44,6 @@ const EMPTY_FIELDS: Fields = {
   jobDuties: "",
   teamLead: "",
   submissionNotes: "",
-  resumeDriveLink: "",
 };
 
 /**
@@ -288,22 +286,6 @@ export function RequirementForm({
           />
         </Field>
       </div>
-
-      <Field
-        label="Résumé — Google Drive link"
-        htmlFor="resumeDriveLink"
-        error={errors.resumeDriveLink}
-        hint="Optional. The recruiter picks/confirms the actual résumé when moving to a submission."
-      >
-        <Input
-          id="resumeDriveLink"
-          name="resumeDriveLink"
-          type="url"
-          value={fields.resumeDriveLink}
-          onChange={set("resumeDriveLink")}
-          placeholder="https://drive.google.com/file/d/…"
-        />
-      </Field>
 
       <Field label="Job duties" htmlFor="jobDuties" error={errors.jobDuties}>
         <Textarea

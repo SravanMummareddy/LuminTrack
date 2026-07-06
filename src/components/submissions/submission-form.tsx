@@ -1,12 +1,13 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { Button, buttonClass } from "@/components/ui/button";
 import { RateChainWarning } from "@/components/ui/rate-chain-warning";
+import { uploadCandidateResume } from "@/server/actions/resumes";
+import { RESUME_ACCEPT, resumeFileError } from "@/lib/validation/resume";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
-import { isLikelyDriveUrl, DRIVE_LINK_WARNING } from "@/lib/validation/resume";
 import {
   BENCH_ENGAGEMENTS,
   BENCH_ENGAGEMENT_LABEL,
@@ -14,7 +15,7 @@ import {
   OVERRIDE_REASON_LABEL,
 } from "@/lib/labels";
 
-type ResumeOption = { id: string; label: string; driveLink: string };
+type ResumeOption = { id: string; label: string };
 type CandidateOption = {
   id: string;
   fullName: string;
@@ -51,8 +52,6 @@ type Fields = {
   candidateRate: string;
   // "" = no résumé, "__new__" = add a new one, otherwise a saved résumé id.
   resumeSelection: string;
-  newResumeLabel: string;
-  newResumeLink: string;
   submissionNotes: string;
   engagement: string;
   vendorRecruiterName: string;
@@ -70,7 +69,6 @@ type Fields = {
   convertReason: string;
 };
 
-const NEW_RESUME = "__new__";
 
 // Convert-only warn gates — cleared by a single free-text `convertOverrideReason`
 // (vs. the duplicate/iLabor gates which take a preset reason).
@@ -128,8 +126,6 @@ export function SubmissionForm({
     submittedById: defaultRecruiterId,
     candidateRate: defaultCandidateRate,
     resumeSelection: "",
-    newResumeLabel: "",
-    newResumeLink: "",
     submissionNotes: "",
     engagement: "",
     vendorRecruiterName: "",
@@ -190,23 +186,74 @@ export function SubmissionForm({
     ) =>
       setFields((f) => ({ ...f, [name]: e.target.value }));
 
+  // Inline "upload a new résumé" — uploads eagerly to private Blob (a separate
+  // action call), then adds the created résumé to the picker and selects it, so
+  // the submission itself just references an existing candidateResumeId. The
+  // file never rides along in the main submit POST.
+  const [uploadedResumes, setUploadedResumes] = useState<ResumeOption[]>([]);
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploadLabel, setUploadLabel] = useState("");
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadPending, startUpload] = useTransition();
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const resetUpload = () => {
+    setShowUpload(false);
+    setUploadLabel("");
+    setUploadError(null);
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const handleUpload = (candidateId: string) => {
+    const file = fileRef.current?.files?.[0] ?? null;
+    if (!uploadLabel.trim()) {
+      setUploadError("Give this resume a label.");
+      return;
+    }
+    if (!file) {
+      setUploadError("Choose a file to upload.");
+      return;
+    }
+    const fileErr = resumeFileError(file);
+    if (fileErr) {
+      setUploadError(fileErr);
+      return;
+    }
+    const fd = new FormData();
+    fd.set("candidateId", candidateId);
+    fd.set("label", uploadLabel.trim());
+    fd.set("file", file);
+    setUploadError(null);
+    startUpload(async () => {
+      const res = await uploadCandidateResume(EMPTY_FORM_STATE, fd);
+      if (res.ok && res.createdResume) {
+        setUploadedResumes((prev) => [...prev, res.createdResume!]);
+        setFields((f) => ({ ...f, resumeSelection: res.createdResume!.id }));
+        setResumeCleared(false);
+        resetUpload();
+      } else {
+        setUploadError(res.error ?? res.fieldErrors?.file ?? "Upload failed.");
+      }
+    });
+  };
+
   // Switching candidate clears the résumé pick — a résumé belongs to one
   // candidate. Warn if there was anything to lose rather than wiping silently.
-  const onCandidateChange = (e: React.ChangeEvent<HTMLSelectElement>) =>
+  const onCandidateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    // A résumé (saved or freshly uploaded) belongs to one candidate — drop both
+    // the pick and the just-uploaded list when the candidate changes.
+    setUploadedResumes([]);
+    resetUpload();
     setFields((f) => {
-      const hadResume =
-        f.resumeSelection !== "" ||
-        f.newResumeLabel.trim() !== "" ||
-        f.newResumeLink.trim() !== "";
+      const hadResume = f.resumeSelection !== "";
       setResumeCleared(hadResume);
       return {
         ...f,
         candidateId: e.target.value,
         resumeSelection: "",
-        newResumeLabel: "",
-        newResumeLink: "",
       };
     });
+  };
 
   // Picking a job in candidate-locked / open mode seeds the rate default from
   // that job (only when the recruiter hasn't already typed one).
@@ -230,13 +277,8 @@ export function SubmissionForm({
     mode === "candidate-locked"
       ? candidate
       : candidates.find((c) => c.id === fields.candidateId);
-  const resumes = activeCandidate?.resumes ?? [];
-  const resumeChoice =
-    fields.resumeSelection === ""
-      ? "none"
-      : fields.resumeSelection === NEW_RESUME
-        ? "new"
-        : "existing";
+  const resumes = [...(activeCandidate?.resumes ?? []), ...uploadedResumes];
+  const resumeChoice = fields.resumeSelection === "" ? "none" : "existing";
 
   // The effective ids the action receives, accounting for the locked anchors.
   const effectiveJobId = mode === "job-locked" ? (job?.id ?? "") : fields.jobId;
@@ -409,7 +451,7 @@ export function SubmissionForm({
       <Field
         label="Resume"
         htmlFor="resumeSelection"
-        hint="Pick one of the candidate's saved resumes, add a new one, or leave as no resume."
+        hint="Pick one of the candidate's uploaded resumes, upload a new one, or leave as no resume."
         error={errors.candidateResumeId}
       >
         <Select
@@ -428,7 +470,6 @@ export function SubmissionForm({
               {r.label}
             </option>
           ))}
-          <option value={NEW_RESUME}>+ Add a new resume</option>
         </Select>
         {resumeCleared && (
           <p className="mt-1 text-xs text-amber-700">
@@ -436,44 +477,55 @@ export function SubmissionForm({
             one for the new candidate.
           </p>
         )}
-      </Field>
 
-      {resumeChoice === "new" && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field
-            label="New resume label"
-            htmlFor="newResumeLabel"
-            required
-            error={errors.newResumeLabel}
-          >
-            <Input
-              id="newResumeLabel"
-              name="newResumeLabel"
-              value={fields.newResumeLabel}
-              onChange={set("newResumeLabel")}
-              placeholder="e.g. Backend Engineer"
-            />
-          </Field>
-          <Field
-            label="New resume — Google Drive link"
-            htmlFor="newResumeLink"
-            required
-            error={errors.newResumeLink}
-          >
-            <Input
-              id="newResumeLink"
-              name="newResumeLink"
-              type="url"
-              value={fields.newResumeLink}
-              onChange={set("newResumeLink")}
-              placeholder="https://drive.google.com/file/d/…"
-            />
-            {!isLikelyDriveUrl(fields.newResumeLink) && (
-              <p className="mt-1 text-xs text-amber-700">{DRIVE_LINK_WARNING}</p>
-            )}
-          </Field>
-        </div>
-      )}
+        {effectiveCandidateId &&
+          (showUpload ? (
+            <div className="mt-2 space-y-2 rounded-md border border-slate-200 bg-slate-50/60 p-3">
+              <Input
+                aria-label="New resume label"
+                value={uploadLabel}
+                onChange={(e) => setUploadLabel(e.target.value)}
+                placeholder="Resume label (e.g. Backend Engineer)"
+              />
+              <input
+                ref={fileRef}
+                type="file"
+                accept={RESUME_ACCEPT}
+                className="block w-full rounded-md border border-slate-300 text-sm text-slate-700 file:mr-3 file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+              />
+              {uploadError && (
+                <p className="text-xs text-red-700">{uploadError}</p>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => handleUpload(effectiveCandidateId)}
+                  disabled={uploadPending}
+                >
+                  {uploadPending ? "Uploading…" : "Upload"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={resetUpload}
+                  disabled={uploadPending}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowUpload(true)}
+              className="mt-2 text-xs font-medium text-indigo-600 hover:underline"
+            >
+              Upload a new resume
+            </button>
+          ))}
+      </Field>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Engagement" htmlFor="engagement" error={errors.engagement} hint="Bench/W2 — for bench-sales submissions.">

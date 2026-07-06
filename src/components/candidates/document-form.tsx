@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect } from "react";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,18 +8,19 @@ import {
   updateCandidateDocument,
 } from "@/server/actions/candidate-documents";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
-import { isLikelyDriveUrl, DRIVE_LINK_WARNING } from "@/lib/validation/resume";
+import { UPLOAD_ACCEPT, UPLOAD_MAX_BYTES } from "@/lib/validation/upload-file";
 import type { DocumentCategory } from "@/generated/prisma/enums";
 
 export type DocumentData = {
   id: string;
   category: DocumentCategory;
   label: string;
-  driveLink: string;
   issuedAt: Date | null;
   expiresAt: Date | null;
   notes: string | null;
 };
+
+const MAX_MB = Math.round(UPLOAD_MAX_BYTES / (1024 * 1024));
 
 const CATEGORY_OPTIONS: { value: DocumentCategory; label: string; sensitive: boolean }[] = [
   { value: "IDENTITY", label: "Identity (passport, driver's license, SSN/visa)", sensitive: true },
@@ -57,8 +58,6 @@ export function DocumentForm({
   }, [state.ok, onDone]);
 
   const errors = state.fieldErrors ?? {};
-  const [driveLink, setDriveLink] = useState(doc?.driveLink ?? "");
-  const showDriveWarning = !isLikelyDriveUrl(driveLink);
 
   const visibleOptions = CATEGORY_OPTIONS.filter(
     (o) => canManageSensitive || !o.sensitive,
@@ -94,26 +93,29 @@ export function DocumentForm({
         />
       </Field>
 
-      <Field
-        label="Google Drive link"
-        htmlFor="driveLink"
-        required
-        hint="Paste a shared Drive link; only viewers with Drive access can open it."
-        error={errors.driveLink}
-      >
-        <Input
-          id="driveLink"
-          name="driveLink"
-          type="url"
-          value={driveLink}
-          onChange={(e) => setDriveLink(e.target.value)}
-          placeholder="https://drive.google.com/file/d/…"
+      {doc ? (
+        <p className="rounded-md border border-slate-200 bg-slate-50/60 px-3 py-2 text-xs text-slate-500">
+          The uploaded file can&apos;t be swapped here — add a new document to
+          replace it. This form edits the label, category, dates, and notes.
+        </p>
+      ) : (
+        <Field
+          label="Document file"
+          htmlFor="file"
           required
-        />
-        {showDriveWarning && (
-          <p className="mt-1 text-xs text-amber-700">{DRIVE_LINK_WARNING}</p>
-        )}
-      </Field>
+          hint={`PDF or Word document (.pdf, .doc, .docx), up to ${MAX_MB} MB. Stored privately.`}
+          error={errors.file}
+        >
+          <input
+            id="file"
+            name="file"
+            type="file"
+            accept={UPLOAD_ACCEPT}
+            required
+            className="block w-full rounded-md border border-slate-300 text-sm text-slate-700 file:mr-3 file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+          />
+        </Field>
+      )}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Issued on" htmlFor="issuedAt" error={errors.issuedAt}>

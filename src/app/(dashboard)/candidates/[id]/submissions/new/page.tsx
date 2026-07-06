@@ -71,7 +71,6 @@ export default async function NewCandidateSubmissionPage({
               resumes: candidate.resumes.map((r) => ({
                 id: r.id,
                 label: r.label,
-                driveLink: r.driveLink,
               })),
             }}
             jobOptions={jobOptions}

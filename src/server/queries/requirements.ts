@@ -156,7 +156,19 @@ export async function getVendorRequirement(id: string) {
       ...REQUIREMENT_INCLUDE,
       createdBy: { select: { fullName: true } },
       convertedBy: { select: { fullName: true } },
-      convertedSubmission: { select: { id: true, seq: true } },
+      // Every submission made against this requirement (newest first) — a VPR
+      // is 1:many now, so the detail page lists them all.
+      submissions: {
+        orderBy: { submittedAt: "desc" },
+        select: {
+          id: true,
+          seq: true,
+          status: true,
+          submittedAt: true,
+          candidate: { select: { id: true, fullName: true } },
+          submittedBy: { select: { fullName: true } },
+        },
+      },
     },
   });
   return row ? flatten(row) : null;

@@ -3,7 +3,6 @@ import Link from "next/link";
 import { ArrowLeft, ExternalLink, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { LinkButton } from "@/components/ui/button";
-import { StatusPipeline } from "@/components/submissions/status-pipeline";
 import { SubmissionStatusForm } from "@/components/submissions/submission-status-form";
 import { InterviewRoundsManager } from "@/components/interviews/interview-rounds-manager";
 import { ActivityTimeline } from "@/components/timeline/activity-timeline";
@@ -18,7 +17,6 @@ import {
   jobSourceLabel,
 } from "@/lib/labels";
 import { formatDate, formatRate, formatSubmissionDisplayId } from "@/lib/format";
-import { toDrivePreviewUrl } from "@/lib/resume";
 
 function SummaryItem({
   label,
@@ -66,9 +64,15 @@ export default async function SubmissionDetailPage({
   if (!submission) notFound();
 
   const { candidate, job } = submission;
-  const resumePreviewUrl = submission.resumeDriveLink
-    ? toDrivePreviewUrl(submission.resumeDriveLink)
-    : null;
+  // Résumé display: the uploaded file streams from /api/resumes/[id] — a PDF
+  // previews inline, Word offers a download.
+  const resumeFileUrl =
+    submission.candidateResume?.blobPathname != null && submission.candidateResumeId
+      ? `/api/resumes/${submission.candidateResumeId}`
+      : null;
+  const resumeIsPdf = (submission.candidateResume?.contentType ?? "").includes("pdf");
+  const hasResume = Boolean(resumeFileUrl || submission.resumeBlobUrl);
+  const resumeOpenHref = resumeFileUrl;
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
@@ -112,14 +116,11 @@ export default async function SubmissionDetailPage({
       </div>
 
       <Card title="Status pipeline">
-        <StatusPipeline status={submission.status} />
-      </Card>
-
-      <Card title="Update status">
-        {/* Not keyed by status: a `key={submission.status}` here remounts the
-            form on every successful save, which unmounted the instance before
-            its success-toast effect could fire (the toast was silently eaten).
-            The form now resets its own fields in the success effect instead. */}
+        {/* The pipeline stepper (interactive) + the advance/branch action bar
+            live in one client island so a clicked stage and a clicked button
+            share the same submit path. Not keyed by status: a
+            `key={submission.status}` would remount on every save and eat the
+            success toast; the form resets its own fields instead. */}
         <SubmissionStatusForm
           submissionId={submission.id}
           status={submission.status}
@@ -243,7 +244,7 @@ export default async function SubmissionDetailPage({
       </Card>
 
       <Card title="Resume used">
-        {!submission.resumeDriveLink ? (
+        {!hasResume ? (
           <p className="text-sm text-slate-400">
             No resume recorded for this submission.
           </p>
@@ -253,35 +254,37 @@ export default async function SubmissionDetailPage({
               {submission.candidateResume && (
                 <Badge tone="indigo">{submission.candidateResume.label}</Badge>
               )}
-              <a
-                href={submission.resumeDriveLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:underline"
-              >
-                Open resume in a new tab
-                <ExternalLink className="h-3.5 w-3.5" />
-              </a>
+              {resumeOpenHref && (
+                <a
+                  href={resumeOpenHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:underline"
+                >
+                  Open resume in a new tab
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              )}
             </div>
-            {resumePreviewUrl ? (
+            {resumeFileUrl && resumeIsPdf ? (
               <iframe
-                src={resumePreviewUrl}
+                src={resumeFileUrl}
                 title="Resume preview"
-                // Drive's embedded viewer needs both `allow-scripts` and
-                // `allow-same-origin` to render. Restricting the rest of the
-                // sandbox stops the embed from popping new windows, escaping
-                // to top, or running forms against our origin.
-                sandbox="allow-scripts allow-same-origin"
-                referrerPolicy="no-referrer"
                 loading="lazy"
                 className="h-[70vh] w-full rounded-md border border-slate-200 md:h-[600px]"
               />
-            ) : (
+            ) : resumeFileUrl ? (
               <p className="text-xs text-slate-500">
-                Inline preview is available for Google Drive links only — use
-                the link above to open this resume.
+                Preview isn&apos;t available for Word files —{" "}
+                <a
+                  href={`${resumeFileUrl}?download=1`}
+                  className="text-indigo-600 hover:underline"
+                >
+                  download the resume
+                </a>
+                .
               </p>
-            )}
+            ) : null}
           </div>
         )}
       </Card>

@@ -484,7 +484,13 @@ model CandidateResume {
   candidateId String
   candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   label       String
-  driveLink   String
+  // Private Vercel Blob upload. `blobPathname` is the key we pass to
+  // get(pathname, { access: 'private' }) to stream the file through our own
+  // authenticated route (private blobs are never fetched directly by the browser).
+  blobPathname String?
+  blobUrl      String?
+  sizeBytes    Int?
+  contentType  String?
   // Soft-delete: archiving sets this false instead of deleting the row, so
   // submissions keep their live FK link (and their snapshot). Active résumés
   // are the only ones offered in the submit picker; the library can reveal
@@ -512,7 +518,14 @@ model CandidateDocument {
   candidate    Candidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   category     DocumentCategory
   label        String
-  driveLink    String
+  // Private Vercel Blob upload (PDF/DOCX), gzip-compressed. `blobPathname` is
+  // the key we pass to get(pathname, { access: 'private' }); served via the
+  // authenticated /api/documents/[id] route (which also enforces the sensitive-
+  // category gate). Nullable only so the migration can add them.
+  blobPathname String?
+  blobUrl      String?
+  sizeBytes    Int?
+  contentType  String?
   issuedAt     DateTime?
   expiresAt    DateTime?
   notes        String?
@@ -595,8 +608,9 @@ model Submission {
   seq             Int              @unique @default(autoincrement())
   status          SubmissionStatus @default(SUBMITTED)
   candidateRate   Decimal?         @db.Decimal(12, 2)
+  // Snapshot of the private-Blob résumé URL used at submit time, so the record
+  // survives the library résumé being renamed/archived.
   resumeBlobUrl   String?
-  resumeDriveLink String?
   submissionNotes String?
   rejectionReason String?
   // Bench-Sales fields (the "Bench Submissions" sheet). Nullable — regular
@@ -634,8 +648,8 @@ model Submission {
   job           Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
   submittedById String
   submittedBy   User      @relation(fields: [submittedById], references: [id])
-  // The library résumé chosen for this submission; resumeDriveLink above keeps a
-  // snapshot of its link so history survives edits/deletes of the library entry.
+  // The library résumé chosen for this submission; resumeBlobUrl above keeps a
+  // snapshot of its URL so history survives edits/deletes of the library entry.
   candidateResumeId String?
   candidateResume   CandidateResume? @relation(fields: [candidateResumeId], references: [id], onDelete: SetNull)
 
@@ -647,8 +661,11 @@ model Submission {
   replacementFor  Placement?       @relation("PlacementReplacement")
   noteEntries     Note[]
   activities      Activity[]
-  // Set when this submission was created by converting a VendorRequirement.
-  convertedFromRequirement VendorRequirement? @relation("VendorRequirementSubmission")
+  // The vendor requirement (VPR) this submission was made against, if any. A
+  // single VPR can spawn many submissions (recruiters submit several candidates
+  // against one requirement) — hence a plain many→one FK, not a 1:1 link.
+  vendorRequirementId String?
+  vendorRequirement   VendorRequirement? @relation("RequirementSubmissions", fields: [vendorRequirementId], references: [id], onDelete: SetNull)
 
   @@index([candidateId, jobId])
   @@index([status])
@@ -657,6 +674,7 @@ model Submission {
   @@index([submittedById])
   @@index([candidateResumeId])
   @@index([submittedAt])
+  @@index([vendorRequirementId])
 }
 
 // R4.2 — a candidate working an assignment. Auto-created when a submission's
@@ -876,13 +894,15 @@ model VendorRequirement {
   jobDuties           String?
   teamLead            String?
   submissionNotes     String?
-  // Soft pointer (no FK) to the résumé to upload — re-validated at convert.
+  // Soft pointer (no FK) to the library résumé to reuse — re-validated at convert.
   candidateResumeId String?
-  resumeDriveLink   String?
 
   // Conversion link — set when moved to a real submission.
-  convertedSubmissionId String?     @unique
-  convertedSubmission   Submission? @relation("VendorRequirementSubmission", fields: [convertedSubmissionId], references: [id], onDelete: SetNull)
+  // Submissions made against this requirement (1:many — the VPR stays OPEN and
+  // accumulates candidate submissions until a team lead closes it).
+  submissions           Submission[] @relation("RequirementSubmissions")
+  // Set when a team lead marks the requirement closed (repurposed from the old
+  // 1:1 "converted" fields — CONVERTED now means "Closed").
   convertedAt           DateTime?
   convertedById         String?
   convertedBy           User?       @relation("VendorRequirementConvertedBy", fields: [convertedById], references: [id])

@@ -452,9 +452,9 @@ export default async function JobDetailPage({
                     </Badge>
                   </Td>
                   <Td label="Resume">
-                    {s.resumeDriveLink ? (
+                    {s.candidateResumeId ? (
                       <a
-                        href={s.resumeDriveLink}
+                        href={`/api/resumes/${s.candidateResumeId}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-indigo-600 hover:underline"

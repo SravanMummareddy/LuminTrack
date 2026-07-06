@@ -6,13 +6,11 @@ import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { Button, buttonClass } from "@/components/ui/button";
 import { RateChainWarning } from "@/components/ui/rate-chain-warning";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
-import { isLikelyDriveUrl, DRIVE_LINK_WARNING } from "@/lib/validation/resume";
 import { BENCH_ENGAGEMENTS, BENCH_ENGAGEMENT_LABEL } from "@/lib/labels";
 
 type ResumeOption = {
   id: string;
   label: string;
-  driveLink: string;
   // false when the résumé has been archived but this submission still uses it —
   // kept in the list so the selection isn't dropped, flagged so we can label it.
   isActive?: boolean;
@@ -49,8 +47,6 @@ type Fields = {
   submissionNotes: string;
   submittedAt: string;
   submittedById: string;
-  newResumeLabel: string;
-  newResumeLink: string;
   engagement: string;
   vendorRecruiterName: string;
   jobDuties: string;
@@ -60,7 +56,6 @@ type Fields = {
   teamLead: string;
 };
 
-const NEW_RESUME = "__new__";
 
 /** Converts a stored date into a `datetime-local` input value in the browser's timezone. */
 function toDateTimeLocal(value: Date | string): string {
@@ -114,8 +109,6 @@ export function SubmissionEditForm({
     submissionNotes: values.submissionNotes,
     submittedAt: toDateTimeLocal(values.submittedAt),
     submittedById: values.submittedById,
-    newResumeLabel: "",
-    newResumeLink: "",
     engagement: values.engagement,
     vendorRecruiterName: values.vendorRecruiterName,
     jobDuties: values.jobDuties,
@@ -149,12 +142,7 @@ export function SubmissionEditForm({
   }, [state]);
 
   const errors = state.fieldErrors ?? {};
-  const resumeChoice =
-    fields.resumeSelection === ""
-      ? "none"
-      : fields.resumeSelection === NEW_RESUME
-        ? "new"
-        : "existing";
+  const resumeChoice = fields.resumeSelection === "" ? "none" : "existing";
 
   return (
     <form action={formAction} className="space-y-5">
@@ -239,7 +227,7 @@ export function SubmissionEditForm({
       <Field
         label="Resume"
         htmlFor="resumeSelection"
-        hint="Pick one of the candidate's saved resumes, add a new one, or leave as no resume."
+        hint="Pick one of the candidate's uploaded resumes, or leave as no resume. Upload new resumes on the candidate's profile."
         error={errors.candidateResumeId}
       >
         <Select
@@ -255,46 +243,8 @@ export function SubmissionEditForm({
               {r.isActive === false ? " (archived)" : ""}
             </option>
           ))}
-          <option value={NEW_RESUME}>+ Add a new resume</option>
         </Select>
       </Field>
-
-      {resumeChoice === "new" && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field
-            label="New resume label"
-            htmlFor="newResumeLabel"
-            required
-            error={errors.newResumeLabel}
-          >
-            <Input
-              id="newResumeLabel"
-              name="newResumeLabel"
-              value={fields.newResumeLabel}
-              onChange={set("newResumeLabel")}
-              placeholder="e.g. Backend Engineer"
-            />
-          </Field>
-          <Field
-            label="New resume — Google Drive link"
-            htmlFor="newResumeLink"
-            required
-            error={errors.newResumeLink}
-          >
-            <Input
-              id="newResumeLink"
-              name="newResumeLink"
-              type="url"
-              value={fields.newResumeLink}
-              onChange={set("newResumeLink")}
-              placeholder="https://drive.google.com/file/d/…"
-            />
-            {!isLikelyDriveUrl(fields.newResumeLink) && (
-              <p className="mt-1 text-xs text-amber-700">{DRIVE_LINK_WARNING}</p>
-            )}
-          </Field>
-        </div>
-      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Engagement" htmlFor="engagement" error={errors.engagement} hint="Bench/W2 — for bench-sales submissions.">

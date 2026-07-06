@@ -54,8 +54,8 @@ export default async function ConvertRequirementPage({
       </Link>
 
       <PageHeader
-        title="Move to submission"
-        description={`Convert ${formatVendorRequirementDisplayId(requirement)} into a real submission — prefilled from the requirement and editable.`}
+        title="Submit a candidate"
+        description={`Create a submission against ${formatVendorRequirementDisplayId(requirement)} — prefilled from the requirement and editable. The requirement stays open for more candidates.`}
       />
 
       <div className="rounded-lg border border-slate-200 bg-white p-6">

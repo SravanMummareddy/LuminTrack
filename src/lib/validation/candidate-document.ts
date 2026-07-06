@@ -9,12 +9,14 @@ const documentCategoryValues = [
   "OTHER",
 ] as const;
 
+/** Metadata for a document — the uploaded file is validated separately (see
+ *  uploadFileError). Used for both create (file required) and edit (metadata
+ *  only; the file can't be swapped in place — upload a new document instead). */
 export const candidateDocumentSchema = z
   .object({
     candidateId: z.string().min(1, "Missing candidate reference."),
     category: z.enum(documentCategoryValues),
     label: z.string().trim().min(1, "Give this document a label.").max(160),
-    driveLink: z.url("Enter a valid Google Drive link."),
     issuedAt: optionalDateTime,
     expiresAt: optionalDateTime,
     notes: optionalText,

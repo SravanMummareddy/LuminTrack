@@ -95,7 +95,7 @@ describe.skipIf(!dbReachable)("updateSubmission — re-attribution, résumé sna
 
     const after = await testPrisma.submission.findUnique({ where: { id: ctx.submission.id } });
     expect(after!.candidateResumeId).toBe(ctx.resume.id);
-    expect(after!.resumeDriveLink).toBe(ctx.resume.driveLink); // snapshot taken
+    expect(after!.resumeBlobUrl).toBe(ctx.resume.blobUrl); // snapshot taken
     expect((await lastUpdate())!.description).toContain("resume");
   });
 

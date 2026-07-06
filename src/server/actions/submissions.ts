@@ -32,8 +32,6 @@ function readSubmission(formData: FormData) {
     submissionNotes: formData.get("submissionNotes") ?? "",
     resumeChoice: formData.get("resumeChoice") ?? "none",
     candidateResumeId: formData.get("candidateResumeId") ?? "",
-    newResumeLabel: formData.get("newResumeLabel") ?? "",
-    newResumeLink: formData.get("newResumeLink") ?? "",
     engagement: formData.get("engagement") ?? "",
     vendorRecruiterName: formData.get("vendorRecruiterName") ?? "",
     jobDuties: formData.get("jobDuties") ?? "",
@@ -115,11 +113,11 @@ export async function createSubmission(
   ).trim();
 
   // Resolve a previously-saved résumé up front so a bad pick returns cleanly.
-  let pickedResume: { id: string; driveLink: string } | null = null;
+  let pickedResume: { id: string; blobUrl: string | null } | null = null;
   if (d.resumeChoice === "existing" && d.candidateResumeId) {
     const resume = await prisma.candidateResume.findUnique({
       where: { id: d.candidateResumeId },
-      select: { id: true, driveLink: true, candidateId: true },
+      select: { id: true, blobUrl: true, candidateId: true },
     });
     if (!resume || resume.candidateId !== d.candidateId)
       return {
@@ -128,17 +126,13 @@ export async function createSubmission(
           candidateResumeId: "Pick a resume that belongs to this candidate.",
         },
       };
-    pickedResume = { id: resume.id, driveLink: resume.driveLink };
+    pickedResume = { id: resume.id, blobUrl: resume.blobUrl };
   }
 
   // One transaction, advisory-locked on the (candidate, job) pair. The actual
   // create + gates live in the shared createSubmissionRecord helper, which the
   // requirement→submission convert flow reuses. Overridable gates come back as
   // a tagged union so we can surface the right `needsConfirm` prompt.
-  const newResume =
-    !pickedResume && d.resumeChoice === "new" && d.newResumeLabel && d.newResumeLink
-      ? { label: d.newResumeLabel, link: d.newResumeLink }
-      : null;
   const result = await prisma.$transaction((tx) =>
     createSubmissionRecord(tx, {
       candidateId: d.candidateId,
@@ -154,7 +148,6 @@ export async function createSubmission(
       clientRate: d.clientRate ?? null,
       teamLead: d.teamLead ?? null,
       pickedResume,
-      newResume,
       duplicateReason,
       ilaborOverrideReason,
       job,
@@ -199,8 +192,6 @@ function readSubmissionEdit(formData: FormData) {
     submittedById: formData.get("submittedById") ?? "",
     resumeChoice: formData.get("resumeChoice") ?? "none",
     candidateResumeId: formData.get("candidateResumeId") ?? "",
-    newResumeLabel: formData.get("newResumeLabel") ?? "",
-    newResumeLink: formData.get("newResumeLink") ?? "",
     engagement: formData.get("engagement") ?? "",
     vendorRecruiterName: formData.get("vendorRecruiterName") ?? "",
     jobDuties: formData.get("jobDuties") ?? "",
@@ -263,11 +254,11 @@ export async function updateSubmission(
   }
 
   // Resolve a previously-saved résumé up front so a bad pick returns cleanly.
-  let pickedResume: { id: string; driveLink: string } | null = null;
+  let pickedResume: { id: string; blobUrl: string | null } | null = null;
   if (d.resumeChoice === "existing" && d.candidateResumeId) {
     const resume = await prisma.candidateResume.findUnique({
       where: { id: d.candidateResumeId },
-      select: { id: true, driveLink: true, candidateId: true },
+      select: { id: true, blobUrl: true, candidateId: true },
     });
     if (!resume || resume.candidateId !== existing.candidateId)
       return {
@@ -276,35 +267,13 @@ export async function updateSubmission(
           candidateResumeId: "Pick a resume that belongs to this candidate.",
         },
       };
-    pickedResume = { id: resume.id, driveLink: resume.driveLink };
+    pickedResume = { id: resume.id, blobUrl: resume.blobUrl };
   }
 
   await prisma.$transaction(async (tx) => {
-    // Settle the résumé: an existing library entry, a new one, or none.
-    let candidateResumeId: string | null = null;
-    let resumeSnapshot: string | null = null;
-
-    if (pickedResume) {
-      candidateResumeId = pickedResume.id;
-      resumeSnapshot = pickedResume.driveLink;
-    } else if (d.resumeChoice === "new" && d.newResumeLabel && d.newResumeLink) {
-      const newResume = await tx.candidateResume.create({
-        data: {
-          candidateId: existing.candidateId,
-          label: d.newResumeLabel,
-          driveLink: d.newResumeLink,
-        },
-      });
-      candidateResumeId = newResume.id;
-      resumeSnapshot = newResume.driveLink;
-      await logActivity(tx, {
-        entityType: "CANDIDATE",
-        action: "RESUME_UPDATED",
-        description: `Resume "${newResume.label}" added`,
-        performedById: user.id,
-        candidateId: existing.candidateId,
-      });
-    }
+    // Settle the résumé: an existing library entry or none.
+    const candidateResumeId = pickedResume?.id ?? null;
+    const blobSnapshot = pickedResume?.blobUrl ?? null;
 
     // Record which fields actually changed, for a meaningful audit entry.
     const changed: string[] = [];
@@ -322,7 +291,7 @@ export async function updateSubmission(
       changed.push("submitted date");
     if (
       String(existing.candidateResumeId ?? "") !== String(candidateResumeId ?? "") ||
-      String(existing.resumeDriveLink ?? "") !== String(resumeSnapshot ?? "")
+      String(existing.resumeBlobUrl ?? "") !== String(blobSnapshot ?? "")
     )
       changed.push("resume");
     if (newSubmittedById) changed.push("submitted by");
@@ -334,8 +303,8 @@ export async function updateSubmission(
         submissionNotes: d.submissionNotes ?? null,
         submittedAt: d.submittedAt,
         candidateResumeId,
-        // Snapshot the link used so it survives résumé edits/deletes.
-        resumeDriveLink: resumeSnapshot,
+        // Snapshot the résumé's blob URL so it survives library edits/deletes.
+        resumeBlobUrl: blobSnapshot,
         engagement: d.engagement ?? null,
         vendorRecruiterName: d.vendorRecruiterName ?? null,
         jobDuties: d.jobDuties ?? null,

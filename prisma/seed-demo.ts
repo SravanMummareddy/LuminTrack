@@ -7,7 +7,9 @@
  */
 import "dotenv/config";
 import bcrypt from "bcryptjs";
-import { PrismaNeon } from "@prisma/adapter-neon";
+import { put } from "@vercel/blob";
+import { gzipForBlob } from "../src/server/blob-upload";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, Prisma } from "../src/generated/prisma/client";
 import type {
   JobStatus,
@@ -16,13 +18,77 @@ import type {
   InterviewResult,
 } from "../src/generated/prisma/enums";
 
-const connectionString = process.env.DATABASE_URL;
+// A bulk one-shot script: use a direct TCP connection (DIRECT_URL, the pg
+// adapter) rather than the app's Neon serverless WebSocket driver, which is
+// flaky for long batch runs from a fresh process. Same adapter the migrations
+// and integration tests use.
+const connectionString = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
 if (!connectionString) {
-  throw new Error("DATABASE_URL is not set. Fill in .env before seeding.");
+  throw new Error("DIRECT_URL / DATABASE_URL is not set. Fill in .env before seeding.");
 }
 const prisma = new PrismaClient({
-  adapter: new PrismaNeon({ connectionString }),
+  adapter: new PrismaPg({ connectionString }),
 });
+
+/**
+ * Builds a tiny but valid one-page PDF (correct xref offsets computed from byte
+ * length, so any title length works). Used to seed real uploaded résumés into
+ * private Blob so the demo shows the upload flow, not just Drive links.
+ */
+function makeSamplePdf(title: string): Buffer {
+  const esc = title.replace(/([()\\])/g, "\\$1");
+  const stream = `BT /F1 24 Tf 72 700 Td (${esc}) Tj ET`;
+  const objs = [
+    "<</Type/Catalog/Pages 2 0 R>>",
+    "<</Type/Pages/Kids[3 0 R]/Count 1>>",
+    "<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Resources<</Font<</F1 5 0 R>>>>/Contents 4 0 R>>",
+    `<</Length ${stream.length}>>stream\n${stream}\nendstream`,
+    "<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>",
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  objs.forEach((body, i) => {
+    offsets.push(Buffer.byteLength(pdf, "latin1"));
+    pdf += `${i + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xrefStart = Buffer.byteLength(pdf, "latin1");
+  pdf += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n`;
+  for (const off of offsets) pdf += `${String(off).padStart(10, "0")} 00000 n \n`;
+  pdf += `trailer\n<</Size ${objs.length + 1}/Root 1 0 R>>\nstartxref\n${xrefStart}\n%%EOF`;
+  return Buffer.from(pdf, "latin1");
+}
+
+type SampleBlob = { pathname: string; url: string; size: number };
+
+/** Uploads a few sample résumé PDFs to private Blob once (reused across seeded
+ *  résumés). Empty when no Blob token is configured — the seed then falls back
+ *  to legacy Drive links so it still runs. */
+async function uploadSampleResumeBlobs(): Promise<SampleBlob[]> {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    console.log("  (no BLOB_READ_WRITE_TOKEN — seeding legacy Drive-link résumés)");
+    return [];
+  }
+  const out: SampleBlob[] = [];
+  for (const name of ["Sample Resume A", "Sample Resume B", "Sample Resume C"]) {
+    const pdf = makeSamplePdf(name);
+    // Stored gzip-compressed to match what the serve routes expect (they set
+    // Content-Encoding: gzip). Fixed pathname (no random suffix) so re-seeding
+    // overwrites the same few sample blobs instead of piling up orphans.
+    const blob = await put(
+      `resumes/samples/${name.replace(/\s+/g, "-").toLowerCase()}.pdf`,
+      gzipForBlob(pdf),
+      {
+        access: "private",
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        contentType: "application/pdf",
+      },
+    );
+    out.push({ pathname: blob.pathname, url: blob.url, size: pdf.length });
+  }
+  console.log(`  Uploaded ${out.length} sample résumé PDFs to private Blob`);
+  return out;
+}
 
 // ─── Deterministic RNG (mulberry32) ──────────────────────────────────────────
 
@@ -739,10 +805,11 @@ async function main() {
     fullName: string;
     createdAt: Date;
     status: string;
-    resumes: { id: string; driveLink: string }[];
+    resumes: { id: string; blobUrl: string | null }[];
   }[] = [];
   const CANDIDATE_TAGS = ["java", "react", "remote", "senior", "urgent", "passive", "h1b", "local"];
   const CANDIDATE_SOURCES = ["LinkedIn", "Referral", "Job board", "Vendor pool", "Repeat consultant"];
+  const sampleBlobs = await uploadSampleResumeBlobs();
   let resumeCount = 0;
   for (let i = 0; i < 30; i++) {
     const first = pick(FIRST_NAMES);
@@ -787,27 +854,29 @@ async function main() {
       select: { id: true },
     });
 
-    // Résumé library — most candidates keep 1-3 labelled résumés.
-    const resumes: { id: string; driveLink: string }[] = [];
-    if (chance(0.8)) {
+    // Résumé library — most candidates keep 1-3 uploaded PDF résumés (rotating
+    // through the sample blobs). Skipped entirely if no Blob store is configured.
+    const resumes: { id: string; blobUrl: string | null }[] = [];
+    if (chance(0.8) && sampleBlobs.length) {
       const labels = pickN(RESUME_LABELS, randInt(1, 3));
       for (let j = 0; j < labels.length; j++) {
         // A few résumés are archived (soft-deleted) so the "Show archived" chip
         // on the candidate page has data. Archived ones aren't offered for
         // submission, so only active ones go into the pick pool below.
         const isActive = chance(0.85);
+        const sample = sampleBlobs[(i + j) % sampleBlobs.length];
         const created = await prisma.candidateResume.create({
           data: {
             candidateId: candidate.id,
             label: labels[j],
-            driveLink:
-              "https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz" +
-              `${i}-${j}` +
-              "/view",
+            blobPathname: sample.pathname,
+            blobUrl: sample.url,
+            contentType: "application/pdf",
+            sizeBytes: sample.size,
             isActive,
             createdAt,
           },
-          select: { id: true, driveLink: true },
+          select: { id: true, blobUrl: true },
         });
         if (isActive) {
           resumes.push(created);
@@ -1017,7 +1086,7 @@ async function main() {
         billRate: chance(0.6) ? job.candidateRate + randInt(12, 30) : null,
         teamLead: chance(0.5) ? pick(TEAM_LEADS) : null,
         candidateResumeId: pickedResume?.id ?? null,
-        resumeDriveLink: pickedResume?.driveLink ?? null,
+        resumeBlobUrl: pickedResume?.blobUrl ?? null,
         submittedAt,
         createdAt: submittedAt,
         updatedAt: times[times.length - 1],
@@ -1452,13 +1521,23 @@ async function main() {
             : bucket === "future"
               ? new Date(NOW.getTime() + randInt(120, 700) * DAY)
               : null;
+      // Reuse the sample résumé blobs as document files (no extra uploads).
+      const docSample = sampleBlobs.length
+        ? sampleBlobs[(i + docCount) % sampleBlobs.length]
+        : null;
       await prisma.candidateDocument.create({
         data: {
           candidateId: c.id,
           category: t.category as never,
           label: t.label,
-          driveLink:
-            "https://drive.google.com/file/d/1Doc" + `${i}-${docCount}` + "/view",
+          ...(docSample
+            ? {
+                blobPathname: docSample.pathname,
+                blobUrl: docSample.url,
+                contentType: "application/pdf",
+                sizeBytes: docSample.size,
+              }
+            : {}),
           issuedAt: new Date(NOW.getTime() - randInt(200, 1000) * DAY),
           expiresAt,
           uploadedById: admin.id,

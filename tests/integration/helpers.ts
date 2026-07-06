@@ -109,7 +109,13 @@ export async function seedSubmissionEditScenario(prisma: PrismaClient) {
     },
   });
   const resume = await prisma.candidateResume.create({
-    data: { candidateId: candidate.id, label: "Primary", driveLink: "https://drive.google.com/file/abc" },
+    data: {
+      candidateId: candidate.id,
+      label: "Primary",
+      blobPathname: "resumes/test/primary.pdf",
+      blobUrl: "https://blob.test/primary.pdf",
+      contentType: "application/pdf",
+    },
   });
   const submission = await prisma.submission.create({
     data: {

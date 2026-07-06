@@ -1,21 +1,31 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
-import { Info } from "lucide-react";
+import { useActionState, useEffect, useRef, useState } from "react";
+import { ArrowRight, Info } from "lucide-react";
 import { Select, Textarea, Input } from "@/components/ui/field";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClass } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 import { changeSubmissionStatus } from "@/server/actions/submissions";
 import {
   SUBMISSION_STATUSES,
   SUBMISSION_STATUS_LABEL,
+  SUBMISSION_STAGE_INDEX,
   STATUS_CHANGE_REASONS,
   STATUS_CHANGE_REASON_LABEL,
 } from "@/lib/labels";
+import {
+  primaryAdvance,
+  branchActions,
+  isTerminal,
+  stageStatus,
+} from "@/lib/submission-flow";
+import { StatusPipeline } from "@/components/submissions/status-pipeline";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
 import type { SubmissionStatus } from "@/generated/prisma/enums";
 
 const labelClass = "mb-1 block text-xs font-medium text-slate-500";
+const linkClass = "text-xs font-medium text-indigo-600 hover:underline";
 
 /** Current local date/time as a `datetime-local` input value. */
 function nowDateTimeLocal(): string {
@@ -26,13 +36,23 @@ function nowDateTimeLocal(): string {
   )}:${pad(d.getMinutes())}`;
 }
 
+type DialogKind = "reject" | "hold" | "backed_out" | "joined" | "confirm_jump";
+
 /**
- * Status update control on the submission detail page. Alongside the new
- * status it records when the change actually happened, an optional note, and
- * — for Rejected / On Hold — a reason. Controlled inputs: React 19 resets
- * uncontrolled <form action> fields after submit, and these must survive until
- * the page revalidates. The parent keys this form by status, so a committed
- * change remounts it with fresh fields.
+ * Status control on the submission detail page. Instead of a flat dropdown, the
+ * common action is a single primary "Advance to <next>" button (see
+ * `primaryAdvance` in submission-flow.ts); Hold / Reject / Backed-out are their
+ * own buttons that open a small confirm capturing the reason (or, for Joined,
+ * the placement heads-up + join date). The full status dropdown is still one
+ * click away under "Jump to any stage" for corrections.
+ *
+ * All paths post the SAME `<form>` to the unchanged `changeSubmissionStatus`
+ * action. Every submitted field is a hidden input bound to component state;
+ * visible controls are name-less and just drive that state — so there's exactly
+ * one input per field name regardless of which UI is showing. Controlled inputs
+ * survive React 19's post-action form reset (the values must live until the
+ * page revalidates); a `submitFlag` effect calls `requestSubmit()` after state
+ * commits so the hidden `status` carries the intended target.
  */
 export function SubmissionStatusForm({
   submissionId,
@@ -41,38 +61,42 @@ export function SubmissionStatusForm({
   submissionId: string;
   status: SubmissionStatus;
 }) {
-  const [selected, setSelected] = useState<SubmissionStatus>(status);
+  const formRef = useRef<HTMLFormElement>(null);
+  // `target` is the status we're about to POST — set right before every submit.
+  const [target, setTarget] = useState<SubmissionStatus>(status);
   const [eventAt, setEventAt] = useState("");
   const [note, setNote] = useState("");
   const [reason, setReason] = useState("");
   const [expectedJoinDate, setExpectedJoinDate] = useState("");
   const [actualJoinDate, setActualJoinDate] = useState("");
-  // useActionState gives us the pending flag, error surface, and field errors
-  // returned by the Server Action. Double-click protection: the submit
-  // button disables mid-flight, so a slow network can't log duplicate audit
-  // rows.
+
+  const [showDetails, setShowDetails] = useState(false);
+  const [showJump, setShowJump] = useState(false);
+  const [dialog, setDialog] = useState<DialogKind | null>(null);
+  // Bumped to request a submit once the intended `target` has committed.
+  const [submitFlag, setSubmitFlag] = useState(0);
+
   const [state, formAction, isPending] = useActionState(
     changeSubmissionStatus,
     EMPTY_FORM_STATE,
   );
   const { toast } = useToast();
 
-  // Default "when this happened" to now. This must run after mount, not in a
-  // useState initializer: the client's local "now" is unknown during SSR, so
-  // seeding it on the server would trip a hydration mismatch on the input.
+  // Default "when this happened" to now — client-only (avoids a hydration
+  // mismatch on the datetime input).
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only initial value
     setEventAt(nowDateTimeLocal());
   }, []);
 
-  // Confirm the save — this action revalidates instead of redirecting, so the
-  // status change used to land with zero feedback. `state` is a fresh object
-  // per submit, so a second identical change still re-fires the toast.
-  //
-  // This form is intentionally NOT remounted via `key={status}` on save: that
-  // unmounted the instance before this effect could run, eating the toast. So
-  // on success we reset the change-specific fields here, the way the remount
-  // used to. `selected` already equals the saved status (the user picked it).
+  // Submit once `target` (and any dialog fields) have committed to the DOM.
+  useEffect(() => {
+    if (submitFlag > 0) formRef.current?.requestSubmit();
+  }, [submitFlag]);
+
+  // Confirm the save (the action revalidates instead of redirecting) and reset
+  // the change-specific fields — this form is intentionally not remounted on
+  // save, which would eat the toast.
   useEffect(() => {
     if (state.ok && state.toast) {
       toast({
@@ -86,63 +110,348 @@ export function SubmissionStatusForm({
       setExpectedJoinDate("");
       setActualJoinDate("");
       setEventAt(nowDateTimeLocal());
+      setShowDetails(false);
+      setShowJump(false);
       /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, [state, toast]);
 
-  const showReason = selected === "REJECTED" || selected === "ON_HOLD";
-  const showExpectedJoin = selected === "OFFER_ACCEPTED";
-  const showActualJoin = selected === "JOINED";
+  function clearTransient() {
+    setNote("");
+    setReason("");
+    setExpectedJoinDate("");
+    setActualJoinDate("");
+  }
+
+  /** Set the target status and fire a submit on the next commit. */
+  function submitAs(next: SubmissionStatus) {
+    setTarget(next);
+    setSubmitFlag((n) => n + 1);
+  }
+
+  /** Open a branch/confirm dialog for `next`, starting from clean fields. */
+  function openDialog(kind: DialogKind, next: SubmissionStatus) {
+    clearTransient();
+    setTarget(next);
+    setDialog(kind);
+  }
+
+  function confirmDialog() {
+    setDialog(null);
+    setSubmitFlag((n) => n + 1);
+  }
+
+  function cancelDialog() {
+    setDialog(null);
+    clearTransient();
+    setTarget(status);
+  }
+
+  const advance = primaryAdvance(status);
+  const branches = branchActions(status);
+  const terminal = isTerminal(status);
+
+  const branchLabel: Record<string, string> = {
+    ON_HOLD: "Put on hold",
+    REJECTED: "Reject",
+    BACKED_OUT: "Backed out",
+  };
+
+  function onBranchClick(s: SubmissionStatus) {
+    if (s === "ON_HOLD") openDialog("hold", "ON_HOLD");
+    else if (s === "REJECTED") openDialog("reject", "REJECTED");
+    else if (s === "BACKED_OUT") openDialog("backed_out", "BACKED_OUT");
+  }
+
+  function onPrimaryClick() {
+    if (!advance) return;
+    if (advance.next === "JOINED") openDialog("joined", "JOINED");
+    else submitAs(advance.next);
+  }
+
+  // The immediate-next stage index drives the dashed "click to advance" cue on
+  // the stepper (only when the happy path really is the next visual stage).
+  const nextStageIndex =
+    advance && stageStatus(SUBMISSION_STAGE_INDEX[status] + 1) === advance.next
+      ? SUBMISSION_STAGE_INDEX[status] + 1
+      : null;
+
+  // Clicking a stepper dot: the happy path runs the primary action; a jump to
+  // Joined opens the placement confirm; anything else (backward / skip) confirms
+  // first. Stepper dots only ever target linear statuses, never Reject/Hold.
+  function onStageClick(index: number) {
+    const clicked = stageStatus(index);
+    if (!clicked || clicked === status) return;
+    if (advance && clicked === advance.next) {
+      onPrimaryClick();
+      return;
+    }
+    if (clicked === "JOINED") {
+      openDialog("joined", "JOINED");
+      return;
+    }
+    openDialog("confirm_jump", clicked);
+  }
+
+  // Which conditional fields the "Jump to any stage" control should reveal for
+  // the currently-picked target (mirrors the old form's rules).
+  const jumpShowReason = target === "REJECTED" || target === "ON_HOLD";
+  const jumpShowExpectedJoin = target === "OFFER_ACCEPTED";
+  const jumpShowActualJoin = target === "JOINED";
 
   return (
     <form action={formAction} className="space-y-3">
       <input type="hidden" name="id" value={submissionId} />
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="w-56">
-          <label htmlFor="status" className={labelClass}>
-            Submission status
-          </label>
-          <Select
-            id="status"
-            name="status"
-            value={selected}
-            onChange={(e) => setSelected(e.target.value as SubmissionStatus)}
-          >
-            {SUBMISSION_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {SUBMISSION_STATUS_LABEL[s]}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div className="w-56">
-          <label
-            htmlFor="eventAt"
-            className={`${labelClass} flex items-center gap-1`}
-          >
-            Effective date/time
-            <span
-              tabIndex={0}
-              role="img"
-              aria-label="Defaults to now. Set this to when the change actually happened if it was earlier — it feeds the time-in-stage and time-to-fill reports."
-              title="Defaults to now. Set this to when the change actually happened if it was earlier — it feeds the time-in-stage and time-to-fill reports."
-              className="cursor-help text-slate-400"
+      <input type="hidden" name="status" value={target} />
+      <input type="hidden" name="eventAt" value={eventAt} />
+      <input type="hidden" name="note" value={note} />
+      <input type="hidden" name="reason" value={reason} />
+      <input type="hidden" name="expectedJoinDate" value={expectedJoinDate} />
+      <input type="hidden" name="actualJoinDate" value={actualJoinDate} />
+
+      <StatusPipeline
+        status={status}
+        onStageClick={onStageClick}
+        nextStageIndex={nextStageIndex}
+      />
+      <div className="border-t border-slate-200 pt-3" />
+
+      {!showJump && (
+        <>
+          {terminal ? (
+            <p className="text-sm text-slate-500">
+              This submission is closed —{" "}
+              <span className="font-medium text-slate-700">
+                {SUBMISSION_STATUS_LABEL[status]}
+              </span>
+              . Use{" "}
+              <button
+                type="button"
+                className={linkClass}
+                onClick={() => {
+                  setTarget(status);
+                  setShowJump(true);
+                }}
+              >
+                Jump to any stage
+              </button>{" "}
+              to reopen or correct it.
+            </p>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                {advance && (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={onPrimaryClick}
+                    disabled={isPending}
+                  >
+                    {advance.label}
+                    <ArrowRight className="h-4 w-4" aria-hidden />
+                  </Button>
+                )}
+                {branches.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => onBranchClick(s)}
+                    className={
+                      s === "ON_HOLD"
+                        ? "inline-flex items-center justify-center gap-1.5 rounded-md border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-700 shadow-sm transition hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                        : s === "REJECTED"
+                          ? buttonClass("danger")
+                          : buttonClass("secondary")
+                    }
+                  >
+                    {branchLabel[s]}
+                  </button>
+                ))}
+              </div>
+
+              {showDetails && (
+                <div className="flex flex-wrap items-end gap-3 rounded-md border border-slate-200 bg-slate-50/60 p-3">
+                  <div className="w-56">
+                    <label
+                      htmlFor="eventAtCtl"
+                      className={`${labelClass} flex items-center gap-1`}
+                    >
+                      Effective date/time
+                      <span
+                        tabIndex={0}
+                        role="img"
+                        aria-label="Defaults to now. Set this to when the change actually happened if it was earlier — it feeds the time-in-stage and time-to-fill reports."
+                        title="Defaults to now. Set this to when the change actually happened if it was earlier — it feeds the time-in-stage and time-to-fill reports."
+                        className="cursor-help text-slate-400"
+                      >
+                        <Info className="h-3 w-3" aria-hidden />
+                      </span>
+                    </label>
+                    <Input
+                      id="eventAtCtl"
+                      type="datetime-local"
+                      value={eventAt}
+                      onChange={(e) => setEventAt(e.target.value)}
+                    />
+                  </div>
+                  <div className="min-w-[16rem] flex-1">
+                    <label htmlFor="noteCtl" className={labelClass}>
+                      Note
+                    </label>
+                    <Textarea
+                      id="noteCtl"
+                      rows={2}
+                      value={note}
+                      onChange={(e) => setNote(e.target.value)}
+                      placeholder="Optional note — applied to the next advance"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-4 pt-0.5">
+                <button
+                  type="button"
+                  className={linkClass}
+                  onClick={() => setShowDetails((v) => !v)}
+                >
+                  {showDetails ? "Hide note / date" : "Add note or backdate"}
+                </button>
+                <button
+                  type="button"
+                  className={linkClass}
+                  onClick={() => {
+                    setTarget(status);
+                    setShowJump(true);
+                  }}
+                >
+                  Jump to any stage
+                </button>
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      {showJump && (
+        <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50/60 p-3">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="w-56">
+              <label htmlFor="statusJump" className={labelClass}>
+                Set status
+              </label>
+              <Select
+                id="statusJump"
+                value={target}
+                onChange={(e) => setTarget(e.target.value as SubmissionStatus)}
+              >
+                {SUBMISSION_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {SUBMISSION_STATUS_LABEL[s]}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="w-56">
+              <label htmlFor="eventAtJump" className={labelClass}>
+                Effective date/time
+              </label>
+              <Input
+                id="eventAtJump"
+                type="datetime-local"
+                value={eventAt}
+                onChange={(e) => setEventAt(e.target.value)}
+              />
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setSubmitFlag((n) => n + 1)}
+              disabled={isPending}
             >
-              <Info className="h-3 w-3" aria-hidden />
-            </span>
-          </label>
-          <Input
-            id="eventAt"
-            name="eventAt"
-            type="datetime-local"
-            value={eventAt}
-            onChange={(e) => setEventAt(e.target.value)}
-          />
+              {isPending ? "Updating…" : "Update"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setShowJump(false);
+                setTarget(status);
+                clearTransient();
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+
+          {jumpShowReason && (
+            <div className="w-56">
+              <label htmlFor="reasonJump" className={labelClass}>
+                Reason
+              </label>
+              <Select
+                id="reasonJump"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              >
+                <option value="">Select a reason (optional)…</option>
+                {STATUS_CHANGE_REASONS.map((r) => (
+                  <option key={r} value={r}>
+                    {STATUS_CHANGE_REASON_LABEL[r]}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
+          {jumpShowExpectedJoin && (
+            <div className="w-56">
+              <label htmlFor="expectedJoinJump" className={labelClass}>
+                Expected join date
+              </label>
+              <Input
+                id="expectedJoinJump"
+                type="date"
+                value={expectedJoinDate}
+                onChange={(e) => setExpectedJoinDate(e.target.value)}
+              />
+            </div>
+          )}
+          {jumpShowActualJoin && (
+            <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+              Saving as <strong>Joined</strong> creates a placement and marks the
+              candidate <strong>Placed</strong>. Set the placement&apos;s bill/pay
+              rates afterward.
+            </p>
+          )}
+          {jumpShowActualJoin && (
+            <div className="w-56">
+              <label htmlFor="actualJoinJump" className={labelClass}>
+                Actual join date
+              </label>
+              <Input
+                id="actualJoinJump"
+                type="date"
+                value={actualJoinDate}
+                onChange={(e) => setActualJoinDate(e.target.value)}
+              />
+            </div>
+          )}
+          <div className="max-w-md">
+            <label htmlFor="noteJump" className={labelClass}>
+              Note
+            </label>
+            <Textarea
+              id="noteJump"
+              rows={2}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Optional note about this change"
+            />
+          </div>
         </div>
-        <Button type="submit" variant="secondary" disabled={isPending}>
-          {isPending ? "Updating…" : "Update"}
-        </Button>
-      </div>
+      )}
+
       {state.error && (
         <p
           role="alert"
@@ -151,9 +460,10 @@ export function SubmissionStatusForm({
           {state.error}
         </p>
       )}
+
       <p className="text-xs text-slate-400">
-        To correct the original <strong>submitted date</strong> (not this
-        change), use{" "}
+        To correct the original <strong>submitted date</strong> (not this change),
+        use{" "}
         <a
           href={`/submissions/${submissionId}/edit`}
           className="text-indigo-600 hover:underline"
@@ -163,81 +473,152 @@ export function SubmissionStatusForm({
         .
       </p>
 
-      {showExpectedJoin && (
-        <div className="w-56">
-          <label htmlFor="expectedJoinDate" className={labelClass}>
-            Expected join date
-          </label>
-          <Input
-            id="expectedJoinDate"
-            name="expectedJoinDate"
-            type="date"
-            value={expectedJoinDate}
-            onChange={(e) => setExpectedJoinDate(e.target.value)}
-          />
-        </div>
-      )}
-
-      {showActualJoin && (
-        <div className="space-y-2">
-          <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-            Saving as <strong>Joined</strong> creates a placement and marks the
-            candidate (and any linked bench profile) <strong>Placed</strong>. Set
-            the placement&apos;s bill/pay rates afterward on the placement page.
-          </p>
-          <div className="w-56">
-            <label htmlFor="actualJoinDate" className={labelClass}>
-              Actual join date
-            </label>
-            <Input
-              id="actualJoinDate"
-              name="actualJoinDate"
-              type="date"
-              value={actualJoinDate}
-              onChange={(e) => setActualJoinDate(e.target.value)}
-            />
-          </div>
-        </div>
-      )}
-
-      {showReason && (
-        <div className="w-56">
-          <label htmlFor="reason" className={labelClass}>
-            Reason
-          </label>
-          <Select
-            id="reason"
-            name="reason"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-          >
-            <option value="">Select a reason (optional)…</option>
-            {STATUS_CHANGE_REASONS.map((r) => (
-              <option key={r} value={r}>
-                {STATUS_CHANGE_REASON_LABEL[r]}
-              </option>
-            ))}
-          </Select>
-        </div>
-      )}
-
-      <div className="max-w-md">
-        <label htmlFor="note" className={labelClass}>
-          Note
-        </label>
-        <Textarea
-          id="note"
-          name="note"
-          rows={2}
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder={
-            selected === "REJECTED"
-              ? "Why was the candidate rejected?"
-              : "Optional note about this change"
+      {(dialog === "reject" || dialog === "hold") && (
+        <Dialog
+          open
+          onClose={cancelDialog}
+          title={dialog === "reject" ? "Reject candidate" : "Put on hold"}
+          description={
+            dialog === "reject"
+              ? "Pick a reason (optional) — it shows on the timeline and the reports."
+              : "Pausing this submission. Pick a reason (optional)."
           }
-        />
-      </div>
+        >
+          <div className="space-y-3">
+            <div>
+              <label htmlFor="reasonDlg" className={labelClass}>
+                Reason
+              </label>
+              <Select
+                id="reasonDlg"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              >
+                <option value="">Select a reason (optional)…</option>
+                {STATUS_CHANGE_REASONS.map((r) => (
+                  <option key={r} value={r}>
+                    {STATUS_CHANGE_REASON_LABEL[r]}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <label htmlFor="noteDlg" className={labelClass}>
+                Note
+              </label>
+              <Textarea
+                id="noteDlg"
+                rows={2}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder={
+                  dialog === "reject"
+                    ? "Why was the candidate rejected?"
+                    : "Optional note about this change"
+                }
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="secondary" onClick={cancelDialog}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant={dialog === "reject" ? "danger" : "primary"}
+                onClick={confirmDialog}
+              >
+                {dialog === "reject" ? "Reject candidate" : "Put on hold"}
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+
+      {dialog === "backed_out" && (
+        <Dialog
+          open
+          onClose={cancelDialog}
+          title="Mark as backed out"
+          description="The candidate withdrew after being selected or offered."
+        >
+          <div className="space-y-3">
+            <div>
+              <label htmlFor="noteBacked" className={labelClass}>
+                Note
+              </label>
+              <Textarea
+                id="noteBacked"
+                rows={2}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Optional — what happened?"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="secondary" onClick={cancelDialog}>
+                Cancel
+              </Button>
+              <Button type="button" variant="danger" onClick={confirmDialog}>
+                Mark backed out
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+
+      {dialog === "confirm_jump" && (
+        <Dialog
+          open
+          onClose={cancelDialog}
+          title={`Move to ${SUBMISSION_STATUS_LABEL[target].toLowerCase()}?`}
+          description="This sets the submission's status and logs the change on the timeline."
+        >
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={cancelDialog}>
+              Cancel
+            </Button>
+            <Button type="button" variant="primary" onClick={confirmDialog}>
+              Move to {SUBMISSION_STATUS_LABEL[target].toLowerCase()}
+            </Button>
+          </div>
+        </Dialog>
+      )}
+
+      {dialog === "joined" && (
+        <Dialog
+          open
+          onClose={cancelDialog}
+          title="Mark as joined"
+          description="This creates a placement and marks the candidate placed."
+        >
+          <div className="space-y-3">
+            <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+              Saving as <strong>Joined</strong> creates a placement and marks the
+              candidate (and any linked bench profile) <strong>Placed</strong>. Set
+              the placement&apos;s bill/pay rates afterward on the placement page.
+            </p>
+            <div className="w-56">
+              <label htmlFor="actualJoinDlg" className={labelClass}>
+                Actual join date
+              </label>
+              <Input
+                id="actualJoinDlg"
+                type="date"
+                value={actualJoinDate}
+                onChange={(e) => setActualJoinDate(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="secondary" onClick={cancelDialog}>
+                Cancel
+              </Button>
+              <Button type="button" variant="primary" onClick={confirmDialog}>
+                Mark joined
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
     </form>
   );
 }

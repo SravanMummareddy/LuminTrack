@@ -74,7 +74,7 @@ const SUBMISSION_INCLUDE = {
     },
   },
   submittedBy: { select: { fullName: true } },
-  candidateResume: { select: { label: true, driveLink: true } },
+  candidateResume: { select: { label: true } },
   _count: { select: { interviewRounds: true } },
 } satisfies Prisma.SubmissionInclude;
 
@@ -225,7 +225,13 @@ export function getSubmissionDetail(id: string) {
         },
       },
       submittedBy: { select: { fullName: true } },
-      candidateResume: { select: { label: true } },
+      candidateResume: {
+        select: {
+          label: true,
+          blobPathname: true,
+          contentType: true,
+        },
+      },
       interviewRounds: {
         orderBy: { roundOrder: "asc" },
         include: { updatedBy: { select: { fullName: true } } },
@@ -250,7 +256,6 @@ export async function getSubmissionForEdit(id: string) {
       submissionNotes: true,
       submittedAt: true,
       candidateResumeId: true,
-      resumeDriveLink: true,
       engagement: true,
       vendorRecruiterName: true,
       jobDuties: true,
@@ -281,7 +286,7 @@ export async function getSubmissionForEdit(id: string) {
       ],
     },
     orderBy: { createdAt: "asc" },
-    select: { id: true, label: true, driveLink: true, isActive: true },
+    select: { id: true, label: true, isActive: true },
   });
 
   return { ...submission, candidate: { ...submission.candidate, resumes } };

@@ -106,8 +106,9 @@ export async function listJobs(filters: JobListFilters) {
   // boundary (RSC requires plain JSON values). Coerce rate fields to plain
   // numbers here, once, so downstream consumers — including <JobsTable> —
   // can treat them as primitives.
-  const rows = raw.map(({ vendorRate, candidateRate, ...rest }) => ({
+  const rows = raw.map(({ clientRate, vendorRate, candidateRate, ...rest }) => ({
     ...rest,
+    clientRate: clientRate != null ? Number(clientRate) : null,
     vendorRate: vendorRate != null ? Number(vendorRate) : null,
     candidateRate: candidateRate != null ? Number(candidateRate) : null,
   }));

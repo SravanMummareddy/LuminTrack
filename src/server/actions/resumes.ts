@@ -1,63 +1,101 @@
 "use server";
 
+import { del } from "@vercel/blob";
+import { uploadPrivateFile } from "@/server/blob-upload";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/lib/session";
 import { logActivity } from "@/server/activity";
-import { candidateResumeSchema } from "@/lib/validation/resume";
+import {
+  resumeUploadMetaSchema,
+  resumeLabelSchema,
+  resumeFileError,
+} from "@/lib/validation/resume";
 import { toFieldErrors } from "@/lib/validation/common";
 import type { FormState } from "@/lib/form-state";
 
-function readResume(formData: FormData) {
-  return candidateResumeSchema.safeParse({
-    candidateId: formData.get("candidateId") ?? "",
-    label: formData.get("label") ?? "",
-    driveLink: formData.get("driveLink") ?? "",
-  });
+/** Turn a filename into a safe blob path segment (put() adds a random suffix
+ *  for uniqueness, so this only needs to be filesystem-friendly). */
+function safeFileName(name: string): string {
+  const cleaned = name.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+  return cleaned || "resume";
 }
 
-/** Adds a résumé to a candidate's library. */
-export async function createCandidateResume(
+/**
+ * Uploads a résumé file to private Vercel Blob and adds it to the candidate's
+ * library. The upload (a network call) happens BEFORE the DB transaction —
+ * upload first, then write the row that points at it, so we never commit a row
+ * referencing a blob that failed to land. Returns the created résumé so an
+ * inline caller (the submission form) can select it right away.
+ */
+export async function uploadCandidateResume(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
   const user = await requireUser();
-  const parsed = readResume(formData);
+
+  const parsed = resumeUploadMetaSchema.safeParse({
+    candidateId: formData.get("candidateId") ?? "",
+    label: formData.get("label") ?? "",
+  });
   if (!parsed.success)
     return {
       error: "Please fix the highlighted fields.",
       fieldErrors: toFieldErrors(parsed.error),
     };
-  const d = parsed.data;
+  const { candidateId, label } = parsed.data;
+
+  const file = formData.get("file");
+  if (!(file instanceof File))
+    return {
+      error: "Choose a file to upload.",
+      fieldErrors: { file: "Choose a file to upload." },
+    };
+  const fileErr = resumeFileError(file);
+  if (fileErr)
+    return { error: fileErr, fieldErrors: { file: fileErr } };
 
   const candidate = await prisma.candidate.findUnique({
-    where: { id: d.candidateId },
+    where: { id: candidateId },
     select: { id: true },
   });
   if (!candidate) return { error: "This candidate no longer exists." };
 
-  await prisma.$transaction(async (tx) => {
-    const created = await tx.candidateResume.create({
+  // Private, gzip-compressed blob — never fetched directly by the browser;
+  // served via /api/resumes/[id]. blob.pathname is the actual stored key.
+  const blob = await uploadPrivateFile(
+    `resumes/${candidateId}/${safeFileName(file.name)}`,
+    file,
+  );
+
+  const created = await prisma.$transaction(async (tx) => {
+    const row = await tx.candidateResume.create({
       data: {
-        candidateId: d.candidateId,
-        label: d.label,
-        driveLink: d.driveLink,
+        candidateId,
+        label,
+        blobPathname: blob.pathname,
+        blobUrl: blob.url,
+        sizeBytes: blob.size,
+        contentType: file.type || null,
       },
+      select: { id: true, label: true },
     });
     await logActivity(tx, {
       entityType: "CANDIDATE",
       action: "RESUME_ADDED",
-      description: `Resume "${created.label}" added`,
+      description: `Resume "${row.label}" uploaded`,
       performedById: user.id,
-      candidateId: d.candidateId,
+      candidateId,
     });
+    return row;
   });
 
-  revalidatePath(`/candidates/${d.candidateId}`);
-  return { ok: true };
+  revalidatePath(`/candidates/${candidateId}`);
+  return { ok: true, createdResume: { id: created.id, label: created.label } };
 }
 
-/** Edits a résumé's label or link. The change does not re-sync past submissions. */
+/** Renames a résumé. The file itself can't be swapped in place — upload a new
+ *  résumé for that. The change does not re-sync past submissions. */
 export async function updateCandidateResume(
   _prev: FormState,
   formData: FormData,
@@ -66,41 +104,37 @@ export async function updateCandidateResume(
   const resumeId = String(formData.get("id") ?? "").trim();
   if (!resumeId) return { error: "Missing résumé reference." };
 
-  const parsed = readResume(formData);
+  const parsed = resumeLabelSchema.safeParse({
+    label: formData.get("label") ?? "",
+  });
   if (!parsed.success)
     return {
       error: "Please fix the highlighted fields.",
       fieldErrors: toFieldErrors(parsed.error),
     };
-  const d = parsed.data;
+  const { label } = parsed.data;
 
   const existing = await prisma.candidateResume.findUnique({
     where: { id: resumeId },
+    select: { id: true, label: true, candidateId: true },
   });
   if (!existing) return { error: "This résumé no longer exists." };
 
-  const linkChanged = existing.driveLink !== d.driveLink;
-  const labelChanged = existing.label !== d.label;
-  const labelPart = labelChanged
-    ? `"${existing.label}" → "${d.label}"`
-    : `"${d.label}"`;
-  const linkPart = linkChanged ? "link changed" : "link unchanged";
-
-  await prisma.$transaction(async (tx) => {
-    await tx.candidateResume.update({
-      where: { id: resumeId },
-      data: { label: d.label, driveLink: d.driveLink },
+  if (existing.label !== label) {
+    await prisma.$transaction(async (tx) => {
+      await tx.candidateResume.update({
+        where: { id: resumeId },
+        data: { label },
+      });
+      await logActivity(tx, {
+        entityType: "CANDIDATE",
+        action: "RESUME_UPDATED",
+        description: `Resume "${existing.label}" → "${label}"`,
+        performedById: user.id,
+        candidateId: existing.candidateId,
+      });
     });
-    await logActivity(tx, {
-      entityType: "CANDIDATE",
-      action: "RESUME_UPDATED",
-      description: `Resume ${labelPart} updated · ${linkPart}`,
-      oldValue: linkChanged ? existing.driveLink : null,
-      newValue: linkChanged ? d.driveLink : null,
-      performedById: user.id,
-      candidateId: existing.candidateId,
-    });
-  });
+  }
 
   revalidatePath(`/candidates/${existing.candidateId}`);
   return { ok: true };
@@ -186,7 +220,13 @@ export async function deleteCandidateResume(formData: FormData): Promise<void> {
 
   const existing = await prisma.candidateResume.findUnique({
     where: { id: resumeId },
-    include: { _count: { select: { submissions: true } } },
+    select: {
+      id: true,
+      label: true,
+      candidateId: true,
+      blobUrl: true,
+      _count: { select: { submissions: true } },
+    },
   });
   if (!existing) return;
   // Backstop: never hard-delete a résumé still referenced by a submission.
@@ -202,6 +242,16 @@ export async function deleteCandidateResume(formData: FormData): Promise<void> {
       candidateId: existing.candidateId,
     });
   });
+
+  // Free the Blob storage once the row is gone (best-effort — a failed cleanup
+  // shouldn't surface an error to the user; the DB row is already deleted).
+  if (existing.blobUrl) {
+    try {
+      await del(existing.blobUrl);
+    } catch {
+      // Orphaned blob; safe to ignore (no broken references).
+    }
+  }
 
   revalidatePath(`/candidates/${existing.candidateId}`);
 }

@@ -23,7 +23,6 @@ const requirementBase = {
   jobDuties: optionalText,
   teamLead: optionalText,
   submissionNotes: optionalText,
-  resumeDriveLink: optionalUrl,
 };
 
 /** A new requirement — the job is required and fixed once chosen. */

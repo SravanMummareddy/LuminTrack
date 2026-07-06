@@ -232,7 +232,7 @@ export function DocumentsManager({
                                   </span>
                                 )}
                                 <a
-                                  href={d.driveLink}
+                                  href={`/api/documents/${d.id}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="inline-flex items-center gap-1 text-indigo-600 hover:underline"

@@ -355,13 +355,15 @@ async function resumesSheet(mode: ExcelMode): Promise<SheetSpec> {
     columns: [
       { header: "Candidate", key: "candidate", width: 28 },
       { header: "Label", key: "label", width: 24 },
-      ...(mode === "full" ? [{ header: "Drive link", key: "driveLink", width: 60 }] : []),
+      ...(mode === "full"
+        ? [{ header: "File", key: "file", width: 40 }]
+        : []),
       { header: "Created at", key: "createdAt", width: 18 },
     ],
     rows: rows.map((r) => ({
       candidate: r.candidate.fullName,
       label: r.label,
-      driveLink: r.driveLink,
+      file: r.blobPathname ?? "",
       createdAt: r.createdAt,
     })),
   };
@@ -379,7 +381,7 @@ async function documentsSheet(mode: ExcelMode): Promise<SheetSpec> {
       { header: "Candidate", key: "candidate", width: 28 },
       { header: "Category", key: "category", width: 16 },
       { header: "Label", key: "label", width: 28 },
-      ...(mode === "full" ? [{ header: "Drive link", key: "driveLink", width: 60 }] : []),
+      ...(mode === "full" ? [{ header: "File", key: "file", width: 40 }] : []),
       { header: "Issued", key: "issuedAt", width: 14 },
       { header: "Expires", key: "expiresAt", width: 14 },
       { header: "Notes", key: "notes", width: 32 },
@@ -388,7 +390,7 @@ async function documentsSheet(mode: ExcelMode): Promise<SheetSpec> {
       candidate: d.candidate.fullName,
       category: d.category,
       label: d.label,
-      driveLink: d.driveLink,
+      file: d.blobPathname ?? "",
       issuedAt: d.issuedAt ?? "",
       expiresAt: d.expiresAt ?? "",
       notes: d.notes ?? "",

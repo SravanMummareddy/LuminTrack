@@ -75,7 +75,6 @@ export default async function EditRequirementPage({
             jobDuties: requirement.jobDuties ?? "",
             teamLead: requirement.teamLead ?? "",
             submissionNotes: requirement.submissionNotes ?? "",
-            resumeDriveLink: requirement.resumeDriveLink ?? "",
           }}
           cancelHref={`/vendor-portal/${id}`}
         />

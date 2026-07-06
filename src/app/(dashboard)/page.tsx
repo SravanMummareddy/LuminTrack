@@ -31,18 +31,15 @@ import {
   listSisterCompanies,
   listActiveRecruiterOptions,
 } from "@/server/queries/org";
-import { parseAnalyticsParams, TONE_HEX, AGING_BUCKET_LABEL, AGING_BUCKET_TONE } from "@/lib/analytics";
+import { parseAnalyticsParams, TONE_HEX } from "@/lib/analytics";
 import {
-  JOB_STATUS_LABEL,
-  JOB_STATUS_TONE,
   SUBMISSION_STATUS_LABEL,
   SUBMISSION_STATUS_TONE,
 } from "@/lib/labels";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist";
-import { BarChartCard, DonutChartCard } from "@/components/dashboard/charts";
-import { Badge } from "@/components/ui/badge";
+import { BarChartCard } from "@/components/dashboard/charts";
 import { Table, Th, Td, cardLink } from "@/components/ui/table";
 
 function Card({
@@ -228,30 +225,11 @@ export default async function DashboardPage({
     getOnboardingStatus(),
   ]);
 
-  const jobsByStatusChart = data.jobsByStatus.map((d) => ({
-    label: JOB_STATUS_LABEL[d.status],
-    value: d.count,
-    color: TONE_HEX[JOB_STATUS_TONE[d.status]],
-  }));
-
   const submissionsByStageChart = data.submissionsByStatus.map((d) => ({
     label: SUBMISSION_STATUS_LABEL[d.status],
     value: d.count,
     color: TONE_HEX[SUBMISSION_STATUS_TONE[d.status]],
   }));
-
-  // Long tail of sources crushes the bar chart — keep the top 5 distinct and
-  // roll the remainder into a single "Other" bar. `data.jobsBySource` is
-  // already sorted desc by count.
-  const TOP_SOURCES = 5;
-  const topSources = data.jobsBySource.slice(0, TOP_SOURCES);
-  const restCount = data.jobsBySource
-    .slice(TOP_SOURCES)
-    .reduce((sum, d) => sum + d.count, 0);
-  const jobsBySourceChart = [
-    ...topSources.map((d) => ({ label: d.name, value: d.count })),
-    ...(restCount > 0 ? [{ label: "Other", value: restCount }] : []),
-  ];
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
@@ -431,78 +409,8 @@ export default async function DashboardPage({
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <Card title="Jobs by status">
-          {data.totalJobs === 0 ? (
-            <p className="py-12 text-center text-sm text-slate-400">
-              No jobs for the selected filters.
-            </p>
-          ) : (
-            <div className="flex flex-col items-center gap-4 sm:flex-row">
-              <div className="w-full sm:w-1/2">
-                <DonutChartCard data={jobsByStatusChart} />
-              </div>
-              <ul className="w-full space-y-1.5 sm:w-1/2">
-                {data.jobsByStatus.map((d) => (
-                  <li
-                    key={d.status}
-                    className="flex items-center justify-between text-sm"
-                  >
-                    <span className="flex items-center gap-2 text-slate-600">
-                      <span
-                        className="h-2.5 w-2.5 rounded-full"
-                        style={{
-                          backgroundColor: TONE_HEX[JOB_STATUS_TONE[d.status]],
-                        }}
-                      />
-                      {JOB_STATUS_LABEL[d.status]}
-                    </span>
-                    <span className="font-medium tabular-nums text-slate-900">
-                      {d.count}
-                    </span>
-                  </li>
-                ))}
-                <li className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2 text-sm">
-                  <span className="text-slate-500">Total jobs</span>
-                  <span className="font-semibold tabular-nums text-slate-900">
-                    {data.totalJobs}
-                  </span>
-                </li>
-              </ul>
-            </div>
-          )}
-        </Card>
-
-        <Card title="Jobs by source">
-          <BarChartCard data={jobsBySourceChart} />
-        </Card>
-      </div>
-
       <Card title="Submissions by pipeline stage">
         <BarChartCard data={submissionsByStageChart} height={320} />
-      </Card>
-
-      <Card title="Open-job aging">
-        <p className="-mt-2 mb-3 text-xs text-slate-400">
-          Days since creation for Open and On Hold jobs.
-        </p>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {data.aging.map((a) => (
-            <div
-              key={a.bucket}
-              className="rounded-md border border-slate-200 p-3 text-center"
-            >
-              <div className="text-2xl font-semibold tabular-nums text-slate-900">
-                {a.count}
-              </div>
-              <div className="mt-1">
-                <Badge tone={AGING_BUCKET_TONE[a.bucket]}>
-                  {AGING_BUCKET_LABEL[a.bucket]}
-                </Badge>
-              </div>
-            </div>
-          ))}
-        </div>
       </Card>
 
       <Card title="Recruiter performance">

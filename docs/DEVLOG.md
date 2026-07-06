@@ -10,6 +10,75 @@ short instead of long.
 
 ---
 
+## 2026-07-06 · The seed died on a bare `ErrorEvent` — right driver, wrong transport
+
+**Situation.** After moving résumés and documents to Vercel Blob, `npx tsx
+prisma/seed-demo.ts` failed immediately at "Wiping existing data…" with a
+useless, message-less `ErrorEvent { type: 'error' }` — a raw WebSocket error
+object, no stack, no SQL. The app itself (the running dev server) talked to the
+same database fine.
+
+**Diagnosis.** The instinct was "my Blob changes broke it," so I tested the two
+things I'd touched: a minimal `SELECT 1` through the exact same adapter +
+connection string **connected fine**, and adding the new `@vercel/blob` /
+`blob-upload` imports to that test **still** connected fine. So it wasn't the
+connection or the imports — it was the *transport under load*. The seed uses
+`PrismaNeon`, the app's **serverless WebSocket** driver. A long-lived Next dev
+server keeps that socket warm, but a fresh one-shot script that opens the socket
+and immediately fires ~20 `deleteMany`s hits a cold Neon compute and the
+WebSocket drops mid-run — surfacing as the bare `ErrorEvent`. The migrations and
+integration tests never hit this because they use the **direct `pg`** adapter
+over `DIRECT_URL`, not the WebSocket driver.
+
+**Fix.** Point the seed at the same transport the other batch tools already use:
+`PrismaPg` (direct TCP) over `DIRECT_URL` instead of `PrismaNeon` over the pooled
+WebSocket URL. One import swap + one connection-string swap. Reseed ran clean.
+
+**Lesson.** A message-less `ErrorEvent` is a transport failure, not a query
+failure — don't debug the SQL. And match the driver to the *workload shape*:
+the serverless WebSocket driver is tuned for a warm, long-lived server, not a
+cold bulk script. When a script misbehaves against a serverless DB, reach for
+the direct connection the migrations already trust.
+
+---
+
+## 2026-07-06 · The feature we "built" already existed — we'd broken it
+
+**Situation.** Stakeholder feedback: "I add jobs manually, keep it simple, let me
+track each recruiter." A first pass ("Phase 1") merged Job and Submission into a
+single one-form "Jobs" list and retired the Vendor Portal Requirements (VPR) tab —
+on the theory that the owner's "job" *was* a submission. Then the owner clarified
+the real workflow: a team lead scopes a requirement (adds bill/pay), *then* recruiters
+submit candidates against it. That's three tiers, not one.
+
+**Diagnosis.** The owner's own spreadsheet had **two separate tabs** ("Vendor Portal
+Requirements" and "Bench Submissions") with the same fields at different stages — a
+staging record and a tracked record. The app's *original* design was already exactly
+that: `Job → VendorRequirement → Submission`, with bill/pay living on the VPR and the
+submission being the analytics-visible record. Phase 1 hadn't added a feature; it had
+flattened a correct three-tier model into one and deleted the middle tier. The only
+real gaps vs. the owner's ideal were narrow: the Job form carried bill/pay it shouldn't,
+and the VPR→Submission convert was 1:1 when the owner wanted one requirement to receive
+several candidates.
+
+**Fix.** Revert, don't rebuild. The de-clutter work and the Phase-1 merge were
+*intermingled* in two files (dashboard `page.tsx`, `queries/dashboard.ts`) and the
+branch had no commits, so a hard reset would have lost the good work. Instead:
+`git checkout HEAD -- <the 7 pure-Phase-1 files>` to restore originals, **surgical
+edits** to the 2 mixed files (kept de-clutter, restored the VPR nudge), and parked the
+3 new files. Then the two genuine refinements: trim the Job form to client-rate-only
+(bill/pay moved to a collapsible, no data loss), and change VPR→Submission to 1:many
+(drop `convertedSubmissionId @unique`, add `Submission.vendorRequirementId`; the VPR
+stays OPEN and accumulates submissions).
+
+**Lesson.** Before building a "new" workflow, check whether the app already models it —
+a pivot request is often a request to *use* an existing structure differently, not to
+replace it. And when good and bad changes are tangled on an uncommitted branch,
+categorize every changed file (keep / revert / mixed) and reach for `git checkout
+<file>` + surgical edits over a blanket reset. The categorization *is* the fix.
+
+---
+
 ## 2026-06-22 · A new `Decimal` column that leaked across the RSC→Client boundary
 
 **Situation.** After adding a `clientRate` column and shipping it, the `/submissions`
