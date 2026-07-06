@@ -59,6 +59,24 @@ A **Candidate** is the base identity. **Bench** (being marketed) and
 **Placements** (placed) are lifecycle views on top of candidates, kept in sync
 automatically.
 
+### Rates & the rate-chain warning
+
+Every submission / placement / requirement carries a rate chain:
+**Client rate** (what the end client releases) ≥ **Bill rate** (what the vendor
+releases to us) ≥ **Pay rate** (what we pay the consultant). `Candidate rate` is a
+legacy single headline number. Client rate is optional (often not disclosed).
+
+**What to test (submission new/edit, and Move-to-submission):**
+- Enter **Pay > Bill** → an amber *"Double-check these rates"* note appears live, saying
+  the margin would be negative. It **does not block** Save (advisory only).
+- Enter **Candidate rate > Client rate** (or Bill > Client) → the note flags that too.
+- Fix the rates (or clear the Client rate) → the note disappears.
+- Save with a warning showing → it still saves (soft warning by design).
+- **Convert a Vendor Portal Requirement** that has a Client rate → open the resulting
+  submission and confirm the Client rate carried over (regression check for PR #35).
+- On a **placement** you own (or as admin), confirm Bill/Pay/Client rate + margin show;
+  as a recruiter who is *not* the recruiter-of-record, confirm they're masked ("—").
+
 ---
 
 ## 3. Lifecycles & automatic cascades

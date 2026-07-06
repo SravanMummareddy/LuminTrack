@@ -1,3 +1,35 @@
+# ⤵ Reconciled 2026-07-05 — read this first
+
+Baseline: `main` @ `23c4f86` (no open PRs, tsc clean, 113 unit tests). The dated
+sweeps below are historical; much has shipped since. For the current "what shipped"
+picture see **CLAUDE.md** ("🚧 Current work" sections) and **`docs/DEVLOG.md`**.
+
+**Previously-"remaining" items now confirmed shipped** (do NOT re-pick):
+- `error.tsx` + `not-found.tsx` for the dashboard segment — both exist under `src/app/(dashboard)/`.
+- Dialog focus trap + return-focus on close (Polish Round 2).
+- Auth/logout hardened — unauth/dead-session requests hit `GET /api/auth/logout` which clears
+  the cookie (see DEVLOG 2026-06-22 redirect-loop entry).
+- clientRate wired everywhere + the two clientRate bugs (Decimal leak, convert drop) — see DEVLOG.
+
+**Candidate still-open small items** (verify against current code before starting):
+- Global search doesn't index display IDs (CAND-001 / REQ-159263 / JOB-00001) — `src/server/queries/search.ts`.
+- Reports: per-source conversion-rate breakdown column.
+- Mobile topbar search overlaps avatar on narrow tablets.
+- Recruiter-detail "Submissions" sub-table sorting.
+- Bulk status update UI (select N submissions → set status).
+- Saved filters / views ("my open jobs" one-click pin).
+
+**From the 2026-06-22 QA sweep** (`test-results/QA_UX_REPORT_2026-06-22.md`, low severity):
+- `not-found.tsx` hydration `className` mismatch warning on 404 pages.
+- Résumé-preview shows a tall empty box when a Drive link can't embed.
+- Scorecard runs past the right edge at 1440px — wants a horizontal-scroll affordance.
+
+**Large deferred items** live in [`ENHANCEMENTS.md`](./ENHANCEMENTS.md). **Pending owner
+decisions** (rate model, retire Candidate rate, "New vendors" semantics, guardrail
+strictness, cap requirements per job) are in the walkthrough DOCX.
+
+---
+
 # Remaining work (2026-05-25 sweep)
 
 **✅ Shipped — Round 5 UX-testing fixes + résumé archive (2026-05-29/30).**
