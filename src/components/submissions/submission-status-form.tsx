@@ -21,6 +21,7 @@ import {
   stageStatus,
 } from "@/lib/submission-flow";
 import { StatusPipeline } from "@/components/submissions/status-pipeline";
+import { Confetti } from "@/components/ui/confetti";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
 import type { SubmissionStatus } from "@/generated/prisma/enums";
 
@@ -75,6 +76,7 @@ export function SubmissionStatusForm({
   const [dialog, setDialog] = useState<DialogKind | null>(null);
   // Bumped to request a submit once the intended `target` has committed.
   const [submitFlag, setSubmitFlag] = useState(0);
+  const [celebrateKey, setCelebrateKey] = useState(0);
 
   const [state, formAction, isPending] = useActionState(
     changeSubmissionStatus,
@@ -105,6 +107,7 @@ export function SubmissionStatusForm({
         description: state.toast.description,
       });
       /* eslint-disable react-hooks/set-state-in-effect */
+      if (state.celebrate) setCelebrateKey((k) => k + 1);
       setNote("");
       setReason("");
       setExpectedJoinDate("");
@@ -201,6 +204,7 @@ export function SubmissionStatusForm({
 
   return (
     <form action={formAction} className="space-y-3">
+      <Confetti fireKey={celebrateKey} />
       <input type="hidden" name="id" value={submissionId} />
       <input type="hidden" name="status" value={target} />
       <input type="hidden" name="eventAt" value={eventAt} />

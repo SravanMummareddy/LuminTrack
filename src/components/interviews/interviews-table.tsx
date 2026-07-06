@@ -7,7 +7,7 @@ import {
   INTERVIEW_RESULT_LABEL,
   INTERVIEW_RESULT_TONE,
 } from "@/lib/labels";
-import { formatDateTime, formatSubmissionDisplayId } from "@/lib/format";
+import { formatDate, formatTime, formatSubmissionDisplayId } from "@/lib/format";
 import type { InterviewListRow } from "@/server/queries/interviews";
 
 function technology(c: InterviewListRow["submission"]["candidate"]): string {
@@ -27,6 +27,7 @@ export function InterviewsTable({
         <tr>
           <Th className="text-right">S.No</Th>
           <SortableHeader column="date" label="Date of interview" defaultDir="desc" />
+          <Th>Time</Th>
           <SortableHeader column="candidate" label="Candidate" />
           <SortableHeader column="client" label="Client" />
           <Th>Vendor</Th>
@@ -48,7 +49,10 @@ export function InterviewsTable({
                 {pageOffset + idx + 1}
               </Td>
               <Td label="Date of interview" secondary className="whitespace-nowrap">
-                {r.scheduledAt ? formatDateTime(r.scheduledAt) : "—"}
+                {r.scheduledAt ? formatDate(r.scheduledAt) : "—"}
+              </Td>
+              <Td label="Time" secondary className="whitespace-nowrap">
+                {r.scheduledAt ? formatTime(r.scheduledAt) : "—"}
               </Td>
               <Td heading>
                 <Link

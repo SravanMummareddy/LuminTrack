@@ -7,7 +7,9 @@ import { createSubmission } from "@/server/actions/submissions";
 import { getJobSummary } from "@/server/queries/jobs";
 import { getJobSubmittedCandidateIds } from "@/server/queries/submissions";
 import { listCandidateOptions } from "@/server/queries/candidates";
+import { getOpenRequirementPrefill } from "@/server/queries/requirements";
 import { listUsers } from "@/server/queries/org";
+import { formatVendorRequirementDisplayId } from "@/lib/format";
 import { requireUser } from "@/lib/session";
 
 export default async function NewSubmissionPage({
@@ -16,13 +18,15 @@ export default async function NewSubmissionPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [job, candidates, recruiters, submittedIds, user] = await Promise.all([
-    getJobSummary(id),
-    listCandidateOptions(),
-    listUsers(),
-    getJobSubmittedCandidateIds(id),
-    requireUser(),
-  ]);
+  const [job, candidates, recruiters, submittedIds, user, reqPrefill] =
+    await Promise.all([
+      getJobSummary(id),
+      listCandidateOptions(),
+      listUsers(),
+      getJobSubmittedCandidateIds(id),
+      requireUser(),
+      getOpenRequirementPrefill(id),
+    ]);
   if (!job) notFound();
 
   const submitted = new Set(submittedIds);
@@ -45,7 +49,11 @@ export default async function NewSubmissionPage({
 
       <PageHeader
         title="Submit a candidate"
-        description={`Add a candidate submission to "${job.title}".`}
+        description={
+          reqPrefill
+            ? `Add a candidate submission to "${job.title}". Commercial terms prefilled from ${formatVendorRequirementDisplayId(reqPrefill)} — edit as needed.`
+            : `Add a candidate submission to "${job.title}".`
+        }
       />
 
       {candidates.length === 0 ? (
@@ -71,6 +79,18 @@ export default async function NewSubmissionPage({
             recruiters={recruiters}
             defaultRecruiterId={user.id}
             defaultCandidateRate={job.candidateRate?.toString() ?? ""}
+            prefill={
+              reqPrefill
+                ? {
+                    payRate: reqPrefill.payRate,
+                    billRate: reqPrefill.billRate,
+                    clientRate: reqPrefill.clientRate,
+                    engagement: reqPrefill.engagement,
+                    vendorRecruiterName: reqPrefill.vendorRecruiterName,
+                    teamLead: reqPrefill.teamLead,
+                  }
+                : undefined
+            }
             cancelHref={`/jobs/${job.id}`}
           />
         </div>

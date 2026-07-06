@@ -477,6 +477,7 @@ export async function changeSubmissionStatus(
   revalidatePath(`/candidates/${submission.candidateId}`);
   return {
     ok: true,
+    celebrate: next === "JOINED",
     toast: {
       title: `Status updated to ${SUBMISSION_STATUS_LABEL[next]}`,
       description:

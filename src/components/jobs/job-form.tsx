@@ -215,8 +215,13 @@ export function JobForm({
           )}
         </Field>
 
-        <Field label="Status" htmlFor="status" error={errors.status}>
-          <Select id="status" name="status" defaultValue={values?.status ?? "OPEN"}>
+        <Field label="Status" htmlFor="status" required error={errors.status}>
+          <Select
+            id="status"
+            name="status"
+            defaultValue={values?.status ?? "OPEN"}
+            required
+          >
             {JOB_STATUSES.map((s) => (
               <option key={s} value={s}>
                 {JOB_STATUS_LABEL[s]}

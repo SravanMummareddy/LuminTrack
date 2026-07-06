@@ -44,6 +44,9 @@ export type FormState = {
    * — the app previously gave no feedback on these silent writes.
    */
   toast?: { title: string; description?: string };
+  /** Set on a milestone worth celebrating (a candidate JOINED) so the form can
+   *  fire a brief confetti burst on top of the success toast. */
+  celebrate?: boolean;
   /** The résumé just created by an upload action — lets a caller (e.g. the
    *  submission form's inline upload) select it immediately. */
   createdResume?: { id: string; label: string };

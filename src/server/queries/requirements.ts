@@ -149,6 +149,38 @@ export type JobRequirementRow = Awaited<
   ReturnType<typeof getRequirementsForJob>
 >[number];
 
+/**
+ * The job's most-recent OPEN requirement, shaped as editable prefill for a
+ * direct "submit a candidate against this job" (so that path carries the same
+ * commercial terms as the convert-from-requirement path instead of starting
+ * blank). Returns null when the job has no OPEN requirement.
+ */
+export async function getOpenRequirementPrefill(jobId: string) {
+  const r = await prisma.vendorRequirement.findFirst({
+    where: { jobId, status: "OPEN" },
+    orderBy: { createdAt: "desc" },
+    select: {
+      seq: true,
+      payRate: true,
+      billRate: true,
+      clientRate: true,
+      engagement: true,
+      vendorRecruiterName: true,
+      teamLead: true,
+    },
+  });
+  if (!r) return null;
+  return {
+    seq: r.seq,
+    payRate: r.payRate == null ? "" : String(r.payRate),
+    billRate: r.billRate == null ? "" : String(r.billRate),
+    clientRate: r.clientRate == null ? "" : String(r.clientRate),
+    engagement: r.engagement ?? "",
+    vendorRecruiterName: r.vendorRecruiterName ?? "",
+    teamLead: r.teamLead ?? "",
+  };
+}
+
 export async function getVendorRequirement(id: string) {
   const row = await prisma.vendorRequirement.findUnique({
     where: { id },

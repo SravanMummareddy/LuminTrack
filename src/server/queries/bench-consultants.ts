@@ -116,10 +116,19 @@ export type BenchListRow = Awaited<
   ReturnType<typeof listBenchConsultants>
 >["rows"][number];
 
-/** Full detail (incl. gated credentials — caller decides what to render). */
-export async function getBenchConsultant(id: string) {
+/**
+ * Full detail. The marketing password is a gated credential — the caller passes
+ * `includeCredentials` (from `canViewBenchCredentials`) and the field is dropped
+ * from the query entirely for everyone else, so it never leaves the database for
+ * an unauthorized viewer (defense-in-depth, not just hidden at render time).
+ */
+export async function getBenchConsultant(
+  id: string,
+  opts: { includeCredentials?: boolean } = {},
+) {
   return prisma.benchConsultant.findUnique({
     where: { id },
+    omit: opts.includeCredentials ? {} : { marketingPassword: true },
     include: {
       recruiter: { select: { id: true, fullName: true } },
       candidate: { select: { id: true, seq: true, fullName: true } },
