@@ -122,13 +122,20 @@ Before jobs can be created, the supporting lists must exist.
 2. Fill the form. Required: **Job title, Client, Vendor, Source**. The
    **Source** dropdown lists managed sources plus an **Other** option — choose
    *Other* to type a one-off source by hand. Optional: status (defaults to
-   *Open*), vendor rate, candidate rate, location, description, notes.
+   *Open*), **client / vendor (bill) / candidate rates**, location, description, notes.
 3. Tick the **recruiters** assigned to work the job.
 4. *(Admins / team leads)* Optionally expand **"Also plan a vendor portal
    requirement"** to pre-decide commercial terms (recruiter, location, pay /
-   bill / candidate rates, engagement) at the same time — see Workflow 2a.
+   bill / client / candidate rates, engagement) at the same time — see Workflow 2a.
 5. Save. The job appears in the Jobs list and on the assigned recruiters'
    pages.
+
+> **Rates explained.** The chain is **Client rate** (what the end client releases)
+> ≥ **Bill / vendor rate** (what the vendor releases to us) ≥ **Pay rate** (what we
+> pay the consultant); **Candidate rate** is a legacy single headline number. Client
+> rate is optional (often not disclosed). On the submission form, if the rates break
+> the chain (e.g. pay above bill, or candidate above client) a live amber
+> *"Double-check these rates"* note appears — it's a soft warning and never blocks Save.
 
 ### Workflow 2a — Plan a vendor portal requirement *(Vendor Portal Requirements, admin / team lead)*
 A **vendor portal requirement** is a planning record: a team lead or admin
@@ -138,7 +145,7 @@ enters the pipeline (or any analytics) until it's moved.
 1. Go to **Vendor Portal Requirements** → **New requirement** (or use **Create
    requirement** on a job's detail page, which pre-selects that job).
 2. Pick the **job**, then fill any of: candidate (optional — can be added
-   later), recruiter, location, pay / bill / candidate rates, engagement
+   later), recruiter, location, pay / bill / client / candidate rates, engagement
    (C2C / W2), vendor recruiter, team lead (auto-filled from the recruiter's
    team if blank), résumé link and notes. Save — the requirement shows as
    **Open** in the list.

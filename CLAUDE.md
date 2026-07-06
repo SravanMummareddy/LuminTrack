@@ -12,6 +12,51 @@ timeline, and recruiter performance. Replaces a manual Excel/Word process.
 "Remaining work" summary — start there before grepping the audit sections).
 **Future enhancements (large multi-session items):** [`ENHANCEMENTS.md`](./ENHANCEMENTS.md).
 
+## Rate & margin model
+
+Money flows downhill, each rung keeping a margin:
+**Client rate** (what the end client releases) ≥ **Bill / Vendor rate** (what the vendor
+releases to us — what we actually receive) ≥ **Pay rate** (what we pay the consultant).
+Margin = bill − pay; the binding profit constraint is **Pay ≤ Bill** (we only ever receive
+the bill rate). `candidateRate` is a **legacy single "headline" rate**, kept unchanged for
+analytics continuity (revenue projections key off it) — possibly retired later pending owner
+confirmation. `clientRate` is nullable and often undisclosed by the vendor.
+**Source of truth:** the header comment + `rateChainWarnings()` in `src/lib/rates.ts`; the
+live (non-blocking) chain warning is `src/components/ui/rate-chain-warning.tsx`.
+
+## 🚧 Current work — Rate model, clientRate, company-wide scorecard, rate guardrail (2026-06-22, PRs #32–#35, on `main`)
+
+Post-verification baseline: `main` @ `23c4f86`, no open PRs, tsc clean, 113 unit tests.
+Demo reseeded + sent to the stakeholder for verification (creds `sriman@lumintrack.com`
+admin+team-lead / `hrishikesh@lumintrack.com` recruiter, password `LuminTrack2026!`);
+`LuminTrack-App-Walkthrough.docx` (feature tour + open questions) delivered. **Awaiting
+stakeholder feedback.**
+
+- **`clientRate` end-to-end (PR #32).** New nullable `clientRate Decimal(12,2)` on **Job,
+  Submission, Placement, VendorRequirement** (migration `20260622190000_client_rate`,
+  applied to the Neon dev DB), wired through Zod schemas, all create/edit forms, server
+  actions (incl. audit-drift compare + the VPR→submission convert path), and queries
+  (Decimal→number flatten). Rate model documented above. `candidateRate` intentionally
+  **not** dropped (owner to confirm).
+- **Live rate-chain warning (PR #34).** `src/lib/rates.ts` `rateChainWarnings()` +
+  `src/components/ui/rate-chain-warning.tsx` — advisory amber note on the submission
+  new/edit forms when rates break the chain (pay>bill / bill,candidate>client). **Never
+  blocks a save**; silent when client rate is blank. 10 unit tests in `src/lib/__tests__/rates.test.ts`.
+- **Company-wide "New vendors" scorecard (PR #32).** `getMonthlyScorecard`
+  (`src/server/queries/monthly-scorecard.ts`) now counts the first-ever submission *anyone*
+  made to a vendor (credited to whoever made it), not per-recruiter.
+- **UX clarity fixes (PR #32).** Admin-only weekly-margin strip on `/placements`; JOINED
+  cascade heads-up on the submission status form; clarified rate/source/vendor/client hints;
+  "⚠ Rates pending" shown when bill==pay (instead of a fake $0 margin); Candidates/Bench/Settings copy.
+- **Bug fixes.** clientRate `Decimal` leak on `/submissions` (`flattenRow` missed the new
+  column — PR #33); clientRate dropped on the VPR→submission convert path (the convert
+  action's `safeParse` omitted the field while still writing it — PR #35). Both in `docs/DEVLOG.md`.
+
+> **Open owner questions gating the rate model + scorecard** (in the walkthrough DOCX):
+> confirm the rate chain; retire legacy Candidate rate?; "New vendors" company-wide
+> semantics; rate guardrail soft-warn vs hard-block; cap requirements per job? Hold
+> rate/scorecard changes until answered.
+
 ## ✅ Vendor Portal Requirements (R0–R5) — SHIPPED 2026-06-22 (on `bench-sales-build` / PR #31)
 
 A pre-submission **planning layer**: a team-lead/admin scopes a vendor

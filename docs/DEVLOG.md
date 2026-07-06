@@ -10,6 +10,55 @@ short instead of long.
 
 ---
 
+## 2026-06-22 · A new `Decimal` column that leaked across the RSC→Client boundary
+
+**Situation.** After adding a `clientRate` column and shipping it, the `/submissions`
+list logged a React console error on every load: *"Only plain objects can be passed to
+Client Components from Server Components … Decimal"* — naming `clientRate`. The page
+rendered fine, but the warning was new and pointed at the just-added field.
+
+**Diagnosis.** `listSubmissions` uses `include: SUBMISSION_INCLUDE`, so Prisma returns
+*all* scalar columns — including the new `clientRate` as a `Decimal`. The submissions
+table is a Client Component, and a `Prisma.Decimal` is not a plain serialisable object.
+There was already a `flattenRow` helper converting `candidateRate`/`payRate`/`billRate`
+to `number` — but it predated `clientRate`, so the new column rode across un-flattened.
+The other three rates were fine precisely *because* someone had remembered to add them.
+
+**Fix.** One line: `clientRate: s.clientRate == null ? null : Number(s.clientRate)` in
+`flattenRow` (`src/server/queries/submissions.ts`). Re-checked in the browser → zero leak
+errors. (PR #33.)
+
+**Lesson.** Adding a `Decimal` (or `Date`, or any non-plain) column is not a one-place
+change — it silently rides every `include`/full-select query into the client. The real fix
+is to make flattening total: a single `flattenRates` helper per model that a schema change
+*forces* you to update, rather than N ad-hoc field lists that a new column quietly slips past.
+
+## 2026-06-22 · A field wired into the write but not the read — clientRate dropped on convert
+
+**Situation.** The Vendor-Portal "Move to submission" convert flow **showed and prefilled**
+a Client rate, and the form submitted it — but every converted submission came out with a
+blank client rate.
+
+**Diagnosis.** Found while tracing the multi-requirement→submission flow, not from an error
+(nothing threw). `convertRequirementToSubmission` parses the posted form with
+`submissionSchema.safeParse({ … })`, then writes `clientRate: d.clientRate ?? null` into the
+new submission. The **write** was correct, but the object handed to `safeParse` never read
+`clientRate` from `formData` — so `d.clientRate` was always `undefined` → always `null`. The
+direct-submit path (`readSubmission`) *did* read it; only the convert action's inline parse
+object had been missed when clientRate was threaded through.
+
+**Fix.** Add `clientRate: formData.get("clientRate") ?? ""` to the convert action's parse
+input (`src/server/actions/requirements.ts`). Verified: converting a VPR with Client rate
+$120 now persists $120 on the resulting submission (was blank). (PR #35.)
+
+**Lesson.** A new field has *two* touchpoints per action — the read (formData → parsed) and
+the write (parsed → DB). Wiring only the write typechecks cleanly (`d.clientRate` exists on
+the schema) and fails silently at runtime. When adding a field, grep every `formData.get`
+block, not just the `create`/`update` data — especially where an action hand-rolls its parse
+object instead of sharing the `readX` helper.
+
+---
+
 ## 2026-06-22 · "localhost is unable to open" — a `/` ⇄ `/login` redirect loop after a reseed
 
 **Situation.** Right after shipping the Vendor Portal Requirements feature, the
