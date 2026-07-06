@@ -1,0 +1,294 @@
+[
+  {
+    "page": "login:sriman@lumintrack.com",
+    "url": "http://localhost:3000/",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": [
+      "logged in -> http://localhost:3000/"
+    ]
+  },
+  {
+    "page": "A01-dashboard-me",
+    "url": "http://localhost:3000/?scope=me",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "A02-dashboard-org",
+    "url": "http://localhost:3000/?scope=org",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "A03-jobs-list",
+    "url": "http://localhost:3000/jobs",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "A04-job-detail",
+    "url": "http://localhost:3000/jobs/cmr9i0fcf001y6hzeock4jwau",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "A05-vpr-list",
+    "url": "http://localhost:3000/vendor-portal",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "A06-vpr-detail",
+    "url": "http://localhost:3000/vendor-portal/cmr9i0t4i00cj6hzew2k2c5ix",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "A07-submissions-list",
+    "url": "http://localhost:3000/submissions",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "A08-submission-detail",
+    "url": "http://localhost:3000/submissions/cmr9i0pbu009k6hze5fjjdbnl",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "A09-candidates-list",
+    "url": "http://localhost:3000/candidates",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "A10-candidate-detail",
+    "url": "http://localhost:3000/candidates/cmr9i0gzp002u6hzenbyw4ejb",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "A11-interviews",
+    "url": "http://localhost:3000/interviews",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "A12-placements-list",
+    "url": "http://localhost:3000/placements",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "A13-placement-detail",
+    "url": "http://localhost:3000/placements/cmr9i0l2100676hzeqozwmadv",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "A14-bench",
+    "url": "http://localhost:3000/bench",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "A15-recruiters-list",
+    "url": "http://localhost:3000/recruiters",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "A16-recruiter-detail",
+    "url": "http://localhost:3000/recruiters/cmr9i0d7500056hzepv6kfs4d",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "A17-reports-analytics",
+    "url": "http://localhost:3000/reports",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "A18-reports-monthly",
+    "url": "http://localhost:3000/reports?tab=monthly",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "A19-audit",
+    "url": "http://localhost:3000/audit",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "A20-settings",
+    "url": "http://localhost:3000/settings",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "A21-settings-export",
+    "url": "http://localhost:3000/settings/export",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "A-hydration-probe",
+    "url": "http://localhost:3000/candidates",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": [
+      "hydration(click Columns/Filters) changed DOM? true"
+    ]
+  },
+  {
+    "page": "A-status-ux",
+    "url": "http://localhost:3000/submissions/cmr9i0pbu009k6hze5fjjdbnl",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": [
+      "has 'Advance' primary btn? true",
+      "has branch btns (hold/reject/backed)? true",
+      "interactive buttons on page: 17"
+    ]
+  },
+  {
+    "page": "login:hrishikesh@lumintrack.com",
+    "url": "http://localhost:3000/",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": [
+      "logged in -> http://localhost:3000/"
+    ]
+  },
+  {
+    "page": "R01-dashboard-me",
+    "url": "http://localhost:3000/?scope=me",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "R02-jobs-list",
+    "url": "http://localhost:3000/jobs",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "R03-job-detail",
+    "url": "http://localhost:3000/jobs/cmr9i0fcf001y6hzeock4jwau",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "R04-candidates-list",
+    "url": "http://localhost:3000/candidates",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "R05-candidate-detail",
+    "url": "http://localhost:3000/candidates/cmr9i0gzp002u6hzenbyw4ejb",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "R06-submissions-list",
+    "url": "http://localhost:3000/submissions",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "R07-submission-detail",
+    "url": "http://localhost:3000/submissions/cmr9i0pbu009k6hze5fjjdbnl",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "R08-interviews",
+    "url": "http://localhost:3000/interviews",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "R09-placements",
+    "url": "http://localhost:3000/placements",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "R10-reports-as-recruiter",
+    "url": "http://localhost:3000/reports",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "R11-forbidden-export",
+    "url": "http://localhost:3000/settings/export",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "R12-forbidden-audit",
+    "url": "http://localhost:3000/audit",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "R13-forbidden-vpr-new",
+    "url": "http://localhost:3000/vendor-portal",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": [
+      "REDIRECTED to /vendor-portal"
+    ]
+  },
+  {
+    "page": "R14-job-new-as-recruiter",
+    "url": "http://localhost:3000/jobs/new",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  },
+  {
+    "page": "R15-settings-as-recruiter",
+    "url": "http://localhost:3000/settings",
+    "consoleErrors": [],
+    "netFails": [],
+    "notes": []
+  }
+]
