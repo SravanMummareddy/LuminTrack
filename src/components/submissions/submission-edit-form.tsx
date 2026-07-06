@@ -24,7 +24,6 @@ type SubmissionAction = (
 type RecruiterOption = { id: string; fullName: string; isActive: boolean };
 
 type EditValues = {
-  candidateRate: string;
   // "" = no résumé, "__new__" = add a new one, otherwise a saved résumé id.
   resumeSelection: string;
   submissionNotes: string;
@@ -42,7 +41,6 @@ type EditValues = {
 };
 
 type Fields = {
-  candidateRate: string;
   resumeSelection: string;
   submissionNotes: string;
   submittedAt: string;
@@ -104,7 +102,6 @@ export function SubmissionEditForm({
   // Inputs are controlled — a validation error returns without redirecting, and
   // React 19 would otherwise reset the uncontrolled fields.
   const [fields, setFields] = useState<Fields>({
-    candidateRate: values.candidateRate,
     resumeSelection: values.resumeSelection,
     submissionNotes: values.submissionNotes,
     submittedAt: toDateTimeLocal(values.submittedAt),
@@ -207,21 +204,6 @@ export function SubmissionEditForm({
           />
         </Field>
 
-        <Field
-          label="Candidate rate"
-          htmlFor="candidateRate"
-          error={errors.candidateRate}
-        >
-          <Input
-            id="candidateRate"
-            name="candidateRate"
-            type="number"
-            min="0"
-            step="0.01"
-            value={fields.candidateRate}
-            onChange={set("candidateRate")}
-          />
-        </Field>
       </div>
 
       <Field

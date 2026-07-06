@@ -39,7 +39,6 @@ export default async function EditJobPage({
     location: job.location ?? "",
     clientRate: job.clientRate?.toString() ?? "",
     vendorRate: job.vendorRate?.toString() ?? "",
-    candidateRate: job.candidateRate?.toString() ?? "",
     description: job.description ?? "",
     notes: job.notes ?? "",
     recruiterIds: job.assignments.map((a) => a.recruiterId),

@@ -86,7 +86,6 @@ type RawSubmissionRow = Prisma.SubmissionGetPayload<{
 function flattenRow(s: RawSubmissionRow) {
   return {
     ...s,
-    candidateRate: s.candidateRate == null ? null : Number(s.candidateRate),
     payRate: s.payRate == null ? null : Number(s.payRate),
     billRate: s.billRate == null ? null : Number(s.billRate),
     clientRate: s.clientRate == null ? null : Number(s.clientRate),
@@ -252,7 +251,6 @@ export async function getSubmissionForEdit(id: string) {
     select: {
       id: true,
       candidateId: true,
-      candidateRate: true,
       submissionNotes: true,
       submittedAt: true,
       candidateResumeId: true,

@@ -22,7 +22,6 @@ type Fields = {
   location: string;
   payRate: string;
   billRate: string;
-  candidateRate: string;
   clientRate: string;
   engagement: string;
   vendorRecruiterName: string;
@@ -37,7 +36,6 @@ const EMPTY_FIELDS: Fields = {
   location: "",
   payRate: "",
   billRate: "",
-  candidateRate: "",
   clientRate: "",
   engagement: "",
   vendorRecruiterName: "",
@@ -238,23 +236,6 @@ export function RequirementForm({
             inputMode="decimal"
             value={fields.payRate}
             onChange={set("payRate")}
-          />
-        </Field>
-        <Field
-          label="Candidate rate"
-          htmlFor="candidateRate"
-          error={errors.candidateRate}
-          hint="Target candidate rate."
-        >
-          <Input
-            id="candidateRate"
-            name="candidateRate"
-            type="number"
-            min="0"
-            step="0.01"
-            inputMode="decimal"
-            value={fields.candidateRate}
-            onChange={set("candidateRate")}
           />
         </Field>
       </div>

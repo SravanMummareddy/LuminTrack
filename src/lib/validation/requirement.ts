@@ -15,7 +15,6 @@ const requirementBase = {
   location: optionalText,
   payRate: optionalNonNegativeNumber,
   billRate: optionalNonNegativeNumber,
-  candidateRate: optionalNonNegativeNumber,
   clientRate: optionalNonNegativeNumber,
   engagement: z.preprocess(emptyToUndefined, z.enum(["C2C", "W2"]).optional()),
   vendorRecruiterName: optionalText,

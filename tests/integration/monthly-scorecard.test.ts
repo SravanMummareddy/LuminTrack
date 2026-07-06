@@ -64,7 +64,6 @@ async function seedScorecard() {
     testPrisma.job.create({
       data: {
         title: "Role",
-        candidateRate: 80,
         client: { connect: { id: client.id } },
         vendor: { connect: { id: vendorId } },
         createdBy: { connect: { id: admin.id } },
@@ -77,7 +76,6 @@ async function seedScorecard() {
     testPrisma.submission.create({
       data: {
         status: status as never,
-        candidateRate: 80,
         submittedAt: when,
         candidate: { connect: { id: cand.id } },
         job: { connect: { id: jobId } },

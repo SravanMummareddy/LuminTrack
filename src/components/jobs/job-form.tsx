@@ -32,7 +32,6 @@ export type JobFormValues = {
   location: string;
   clientRate: string;
   vendorRate: string;
-  candidateRate: string;
   description: string;
   notes: string;
   recruiterIds: string[];
@@ -294,21 +293,6 @@ export function JobForm({
               min="0"
               step="0.01"
               defaultValue={values?.vendorRate ?? ""}
-            />
-          </Field>
-          <Field
-            label="Candidate rate"
-            htmlFor="candidateRate"
-            error={errors.candidateRate}
-            hint="$/hr target for the candidate. Usually set on the requirement instead."
-          >
-            <Input
-              id="candidateRate"
-              name="candidateRate"
-              type="number"
-              min="0"
-              step="0.01"
-              defaultValue={values?.candidateRate ?? ""}
             />
           </Field>
           <Field

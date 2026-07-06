@@ -154,9 +154,6 @@ export default async function SubmissionDetailPage({
           <SummaryItem label="Submitted date">
             {formatDate(submission.submittedAt)}
           </SummaryItem>
-          <SummaryItem label="Candidate rate">
-            {formatRate(submission.candidateRate)}
-          </SummaryItem>
           <SummaryItem label="Last updated">
             {formatDate(submission.updatedAt)}
           </SummaryItem>

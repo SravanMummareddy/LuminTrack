@@ -28,7 +28,6 @@ function readSubmission(formData: FormData) {
     candidateId: formData.get("candidateId") ?? "",
     jobId: formData.get("jobId") ?? "",
     submittedById: formData.get("submittedById") ?? "",
-    candidateRate: formData.get("candidateRate") ?? "",
     submissionNotes: formData.get("submissionNotes") ?? "",
     resumeChoice: formData.get("resumeChoice") ?? "none",
     candidateResumeId: formData.get("candidateResumeId") ?? "",
@@ -138,7 +137,6 @@ export async function createSubmission(
       candidateId: d.candidateId,
       jobId: d.jobId,
       submittedById: d.submittedById,
-      candidateRate: d.candidateRate ?? null,
       submissionNotes: d.submissionNotes ?? null,
       engagement: d.engagement ?? null,
       vendorRecruiterName: d.vendorRecruiterName ?? null,
@@ -186,7 +184,6 @@ export async function createSubmission(
 
 function readSubmissionEdit(formData: FormData) {
   return submissionEditSchema.safeParse({
-    candidateRate: formData.get("candidateRate") ?? "",
     submissionNotes: formData.get("submissionNotes") ?? "",
     submittedAt: formData.get("submittedAt") ?? "",
     submittedById: formData.get("submittedById") ?? "",
@@ -280,7 +277,6 @@ export async function updateSubmission(
     const compare = (label: string, before: unknown, after: unknown) => {
       if (String(before ?? "") !== String(after ?? "")) changed.push(label);
     };
-    compare("candidate rate", existing.candidateRate?.toString(), d.candidateRate);
     compare("notes", existing.submissionNotes, d.submissionNotes);
     // Compare the submitted date at minute precision — the datetime-local input
     // only carries minutes, so a stored seconds component must not count as a change.
@@ -299,7 +295,6 @@ export async function updateSubmission(
     await tx.submission.update({
       where: { id: submissionId },
       data: {
-        candidateRate: d.candidateRate ?? null,
         submissionNotes: d.submissionNotes ?? null,
         submittedAt: d.submittedAt,
         candidateResumeId,
@@ -442,7 +437,6 @@ export async function changeSubmissionStatus(
         submissionId: d.id,
         candidateId: submission.candidateId,
         jobId: submission.jobId,
-        candidateRate: submission.candidateRate,
         payRate: submission.payRate,
         billRate: submission.billRate,
         clientRate: submission.clientRate,

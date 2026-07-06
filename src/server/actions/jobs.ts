@@ -52,7 +52,6 @@ function readJob(formData: FormData) {
     location: formData.get("location") ?? "",
     clientRate: formData.get("clientRate") ?? "",
     vendorRate: formData.get("vendorRate") ?? "",
-    candidateRate: formData.get("candidateRate") ?? "",
     description: formData.get("description") ?? "",
     notes: formData.get("notes") ?? "",
     recruiterIds: formData.getAll("recruiterIds").map(String),
@@ -122,7 +121,6 @@ export async function createJob(
         location: d.location ?? null,
         clientRate: d.clientRate ?? null,
         vendorRate: d.vendorRate ?? null,
-        candidateRate: d.candidateRate ?? null,
         description: d.description ?? null,
         notes: d.notes ?? null,
         positions: d.positions ?? null,
@@ -204,7 +202,6 @@ export async function updateJob(
   compare("location", existing.location, d.location);
   compare("client rate", existing.clientRate?.toString(), d.clientRate);
   compare("vendor rate", existing.vendorRate?.toString(), d.vendorRate);
-  compare("candidate rate", existing.candidateRate?.toString(), d.candidateRate);
   compare("description", existing.description, d.description);
   compare("notes", existing.notes, d.notes);
   compare("positions", existing.positions, d.positions);
@@ -263,7 +260,6 @@ export async function updateJob(
         location: d.location ?? null,
         clientRate: d.clientRate ?? null,
         vendorRate: d.vendorRate ?? null,
-        candidateRate: d.candidateRate ?? null,
         description: d.description ?? null,
         notes: d.notes ?? null,
         positions: d.positions ?? null,

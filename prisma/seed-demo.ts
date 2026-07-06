@@ -676,7 +676,7 @@ async function main() {
     id: string;
     title: string;
     createdAt: Date;
-    candidateRate: number;
+    payBase: number;
     clientRate: number | null;
     assigneeIds: string[];
   }[] = [];
@@ -697,11 +697,14 @@ async function main() {
     );
     const status = weighted(JOB_STATUS_W);
     const vendorRate = randInt(75, 150);
-    const candidateRate = vendorRate - randInt(8, 22);
+    // Pay-rate anchor used to derive each candidate's pay/bill below. NOT a DB
+    // field — the legacy single "candidate rate" was retired; the DB stores only
+    // pay/bill (per submission/requirement) plus vendor/client rate (per job).
+    const payBase = vendorRate - randInt(8, 22);
     // Client rate sits at the top of the chain (Client >= Bill >= Pay). Set on
     // ~80% of jobs; the vendor leaves it undisclosed on the rest (nullable).
-    // +30..55 over candidate rate keeps it above any generated bill rate.
-    const clientRate = chance(0.8) ? candidateRate + randInt(30, 55) : null;
+    // +30..55 over the pay anchor keeps it above any generated bill rate.
+    const clientRate = chance(0.8) ? payBase + randInt(30, 55) : null;
     const creator = chance(0.7) ? admin : pick(recruiters);
     const client = pick(clients);
     // ~35% come from the Randstad iLabor vendor portal; those carry a portal
@@ -713,7 +716,6 @@ async function main() {
         title,
         location: pick(LOCATIONS),
         vendorRate,
-        candidateRate,
         clientRate,
         status,
         description: `${title} opening at ${client.name}. ${randInt(
@@ -799,7 +801,7 @@ async function main() {
       id: job.id,
       title,
       createdAt,
-      candidateRate,
+      payBase,
       clientRate,
       assigneeIds: assignees.map((r) => r.id),
     });
@@ -1079,7 +1081,6 @@ async function main() {
         jobId: job.id,
         submittedById,
         status: finalStatus,
-        candidateRate: job.candidateRate + randInt(-5, 6),
         clientRate: job.clientRate, // carried down the chain from the job
 
         rejectionReason:
@@ -1091,8 +1092,8 @@ async function main() {
         vendorRecruiterName: chance(0.5) ? pick(VENDOR_RECRUITER_NAMES) : null,
         jobDuties: chance(0.3) ? pick(JOB_DUTIES_SAMPLES) : null,
         // Pay/Bill rate pair (bill > pay) + team lead on a subset.
-        payRate: chance(0.6) ? job.candidateRate + randInt(-3, 4) : null,
-        billRate: chance(0.6) ? job.candidateRate + randInt(12, 30) : null,
+        payRate: chance(0.6) ? job.payBase + randInt(-3, 4) : null,
+        billRate: chance(0.6) ? job.payBase + randInt(12, 30) : null,
         teamLead: chance(0.5) ? pick(TEAM_LEADS) : null,
         candidateResumeId: pickedResume?.id ?? null,
         resumeBlobUrl: pickedResume?.blobUrl ?? null,
@@ -1270,8 +1271,8 @@ async function main() {
       // ~20% of placements have rates still pending (0/0) — exercises the
       // "Rates pending" UI flag + the dashboard "rates pending" card.
       const ratesPending = chance(0.2);
-      const bill = ratesPending ? 0 : job.candidateRate + randInt(12, 30);
-      const pay = ratesPending ? 0 : job.candidateRate + randInt(-3, 4);
+      const bill = ratesPending ? 0 : job.payBase + randInt(12, 30);
+      const pay = ratesPending ? 0 : job.payBase + randInt(-3, 4);
       // ~25% have already ended; the rest stay ACTIVE (open-ended or a future
       // end date for a fixed-length contract).
       const ended = chance(0.25);
@@ -1452,8 +1453,8 @@ async function main() {
       ["OPEN", 11],
       ["CANCELLED", 3],
     ]);
-    const payRate = job.candidateRate - randInt(0, 6);
-    const billRate = job.candidateRate + randInt(10, 30);
+    const payRate = job.payBase - randInt(0, 6);
+    const billRate = job.payBase + randInt(10, 30);
     const createdAt = randDate(
       new Date(NOW.getTime() - 30 * DAY),
       new Date(NOW.getTime() - 1 * DAY),
@@ -1466,7 +1467,6 @@ async function main() {
         location: pick(LOCATIONS),
         payRate,
         billRate,
-        candidateRate: job.candidateRate,
         clientRate: job.clientRate, // carried from the job (Client >= Bill >= Pay)
         engagement: chance(0.6) ? "C2C" : "W2",
         vendorRecruiterName: chance(0.5) ? pick(VENDOR_RECRUITER_NAMES) : null,

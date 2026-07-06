@@ -67,7 +67,6 @@ async function seed() {
   const job = await testPrisma.job.create({
     data: {
       title: "Senior Engineer",
-      candidateRate: 80,
       client: { connect: { id: client.id } },
       vendor: { connect: { id: vendor.id } },
       createdBy: { connect: { id: admin.id } },

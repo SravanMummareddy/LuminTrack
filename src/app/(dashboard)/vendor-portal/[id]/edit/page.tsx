@@ -68,7 +68,6 @@ export default async function EditRequirementPage({
             location: requirement.location ?? "",
             payRate: rateStr(requirement.payRate),
             billRate: rateStr(requirement.billRate),
-            candidateRate: rateStr(requirement.candidateRate),
             clientRate: rateStr(requirement.clientRate),
             engagement: requirement.engagement ?? "",
             vendorRecruiterName: requirement.vendorRecruiterName ?? "",

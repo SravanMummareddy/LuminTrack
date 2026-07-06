@@ -219,9 +219,6 @@ export default async function RequirementDetailPage({
           <SummaryItem label="Client rate">{formatRate(requirement.clientRate)}</SummaryItem>
           <SummaryItem label="Bill rate">{formatRate(requirement.billRate)}</SummaryItem>
           <SummaryItem label="Pay rate">{formatRate(requirement.payRate)}</SummaryItem>
-          <SummaryItem label="Candidate rate">
-            {formatRate(requirement.candidateRate)}
-          </SummaryItem>
           <SummaryItem label="Recruiter">
             {requirement.recruiter?.fullName ?? "—"}
           </SummaryItem>

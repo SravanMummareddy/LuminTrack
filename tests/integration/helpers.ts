@@ -36,7 +36,6 @@ export async function seedBasics(prisma: PrismaClient) {
   const job = await prisma.job.create({
     data: {
       title: "Senior Engineer",
-      candidateRate: 80,
       client: { connect: { id: client.id } },
       vendor: { connect: { id: vendor.id } },
       createdBy: { connect: { id: user.id } },
@@ -45,7 +44,6 @@ export async function seedBasics(prisma: PrismaClient) {
   const submission = await prisma.submission.create({
     data: {
       status: "SELECTED",
-      candidateRate: 80,
       candidate: { connect: { id: candidate.id } },
       job: { connect: { id: job.id } },
       submittedBy: { connect: { id: user.id } },
@@ -102,7 +100,6 @@ export async function seedSubmissionEditScenario(prisma: PrismaClient) {
   const job = await prisma.job.create({
     data: {
       title: "Senior Engineer",
-      candidateRate: 80,
       client: { connect: { id: client.id } },
       vendor: { connect: { id: vendor.id } },
       createdBy: { connect: { id: admin.id } },
@@ -120,7 +117,6 @@ export async function seedSubmissionEditScenario(prisma: PrismaClient) {
   const submission = await prisma.submission.create({
     data: {
       status: "SUBMITTED",
-      candidateRate: 80,
       submissionNotes: "Original note",
       submittedAt: new Date("2026-06-01T10:00"), // local; matches the edit form's string
       candidate: { connect: { id: candidate.id } },
@@ -155,7 +151,6 @@ export async function seedPlacementScenario(prisma: PrismaClient) {
   const job = await prisma.job.create({
     data: {
       title: "Senior Engineer",
-      candidateRate: 80,
       client: { connect: { id: client.id } },
       vendor: { connect: { id: vendor.id } },
       createdBy: { connect: { id: admin.id } },

@@ -66,7 +66,6 @@ export default async function ConvertRequirementPage({
           candidates={candidateOptions}
           recruiters={recruiters}
           defaultRecruiterId={requirement.recruiterId ?? user.id}
-          defaultCandidateRate={rateStr(requirement.candidateRate)}
           requirementId={requirement.id}
           prefill={{
             candidateId: requirement.candidateId ?? "",

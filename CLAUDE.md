@@ -18,11 +18,16 @@ Money flows downhill, each rung keeping a margin:
 **Client rate** (what the end client releases) ≥ **Bill / Vendor rate** (what the vendor
 releases to us — what we actually receive) ≥ **Pay rate** (what we pay the consultant).
 Margin = bill − pay; the binding profit constraint is **Pay ≤ Bill** (we only ever receive
-the bill rate). `candidateRate` is a **legacy single "headline" rate**, kept unchanged for
-analytics continuity (revenue projections key off it) — possibly retired later pending owner
-confirmation. `clientRate` is nullable and often undisclosed by the vendor.
-**Source of truth:** the header comment + `rateChainWarnings()` in `src/lib/rates.ts`; the
-live (non-blocking) chain warning is `src/components/ui/rate-chain-warning.tsx`.
+the bill rate). All revenue/margin math keys off **Bill − Pay**. The client's Excel tracks
+only Pay rate + Bill rate; `clientRate` is nullable and often undisclosed by the vendor
+(kept as optional context). The Job carries requisition-level `clientRate` + `vendorRate`
+(the latter = the job-level bill rate, e.g. from an iLabor import); per-candidate `payRate`/
+`billRate` live on the requirement + submission.
+**Legacy `candidateRate` was RETIRED 2026-07-06** (owner-confirmed) — dropped from Job,
+Submission, VendorRequirement (migration `20260706220000_retire_candidate_rate`) and removed
+from all code. Do not reintroduce it.
+**Source of truth:** the header comment + `rateChainWarnings()` in `src/lib/rates.ts` (chain
+= Client ≥ Bill ≥ Pay); the live chain warning is `src/components/ui/rate-chain-warning.tsx`.
 
 ## 🚧 Current work — Rate model, clientRate, company-wide scorecard, rate guardrail (2026-06-22, PRs #32–#35, on `main`)
 

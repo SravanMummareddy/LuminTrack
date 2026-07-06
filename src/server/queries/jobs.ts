@@ -135,13 +135,12 @@ export async function listJobs(filters: JobListFilters) {
   // boundary (RSC requires plain JSON values). Coerce rate fields to plain
   // numbers here, once, so downstream consumers — including <JobsTable> —
   // can treat them as primitives.
-  const rows = raw.map(({ clientRate, vendorRate, candidateRate, ...rest }) => {
+  const rows = raw.map(({ clientRate, vendorRate, ...rest }) => {
     const t = tally.get(rest.id) ?? { interviews: 0, selected: 0, joined: 0 };
     return {
       ...rest,
       clientRate: clientRate != null ? Number(clientRate) : null,
       vendorRate: vendorRate != null ? Number(vendorRate) : null,
-      candidateRate: candidateRate != null ? Number(candidateRate) : null,
       interviewCount: t.interviews,
       selectedCount: t.selected,
       joinedCount: t.joined,
@@ -241,11 +240,11 @@ export function getJobDetail(id: string) {
   });
 }
 
-/** Minimal job shape for the new-submission page header and rate default. */
+/** Minimal job shape for the new-submission page header. */
 export function getJobSummary(id: string) {
   return prisma.job.findUnique({
     where: { id },
-    select: { id: true, title: true, status: true, candidateRate: true },
+    select: { id: true, title: true, status: true },
   });
 }
 
@@ -253,8 +252,8 @@ export function getJobSummary(id: string) {
  * Lightweight job list for the submission form's job picker (candidate-locked
  * and open entry points). Mirrors `listCandidateOptions`. Scoped to jobs that
  * still accept submissions (OPEN / ON_HOLD) so the dropdown isn't cluttered
- * with filled/closed/cancelled reqs. `candidateRate` lets the form seed a rate
- * default once a job is picked; `seq`/`portalRefId` build the display id label.
+ * with filled/closed/cancelled reqs. `seq`/`portalRefId` build the display id
+ * label.
  */
 export async function listJobOptions() {
   const rows = await prisma.job.findMany({
@@ -265,16 +264,12 @@ export async function listJobOptions() {
       title: true,
       seq: true,
       portalRefId: true,
-      candidateRate: true,
       client: { select: { name: true } },
     },
   });
-  // Decimal isn't serializable across the RSC → Client boundary; flatten the
-  // rate to a plain string the form can drop straight into the rate input.
-  return rows.map(({ candidateRate, client, ...rest }) => ({
+  return rows.map(({ client, ...rest }) => ({
     ...rest,
     clientName: client?.name ?? null,
-    candidateRate: candidateRate != null ? candidateRate.toString() : "",
   }));
 }
 

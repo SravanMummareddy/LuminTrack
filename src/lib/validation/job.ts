@@ -36,7 +36,6 @@ export const jobSchema = z
     location: optionalText,
     clientRate: optionalNonNegativeNumber,
     vendorRate: optionalNonNegativeNumber,
-    candidateRate: optionalNonNegativeNumber,
     description: optionalText,
     notes: optionalText,
     recruiterIds: z.array(z.string().min(1)).default([]),

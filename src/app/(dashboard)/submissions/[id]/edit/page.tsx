@@ -57,7 +57,6 @@ export default async function EditSubmissionPage({
           recruiters={recruiters}
           resumes={submission.candidate.resumes}
           values={{
-            candidateRate: submission.candidateRate?.toString() ?? "",
             resumeSelection: submission.candidateResumeId ?? "",
             submissionNotes: submission.submissionNotes ?? "",
             submittedAt: submission.submittedAt,

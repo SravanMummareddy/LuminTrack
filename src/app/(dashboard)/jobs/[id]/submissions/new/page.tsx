@@ -78,7 +78,6 @@ export default async function NewSubmissionPage({
             candidates={candidateOptions}
             recruiters={recruiters}
             defaultRecruiterId={user.id}
-            defaultCandidateRate={job.candidateRate?.toString() ?? ""}
             prefill={
               reqPrefill
                 ? {

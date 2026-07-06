@@ -37,7 +37,6 @@ describe.skipIf(!dbReachable)("updateSubmission — re-attribution, résumé sna
     const fd = new FormData();
     fd.set("id", ctx.submission.id);
     fd.set("submittedAt", "2026-06-01T10:00"); // == the seeded minute
-    fd.set("candidateRate", "80");
     fd.set("submissionNotes", "Original note");
     fd.set("resumeChoice", "none");
     for (const [k, v] of Object.entries(fields)) fd.set(k, v);
@@ -70,19 +69,17 @@ describe.skipIf(!dbReachable)("updateSubmission — re-attribution, résumé sna
     expect(after!.submittedById).toBe(ctx.recruiterA.id); // unchanged — re-attribution ignored
   });
 
-  it("editing rate + notes updates the row and lists both fields in the audit", async () => {
+  it("editing notes updates the row and lists the field in the audit", async () => {
     vi.mocked(requireUser).mockResolvedValue(ctx.admin as never);
     await updateSubmission(
       undefined as never,
-      editForm({ candidateRate: "95", submissionNotes: "Revised note" }),
+      editForm({ submissionNotes: "Revised note" }),
     );
 
     const after = await testPrisma.submission.findUnique({ where: { id: ctx.submission.id } });
-    expect(Number(after!.candidateRate)).toBe(95);
     expect(after!.submissionNotes).toBe("Revised note");
 
     const audit = await lastUpdate();
-    expect(audit!.description).toContain("candidate rate");
     expect(audit!.description).toContain("notes");
   });
 

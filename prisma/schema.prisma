@@ -334,12 +334,12 @@ model Job {
   title         String
   location      String?
   // Rate chain (top → bottom): clientRate = what the end client releases,
-  // vendorRate = what the vendor releases to us, candidateRate = target $/hr to
-  // the consultant. clientRate is optional ("if available" — often the client's
-  // budget isn't disclosed down the vendor chain).
+  // vendorRate = the bill rate the vendor releases to us. clientRate is optional
+  // ("if available" — often the client's budget isn't disclosed down the vendor
+  // chain). Pay/Bill rates for a specific candidate live on the requirement and
+  // submission; the Job only carries these requisition-level rates.
   clientRate    Decimal?  @db.Decimal(12, 2)
   vendorRate    Decimal?  @db.Decimal(12, 2)
-  candidateRate Decimal?  @db.Decimal(12, 2)
   status        JobStatus @default(OPEN)
   description   String?
   notes         String?
@@ -607,7 +607,6 @@ model Submission {
   id              String           @id @default(cuid())
   seq             Int              @unique @default(autoincrement())
   status          SubmissionStatus @default(SUBMITTED)
-  candidateRate   Decimal?         @db.Decimal(12, 2)
   // Snapshot of the private-Blob résumé URL used at submit time, so the record
   // survives the library résumé being renamed/archived.
   resumeBlobUrl   String?
@@ -886,7 +885,6 @@ model VendorRequirement {
   location            String?
   payRate             Decimal? @db.Decimal(12, 2)
   billRate            Decimal? @db.Decimal(12, 2)
-  candidateRate       Decimal? @db.Decimal(12, 2)
   // What the end client releases (optional — "if available").
   clientRate          Decimal? @db.Decimal(12, 2)
   engagement          BenchEngagement?

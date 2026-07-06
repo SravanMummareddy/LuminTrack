@@ -1,7 +1,8 @@
 /**
  * One-off backfill — creates a Placement row for every submission already in
- * JOINED status that doesn't have one. Seeds rates from `submission.candidateRate`
- * (else $0/$0 with "Rates pending" surfacing in the UI). Start date prefers the
+ * JOINED status that doesn't have one. Seeds rates from the submission's
+ * `billRate`/`payRate` (else $0/$0 with "Rates pending" surfacing in the UI).
+ * Start date prefers the
  * JOINED audit row's `eventAt`, falls back to `actualJoinDate`, then the
  * submission's createdAt. Logged as `PLACEMENT_CREATED` with `note: "backfill"`.
  * Also flips `Candidate.status → PLACED` for any candidate not already there.
@@ -42,7 +43,8 @@ async function main() {
       id: true,
       candidateId: true,
       jobId: true,
-      candidateRate: true,
+      billRate: true,
+      payRate: true,
       actualJoinDate: true,
       createdAt: true,
       candidate: { select: { fullName: true, status: true } },
@@ -74,8 +76,6 @@ async function main() {
       joinedAudit?.createdAt ??
       sub.createdAt;
 
-    const rate = sub.candidateRate ?? 0;
-
     await prisma.$transaction(async (tx) => {
       const placement = await tx.placement.create({
         data: {
@@ -83,8 +83,8 @@ async function main() {
           candidateId: sub.candidateId,
           jobId: sub.jobId,
           startDate,
-          billRate: rate,
-          payRate: rate,
+          billRate: sub.billRate ?? 0,
+          payRate: sub.payRate ?? 0,
         },
         select: { id: true, seq: true },
       });

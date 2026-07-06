@@ -27,7 +27,6 @@ type JobOption = {
   title: string;
   displayId: string;
   clientName: string | null;
-  candidateRate: string;
 };
 type Recruiter = { id: string; fullName: string; isActive: boolean };
 
@@ -49,7 +48,6 @@ type Fields = {
   candidateId: string;
   jobId: string;
   submittedById: string;
-  candidateRate: string;
   // "" = no résumé, "__new__" = add a new one, otherwise a saved résumé id.
   resumeSelection: string;
   submissionNotes: string;
@@ -88,7 +86,6 @@ export function SubmissionForm({
   candidates = [],
   recruiters,
   defaultRecruiterId,
-  defaultCandidateRate,
   cancelHref,
   requirementId,
   prefill,
@@ -105,7 +102,6 @@ export function SubmissionForm({
   candidates?: CandidateOption[];
   recruiters: Recruiter[];
   defaultRecruiterId: string;
-  defaultCandidateRate: string;
   cancelHref: string;
   /**
    * Convert mode — when set, this form moves a Vendor Portal Requirement to a
@@ -124,7 +120,6 @@ export function SubmissionForm({
     candidateId: candidate?.id ?? "",
     jobId: job?.id ?? "",
     submittedById: defaultRecruiterId,
-    candidateRate: defaultCandidateRate,
     resumeSelection: "",
     submissionNotes: "",
     engagement: "",
@@ -142,12 +137,6 @@ export function SubmissionForm({
   // Surfaced after a candidate switch clears a résumé pick, so the wipe isn't
   // silent (it used to vanish a freshly-typed Drive link with no warning).
   const [resumeCleared, setResumeCleared] = useState(false);
-  // The rate prefills from the job's target rate. Flag it as an unconfirmed
-  // default until the recruiter edits it, so they don't submit the job's
-  // number as if it were the negotiated candidate rate.
-  const [rateUnconfirmed, setRateUnconfirmed] = useState(
-    defaultCandidateRate !== "",
-  );
   // A recruiter who self-claims an unassigned job can hit a SECOND gate right
   // after (iLabor closed/cap, or a duplicate). The claim flag used to live only
   // inside the not-assigned prompt, so it was dropped on the next submit and the
@@ -255,18 +244,12 @@ export function SubmissionForm({
     });
   };
 
-  // Picking a job in candidate-locked / open mode seeds the rate default from
-  // that job (only when the recruiter hasn't already typed one).
   const onJobChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const nextJobId = e.target.value;
-    const picked = jobOptions.find((j) => j.id === nextJobId);
-    const seeded = fields.candidateRate === "" && !!picked?.candidateRate;
     setFields((f) => ({
       ...f,
       jobId: nextJobId,
-      candidateRate: f.candidateRate === "" ? (picked?.candidateRate ?? "") : f.candidateRate,
     }));
-    if (seeded) setRateUnconfirmed(true);
   };
 
   const errors = state.fieldErrors ?? {};
@@ -421,31 +404,6 @@ export function SubmissionForm({
           </Select>
         </Field>
 
-        <Field
-          label="Candidate rate"
-          htmlFor="candidateRate"
-          error={errors.candidateRate}
-          hint="Headline rate for this candidate (shown on the submission, used in reports). Pay & Bill rate below drive placement margin."
-        >
-          <Input
-            id="candidateRate"
-            name="candidateRate"
-            type="number"
-            min="0"
-            step="0.01"
-            value={fields.candidateRate}
-            onChange={(e) => {
-              setRateUnconfirmed(false);
-              set("candidateRate")(e);
-            }}
-          />
-          {rateUnconfirmed && fields.candidateRate !== "" && (
-            <p className="mt-1 text-xs text-amber-700">
-              Prefilled from the job&apos;s target rate — confirm or adjust to
-              the candidate&apos;s actual rate.
-            </p>
-          )}
-        </Field>
       </div>
 
       <Field

@@ -29,7 +29,6 @@ export const SUBMISSION_STATUS_VALUES = [
  * existing pick, not as flat fields here.
  */
 const resumeFields = {
-  candidateRate: optionalNonNegativeNumber,
   submissionNotes: optionalText,
   resumeChoice: z.enum(["existing", "none"]).catch("none"),
   candidateResumeId: z.preprocess(emptyToUndefined, z.string().optional()),

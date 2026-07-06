@@ -75,7 +75,6 @@ async function jobsSheet(mode: ExcelMode): Promise<SheetSpec> {
       ...(mode === "full"
         ? [
             { header: "Vendor rate ($/hr)", key: "vendorRate", width: 14 },
-            { header: "Candidate rate ($/hr)", key: "candidateRate", width: 14 },
           ]
         : []),
       { header: "Created by", key: "createdBy", width: 22 },
@@ -95,7 +94,6 @@ async function jobsSheet(mode: ExcelMode): Promise<SheetSpec> {
       startDate: j.startDate ?? "",
       endDate: j.endDate ?? "",
       vendorRate: toNum(j.vendorRate),
-      candidateRate: toNum(j.candidateRate),
       createdBy: j.createdBy.fullName,
       createdAt: j.createdAt,
     })),
@@ -170,11 +168,18 @@ async function submissionsSheet(mode: ExcelMode): Promise<SheetSpec> {
       { header: "Client", key: "client", width: 22 },
       { header: "Status", key: "status", width: 16 },
       { header: "Recruiter", key: "recruiter", width: 22 },
-      ...(mode === "full" ? [{ header: "Candidate rate ($/hr)", key: "rate", width: 14 }] : []),
       { header: "Submitted at", key: "submittedAt", width: 18 },
       { header: "Expected join", key: "expectedJoinDate", width: 16 },
       { header: "Actual join", key: "actualJoinDate", width: 16 },
       { header: "Rejection reason", key: "rejectionReason", width: 24 },
+      // Rates are sensitive — only the admin-only "full" export includes them.
+      ...(mode === "full"
+        ? [
+            { header: "Pay rate ($/hr)", key: "payRate", width: 14 },
+            { header: "Bill rate ($/hr)", key: "billRate", width: 14 },
+            { header: "Client rate ($/hr)", key: "clientRate", width: 14 },
+          ]
+        : []),
     ],
     rows: rows.map((s) => ({
       displayId: `SUB-${String(s.seq).padStart(4, "0")}`,
@@ -183,11 +188,17 @@ async function submissionsSheet(mode: ExcelMode): Promise<SheetSpec> {
       client: s.job.client.name,
       status: s.status,
       recruiter: s.submittedBy.fullName,
-      rate: toNum(s.candidateRate),
       submittedAt: s.submittedAt,
       expectedJoinDate: s.expectedJoinDate ?? "",
       actualJoinDate: s.actualJoinDate ?? "",
       rejectionReason: s.rejectionReason ?? "",
+      ...(mode === "full"
+        ? {
+            payRate: toNum(s.payRate),
+            billRate: toNum(s.billRate),
+            clientRate: toNum(s.clientRate),
+          }
+        : {}),
     })),
   };
 }

@@ -48,7 +48,6 @@ export type SubmissionRecordInput = {
   candidateId: string;
   jobId: string;
   submittedById: string;
-  candidateRate: number | null;
   submissionNotes: string | null;
   engagement: BenchEngagement | null;
   vendorRecruiterName: string | null;
@@ -170,7 +169,6 @@ export async function createSubmissionRecord(
       candidateId: input.candidateId,
       jobId: input.jobId,
       submittedById: input.submittedById,
-      candidateRate: input.candidateRate ?? null,
       candidateResumeId,
       // Snapshot the résumé's blob URL so it survives library edits/deletes.
       resumeBlobUrl: blobSnapshot,

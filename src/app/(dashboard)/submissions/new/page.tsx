@@ -22,7 +22,6 @@ export default async function NewOpenSubmissionPage() {
     title: j.title,
     displayId: formatJobDisplayId(j),
     clientName: j.clientName,
-    candidateRate: j.candidateRate,
   }));
   const candidateOptions = candidates.map((c) => ({
     id: c.id,
@@ -84,7 +83,6 @@ export default async function NewOpenSubmissionPage() {
             candidates={candidateOptions}
             recruiters={recruiters}
             defaultRecruiterId={user.id}
-            defaultCandidateRate=""
             cancelHref="/submissions"
           />
         </div>

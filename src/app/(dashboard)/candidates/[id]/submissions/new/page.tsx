@@ -29,7 +29,6 @@ export default async function NewCandidateSubmissionPage({
     title: j.title,
     displayId: formatJobDisplayId(j),
     clientName: j.clientName,
-    candidateRate: j.candidateRate,
   }));
 
   return (
@@ -76,7 +75,6 @@ export default async function NewCandidateSubmissionPage({
             jobOptions={jobOptions}
             recruiters={recruiters}
             defaultRecruiterId={user.id}
-            defaultCandidateRate=""
             cancelHref={`/candidates/${candidate.id}`}
           />
         </div>

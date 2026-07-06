@@ -280,9 +280,6 @@ export default async function JobDetailPage({
           <SummaryItem label="Location">{job.location || "—"}</SummaryItem>
           <SummaryItem label="Client rate">{formatRate(job.clientRate)}</SummaryItem>
           <SummaryItem label="Vendor rate">{formatRate(job.vendorRate)}</SummaryItem>
-          <SummaryItem label="Candidate rate">
-            {formatRate(job.candidateRate)}
-          </SummaryItem>
           <SummaryItem label="Created by">{job.createdBy.fullName}</SummaryItem>
           <SummaryItem label="Created">{formatDate(job.createdAt)}</SummaryItem>
           <SummaryItem label="Last updated">{formatDate(job.updatedAt)}</SummaryItem>
@@ -424,7 +421,6 @@ export default async function JobDetailPage({
                 <Th>Submitted</Th>
                 <Th>Status</Th>
                 <Th>Resume</Th>
-                <Th className="text-right">Rate</Th>
                 <Th className="text-right">Rounds</Th>
               </tr>
             </thead>
@@ -464,9 +460,6 @@ export default async function JobDetailPage({
                     ) : (
                       "—"
                     )}
-                  </Td>
-                  <Td label="Rate" className="text-right tabular-nums">
-                    {formatRate(s.candidateRate)}
                   </Td>
                   <Td label="Rounds" className="text-right tabular-nums">
                     {s._count.interviewRounds}
