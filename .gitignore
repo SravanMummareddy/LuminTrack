@@ -42,3 +42,12 @@ next-env.d.ts
 
 /src/generated/prisma
 .playwright-mcp/
+
+# agent scratch + local test/review output (committed deliverables in test-results are tracked explicitly)
+/test-results/
+/scratch-*
+*.output
+
+# local screenshot/upload dropbox (iLabor sample is tracked explicitly)
+/uploads/*
+!/uploads/ilabor_data_sample.json

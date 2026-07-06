@@ -1,7 +1,6 @@
 import { z } from "zod";
 import {
   optionalText,
-  optionalUrl,
   optionalNonNegativeNumber,
   emptyToUndefined,
 } from "./common";
