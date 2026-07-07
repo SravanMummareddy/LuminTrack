@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 // Content-Security-Policy — shipped in *Report-Only* first. `script-src` and
 // `style-src` allow 'unsafe-inline' because Next injects inline hydration
@@ -55,4 +56,16 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["192.168.1.219", "127.0.0.1"],
 };
 
-export default nextConfig;
+// Sentry wrapping. Source-map upload is disabled (no auth token yet, and
+// Turbopack builds it separately) — enable it later by setting SENTRY_AUTH_TOKEN
+// and flipping `sourcemaps.disable`. `tunnelRoute` proxies browser events
+// through a same-origin route so they aren't blocked by ad-blockers or the
+// app's `connect-src 'self'` CSP. All of this is a no-op at runtime until a DSN
+// is configured (see the sentry.*.config files).
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  silent: !process.env.CI,
+  sourcemaps: { disable: true },
+  tunnelRoute: "/monitoring",
+});
