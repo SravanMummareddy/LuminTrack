@@ -269,24 +269,17 @@ export function SubmissionsTable({
   rows,
   pageOffset = 0,
   storageKey = STORAGE_KEY,
-  defaultVisibleKeys,
 }: {
   rows: SubmissionListRow[];
   pageOffset?: number;
-  /** Override the localStorage key so a scoped view (e.g. Vendor Portal) keeps
-   *  its own column prefs separate from the main Submissions list. */
+  /** Override the localStorage key so a scoped view keeps its own column prefs
+   *  separate from the main Submissions list. */
   storageKey?: string;
-  /** Override which columns are visible by default (the Vendor Portal view
-   *  surfaces the sheet's Pay/Bill/C2C-W2/resume columns up front). */
-  defaultVisibleKeys?: string[];
 }) {
-  const defaults: ColumnPrefs = defaultVisibleKeys
-    ? { visible: defaultVisibleKeys, order: COLUMNS.map((c) => c.key) }
-    : DEFAULTS;
   const [prefs, setPrefs] = useColumnPrefs(
     storageKey,
     STORAGE_VERSION,
-    defaults,
+    DEFAULTS,
   );
 
   const byKey = new Map(COLUMNS.map((c) => [c.key, c]));
@@ -307,7 +300,7 @@ export function SubmissionsTable({
           columns={orderedCols.map((c) => ({ key: c.key, label: c.label }))}
           prefs={prefs}
           onChange={setPrefs}
-          defaults={defaults}
+          defaults={DEFAULTS}
         />
       </div>
 

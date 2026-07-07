@@ -2,7 +2,6 @@ import { prisma } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
 import type { SubmissionStatus } from "@/generated/prisma/enums";
 import { OTHER_SOURCE } from "@/lib/labels";
-import { RANDSTAD_PORTAL_NAME } from "@/server/queries/jobs";
 import {
   currentStageDays,
   STALE_STAGE_DAYS,
@@ -26,9 +25,6 @@ export type SubmissionListFilters = {
   vendorId?: string[];
   sisterCompanySourceId?: string;
   submittedRange?: DateRange;
-  // Option B "Vendor Portal" scope: only submissions to portal-sourced
-  // (Randstad iLabor) jobs.
-  vendorPortalOnly?: boolean;
   sort?: SortState;
   page?: number;
   /** "Mine, stale >7d" quick filter — narrows to `currentUserId`'s early-
@@ -130,8 +126,6 @@ export async function listSubmissions(filters: SubmissionListFilters) {
     where.submittedAt = filters.submittedRange;
 
   const job: Prisma.JobWhereInput = {};
-  if (filters.vendorPortalOnly)
-    job.portal = { is: { name: RANDSTAD_PORTAL_NAME } };
   if (filters.clientId?.length) job.clientId = { in: filters.clientId };
   if (filters.vendorId?.length) job.vendorId = { in: filters.vendorId };
   if (filters.sisterCompanySourceId)
