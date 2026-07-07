@@ -5,7 +5,6 @@ import {
   daysSince,
   type AnalyticsFilters,
 } from "@/lib/analytics";
-import { SUBMISSION_STATUSES } from "@/lib/labels";
 import type { JobStatus, SubmissionStatus } from "@/generated/prisma/enums";
 
 /**
@@ -49,10 +48,6 @@ export async function getDashboardData(filters: AnalyticsFilters) {
   const onHoldJobs = jobs.filter((j) => isActive(j) && j.status === "ON_HOLD").length;
 
   // ── Submissions ──
-  const submissionsByStatus = SUBMISSION_STATUSES.map((status) => ({
-    status,
-    count: submissions.filter((s) => s.status === status).length,
-  }));
   const subStatusCount = (s: SubmissionStatus) =>
     submissions.filter((x) => x.status === s).length;
 
@@ -86,7 +81,6 @@ export async function getDashboardData(filters: AnalyticsFilters) {
     openJobs,
     onHoldJobs,
     totalSubmissions: submissions.length,
-    submissionsByStatus,
     interviewCount,
     selected: subStatusCount("SELECTED"),
     offerReleased: subStatusCount("OFFER_RELEASED"),

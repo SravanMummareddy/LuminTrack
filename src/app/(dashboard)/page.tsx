@@ -32,15 +32,11 @@ import {
   listSisterCompanies,
   listActiveRecruiterOptions,
 } from "@/server/queries/org";
-import { parseAnalyticsParams, TONE_HEX } from "@/lib/analytics";
-import {
-  SUBMISSION_STATUS_LABEL,
-  SUBMISSION_STATUS_TONE,
-} from "@/lib/labels";
+import { parseAnalyticsParams } from "@/lib/analytics";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist";
-import { BarChartCard } from "@/components/dashboard/charts";
+import { MyWorkList } from "@/components/dashboard/needs-attention-list";
 import { Table, Th, Td, cardLink } from "@/components/ui/table";
 
 function Card({
@@ -112,62 +108,6 @@ function ScopeToggle({
   );
 }
 
-function MyWorkList({
-  heading,
-  empty,
-  items,
-  footer,
-}: {
-  heading: string;
-  empty: string;
-  items: { href: string; primary: string; secondary: string }[];
-  /** Optional "View all" link rendered below the list when items are present. */
-  footer?: { href: string; label: string };
-}) {
-  return (
-    <div>
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-        {heading}
-      </h3>
-      {items.length === 0 ? (
-        <p className="rounded-md border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-400">
-          {empty}
-        </p>
-      ) : (
-        <>
-          <ul className="divide-y divide-slate-100 rounded-md border border-slate-200">
-            {items.map((it, i) => (
-              <li key={i}>
-                <Link
-                  href={it.href}
-                  className="block px-3 py-2 hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:[outline-offset:-2px]"
-                >
-                  <span className="block truncate text-sm text-slate-800">
-                    {it.primary}
-                  </span>
-                  <span className="block truncate text-xs text-slate-400">
-                    {it.secondary}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-          {footer && (
-            <div className="mt-2 text-right text-xs">
-              <Link
-                href={footer.href}
-                className="text-indigo-600 hover:underline"
-              >
-                {footer.label}
-              </Link>
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -225,12 +165,6 @@ export default async function DashboardPage({
     listActiveRecruiterOptions(),
     getOnboardingStatus(),
   ]);
-
-  const submissionsByStageChart = data.submissionsByStatus.map((d) => ({
-    label: SUBMISSION_STATUS_LABEL[d.status],
-    value: d.count,
-    color: TONE_HEX[SUBMISSION_STATUS_TONE[d.status]],
-  }));
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
@@ -316,7 +250,7 @@ export default async function DashboardPage({
             <MyWorkList
               heading={`Documents expiring (30 days) (${expiringDocs.length})`}
               empty="No documents expiring in the next 30 days."
-              items={expiringDocs.slice(0, 5).map((d) => {
+              items={expiringDocs.map((d) => {
                 const days = d.daysUntilExpiry ?? 0;
                 const status =
                   days < 0 ? "Expired" : days < 1 ? "Expires today" : `${days}d left`;
@@ -409,10 +343,6 @@ export default async function DashboardPage({
           tooltip="Submissions whose current status is On Hold."
         />
       </div>
-
-      <Card title="Submissions by pipeline stage">
-        <BarChartCard data={submissionsByStageChart} height={320} />
-      </Card>
 
       <Card title="Recruiter performance">
         {data.recruiterPerf.length === 0 ? (
