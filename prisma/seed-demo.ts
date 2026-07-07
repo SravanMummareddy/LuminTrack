@@ -1020,6 +1020,80 @@ async function main() {
   let roundCount = 0;
   let placementCount = 0;
 
+  // VPR-first: every submission is created *against* a Vendor Portal Requirement.
+  // Scope one requirement per job on first use (occasionally a second one) and
+  // reuse it for that job's other submissions — one requirement, many candidate
+  // submissions. The requirement's commercial terms are carried onto each sub.
+  const teamLeadByLabel = new Map<string, string>();
+  for (const u of USER_ROSTER) {
+    if (u.role === "TEAM_LEAD") teamLeadByLabel.set(u.teamLabel, u.fullName);
+  }
+  type VprRec = {
+    id: string;
+    payRate: number;
+    billRate: number;
+    engagement: "C2C" | "W2";
+    teamLead: string | null;
+    vendorRecruiterName: string | null;
+  };
+  const vprByJob = new Map<string, VprRec[]>();
+  let requirementCount = 0;
+
+  async function getVprForJob(job: (typeof jobs)[number]): Promise<VprRec> {
+    const existing = vprByJob.get(job.id) ?? [];
+    // Reuse an existing requirement most of the time; ~20% of the time scope a
+    // second one for the same job so "many requirements per job" is represented.
+    if (existing.length > 0 && !(existing.length === 1 && chance(0.2))) {
+      return pick(existing);
+    }
+    const recruiter = pick(recruiters);
+    const payRate = job.payBase - randInt(0, 6);
+    const billRate = job.payBase + randInt(10, 30);
+    const engagement: "C2C" | "W2" = chance(0.6) ? "C2C" : "W2";
+    const teamLead = teamLeadByLabel.get(recruiter.teamLabel ?? "") ?? null;
+    const vendorRecruiterName = chance(0.5) ? pick(VENDOR_RECRUITER_NAMES) : null;
+    // Scoped right after the job is created, so it always predates its submissions.
+    const createdAt = new Date(job.createdAt.getTime() + 6 * HOUR);
+    const req = await prisma.vendorRequirement.create({
+      data: {
+        jobId: job.id,
+        recruiterId: recruiter.id,
+        location: pick(LOCATIONS),
+        payRate,
+        billRate,
+        clientRate: job.clientRate,
+        engagement,
+        vendorRecruiterName,
+        teamLead,
+        submissionNotes: chance(0.4) ? pick(CANDIDATE_NOTES) : null,
+        status: "OPEN",
+        createdById: admin.id,
+        createdAt,
+        updatedAt: createdAt,
+      },
+      select: { id: true },
+    });
+    requirementCount++;
+    activityRows.push({
+      entityType: "REQUIREMENT",
+      action: "REQUIREMENT_CREATED",
+      description: `Vendor requirement created for "${job.title}"`,
+      performedById: admin.id,
+      requirementId: req.id,
+      createdAt,
+    });
+    const rec: VprRec = {
+      id: req.id,
+      payRate,
+      billRate,
+      engagement,
+      teamLead,
+      vendorRecruiterName,
+    };
+    vprByJob.set(job.id, [...existing, rec]);
+    return rec;
+  }
+
   for (let i = 0; i < 160; i++) {
     // Pick a unique candidate+job pair (candidate capped at 9 submissions).
     let candidate = candidates[0];
@@ -1074,26 +1148,29 @@ async function main() {
         ? pick(candidate.resumes)
         : null;
 
+    // The requirement this candidate is submitted against (VPR-first).
+    const vpr = await getVprForJob(job);
+
     const submission = await prisma.submission.create({
       data: {
         candidateId: candidate.id,
         jobId: job.id,
         submittedById,
         status: finalStatus,
-        clientRate: job.clientRate, // carried down the chain from the job
+        clientRate: job.clientRate, // carried down the chain: job → requirement → sub
+        vendorRequirementId: vpr.id, // submitted against this requirement
 
         rejectionReason:
           finalStatus === "REJECTED" ? pick(REJECTION_REASONS) : null,
         submissionNotes: chance(0.4) ? pick(SUBMISSION_NOTES) : null,
-        // Bench-Sales fields — populated on a subset so the new columns/detail
-        // rows have realistic data; left null on the rest (regular submissions).
-        engagement: chance(0.6) ? (chance(0.5) ? "C2C" : "W2") : null,
-        vendorRecruiterName: chance(0.5) ? pick(VENDOR_RECRUITER_NAMES) : null,
+        // Commercial terms carried from the requirement (slight per-candidate
+        // variance on pay), so the submission mirrors what it was scoped against.
+        engagement: vpr.engagement,
+        vendorRecruiterName: vpr.vendorRecruiterName,
         jobDuties: chance(0.3) ? pick(JOB_DUTIES_SAMPLES) : null,
-        // Pay/Bill rate pair (bill > pay) + team lead on a subset.
-        payRate: chance(0.6) ? job.payBase + randInt(-3, 4) : null,
-        billRate: chance(0.6) ? job.payBase + randInt(12, 30) : null,
-        teamLead: chance(0.5) ? pick(TEAM_LEADS) : null,
+        payRate: vpr.payRate + randInt(-2, 2),
+        billRate: vpr.billRate,
+        teamLead: vpr.teamLead,
         candidateResumeId: pickedResume?.id ?? null,
         resumeBlobUrl: pickedResume?.blobUrl ?? null,
         submittedAt,
@@ -1432,18 +1509,13 @@ async function main() {
     });
   }
 
-  // ── Vendor portal requirements (the planning queue) ──
-  // Mostly OPEN (the requisitions a team lead has scoped, waiting for a
-  // recruiter to move them to a submission) plus a couple CANCELLED so the
-  // status filter has something to do. Team lead is derived from the assigned
-  // recruiter's team (Sriman → TEAM_A, Deepa → TEAM_B).
-  console.log("Creating vendor portal requirements…");
-  const teamLeadByLabel = new Map<string, string>();
-  for (const u of USER_ROSTER) {
-    if (u.role === "TEAM_LEAD") teamLeadByLabel.set(u.teamLabel, u.fullName);
-  }
-  let requirementCount = 0;
-  for (let i = 0; i < 14; i++) {
+  // ── Extra vendor portal requirements (still awaiting candidates) ──
+  // The submission loop above already scoped a requirement per job it touched
+  // (each with 1+ submissions). These extras are OPEN requirements no candidate
+  // has been submitted against yet — plus a couple CANCELLED so the status
+  // filter has something to do. Team lead is derived from the recruiter's team.
+  console.log("Creating extra (awaiting) vendor portal requirements…");
+  for (let i = 0; i < 8; i++) {
     const job = pick(jobs);
     const recruiter = pick(recruiters);
     // ~70% already have a candidate picked; the rest are candidate-less plans.
