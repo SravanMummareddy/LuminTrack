@@ -70,7 +70,8 @@ export function RecentActivityCard({ items }: { items: Row[] }) {
                   <span className="block truncate text-sm text-slate-800">
                     {it.description}
                   </span>
-                  <span className="block text-xs text-slate-400">
+                  <span className="block truncate text-xs text-slate-400">
+                    {it.entity ? `${it.entity} · ` : ""}
                     {relativeTime(it.createdAt)}
                   </span>
                 </span>

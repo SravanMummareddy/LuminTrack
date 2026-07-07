@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Table, Th, Td, cardLink, cardLinkRaise } from "@/components/ui/table";
+import { Table, Th, Td, cardLinkRaise } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { MobileSort } from "@/components/ui/mobile-sort";
 import { Badge } from "@/components/ui/badge";
@@ -53,18 +53,35 @@ const COLUMNS: Column[] = [
     ),
   },
   {
+    key: "submissions",
+    label: "Submissions",
+    align: "right",
+    defaultVisible: true,
+    render: (r) => (
+      <Td label="Submissions" className="text-right tabular-nums">
+        <Link
+          href={`/vendor-portal/${r.id}`}
+          className={
+            r._count.submissions > 0
+              ? "font-medium text-indigo-600 hover:underline"
+              : "text-slate-300 hover:underline"
+          }
+        >
+          {r._count.submissions}
+        </Link>
+      </Td>
+    ),
+  },
+  {
     key: "candidate",
-    label: "Candidate",
+    // The optional candidate a team lead scoped up front — NOT the submissions
+    // (those are the Submissions column). Usually blank; recruiters submit later.
+    label: "Target",
     sortKey: "candidate",
     defaultVisible: true,
     render: (r) => (
-      <Td heading>
-        <Link
-          href={`/vendor-portal/${r.id}`}
-          className={`${cardLink} font-medium text-indigo-600 hover:underline`}
-        >
-          {r.candidate?.fullName ?? "— (unassigned)"}
-        </Link>
+      <Td label="Target" secondary>
+        {r.candidate?.fullName ?? "— (none)"}
       </Td>
     ),
   },
@@ -74,10 +91,10 @@ const COLUMNS: Column[] = [
     sortKey: "job",
     defaultVisible: true,
     render: (r) => (
-      <Td label="Job">
+      <Td heading>
         <Link
           href={`/jobs/${r.job.id}`}
-          className={`${cardLinkRaise} text-slate-700 hover:underline`}
+          className={`${cardLinkRaise} font-medium text-slate-800 hover:underline`}
         >
           {r.job.title}
         </Link>

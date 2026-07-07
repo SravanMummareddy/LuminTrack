@@ -105,6 +105,9 @@ export async function listBenchConsultants(filters: BenchListFilters) {
       company: true,
       isActive: true,
       candidateId: true,
+      // Company is the linked candidate's current employer (owner's model); the
+      // bench's own `company` is only a fallback for unlinked marketed identities.
+      candidate: { select: { currentCompany: true } },
       recruiter: { select: { id: true, fullName: true } },
     },
   });

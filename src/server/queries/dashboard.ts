@@ -192,6 +192,18 @@ export async function getMyRecentActivity(userId: string, limit = 8) {
       candidateId: true,
       jobId: true,
       benchConsultantId: true,
+      // The entity's name, so a terse description ("Status changed…") still says
+      // which job/candidate it was about.
+      submission: {
+        select: {
+          candidate: { select: { fullName: true } },
+          job: { select: { title: true } },
+        },
+      },
+      requirement: { select: { job: { select: { title: true } } } },
+      candidate: { select: { fullName: true } },
+      job: { select: { title: true } },
+      benchConsultant: { select: { fullName: true } },
     },
   });
   return rows.map((r) => ({
@@ -199,6 +211,17 @@ export async function getMyRecentActivity(userId: string, limit = 8) {
     action: r.action,
     description: r.description,
     createdAt: r.createdAt,
+    entity: r.submission
+      ? (r.submission.candidate?.fullName ?? r.submission.job?.title ?? null)
+      : r.requirement
+        ? (r.requirement.job?.title ?? null)
+        : r.candidate
+          ? r.candidate.fullName
+          : r.job
+            ? r.job.title
+            : r.benchConsultant
+              ? r.benchConsultant.fullName
+              : null,
     href: r.submissionId
       ? `/submissions/${r.submissionId}`
       : r.requirementId

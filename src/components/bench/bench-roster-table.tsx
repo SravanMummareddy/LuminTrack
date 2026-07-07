@@ -188,7 +188,7 @@ const COLUMNS: Column[] = [
     defaultVisible: false,
     render: (c) => (
       <Td label="Company" secondary>
-        {c.company ?? "—"}
+        {c.candidate?.currentCompany ?? c.company ?? "—"}
       </Td>
     ),
   },
