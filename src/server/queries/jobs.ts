@@ -246,14 +246,6 @@ export function getJobDetail(id: string) {
   });
 }
 
-/** Minimal job shape for the new-submission page header. */
-export function getJobSummary(id: string) {
-  return prisma.job.findUnique({
-    where: { id },
-    select: { id: true, title: true, status: true },
-  });
-}
-
 /**
  * Lightweight job list for the submission form's job picker (candidate-locked
  * and open entry points). Mirrors `listCandidateOptions`. Scoped to jobs that

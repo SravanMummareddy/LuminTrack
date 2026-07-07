@@ -77,14 +77,6 @@ export function canManageUsers(viewer: Viewer | null | undefined): boolean {
   return hasFullAccess(viewer);
 }
 
-export function canExportData(viewer: Viewer | null | undefined): boolean {
-  return hasFullAccess(viewer);
-}
-
-export function canViewAudit(viewer: Viewer | null | undefined): boolean {
-  return hasFullAccess(viewer);
-}
-
 // Job commercial fields (client/vendor rates) and recruiter assignment on the
 // job-edit form. Recruiters may edit basic job details + status but not these.
 export function canEditJobRatesAndAssignment(

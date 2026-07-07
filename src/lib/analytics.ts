@@ -1,38 +1,11 @@
 import type { Prisma } from "@/generated/prisma/client";
 import type { JobStatus, SubmissionStatus } from "@/generated/prisma/enums";
-import type { BadgeTone } from "@/lib/labels";
 import { JOB_STATUSES, SUBMISSION_STATUSES, OTHER_SOURCE } from "@/lib/labels";
 import { parseDateRange, parseList, type DateRange } from "@/lib/filters";
-
-/** Hex equivalents of the badge tones, for Recharts (which needs real colours). */
-export const TONE_HEX: Record<BadgeTone, string> = {
-  slate: "#94a3b8",
-  green: "#22c55e",
-  amber: "#f59e0b",
-  red: "#ef4444",
-  blue: "#3b82f6",
-  indigo: "#6366f1",
-};
 
 // ─── Open-job aging ──────────────────────────────────────────────────────────
 
 export type AgingBucket = "0-15" | "16-30" | "31-60" | "60+";
-
-export const AGING_BUCKETS: AgingBucket[] = ["0-15", "16-30", "31-60", "60+"];
-
-export const AGING_BUCKET_LABEL: Record<AgingBucket, string> = {
-  "0-15": "0–15 days",
-  "16-30": "16–30 days",
-  "31-60": "31–60 days",
-  "60+": "Over 60 days",
-};
-
-export const AGING_BUCKET_TONE: Record<AgingBucket, BadgeTone> = {
-  "0-15": "green",
-  "16-30": "blue",
-  "31-60": "amber",
-  "60+": "red",
-};
 
 /** Whole days between `date` and now (never negative). */
 export function daysSince(date: Date | string): number {

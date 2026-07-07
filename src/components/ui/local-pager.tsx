@@ -32,7 +32,7 @@ export function useLocalPagination<T>(items: T[], pageSize = 10) {
   };
 }
 
-export function LocalPager({
+function LocalPager({
   page,
   pageSize,
   total,

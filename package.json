@@ -19,7 +19,6 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@hookform/resolvers": "^5.4.0",
     "@neondatabase/serverless": "^1.1.0",
     "@prisma/adapter-neon": "^7.8.0",
     "@prisma/client": "^7.8.0",
@@ -32,7 +31,6 @@
     "next": "16.2.6",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "react-hook-form": "^7.76.0",
     "recharts": "^3.8.1",
     "tailwind-merge": "^3.6.0",
     "zod": "^4.4.3"

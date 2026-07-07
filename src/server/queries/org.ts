@@ -34,25 +34,6 @@ export function listVendors() {
   });
 }
 
-import type { ContactKind } from "@/lib/contact-kinds";
-
-export function listContacts(kind: ContactKind, parentId: string) {
-  const where =
-    kind === "client"
-      ? { clientId: parentId }
-      : kind === "vendor"
-        ? { vendorId: parentId }
-        : { sourceId: parentId };
-  return prisma.contact.findMany({
-    where,
-    // Primary first, then most-recently-edited; stable + matches the UI
-    // expectation that "the important one" stays on top.
-    orderBy: [{ isPrimary: "desc" }, { updatedAt: "desc" }],
-  });
-}
-
-export type ContactListItem = Awaited<ReturnType<typeof listContacts>>[number];
-
 /** App users — never selects passwordHash, so the result is safe to pass to client components. */
 export function listUsers() {
   return prisma.user.findMany({

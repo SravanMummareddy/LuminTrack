@@ -515,20 +515,3 @@ async function writeWorkbook(
 
   await wb.commit();
 }
-
-/**
- * In-memory variant — kept for callers that need a Buffer (e.g. the deferred
- * R4.4 cron job that uploads to Drive). The HTTP route handler should use
- * `streamBusinessExcel` instead.
- */
-export async function buildBusinessExcelBuffer(args: {
-  mode: ExcelMode;
-  entities: ExcelEntity[];
-}): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  const stream = streamBusinessExcel(args);
-  for await (const chunk of stream) {
-    chunks.push(chunk as Buffer);
-  }
-  return Buffer.concat(chunks);
-}
