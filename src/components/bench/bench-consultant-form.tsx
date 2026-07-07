@@ -1,10 +1,13 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import Link from "next/link";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { SearchSelect } from "@/components/ui/search-select";
-import { Button, buttonClass } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import {
+  useUnsavedChanges,
+  GuardedCancel,
+} from "@/components/ui/unsaved-changes";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 import {
   BENCH_PRIORITIES,
@@ -119,8 +122,13 @@ export function BenchConsultantForm({
   const errors = state.fieldErrors ?? {};
   const cancelHref = values ? `/bench/${values.id}` : "/bench";
 
+  // Unsaved-changes guard — any user input arms the leave prompt + Cancel confirm.
+  const [dirty, setDirty] = useState(false);
+  const markDirty = () => setDirty((d) => (d ? d : true));
+  useUnsavedChanges(dirty);
+
   return (
-    <form action={formAction} className="space-y-6">
+    <form action={formAction} onInput={markDirty} className="space-y-6">
       {values && <input type="hidden" name="id" value={values.id} />}
 
       {/* ── Identity + marketing tier ─────────────────────────────── */}
@@ -310,9 +318,7 @@ export function BenchConsultantForm({
       ) : null}
 
       <div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
-        <Link href={cancelHref} className={buttonClass("secondary")}>
-          Cancel
-        </Link>
+        <GuardedCancel href={cancelHref} dirty={dirty} />
         <Button type="submit" disabled={pending}>
           {pending ? "Saving…" : submitLabel}
         </Button>

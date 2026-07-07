@@ -1,11 +1,14 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import Link from "next/link";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { LocationInput } from "@/components/ui/location-input";
 import { SearchSelect } from "@/components/ui/search-select";
-import { Button, buttonClass } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import {
+  useUnsavedChanges,
+  GuardedCancel,
+} from "@/components/ui/unsaved-changes";
 import {
   JOB_STATUSES,
   JOB_STATUS_LABEL,
@@ -88,6 +91,11 @@ export function JobForm({
   const assigned = new Set(values?.recruiterIds ?? []);
   const cancelHref = values ? `/jobs/${values.id}` : "/jobs";
 
+  // Unsaved-changes guard — any user input arms the leave prompt + Cancel confirm.
+  const [dirty, setDirty] = useState(false);
+  const markDirty = () => setDirty((d) => (d ? d : true));
+  useUnsavedChanges(dirty);
+
   // The source is either a managed source (FK) or a free-text entry. When a
   // saved job has no FK but a `sourceOther`, the select shows the "Other" option.
   const [sourceValue, setSourceValue] = useState(
@@ -107,7 +115,7 @@ export function JobForm({
   const isNewVendor = vendorValue === NEW_ORG_ENTITY;
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form action={formAction} onInput={markDirty} className="space-y-5">
       {values && <input type="hidden" name="id" value={values.id} />}
 
       <Field label="Job title" htmlFor="title" required error={errors.title}>
@@ -522,9 +530,7 @@ export function JobForm({
       )}
 
       <div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
-        <Link href={cancelHref} className={buttonClass("secondary")}>
-          Cancel
-        </Link>
+        <GuardedCancel href={cancelHref} dirty={dirty} />
         <Button type="submit" disabled={pending}>
           {pending ? "Saving…" : submitLabel}
         </Button>

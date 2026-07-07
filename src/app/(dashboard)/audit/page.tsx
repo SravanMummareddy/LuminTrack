@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Forbidden } from "@/components/ui/forbidden";
 import { Table, Th, Td } from "@/components/ui/table";
@@ -84,6 +85,14 @@ export default async function AuditPage({
 
   return (
     <div className="space-y-5">
+      <Link
+        href="/settings"
+        className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to Settings
+      </Link>
+
       <PageHeader
         title="Audit log"
         description="Org-wide activity across jobs, candidates, submissions, and interview rounds. Admin only."

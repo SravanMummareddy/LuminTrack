@@ -1,11 +1,14 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import Link from "next/link";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { SearchSelect } from "@/components/ui/search-select";
-import { Button, buttonClass } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { RateChainWarning } from "@/components/ui/rate-chain-warning";
+import {
+  useUnsavedChanges,
+  GuardedCancel,
+} from "@/components/ui/unsaved-changes";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 import { BENCH_ENGAGEMENTS, BENCH_ENGAGEMENT_LABEL } from "@/lib/labels";
 
@@ -145,6 +148,12 @@ export function SubmissionEditForm({
   }, [state]);
 
   const errors = state.fieldErrors ?? {};
+
+  // Unsaved-changes guard — any user input arms the leave prompt + Cancel confirm.
+  const [dirty, setDirty] = useState(false);
+  const markDirty = () => setDirty((d) => (d ? d : true));
+  useUnsavedChanges(dirty);
+
   // Team-lead picker — keep the saved value even if it's not a current lead.
   const teamLeadNames = teamLeads.map((t) => t.fullName);
   const teamLeadChoices =
@@ -154,7 +163,7 @@ export function SubmissionEditForm({
   const resumeChoice = fields.resumeSelection === "" ? "none" : "existing";
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form action={formAction} onInput={markDirty} className="space-y-5">
       <input type="hidden" name="id" value={submissionId} />
       <input type="hidden" name="resumeChoice" value={resumeChoice} />
       <input
@@ -339,12 +348,7 @@ export function SubmissionEditForm({
       )}
 
       <div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
-        <Link
-          href={`/submissions/${submissionId}`}
-          className={buttonClass("secondary")}
-        >
-          Cancel
-        </Link>
+        <GuardedCancel href={`/submissions/${submissionId}`} dirty={dirty} />
         <Button type="submit" disabled={pending}>
           {pending
             ? "Saving…"

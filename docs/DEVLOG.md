@@ -10,6 +10,34 @@ short instead of long.
 
 ---
 
+## 2026-07-06 · Duplicate React key on the résumé picker — optimistic state met revalidation
+
+**Situation.** During round-2 testing, the submission form (on the VPR-convert
+path) threw a console error: `Encountered two children with the same key,
+cmra2yvq40008pwze5xmjwdmi` at the résumé `<option>` map. The list visibly worked,
+but React warned the same résumé id was rendered twice.
+
+**Diagnosis.** The picker's options come from
+`resumes = [...activeCandidate.resumes, ...uploadedResumes]`. `uploadedResumes`
+is client state appended optimistically right after an inline
+`uploadCandidateResume`. But that server action calls `revalidatePath`, so the
+parent Server Component re-fetches `listCandidateOptions()` and the freshly
+uploaded résumé now appears in `activeCandidate.resumes` **too** — while still
+sitting in the client's `uploadedResumes`. Same id in both arrays → duplicate
+key. The two sources of truth (optimistic client list + revalidated server list)
+overlap for one render cycle.
+
+**Fix.** Dedupe the merged list by id, server row first
+(`submission-form.tsx`). One-line-idea fix: a `Set<string>` guard while merging,
+rather than trying to clear `uploadedResumes` on revalidation (which you can't
+observe cleanly from the client).
+
+**Lesson.** Whenever you merge an **optimistic client list** with a
+**revalidated server list** of the same entity, they *will* overlap for a beat —
+always key the union through a dedupe, don't assume the two are disjoint.
+
+---
+
 ## 2026-07-06 · The seed died on a bare `ErrorEvent` — right driver, wrong transport
 
 **Situation.** After moving résumés and documents to Vercel Blob, `npx tsx

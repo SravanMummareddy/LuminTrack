@@ -4,8 +4,12 @@ import { useActionState, useEffect, useRef, useState, useTransition } from "reac
 import Link from "next/link";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { SearchSelect } from "@/components/ui/search-select";
-import { Button, buttonClass } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { RateChainWarning } from "@/components/ui/rate-chain-warning";
+import {
+  useUnsavedChanges,
+  GuardedCancel,
+} from "@/components/ui/unsaved-changes";
 import { uploadCandidateResume } from "@/server/actions/resumes";
 import { fetchSubmissionPrefill } from "@/server/actions/submission-prefill";
 import { RESUME_ACCEPT, resumeFileError } from "@/lib/validation/resume";
@@ -283,13 +287,34 @@ export function SubmissionForm({
 
   const errors = state.fieldErrors ?? {};
 
+  // Unsaved-changes guard: any user input flips `dirty` (idempotent — the
+  // functional updater bails out of re-render once already true), arming the
+  // browser's leave prompt and the branded Cancel confirm. A successful submit
+  // redirects (soft nav, no unload) so it never prompts.
+  const [dirty, setDirty] = useState(false);
+  const markDirty = () => setDirty((d) => (d ? d : true));
+  useUnsavedChanges(dirty);
+
   // The candidate whose résumés the picker offers — the fixed one in
   // candidate-locked mode, otherwise whichever is selected.
   const activeCandidate =
     mode === "candidate-locked"
       ? candidate
       : candidates.find((c) => c.id === fields.candidateId);
-  const resumes = [...(activeCandidate?.resumes ?? []), ...uploadedResumes];
+  // Dedupe by id: after an inline upload, `uploadCandidateResume` revalidates
+  // the page, so the new résumé reappears in `activeCandidate.resumes` while
+  // still present in the optimistic `uploadedResumes` list — same id twice
+  // would trip React's duplicate-key warning. Server row wins (listed first).
+  const resumes = (() => {
+    const seen = new Set<string>();
+    const merged: ResumeOption[] = [];
+    for (const r of [...(activeCandidate?.resumes ?? []), ...uploadedResumes]) {
+      if (seen.has(r.id)) continue;
+      seen.add(r.id);
+      merged.push(r);
+    }
+    return merged;
+  })();
   const resumeChoice = fields.resumeSelection === "" ? "none" : "existing";
 
   // The effective ids the action receives, accounting for the locked anchors.
@@ -390,7 +415,7 @@ export function SubmissionForm({
   );
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form action={formAction} onInput={markDirty} className="space-y-5">
       {/* Job + candidate are carried by their SearchSelect (name=…) when a picker
           is shown; in the locked modes there's no picker, so a hidden input holds
           the fixed value. submittedById is always a picker (SearchSelect). */}
@@ -817,9 +842,7 @@ export function SubmissionForm({
       )}
 
       <div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
-        <Link href={cancelHref} className={buttonClass("secondary")}>
-          Cancel
-        </Link>
+        <GuardedCancel href={cancelHref} dirty={dirty} />
         <Button
           type="submit"
           disabled={pending}

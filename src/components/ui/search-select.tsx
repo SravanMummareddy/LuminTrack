@@ -52,6 +52,7 @@ export function SearchSelect({
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hiddenRef = useRef<HTMLInputElement>(null);
   const listId = useId();
 
   const selectedLabel = useMemo(() => {
@@ -78,6 +79,11 @@ export function SearchSelect({
   function choose(opt: ComboOption) {
     if (opt.disabled) return;
     onChange(opt.value);
+    // Updating the hidden input via React state doesn't dispatch a native
+    // event, so ancestor form-level `onInput` handlers (e.g. the unsaved-changes
+    // dirty guard) wouldn't notice a picker-only change. Emit a bubbling input
+    // event so they do.
+    hiddenRef.current?.dispatchEvent(new Event("input", { bubbles: true }));
     setQuery("");
     setOpen(false);
     setActive(-1);
@@ -105,7 +111,7 @@ export function SearchSelect({
 
   return (
     <div className="relative">
-      <input type="hidden" name={name} value={value} />
+      <input ref={hiddenRef} type="hidden" name={name} value={value} />
       <input
         id={id}
         type="text"

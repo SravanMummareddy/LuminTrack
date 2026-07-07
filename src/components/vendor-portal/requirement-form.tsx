@@ -1,11 +1,14 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import Link from "next/link";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { SearchSelect } from "@/components/ui/search-select";
 import { LocationInput } from "@/components/ui/location-input";
-import { Button, buttonClass } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import {
+  useUnsavedChanges,
+  GuardedCancel,
+} from "@/components/ui/unsaved-changes";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 import { BENCH_ENGAGEMENTS, BENCH_ENGAGEMENT_LABEL } from "@/lib/labels";
 
@@ -105,6 +108,12 @@ export function RequirementForm({
       setFields((f) => ({ ...f, [name]: e.target.value }));
 
   const errors = state.fieldErrors ?? {};
+
+  // Unsaved-changes guard — any user input arms the leave prompt + Cancel confirm.
+  const [dirty, setDirty] = useState(false);
+  const markDirty = () => setDirty((d) => (d ? d : true));
+  useUnsavedChanges(dirty);
+
   // Team-lead picker — keep the saved value even if it's not a current lead.
   const teamLeadNames = teamLeads.map((t) => t.fullName);
   const teamLeadChoices =
@@ -113,7 +122,7 @@ export function RequirementForm({
       : teamLeadNames;
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form action={formAction} onInput={markDirty} className="space-y-5">
       {mode === "create" ? (
         <input type="hidden" name="jobId" value={job.id} />
       ) : (
@@ -311,9 +320,7 @@ export function RequirementForm({
       )}
 
       <div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
-        <Link href={cancelHref} className={buttonClass("secondary")}>
-          Cancel
-        </Link>
+        <GuardedCancel href={cancelHref} dirty={dirty} />
         <Button type="submit" disabled={pending}>
           {pending
             ? "Saving…"
