@@ -3,7 +3,6 @@ import { Table, Th, Td } from "@/components/ui/table";
 import { CollapsibleTable } from "@/components/reports/collapsible-table";
 import { Pagination } from "@/components/ui/pagination";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
-import { BarChartCard } from "@/components/dashboard/charts";
 import { getReportsData } from "@/server/queries/reports";
 import {
   listClients,
@@ -11,12 +10,9 @@ import {
   listSisterCompanies,
   listUsers,
 } from "@/server/queries/org";
-import { parseAnalyticsParams, TONE_HEX } from "@/lib/analytics";
+import { parseAnalyticsParams } from "@/lib/analytics";
 import { parsePage } from "@/lib/filters";
-import {
-  SUBMISSION_STATUS_LABEL,
-  SUBMISSION_STATUS_TONE,
-} from "@/lib/labels";
+import { SUBMISSION_STATUS_LABEL } from "@/lib/labels";
 
 const REPORTS_PAGE_SIZE = 10;
 
@@ -103,12 +99,6 @@ export async function AnalyticsTab({
     listUsers(),
   ]);
 
-  const pipelineChart = data.pipeline.map((d) => ({
-    label: SUBMISSION_STATUS_LABEL[d.status],
-    value: d.count,
-    color: TONE_HEX[SUBMISSION_STATUS_TONE[d.status]],
-  }));
-
   const { conversions } = data;
 
   const recruiterHead = (
@@ -143,13 +133,6 @@ export async function AnalyticsTab({
           detail={`${conversions.selectedAfterInterview} of ${conversions.interviewed} interviewed candidates were selected or beyond`}
         />
       </div>
-
-      <Card
-        title="Candidate pipeline by stage"
-        description="Submissions grouped by their current pipeline status."
-      >
-        <BarChartCard data={pipelineChart} height={300} />
-      </Card>
 
       <Card title="Performance by recruiter">
         <CollapsibleTable

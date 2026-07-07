@@ -5,7 +5,6 @@ import {
   STALE_SUBMISSION_STATUSES,
   type AnalyticsFilters,
 } from "@/lib/analytics";
-import { SUBMISSION_STATUSES } from "@/lib/labels";
 
 const REPORTS_PAGE_SIZE = 10;
 
@@ -67,12 +66,6 @@ export async function getReportsData(
     })
     .filter((r) => r.submissions > 0)
     .sort((a, b) => b.submissions - a.submissions);
-
-  // Candidate pipeline by stage.
-  const pipeline = SUBMISSION_STATUSES.map((status) => ({
-    status,
-    count: submissions.filter((s) => s.status === status).length,
-  }));
 
   // Conversion rates.
   const interviewed = submissions.filter(
@@ -188,7 +181,6 @@ export async function getReportsData(
 
   return {
     byRecruiter,
-    pipeline,
     conversions,
     recruiterAging: paginate(recruiterAging, pages.recruiterAging ?? 1),
     placementMargin,
