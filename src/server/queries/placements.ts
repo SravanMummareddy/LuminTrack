@@ -135,7 +135,7 @@ export async function getPlacement(id: string) {
     where: { id },
     include: {
       candidate: {
-        select: { id: true, fullName: true, status: true },
+        select: { id: true, seq: true, fullName: true, status: true },
       },
       job: {
         select: {

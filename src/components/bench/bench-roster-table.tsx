@@ -205,11 +205,20 @@ const COLUMNS: Column[] = [
   },
   {
     key: "linked",
-    label: "Candidate link",
+    label: "Candidate",
     defaultVisible: false,
     render: (c) => (
-      <Td label="Candidate link" secondary>
-        {c.candidateId ? "Linked" : "—"}
+      <Td label="Candidate" secondary>
+        {c.candidateId ? (
+          <Link
+            href={`/candidates/${c.candidateId}`}
+            className="text-indigo-600 hover:underline"
+          >
+            View profile
+          </Link>
+        ) : (
+          "—"
+        )}
       </Td>
     ),
   },
