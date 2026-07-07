@@ -74,16 +74,37 @@ const COLUMNS: Column[] = [
   },
   {
     key: "candidate",
-    // The optional candidate a team lead scoped up front — NOT the submissions
-    // (those are the Submissions column). Usually blank; recruiters submit later.
-    label: "Target",
-    sortKey: "candidate",
+    // The candidates actually submitted against this requirement (VPR-first).
+    // First couple as chips + "+N" for the rest; the cell links to the detail.
+    label: "Candidates",
     defaultVisible: true,
-    render: (r) => (
-      <Td label="Target" secondary>
-        {r.candidate?.fullName ?? "— (none)"}
-      </Td>
-    ),
+    render: (r) => {
+      const extra = r._count.submissions - r.submissions.length;
+      return (
+        <Td label="Candidates">
+          {r._count.submissions === 0 ? (
+            <span className="text-sm text-slate-400">No candidates yet</span>
+          ) : (
+            <Link
+              href={`/vendor-portal/${r.id}`}
+              className="inline-flex flex-wrap items-center gap-1"
+            >
+              {r.submissions.map((s) => (
+                <span
+                  key={s.id}
+                  className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700"
+                >
+                  {s.candidate?.fullName ?? "—"}
+                </span>
+              ))}
+              {extra > 0 && (
+                <span className="text-xs text-slate-400">+{extra}</span>
+              )}
+            </Link>
+          )}
+        </Td>
+      );
+    },
   },
   {
     key: "job",

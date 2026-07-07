@@ -54,8 +54,14 @@ const REQUIREMENT_INCLUDE = {
   },
   recruiter: { select: { id: true, fullName: true } },
   // How many candidates have been submitted against this requirement (VPR-first:
-  // the point of the list is which requirements have real submissions).
+  // the point of the list is which requirements have real submissions) + the
+  // first couple of names for the list's "Candidates" chips (+N for the rest).
   _count: { select: { submissions: true } },
+  submissions: {
+    select: { id: true, candidate: { select: { id: true, fullName: true } } },
+    orderBy: { submittedAt: "desc" },
+    take: 2,
+  },
 } satisfies Prisma.VendorRequirementInclude;
 
 // Decimal → number across the RSC→Client boundary.
