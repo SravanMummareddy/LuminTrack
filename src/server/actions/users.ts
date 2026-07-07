@@ -3,9 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { prisma, isUniqueConstraintError } from "@/server/db";
 import { requireUser } from "@/lib/session";
-import { hashPassword } from "@/lib/password";
-import { canManageUsers, hasFullAccess } from "@/lib/permissions";
-import { userCreateSchema, userUpdateSchema } from "@/lib/validation/user";
+import { hashPassword, verifyPassword } from "@/lib/password";
+import { canManageUsers, hasFullAccess, roleLabel } from "@/lib/permissions";
+import { logActivity } from "@/server/activity";
+import {
+  userCreateSchema,
+  userUpdateSchema,
+  changePasswordSchema,
+} from "@/lib/validation/user";
 import { toFieldErrors } from "@/lib/validation/common";
 import type { FormState } from "@/lib/form-state";
 
@@ -65,22 +70,41 @@ export async function saveUser(
     isActive: parsed.data.isActive,
   };
 
+  // Hash outside the transaction — bcrypt is CPU-bound and shouldn't hold the tx
+  // open. `password` is required by userCreateSchema, so on create newHash is
+  // always set.
+  const passwordChanged = Boolean(parsed.data.password);
+  const newHash = passwordChanged
+    ? await hashPassword(parsed.data.password as string)
+    : null;
+
   try {
-    if (id) {
-      await prisma.user.update({
-        where: { id },
-        data: parsed.data.password
-          ? { ...fields, passwordHash: await hashPassword(parsed.data.password) }
-          : fields,
-      });
-    } else {
-      await prisma.user.create({
-        data: {
-          ...fields,
-          passwordHash: await hashPassword(parsed.data.password ?? ""),
-        },
-      });
-    }
+    await prisma.$transaction(async (tx) => {
+      if (id) {
+        await tx.user.update({
+          where: { id },
+          data: newHash ? { ...fields, passwordHash: newHash } : fields,
+        });
+        await logActivity(tx, {
+          entityType: "USER",
+          action: "USER_UPDATED",
+          description: `Updated user ${fields.email} · ${roleLabel(fields.role)}${
+            passwordChanged ? " · password reset" : ""
+          }`,
+          performedById: actor.id,
+        });
+      } else {
+        await tx.user.create({
+          data: { ...fields, passwordHash: newHash as string },
+        });
+        await logActivity(tx, {
+          entityType: "USER",
+          action: "USER_CREATED",
+          description: `Created user ${fields.email} · ${roleLabel(fields.role)}`,
+          performedById: actor.id,
+        });
+      }
+    });
   } catch (error) {
     if (isUniqueConstraintError(error))
       return { fieldErrors: { email: "A user with this email already exists." } };
@@ -89,4 +113,43 @@ export async function saveUser(
 
   revalidatePath("/settings");
   return { ok: true };
+}
+
+/**
+ * Self-service password change. Any signed-in user can rotate their own
+ * password: verify the current one, then set the new hash and log a
+ * USER_PASSWORD_CHANGED audit row (performed by, and about, the same user).
+ */
+export async function changeOwnPassword(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const actor = await requireUser();
+
+  const parsed = changePasswordSchema.safeParse({
+    currentPassword: formData.get("currentPassword") ?? "",
+    newPassword: formData.get("newPassword") ?? "",
+    confirmPassword: formData.get("confirmPassword") ?? "",
+  });
+  if (!parsed.success) return { fieldErrors: toFieldErrors(parsed.error) };
+
+  const ok = await verifyPassword(parsed.data.currentPassword, actor.passwordHash);
+  if (!ok)
+    return { fieldErrors: { currentPassword: "Current password is incorrect." } };
+
+  const newHash = await hashPassword(parsed.data.newPassword);
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: actor.id },
+      data: { passwordHash: newHash },
+    });
+    await logActivity(tx, {
+      entityType: "USER",
+      action: "USER_PASSWORD_CHANGED",
+      description: `${actor.fullName} changed their password`,
+      performedById: actor.id,
+    });
+  });
+
+  return { ok: true, toast: { title: "Password updated" } };
 }

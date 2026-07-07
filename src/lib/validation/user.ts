@@ -20,3 +20,21 @@ export const userUpdateSchema = base.extend({
 
 export type UserCreateInput = z.infer<typeof userCreateSchema>;
 export type UserUpdateInput = z.infer<typeof userUpdateSchema>;
+
+/** Self-service password change — verify the current password, then set a new
+ *  one (min 8, must differ from current, must be confirmed). */
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Enter your current password."),
+    newPassword: password,
+    confirmPassword: z.string().min(1, "Confirm your new password."),
+  })
+  .refine((d) => d.newPassword === d.confirmPassword, {
+    message: "New passwords don't match.",
+    path: ["confirmPassword"],
+  })
+  .refine((d) => d.newPassword !== d.currentPassword, {
+    message: "New password must be different from your current one.",
+    path: ["newPassword"],
+  });
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

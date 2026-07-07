@@ -123,6 +123,9 @@ enum EntityType {
   CONSULTANT
   // Vendor Portal Requirement — the pre-submission planning record.
   REQUIREMENT
+  // Account/user management + self-service (password change). No entity FK on
+  // Activity for these — the target is named in the description.
+  USER
 }
 
 enum ActivityAction {
@@ -178,6 +181,10 @@ enum ActivityAction {
   REQUIREMENT_UPDATED
   REQUIREMENT_CONVERTED
   REQUIREMENT_CANCELLED
+  // Account/user management + self-service.
+  USER_CREATED
+  USER_UPDATED
+  USER_PASSWORD_CHANGED
 }
 
 // Bench-Sales roster — marketing priority tier (sheet's "High Priority" /

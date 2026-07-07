@@ -15,12 +15,14 @@ import { saveSisterCompany, saveVendor } from "@/server/actions/org";
 import { ContactOrgSection } from "@/components/settings/contact-org-section";
 import { ClientSection } from "@/components/settings/client-section";
 import { UserSection } from "@/components/settings/user-section";
+import { AccountSection } from "@/components/settings/account-section";
 
 const TABS = [
   { key: "sister-companies", label: "Sources" },
   { key: "clients", label: "Clients" },
   { key: "vendors", label: "Vendors" },
   { key: "users", label: "Users" },
+  { key: "account", label: "My account" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -67,7 +69,7 @@ export default async function SettingsPage({
         isAdmin={isAdmin}
       />
     );
-  } else {
+  } else if (tab === "users") {
     content = (
       <UserSection
         items={await listUsers()}
@@ -75,6 +77,8 @@ export default async function SettingsPage({
         canGrantManager={canGrantManager}
       />
     );
+  } else {
+    content = <AccountSection />;
   }
 
   return (
