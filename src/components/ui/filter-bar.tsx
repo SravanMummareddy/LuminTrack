@@ -421,10 +421,12 @@ function DatePopover({
   const [from, setFrom] = useState(params.get("from") ?? "");
   const [to, setTo] = useState(params.get("to") ?? "");
 
-  return (
-    <div className={popoverCls}>
+  // While the custom calendar is open, highlight "Custom range" rather than the
+  // still-applied preset (which only changes once the user hits Apply).
+  const presets = (
+    <div className={cn("flex flex-col gap-0.5", custom && "w-36 shrink-0")}>
       {DATE_PRESETS.map((p) => {
-        const sel = current === p.value;
+        const sel = custom ? p.value === "custom" : current === p.value;
         return (
           <button
             key={p.value}
@@ -443,33 +445,42 @@ function DatePopover({
           </button>
         );
       })}
-      {custom && (
-        <div className="mt-1 space-y-2 border-t border-slate-100 px-1 pt-2">
-          <RangeCalendar
-            from={from || undefined}
-            to={to || undefined}
-            onChange={(f, t) => {
-              setFrom(f ?? "");
-              setTo(t ?? "");
-            }}
-          />
-          <div className="flex items-center justify-between gap-2 px-0.5">
-            <span className="text-xs text-slate-500">
-              {formatRangeLabel(from || undefined, to || undefined)}
-            </span>
-            <button
-              type="button"
-              disabled={!from && !to}
-              onClick={() =>
-                navigate({ preset: "custom", from: from || null, to: to || null })
-              }
-              className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
-            >
-              Apply
-            </button>
-          </div>
+    </div>
+  );
+
+  if (!custom) {
+    return <div className={popoverCls}>{presets}</div>;
+  }
+
+  // Custom: presets become a left rail, the calendar sits to their right.
+  return (
+    <div className={cn(popoverCls, "flex gap-2 p-2")}>
+      {presets}
+      <div className="space-y-2 border-l border-slate-100 pl-2">
+        <RangeCalendar
+          from={from || undefined}
+          to={to || undefined}
+          onChange={(f, t) => {
+            setFrom(f ?? "");
+            setTo(t ?? "");
+          }}
+        />
+        <div className="flex items-center justify-between gap-2 px-0.5">
+          <span className="text-xs text-slate-500">
+            {formatRangeLabel(from || undefined, to || undefined)}
+          </span>
+          <button
+            type="button"
+            disabled={!from && !to}
+            onClick={() =>
+              navigate({ preset: "custom", from: from || null, to: to || null })
+            }
+            className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+          >
+            Apply
+          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 }
