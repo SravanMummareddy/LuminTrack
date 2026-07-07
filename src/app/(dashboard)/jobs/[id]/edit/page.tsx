@@ -9,7 +9,6 @@ import {
   listClients,
   listVendors,
   listSisterCompanies,
-  listUsers,
 } from "@/server/queries/org";
 
 export default async function EditJobPage({
@@ -18,12 +17,11 @@ export default async function EditJobPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [job, clients, vendors, sources, recruiters, user] = await Promise.all([
+  const [job, clients, vendors, sources, user] = await Promise.all([
     getJobForEdit(id),
     listClients(),
     listVendors(),
     listSisterCompanies(),
-    listUsers(),
     getCurrentUser(),
   ]);
   if (!job) notFound();
@@ -45,7 +43,6 @@ export default async function EditJobPage({
     vendorRate: job.vendorRate?.toString() ?? "",
     description: job.description ?? "",
     notes: job.notes ?? "",
-    recruiterIds: job.assignments.map((a) => a.recruiterId),
     positions: job.positions?.toString() ?? "",
     reqType: job.reqType ?? "",
     department: job.department ?? "",
@@ -70,7 +67,6 @@ export default async function EditJobPage({
           clients={clients}
           vendors={vendors}
           sources={sources}
-          recruiters={recruiters}
           values={values}
           submitLabel="Save changes"
           canManageRatesAndAssignment={canRates}

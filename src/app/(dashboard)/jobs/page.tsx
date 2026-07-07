@@ -22,7 +22,6 @@ import {
   listVendors,
   listSisterCompanies,
   listUsers,
-  listActiveRecruiterOptions,
 } from "@/server/queries/org";
 import { parseDateRange, parseSort, parsePage, parseList, PAGE_SIZE } from "@/lib/filters";
 import { JOB_STATUSES } from "@/lib/labels";
@@ -97,7 +96,6 @@ export default async function JobsPage({
     vendors,
     sources,
     recruiters,
-    activeRecruiters,
     currentUser,
     lastImport,
   ] = await Promise.all([
@@ -106,9 +104,6 @@ export default async function JobsPage({
     listVendors(),
     listSisterCompanies(),
     listUsers(),
-    // Picker source for inline assignment — active recruiters only (excludes
-    // admins + inactive users, matches what the job form uses).
-    listActiveRecruiterOptions(),
     getCurrentUser(),
     // Only fetched (used) on the Randstad tab as admin, but cheap enough to
     // always run in parallel — it's a single indexed findFirst.
@@ -223,8 +218,6 @@ export default async function JobsPage({
             rows={jobs}
             countLabel={`${total} job${total === 1 ? "" : "s"}`}
             pageOffset={(page - 1) * PAGE_SIZE}
-            canEditRecruiters={hasFullAccess(currentUser)}
-            allRecruiters={activeRecruiters}
           />
           <Pagination page={page} totalPages={totalPages} total={total} />
         </div>

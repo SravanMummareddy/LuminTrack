@@ -10,7 +10,6 @@ import { JOB_STATUS_LABEL, JOB_STATUS_TONE, jobSourceLabel } from "@/lib/labels"
 import { formatDate, formatJobDisplayId } from "@/lib/format";
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
 import type { JobListRow } from "@/server/queries/jobs";
-import { JobRecruitersCell } from "@/components/jobs/job-recruiters-cell";
 
 /**
  * Column registry. Each column is independent — toggling visibility or
@@ -20,14 +19,6 @@ import { JobRecruitersCell } from "@/components/jobs/job-recruiters-cell";
  * `sortKey` (when present) wires the column header to ?sort= via SortableHeader.
  * Server-side sortable keys are defined in `JOB_SORTS` in queries/jobs.ts.
  */
-/** Cross-row context threaded into every cell render so columns can reach
- *  page-level data (current user, lookup lists) without prop-drilling each
- *  cell component through the table itself. */
-type RenderCtx = {
-  canEditRecruiters: boolean;
-  allRecruiters: { id: string; fullName: string }[];
-};
-
 type Column = {
   key: string;
   label: string;
@@ -36,8 +27,8 @@ type Column = {
   sortDefaultDir?: "asc" | "desc";
   align?: "right";
   defaultVisible: boolean;
-  /** Receives the row, its 1-based page-offset row number, and shared ctx. */
-  render: (job: JobListRow, rowNumber: number, ctx: RenderCtx) => React.ReactNode;
+  /** Receives the row and its 1-based page-offset row number. */
+  render: (job: JobListRow, rowNumber: number) => React.ReactNode;
 };
 
 const COLUMNS: Column[] = [
@@ -118,22 +109,6 @@ const COLUMNS: Column[] = [
       <Td label="Location" secondary>
         {job.location || "—"}
       </Td>
-    ),
-  },
-  {
-    key: "recruiters",
-    label: "Recruiters",
-    defaultVisible: true,
-    render: (job, _n, ctx) => (
-      <JobRecruitersCell
-        jobId={job.id}
-        currentRecruiters={job.assignments.map((a) => ({
-          id: a.recruiter.id,
-          fullName: a.recruiter.fullName,
-        }))}
-        allRecruiters={ctx.allRecruiters}
-        canEdit={ctx.canEditRecruiters}
-      />
     ),
   },
   {
@@ -314,8 +289,6 @@ export function JobsTable({
   rows,
   pageOffset = 0,
   countLabel,
-  canEditRecruiters = false,
-  allRecruiters = [],
   storageKey = STORAGE_KEY,
   columnDefaults = DEFAULTS,
 }: {
@@ -324,17 +297,12 @@ export function JobsTable({
   pageOffset?: number;
   /** e.g. "53 jobs" — shown before the column count. */
   countLabel?: string;
-  /** True when the current user can change recruiter assignments inline. */
-  canEditRecruiters?: boolean;
-  /** Full set of active recruiters available for inline assignment. */
-  allRecruiters?: { id: string; fullName: string }[];
   /** Override the localStorage key so a different view (e.g. /vendor-portal)
    *  keeps its own independent column preferences. */
   storageKey?: string;
   /** Override which columns are visible/ordered by default for this view. */
   columnDefaults?: ColumnPrefs;
 }) {
-  const ctx: RenderCtx = { canEditRecruiters, allRecruiters };
   const [prefs, setPrefs] = useColumnPrefs(
     storageKey,
     STORAGE_VERSION,
@@ -402,7 +370,6 @@ export function JobsTable({
                   column={c}
                   job={job}
                   rowNumber={pageOffset + idx + 1}
-                  ctx={ctx}
                 />
               ))}
             </tr>
@@ -418,13 +385,11 @@ function RenderCell({
   column,
   job,
   rowNumber,
-  ctx,
 }: {
   column: Column;
   job: JobListRow;
   rowNumber: number;
-  ctx: RenderCtx;
 }) {
-  return <>{column.render(job, rowNumber, ctx)}</>;
+  return <>{column.render(job, rowNumber)}</>;
 }
 

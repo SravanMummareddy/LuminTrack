@@ -7,7 +7,6 @@ import { requireUser } from "@/lib/session";
 import {
   canManageOrgEntities,
   canEditJobRatesAndAssignment,
-  hasFullAccess,
 } from "@/lib/permissions";
 import { logActivity } from "@/server/activity";
 import { jobSchema, JOB_STATUS_VALUES } from "@/lib/validation/job";
@@ -145,12 +144,6 @@ export async function createJob(
         workAuthRequirement: d.workAuthRequirement ?? null,
         skills: parseSkillsCsv(d.skills),
         createdById: user.id,
-        assignments: {
-          create: d.recruiterIds.map((recruiterId) => ({
-            recruiterId,
-            assignedById: user.id,
-          })),
-        },
       },
     });
     await logActivity(tx, {
@@ -187,16 +180,13 @@ export async function updateJob(
   const nextSourceId = isOtherSource ? null : d.sisterCompanySourceId;
   const nextSourceOther = isOtherSource ? (d.sourceOther ?? null) : null;
 
-  const existing = await prisma.job.findUnique({
-    where: { id: jobId },
-    include: { assignments: true },
-  });
+  const existing = await prisma.job.findUnique({ where: { id: jobId } });
   if (!existing) return { error: "This job no longer exists." };
 
   // Recruiters may edit basic job details + status, but NOT the commercial
-  // rates or the recruiter assignment — those are manager/team-lead only. For a
-  // recruiter, force the rate + assignment inputs back to their stored values so
-  // a hand-crafted POST can't change them (the form also hides these controls).
+  // rates — those are manager/team-lead only. For a recruiter, force the rate
+  // inputs back to their stored values so a hand-crafted POST can't change them
+  // (the form also hides these controls). Recruiter ownership is a VPR concern.
   const canRates = canEditJobRatesAndAssignment(user);
   const effClientRate = canRates
     ? (d.clientRate ?? null)
@@ -255,28 +245,6 @@ export async function updateJob(
   const nextSkills = parseSkillsCsv(d.skills);
   compare("skills", existing.skills.join(", "), nextSkills.join(", "));
 
-  const currentRecruiters = new Set(existing.assignments.map((a) => a.recruiterId));
-  const desiredRecruiters = new Set(d.recruiterIds);
-  // Only full-access users may change the assignment; for recruiters the diff is
-  // forced empty so their POST can never add/remove recruiters.
-  const toAdd = canRates
-    ? d.recruiterIds.filter((id) => !currentRecruiters.has(id))
-    : [];
-  const toRemove = canRates
-    ? [...currentRecruiters].filter((id) => !desiredRecruiters.has(id))
-    : [];
-
-  const affected = [...new Set([...toAdd, ...toRemove])];
-  const affectedUsers = affected.length
-    ? await prisma.user.findMany({
-        where: { id: { in: affected } },
-        select: { id: true, fullName: true },
-      })
-    : [];
-  const recruiterNames = new Map(
-    affectedUsers.map((u) => [u.id, u.fullName] as const),
-  );
-
   await prisma.$transaction(async (tx) => {
     await tx.job.update({
       where: { id: jobId },
@@ -308,15 +276,6 @@ export async function updateJob(
       },
     });
 
-    if (toRemove.length)
-      await tx.jobAssignment.deleteMany({
-        where: { jobId, recruiterId: { in: toRemove } },
-      });
-    for (const recruiterId of toAdd)
-      await tx.jobAssignment.create({
-        data: { jobId, recruiterId, assignedById: user.id },
-      });
-
     if (changed.length)
       await logActivity(tx, {
         entityType: "JOB",
@@ -326,110 +285,11 @@ export async function updateJob(
         performedById: user.id,
         jobId,
       });
-    for (const recruiterId of toAdd)
-      await logActivity(tx, {
-        entityType: "JOB",
-        action: "RECRUITER_ASSIGNED",
-        description: `${recruiterNames.get(recruiterId) ?? "A recruiter"} assigned to the job`,
-        performedById: user.id,
-        jobId,
-      });
-    for (const recruiterId of toRemove)
-      await logActivity(tx, {
-        entityType: "JOB",
-        action: "RECRUITER_UNASSIGNED",
-        description: `${recruiterNames.get(recruiterId) ?? "A recruiter"} removed from the job`,
-        performedById: user.id,
-        jobId,
-      });
   });
 
   revalidatePath("/jobs");
   revalidatePath(`/jobs/${jobId}`);
   redirect(`/jobs/${jobId}`);
-}
-
-/**
- * Inline recruiter assignment from the Jobs list. Admin-only — matches the
- * Tier 1 pattern for org-entity writes. Mirrors `updateJob`'s assignment-diff
- * block: computes toAdd / toRemove against the current set, then writes one
- * RECRUITER_ASSIGNED per added user and one RECRUITER_UNASSIGNED per removed
- * user, all inside a single transaction so the JobAssignment rows and the
- * audit entries commit atomically.
- */
-export async function assignJobRecruiters(
-  jobId: string,
-  recruiterIds: string[],
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  const user = await requireUser();
-  if (!canEditJobRatesAndAssignment(user))
-    return {
-      ok: false,
-      error: "Only managers and team leads can change job assignments.",
-    };
-  if (!jobId.trim()) return { ok: false, error: "Missing job reference." };
-
-  // Defensive de-dup: client may send a stale checkbox state where the same
-  // id appears twice. Empty strings are dropped.
-  const desiredIds = Array.from(
-    new Set(recruiterIds.map((id) => String(id ?? "").trim()).filter(Boolean)),
-  );
-
-  const job = await prisma.job.findUnique({
-    where: { id: jobId },
-    include: { assignments: { select: { recruiterId: true } } },
-  });
-  if (!job) return { ok: false, error: "This job no longer exists." };
-
-  const currentSet = new Set(job.assignments.map((a) => a.recruiterId));
-  const desiredSet = new Set(desiredIds);
-  const toAdd = desiredIds.filter((id) => !currentSet.has(id));
-  const toRemove = [...currentSet].filter((id) => !desiredSet.has(id));
-
-  if (toAdd.length === 0 && toRemove.length === 0) {
-    // No-op — don't write a noise audit row.
-    return { ok: true };
-  }
-
-  const affected = [...new Set([...toAdd, ...toRemove])];
-  const affectedUsers = await prisma.user.findMany({
-    where: { id: { in: affected } },
-    select: { id: true, fullName: true },
-  });
-  const recruiterNames = new Map(
-    affectedUsers.map((u) => [u.id, u.fullName] as const),
-  );
-
-  await prisma.$transaction(async (tx) => {
-    if (toRemove.length)
-      await tx.jobAssignment.deleteMany({
-        where: { jobId, recruiterId: { in: toRemove } },
-      });
-    for (const recruiterId of toAdd)
-      await tx.jobAssignment.create({
-        data: { jobId, recruiterId, assignedById: user.id },
-      });
-    for (const recruiterId of toAdd)
-      await logActivity(tx, {
-        entityType: "JOB",
-        action: "RECRUITER_ASSIGNED",
-        description: `${recruiterNames.get(recruiterId) ?? "A recruiter"} assigned to the job`,
-        performedById: user.id,
-        jobId,
-      });
-    for (const recruiterId of toRemove)
-      await logActivity(tx, {
-        entityType: "JOB",
-        action: "RECRUITER_UNASSIGNED",
-        description: `${recruiterNames.get(recruiterId) ?? "A recruiter"} removed from the job`,
-        performedById: user.id,
-        jobId,
-      });
-  });
-
-  revalidatePath("/jobs");
-  revalidatePath(`/jobs/${jobId}`);
-  return { ok: true };
 }
 
 /**

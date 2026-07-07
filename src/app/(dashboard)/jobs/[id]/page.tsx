@@ -396,22 +396,6 @@ export default async function JobDetailPage({
           </div>
         </div>
 
-        <div className="mt-5">
-          <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">
-            Assigned recruiters
-          </dt>
-          <dd className="mt-1.5 flex flex-wrap gap-1.5">
-            {job.assignments.length === 0 ? (
-              <span className="text-sm text-slate-500">No recruiters assigned</span>
-            ) : (
-              job.assignments.map((a) => (
-                <Badge key={a.id} tone="indigo">
-                  {a.recruiter.fullName}
-                </Badge>
-              ))
-            )}
-          </dd>
-        </div>
       </Card>
 
       <section className="rounded-lg border border-slate-200 bg-white p-5">

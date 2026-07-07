@@ -22,7 +22,6 @@ import {
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 
 type Option = { id: string; name: string; isActive: boolean };
-type Recruiter = { id: string; fullName: string; isActive: boolean };
 
 export type JobFormValues = {
   id: string;
@@ -37,7 +36,6 @@ export type JobFormValues = {
   vendorRate: string;
   description: string;
   notes: string;
-  recruiterIds: string[];
   positions: string;
   reqType: string;
   department: string;
@@ -66,7 +64,6 @@ export function JobForm({
   clients,
   vendors,
   sources,
-  recruiters,
   values,
   submitLabel,
   canCreateOrgEntities = false,
@@ -76,19 +73,16 @@ export function JobForm({
   clients: Option[];
   vendors: Option[];
   sources: Option[];
-  recruiters: Recruiter[];
   values?: JobFormValues;
   submitLabel: string;
   /** Allow adding a new client/vendor inline (managers/team leads only). */
   canCreateOrgEntities?: boolean;
-  /** Show the commercial rate fields + recruiter assignment. Recruiters may edit
-   *  basic job details but not rates or who's assigned — those are hidden for
-   *  them (and the server enforces the same). */
+  /** Show the commercial rate fields. Recruiters may edit basic job details but
+   *  not rates — those are hidden for them (and the server enforces the same). */
   canManageRatesAndAssignment?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(action, EMPTY_FORM_STATE);
   const errors = state.fieldErrors ?? {};
-  const assigned = new Set(values?.recruiterIds ?? []);
   const cancelHref = values ? `/jobs/${values.id}` : "/jobs";
 
   // Unsaved-changes guard — any user input arms the leave prompt + Cancel confirm.
@@ -488,40 +482,6 @@ export function JobForm({
           defaultValue={values?.notes ?? ""}
         />
       </Field>
-
-      {canManageRatesAndAssignment && (
-        <div>
-          <span className="block text-sm font-medium text-slate-700">
-            Assigned recruiters
-          </span>
-          <p className="mt-0.5 text-xs text-slate-500">
-            Optional — you can assign later from the job detail page.
-          </p>
-          {recruiters.length === 0 ? (
-            <p className="mt-1 text-xs text-slate-500">
-              No users yet — add recruiters under Settings.
-            </p>
-          ) : (
-            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {recruiters.map((r) => (
-                <label
-                  key={r.id}
-                  className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700"
-                >
-                  <input
-                    type="checkbox"
-                    name="recruiterIds"
-                    value={r.id}
-                    defaultChecked={assigned.has(r.id)}
-                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-200"
-                  />
-                  <span>{optionLabel(r.fullName, r.isActive)}</span>
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {state.error && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
