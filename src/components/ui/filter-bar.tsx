@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Search, ChevronDown, X, Check } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { DATE_PRESETS } from "@/lib/filters";
+import { RangeCalendar, formatRangeLabel } from "@/components/ui/range-calendar";
 
 export type FilterOption = { value: string; label: string };
 
@@ -444,32 +445,29 @@ function DatePopover({
       })}
       {custom && (
         <div className="mt-1 space-y-2 border-t border-slate-100 px-1 pt-2">
-          <label className="block text-xs text-slate-500">
-            From
-            <input
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="mt-0.5 w-full rounded-md border border-slate-200 px-2 py-1 text-sm outline-none focus:border-indigo-400"
-            />
-          </label>
-          <label className="block text-xs text-slate-500">
-            To
-            <input
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="mt-0.5 w-full rounded-md border border-slate-200 px-2 py-1 text-sm outline-none focus:border-indigo-400"
-            />
-          </label>
-          <button
-            type="button"
-            disabled={!from && !to}
-            onClick={() => navigate({ preset: "custom", from: from || null, to: to || null })}
-            className="w-full rounded-md bg-indigo-600 px-2 py-1.5 text-sm font-medium text-white disabled:opacity-40"
-          >
-            Apply dates
-          </button>
+          <RangeCalendar
+            from={from || undefined}
+            to={to || undefined}
+            onChange={(f, t) => {
+              setFrom(f ?? "");
+              setTo(t ?? "");
+            }}
+          />
+          <div className="flex items-center justify-between gap-2 px-0.5">
+            <span className="text-xs text-slate-500">
+              {formatRangeLabel(from || undefined, to || undefined)}
+            </span>
+            <button
+              type="button"
+              disabled={!from && !to}
+              onClick={() =>
+                navigate({ preset: "custom", from: from || null, to: to || null })
+              }
+              className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+            >
+              Apply
+            </button>
+          </div>
         </div>
       )}
     </div>
