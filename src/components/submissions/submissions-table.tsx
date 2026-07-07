@@ -40,7 +40,12 @@ const COLUMNS: Column[] = [
     defaultVisible: true,
     render: (s) => (
       <Td label="ID" secondary className="whitespace-nowrap font-mono text-xs">
-        {formatSubmissionDisplayId(s)}
+        <Link
+          href={`/submissions/${s.id}`}
+          className="text-indigo-600 hover:underline"
+        >
+          {formatSubmissionDisplayId(s)}
+        </Link>
       </Td>
     ),
   },

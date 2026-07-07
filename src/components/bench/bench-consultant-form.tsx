@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import Link from "next/link";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
+import { SearchSelect } from "@/components/ui/search-select";
 import { Button, buttonClass } from "@/components/ui/button";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 import {
@@ -144,12 +145,17 @@ export function BenchConsultantForm({
             </Select>
           </Field>
           <Field label="Marketing recruiter" htmlFor="recruiterId" error={errors.recruiterId}>
-            <Select id="recruiterId" name="recruiterId" value={fields.recruiterId} onChange={set("recruiterId")}>
-              <option value="">— Unassigned —</option>
-              {recruiters.map((r) => (
-                <option key={r.id} value={r.id}>{r.fullName}</option>
-              ))}
-            </Select>
+            <SearchSelect
+              id="recruiterId"
+              name="recruiterId"
+              value={fields.recruiterId}
+              onChange={(v) => setFields((f) => ({ ...f, recruiterId: v }))}
+              placeholder="Search recruiters…"
+              options={[
+                { value: "", label: "— Unassigned —" },
+                ...recruiters.map((r) => ({ value: r.id, label: r.fullName })),
+              ]}
+            />
           </Field>
           <Field label="Technology" htmlFor="technology" error={errors.technology}>
             <Input id="technology" name="technology" value={fields.technology} onChange={set("technology")} placeholder="e.g. Java / AWS" />
@@ -199,12 +205,17 @@ export function BenchConsultantForm({
         hint="Optional — link to the ATS candidate record. Can also be created when you submit them."
         error={errors.candidateId}
       >
-        <Select id="candidateId" name="candidateId" value={fields.candidateId} onChange={set("candidateId")}>
-          <option value="">— Not linked —</option>
-          {candidates.map((c) => (
-            <option key={c.id} value={c.id}>{c.fullName}</option>
-          ))}
-        </Select>
+        <SearchSelect
+          id="candidateId"
+          name="candidateId"
+          value={fields.candidateId}
+          onChange={(v) => setFields((f) => ({ ...f, candidateId: v }))}
+          placeholder="Search candidates…"
+          options={[
+            { value: "", label: "— Not linked —" },
+            ...candidates.map((c) => ({ value: c.id, label: c.fullName })),
+          ]}
+        />
       </Field>
 
       {/* ── More details (collapsible) ────────────────────────────── */}

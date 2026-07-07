@@ -43,7 +43,12 @@ const COLUMNS: Column[] = [
     defaultVisible: true,
     render: (r) => (
       <Td label="ID" secondary className="whitespace-nowrap font-mono text-xs">
-        {formatVendorRequirementDisplayId(r)}
+        <Link
+          href={`/vendor-portal/${r.id}`}
+          className="text-indigo-600 hover:underline"
+        >
+          {formatVendorRequirementDisplayId(r)}
+        </Link>
       </Td>
     ),
   },

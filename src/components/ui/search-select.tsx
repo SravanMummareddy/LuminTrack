@@ -4,7 +4,14 @@ import { useId, useMemo, useRef, useState } from "react";
 import { controlClass } from "@/components/ui/field";
 import { cn } from "@/lib/cn";
 
-export type ComboOption = { value: string; label: string };
+export type ComboOption = {
+  value: string;
+  label: string;
+  /** Muted suffix shown after the label (e.g. "(already submitted)"). */
+  hint?: string;
+  /** Greyed + non-selectable (e.g. a candidate already submitted to this job). */
+  disabled?: boolean;
+};
 
 type Props = {
   name: string;
@@ -69,6 +76,7 @@ export function SearchSelect({
   const rows: ComboOption[] = actionOption ? [...filtered, actionOption] : filtered;
 
   function choose(opt: ComboOption) {
+    if (opt.disabled) return;
     onChange(opt.value);
     setQuery("");
     setOpen(false);
@@ -146,18 +154,28 @@ export function SearchSelect({
                 key={opt.value || "__blank"}
                 role="option"
                 aria-selected={i === active}
+                aria-disabled={opt.disabled || undefined}
                 className={cn(
-                  "cursor-pointer px-3 py-1.5",
-                  isAction
-                    ? "mt-1 border-t border-slate-100 font-medium text-indigo-600"
-                    : "text-slate-900",
-                  i === active && (isAction ? "bg-indigo-50" : "bg-slate-50"),
-                  i !== active && !isAction && "hover:bg-slate-50",
+                  "px-3 py-1.5",
+                  opt.disabled
+                    ? "cursor-not-allowed text-slate-300"
+                    : "cursor-pointer",
+                  !opt.disabled &&
+                    (isAction
+                      ? "mt-1 border-t border-slate-100 font-medium text-indigo-600"
+                      : "text-slate-900"),
+                  !opt.disabled &&
+                    i === active &&
+                    (isAction ? "bg-indigo-50" : "bg-slate-50"),
+                  !opt.disabled && i !== active && !isAction && "hover:bg-slate-50",
                 )}
-                onMouseEnter={() => setActive(i)}
+                onMouseEnter={() => !opt.disabled && setActive(i)}
                 onClick={() => choose(opt)}
               >
                 {opt.label}
+                {opt.hint ? (
+                  <span className="ml-1.5 text-xs text-slate-400">{opt.hint}</span>
+                ) : null}
               </li>
             );
           })}

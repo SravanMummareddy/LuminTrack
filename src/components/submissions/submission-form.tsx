@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
+import { SearchSelect } from "@/components/ui/search-select";
 import { Button, buttonClass } from "@/components/ui/button";
 import { RateChainWarning } from "@/components/ui/rate-chain-warning";
 import { uploadCandidateResume } from "@/server/actions/resumes";
@@ -66,6 +67,10 @@ type Fields = {
   // archived résumé, zero rates, bill < pay) paused the move. Any non-empty
   // value clears all four; latched so it rides through a follow-up gate.
   convertReason: string;
+  // Reason for submitting a Not-interested / Do-not-contact candidate. Its own
+  // field (not overrideNote) so it can be latched persistently and survive a
+  // follow-up gate (e.g. rates-pending) on either the direct or convert path.
+  candidateStatusReason: string;
 };
 
 
@@ -136,6 +141,7 @@ export function SubmissionForm({
     overridePreset: "",
     overrideNote: "",
     convertReason: "",
+    candidateStatusReason: "",
     ...prefill,
   });
   // Surfaced after a candidate switch clears a résumé pick, so the wipe isn't
@@ -233,7 +239,7 @@ export function SubmissionForm({
 
   // Switching candidate clears the résumé pick — a résumé belongs to one
   // candidate. Warn if there was anything to lose rather than wiping silently.
-  const onCandidateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const onCandidateChange = (nextCandidateId: string) => {
     // A résumé (saved or freshly uploaded) belongs to one candidate — drop both
     // the pick and the just-uploaded list when the candidate changes.
     setUploadedResumes([]);
@@ -243,14 +249,13 @@ export function SubmissionForm({
       setResumeCleared(hadResume);
       return {
         ...f,
-        candidateId: e.target.value,
+        candidateId: nextCandidateId,
         resumeSelection: "",
       };
     });
   };
 
-  const onJobChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const nextJobId = e.target.value;
+  const onJobChange = (nextJobId: string) => {
     setFields((f) => ({
       ...f,
       jobId: nextJobId,
@@ -270,6 +275,8 @@ export function SubmissionForm({
         engagement: p.engagement,
         vendorRecruiterName: p.vendorRecruiterName,
         teamLead: p.teamLead,
+        jobDuties: p.jobDuties,
+        submissionNotes: p.submissionNotes,
       }));
     });
   };
@@ -384,9 +391,15 @@ export function SubmissionForm({
 
   return (
     <form action={formAction} className="space-y-5">
-      <input type="hidden" name="jobId" value={effectiveJobId} />
-      <input type="hidden" name="candidateId" value={effectiveCandidateId} />
-      <input type="hidden" name="submittedById" value={fields.submittedById} />
+      {/* Job + candidate are carried by their SearchSelect (name=…) when a picker
+          is shown; in the locked modes there's no picker, so a hidden input holds
+          the fixed value. submittedById is always a picker (SearchSelect). */}
+      {mode === "job-locked" && (
+        <input type="hidden" name="jobId" value={effectiveJobId} />
+      )}
+      {mode === "candidate-locked" && (
+        <input type="hidden" name="candidateId" value={effectiveCandidateId} />
+      )}
       {isConvert && (
         <input type="hidden" name="requirementId" value={requirementId} />
       )}
@@ -397,6 +410,16 @@ export function SubmissionForm({
           type="hidden"
           name="convertOverrideReason"
           value={fields.convertReason}
+        />
+      )}
+      {/* Do-not-contact / not-interested override reason, latched persistently so
+          it survives a follow-up gate (e.g. rates-pending) instead of being lost
+          when the candidate_status gate hands off — the bug it fixes. */}
+      {fields.candidateStatusReason.trim() !== "" && (
+        <input
+          type="hidden"
+          name="candidateStatusOverrideReason"
+          value={fields.candidateStatusReason}
         />
       )}
       {/* Persisted across gate transitions once the recruiter has claimed —
@@ -424,23 +447,17 @@ export function SubmissionForm({
           error={errors.jobId}
           hint="Only jobs still open for submissions are listed."
         >
-          <Select
-            key={`jobId-${selectSyncKey}`}
+          <SearchSelect
             id="jobId"
+            name="jobId"
             value={fields.jobId}
             onChange={onJobChange}
-            required
-          >
-            <option value="" disabled>
-              Select a job…
-            </option>
-            {jobOptions.map((j) => (
-              <option key={j.id} value={j.id}>
-                {j.title}
-                {j.clientName ? ` — ${j.clientName}` : ""} ({j.displayId})
-              </option>
-            ))}
-          </Select>
+            placeholder="Search jobs…"
+            options={jobOptions.map((j) => ({
+              value: j.id,
+              label: `${j.title}${j.clientName ? ` — ${j.clientName}` : ""} (${j.displayId})`,
+            }))}
+          />
         </Field>
       )}
 
@@ -463,24 +480,19 @@ export function SubmissionForm({
               : undefined
           }
         >
-          <Select
-            key={`candidateId-${selectSyncKey}`}
+          <SearchSelect
             id="candidateId"
+            name="candidateId"
             value={fields.candidateId}
             onChange={onCandidateChange}
-            required
-          >
-            <option value="" disabled>
-              Select a candidate…
-            </option>
-            {candidates.map((c) => (
-              <option key={c.id} value={c.id} disabled={c.alreadySubmitted}>
-                {c.alreadySubmitted
-                  ? `${c.fullName} (already submitted)`
-                  : c.fullName}
-              </option>
-            ))}
-          </Select>
+            placeholder="Search candidates…"
+            options={candidates.map((c) => ({
+              value: c.id,
+              label: c.fullName,
+              disabled: c.alreadySubmitted,
+              hint: c.alreadySubmitted ? "(already submitted)" : undefined,
+            }))}
+          />
         </Field>
       )}
 
@@ -491,22 +503,17 @@ export function SubmissionForm({
           required
           error={errors.submittedById}
         >
-          <Select
-            key={`submittedBy-${selectSyncKey}`}
+          <SearchSelect
             id="submittedById"
+            name="submittedById"
             value={fields.submittedById}
-            onChange={set("submittedById")}
-            required
-          >
-            <option value="" disabled>
-              Select a recruiter…
-            </option>
-            {recruiters.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.isActive ? r.fullName : `${r.fullName} (inactive)`}
-              </option>
-            ))}
-          </Select>
+            onChange={(v) => setFields((f) => ({ ...f, submittedById: v }))}
+            placeholder="Search recruiters…"
+            options={recruiters.map((r) => ({
+              value: r.id,
+              label: r.isActive ? r.fullName : `${r.fullName} (inactive)`,
+            }))}
+          />
         </Field>
 
       </div>
@@ -702,22 +709,19 @@ export function SubmissionForm({
       {gate === "candidate_status" && (
         <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3">
           <p className="text-sm font-medium text-amber-800">{state.error}</p>
-          <input
-            type="hidden"
-            name="candidateStatusOverrideReason"
-            value={fields.overrideNote}
-          />
+          {/* The reason posts via a persistent latched hidden input above (so it
+              rides through a follow-up gate); this textarea just drives it. */}
           <Field
             label="Reason for submitting anyway"
-            htmlFor="overrideNote"
+            htmlFor="candidateStatusReason"
             required
             hint="Captured on the submission's audit trail."
           >
             <Textarea
-              id="overrideNote"
+              id="candidateStatusReason"
               rows={2}
-              value={fields.overrideNote}
-              onChange={set("overrideNote")}
+              value={fields.candidateStatusReason}
+              onChange={set("candidateStatusReason")}
             />
           </Field>
         </div>

@@ -96,6 +96,7 @@ export default async function NewRequirementPage({
         location: true,
         clientRate: true,
         vendorRate: true,
+        description: true,
         client: { select: { name: true } },
       },
     }),
@@ -144,6 +145,9 @@ export default async function NewRequirementPage({
             // The job's Vendor rate is the job-level bill rate — seed the
             // requirement's Bill rate from it (editable per-candidate).
             billRate: job.vendorRate != null ? String(job.vendorRate) : "",
+            // Carry the job's description into the requirement's Job duties so it
+            // isn't retyped (editable). Flows on to the submission via convert.
+            jobDuties: job.description ?? "",
           }}
           cancelHref="/vendor-portal"
         />

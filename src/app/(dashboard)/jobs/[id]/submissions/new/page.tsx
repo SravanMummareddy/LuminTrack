@@ -89,6 +89,8 @@ export default async function NewSubmissionPage({
                     engagement: reqPrefill.engagement,
                     vendorRecruiterName: reqPrefill.vendorRecruiterName,
                     teamLead: reqPrefill.teamLead,
+                    jobDuties: reqPrefill.jobDuties,
+                    submissionNotes: reqPrefill.submissionNotes,
                   }
                 : undefined
             }

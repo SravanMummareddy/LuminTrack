@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useState } from "react";
 import Link from "next/link";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
+import { SearchSelect } from "@/components/ui/search-select";
 import { LocationInput } from "@/components/ui/location-input";
 import { Button, buttonClass } from "@/components/ui/button";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
@@ -118,9 +119,6 @@ export function RequirementForm({
       ) : (
         <input type="hidden" name="id" value={requirementId ?? ""} />
       )}
-      <input type="hidden" name="candidateId" value={fields.candidateId} />
-      <input type="hidden" name="recruiterId" value={fields.recruiterId} />
-
       <Field label="Job">
         <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
           {job.title}
@@ -136,19 +134,17 @@ export function RequirementForm({
           error={errors.candidateId}
           hint="Optional — leave blank to plan the requirement before a candidate is chosen."
         >
-          <Select
-            key={`candidateId-${selectSyncKey}`}
+          <SearchSelect
             id="candidateId"
+            name="candidateId"
             value={fields.candidateId}
-            onChange={set("candidateId")}
-          >
-            <option value="">— No candidate yet</option>
-            {candidates.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.fullName}
-              </option>
-            ))}
-          </Select>
+            onChange={(v) => setFields((f) => ({ ...f, candidateId: v }))}
+            placeholder="Search candidates…"
+            options={[
+              { value: "", label: "— No candidate yet" },
+              ...candidates.map((c) => ({ value: c.id, label: c.fullName })),
+            ]}
+          />
         </Field>
 
         <Field
@@ -157,19 +153,20 @@ export function RequirementForm({
           error={errors.recruiterId}
           hint="Who will market / submit this requirement."
         >
-          <Select
-            key={`recruiterId-${selectSyncKey}`}
+          <SearchSelect
             id="recruiterId"
+            name="recruiterId"
             value={fields.recruiterId}
-            onChange={set("recruiterId")}
-          >
-            <option value="">— Unassigned</option>
-            {recruiters.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.isActive ? r.fullName : `${r.fullName} (inactive)`}
-              </option>
-            ))}
-          </Select>
+            onChange={(v) => setFields((f) => ({ ...f, recruiterId: v }))}
+            placeholder="Search recruiters…"
+            options={[
+              { value: "", label: "— Unassigned" },
+              ...recruiters.map((r) => ({
+                value: r.id,
+                label: r.isActive ? r.fullName : `${r.fullName} (inactive)`,
+              })),
+            ]}
+          />
         </Field>
       </div>
 

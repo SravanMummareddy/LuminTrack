@@ -15,6 +15,7 @@ import { getNotesFor } from "@/server/queries/notes";
 import { getCurrentUser } from "@/lib/session";
 import { canManageRequirements } from "@/lib/permissions";
 import { JobStatusForm } from "@/components/jobs/job-status-form";
+import { JobPipelineSteps } from "@/components/jobs/job-pipeline-steps";
 import { Pagination } from "@/components/ui/pagination";
 import { SUB_PAGE_SIZE as PAGE_SIZE, parsePage } from "@/lib/filters";
 import {
@@ -178,6 +179,13 @@ export default async function JobDetailPage({
           Edit job
         </LinkButton>
       </div>
+
+      <JobPipelineSteps
+        jobId={job.id}
+        vprCount={requirements.length}
+        submissionCount={submissionsTotal}
+        canManageReq={canManageReq}
+      />
 
       <Card title="Status">
         <JobStatusForm jobId={job.id} status={job.status} />

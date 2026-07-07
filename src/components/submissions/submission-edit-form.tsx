@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useState } from "react";
 import Link from "next/link";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
+import { SearchSelect } from "@/components/ui/search-select";
 import { Button, buttonClass } from "@/components/ui/button";
 import { RateChainWarning } from "@/components/ui/rate-chain-warning";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
@@ -172,26 +173,20 @@ export function SubmissionEditForm({
             hint="Admin: correct who this submission is credited to."
             error={errors.submittedById}
           >
-            {/* Backstop: the visible select is presentational (no name) so a
-                post-action form reset can't diverge the submitted value from
-                state. The hidden input is the one that's actually submitted. */}
-            <input
-              type="hidden"
+            {/* SearchSelect is controlled (text + hidden input both driven by
+                state), so it survives React 19's post-action form reset without
+                the presentational-select + remount-key backstop. */}
+            <SearchSelect
+              id="submittedById"
               name="submittedById"
               value={fields.submittedById}
+              onChange={(v) => setFields((f) => ({ ...f, submittedById: v }))}
+              placeholder="Search recruiters…"
+              options={recruiters.map((r) => ({
+                value: r.id,
+                label: r.isActive ? r.fullName : `${r.fullName} (inactive)`,
+              }))}
             />
-            <Select
-              key={`submittedBy-${selectSyncKey}`}
-              id="submittedById"
-              value={fields.submittedById}
-              onChange={set("submittedById")}
-            >
-              {recruiters.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.isActive ? r.fullName : `${r.fullName} (inactive)`}
-                </option>
-              ))}
-            </Select>
           </Field>
         ) : (
           <LockedField label="Submitted by" value={recruiterName} />

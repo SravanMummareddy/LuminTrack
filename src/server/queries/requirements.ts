@@ -165,6 +165,8 @@ export async function getOpenRequirementPrefill(jobId: string) {
       engagement: true,
       vendorRecruiterName: true,
       teamLead: true,
+      jobDuties: true,
+      submissionNotes: true,
     },
   });
   if (!r) return null;
@@ -176,6 +178,8 @@ export async function getOpenRequirementPrefill(jobId: string) {
     engagement: r.engagement ?? "",
     vendorRecruiterName: r.vendorRecruiterName ?? "",
     teamLead: r.teamLead ?? "",
+    jobDuties: r.jobDuties ?? "",
+    submissionNotes: r.submissionNotes ?? "",
   };
 }
 
