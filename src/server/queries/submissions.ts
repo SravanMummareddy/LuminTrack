@@ -46,6 +46,11 @@ const SUBMISSION_SORTS: Record<
   status: (d) => ({ status: d }),
   rounds: (d) => ({ interviewRounds: { _count: d } }),
   submitted: (d) => ({ submittedAt: d }),
+  engagement: (d) => ({ engagement: d }),
+  vendorRecruiter: (d) => ({ vendorRecruiterName: d }),
+  payRate: (d) => ({ payRate: d }),
+  billRate: (d) => ({ billRate: d }),
+  teamLead: (d) => ({ teamLead: d }),
 };
 
 // `daysInStage` is derived (not a column), so it's not in SUBMISSION_SORTS;

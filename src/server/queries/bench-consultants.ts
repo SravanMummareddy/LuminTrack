@@ -30,6 +30,8 @@ const BENCH_SORTS: Record<
   status: (d) => ({ marketingStatus: d }),
   recruiter: (d) => ({ recruiter: { fullName: d } }),
   created: (d) => ({ createdAt: d }),
+  experience: (d) => ({ marketingExpYears: d }),
+  leastRate: (d) => ({ leastRateC2C: d }),
 };
 
 export const BENCH_SORT_KEYS = Object.keys(BENCH_SORTS);

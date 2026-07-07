@@ -30,13 +30,13 @@ export function InterviewsTable({
           <Th>Time</Th>
           <SortableHeader column="candidate" label="Candidate" />
           <SortableHeader column="client" label="Client" />
-          <Th>Vendor</Th>
-          <Th>Location</Th>
-          <Th>Sales recruiter</Th>
+          <SortableHeader column="vendor" label="Vendor" />
+          <SortableHeader column="location" label="Location" />
+          <SortableHeader column="recruiter" label="Sales recruiter" />
           <Th>Technology</Th>
           <Th>Round</Th>
           <Th>Support</Th>
-          <Th>Result</Th>
+          <SortableHeader column="result" label="Result" />
           <Th>Remarks</Th>
         </tr>
       </thead>

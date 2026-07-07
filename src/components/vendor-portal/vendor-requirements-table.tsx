@@ -55,6 +55,7 @@ const COLUMNS: Column[] = [
   {
     key: "submissions",
     label: "Submissions",
+    sortKey: "submissions",
     align: "right",
     defaultVisible: true,
     render: (r) => (
@@ -125,6 +126,7 @@ const COLUMNS: Column[] = [
   {
     key: "vendor",
     label: "Vendor",
+    sortKey: "vendor",
     defaultVisible: true,
     render: (r) => (
       <Td label="Vendor" secondary>
@@ -135,6 +137,7 @@ const COLUMNS: Column[] = [
   {
     key: "client",
     label: "Client",
+    sortKey: "client",
     defaultVisible: true,
     render: (r) => (
       <Td label="Client" secondary>
@@ -145,6 +148,7 @@ const COLUMNS: Column[] = [
   {
     key: "pay",
     label: "Pay",
+    sortKey: "pay",
     align: "right",
     defaultVisible: true,
     render: (r) => (
@@ -156,6 +160,7 @@ const COLUMNS: Column[] = [
   {
     key: "bill",
     label: "Bill",
+    sortKey: "bill",
     align: "right",
     defaultVisible: true,
     render: (r) => (
@@ -167,6 +172,7 @@ const COLUMNS: Column[] = [
   {
     key: "location",
     label: "Location",
+    sortKey: "location",
     defaultVisible: true,
     render: (r) => (
       <Td label="Location" secondary>
@@ -177,6 +183,7 @@ const COLUMNS: Column[] = [
   {
     key: "engagement",
     label: "C2C/W2",
+    sortKey: "engagement",
     defaultVisible: true,
     render: (r) => (
       <Td label="C2C/W2" secondary>
@@ -187,6 +194,7 @@ const COLUMNS: Column[] = [
   {
     key: "recruiter",
     label: "Recruiter",
+    sortKey: "recruiter",
     defaultVisible: true,
     render: (r) => (
       <Td label="Recruiter" secondary>
@@ -211,6 +219,7 @@ const COLUMNS: Column[] = [
   {
     key: "teamLead",
     label: "Team lead",
+    sortKey: "teamLead",
     defaultVisible: false,
     render: (r) => (
       <Td label="Team lead" secondary>
@@ -231,6 +240,7 @@ const COLUMNS: Column[] = [
   {
     key: "vendorRecruiter",
     label: "Vendor recruiter",
+    sortKey: "vendorRecruiter",
     defaultVisible: false,
     render: (r) => (
       <Td label="Vendor recruiter" secondary>

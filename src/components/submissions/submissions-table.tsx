@@ -180,6 +180,7 @@ const COLUMNS: Column[] = [
   {
     key: "engagement",
     label: "Engagement",
+    sortKey: "engagement",
     defaultVisible: false,
     render: (s) => (
       <Td label="Engagement" secondary>
@@ -190,6 +191,7 @@ const COLUMNS: Column[] = [
   {
     key: "vendorRecruiter",
     label: "Vendor recruiter",
+    sortKey: "vendorRecruiter",
     defaultVisible: false,
     render: (s) => (
       <Td label="Vendor recruiter" secondary>
@@ -200,6 +202,8 @@ const COLUMNS: Column[] = [
   {
     key: "payRate",
     label: "Pay rate",
+    sortKey: "payRate",
+    align: "right",
     defaultVisible: false,
     render: (s) => (
       <Td label="Pay rate" secondary className="tabular-nums">
@@ -210,6 +214,8 @@ const COLUMNS: Column[] = [
   {
     key: "billRate",
     label: "Bill rate",
+    sortKey: "billRate",
+    align: "right",
     defaultVisible: false,
     render: (s) => (
       <Td label="Bill rate" secondary className="tabular-nums">
@@ -220,6 +226,7 @@ const COLUMNS: Column[] = [
   {
     key: "teamLead",
     label: "Team lead",
+    sortKey: "teamLead",
     defaultVisible: false,
     render: (s) => (
       <Td label="Team lead" secondary>

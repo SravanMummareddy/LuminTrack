@@ -232,6 +232,7 @@ const COLUMNS: Column[] = [
   {
     key: "startDate",
     label: "Projected start",
+    sortKey: "startDate",
     defaultVisible: false,
     render: (job) => (
       <Td label="Projected start" secondary className="whitespace-nowrap">
@@ -242,6 +243,7 @@ const COLUMNS: Column[] = [
   {
     key: "lastImported",
     label: "Last imported",
+    sortKey: "lastImported",
     defaultVisible: false,
     render: (job) => (
       <Td label="Last imported" secondary className="whitespace-nowrap">
@@ -254,6 +256,7 @@ const COLUMNS: Column[] = [
   {
     key: "positions",
     label: "Positions",
+    sortKey: "positions",
     align: "right",
     defaultVisible: false,
     render: (job) => (
@@ -265,6 +268,7 @@ const COLUMNS: Column[] = [
   {
     key: "submitLimit",
     label: "Submit limit",
+    sortKey: "submitLimit",
     align: "right",
     defaultVisible: false,
     render: (job) => (
@@ -276,6 +280,7 @@ const COLUMNS: Column[] = [
   {
     key: "activeCount",
     label: "Active (iLabor)",
+    sortKey: "activeCount",
     align: "right",
     defaultVisible: false,
     render: (job) => (
@@ -287,6 +292,7 @@ const COLUMNS: Column[] = [
   {
     key: "released",
     label: "Released",
+    sortKey: "released",
     defaultVisible: false,
     render: (job) => (
       <Td label="Released" secondary className="whitespace-nowrap">

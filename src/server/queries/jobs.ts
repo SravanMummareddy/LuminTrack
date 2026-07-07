@@ -41,6 +41,12 @@ const JOB_SORTS: Record<
   status: (d) => ({ status: d }),
   subs: (d) => ({ submissions: { _count: d } }),
   created: (d) => ({ createdAt: d }),
+  startDate: (d) => ({ startDate: d }),
+  lastImported: (d) => ({ lastImportedAt: d }),
+  positions: (d) => ({ positions: d }),
+  submitLimit: (d) => ({ submitLimit: d }),
+  activeCount: (d) => ({ externalActiveCount: d }),
+  released: (d) => ({ releasedDate: d }),
 };
 
 export const JOB_SORT_KEYS = Object.keys(JOB_SORTS);

@@ -29,6 +29,8 @@ const CANDIDATE_SORTS: Record<
   experience: (d) => ({ totalExperienceYears: d }),
   subs: (d) => ({ submissions: { _count: d } }),
   updated: (d) => ({ updatedAt: d }),
+  workAuthorization: (d) => ({ workAuthorization: d }),
+  currentCompany: (d) => ({ currentCompany: d }),
 };
 
 export const CANDIDATE_SORT_KEYS = Object.keys(CANDIDATE_SORTS);

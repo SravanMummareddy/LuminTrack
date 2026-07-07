@@ -122,6 +122,7 @@ const COLUMNS: Column[] = [
   {
     key: "experience",
     label: "Experience",
+    sortKey: "experience",
     align: "right",
     defaultVisible: true,
     render: (c) => {
@@ -195,6 +196,7 @@ const COLUMNS: Column[] = [
   {
     key: "leastRate",
     label: "Least C2C",
+    sortKey: "leastRate",
     align: "right",
     defaultVisible: false,
     render: (c) => (

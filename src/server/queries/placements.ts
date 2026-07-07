@@ -28,8 +28,12 @@ const PLACEMENT_SORTS: Record<
   candidate: (d) => ({ candidate: { fullName: d } }),
   job: (d) => ({ job: { title: d } }),
   client: (d) => ({ job: { client: { name: d } } }),
+  vendor: (d) => ({ job: { vendor: { name: d } } }),
   start: (d) => ({ startDate: d }),
   end: (d) => ({ endDate: d }),
+  bill: (d) => ({ billRate: d }),
+  pay: (d) => ({ payRate: d }),
+  recruiter: (d) => ({ submission: { submittedBy: { fullName: d } } }),
   status: (d) => ({ status: d }),
 };
 

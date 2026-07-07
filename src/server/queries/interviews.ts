@@ -127,6 +127,10 @@ const INTERVIEW_SORTS: Record<
   date: (d) => ({ scheduledAt: d }),
   candidate: (d) => ({ submission: { candidate: { fullName: d } } }),
   client: (d) => ({ submission: { job: { client: { name: d } } } }),
+  vendor: (d) => ({ submission: { job: { vendor: { name: d } } } }),
+  location: (d) => ({ submission: { job: { location: d } } }),
+  recruiter: (d) => ({ submission: { submittedBy: { fullName: d } } }),
+  result: (d) => ({ result: d }),
 };
 
 export const INTERVIEW_SORT_KEYS = Object.keys(INTERVIEW_SORTS);

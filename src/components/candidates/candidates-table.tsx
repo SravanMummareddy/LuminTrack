@@ -171,6 +171,7 @@ const COLUMNS: Column[] = [
   {
     key: "workAuthorization",
     label: "Work auth",
+    sortKey: "workAuthorization",
     defaultVisible: false,
     render: (c) => (
       <Td label="Work auth" secondary>
@@ -181,6 +182,7 @@ const COLUMNS: Column[] = [
   {
     key: "currentCompany",
     label: "Current company",
+    sortKey: "currentCompany",
     defaultVisible: false,
     render: (c) => (
       <Td label="Current company" secondary>

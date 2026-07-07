@@ -94,6 +94,7 @@ const COLUMNS: Column[] = [
   {
     key: "vendor",
     label: "Vendor",
+    sortKey: "vendor",
     defaultVisible: true,
     render: (p) => (
       <Td label="Vendor" secondary>
@@ -139,6 +140,7 @@ const COLUMNS: Column[] = [
   {
     key: "bill",
     label: "Bill",
+    sortKey: "bill",
     align: "right",
     defaultVisible: true,
     render: (p, _n, ctx) => (
@@ -150,6 +152,7 @@ const COLUMNS: Column[] = [
   {
     key: "pay",
     label: "Pay",
+    sortKey: "pay",
     align: "right",
     defaultVisible: true,
     render: (p, _n, ctx) => (
@@ -213,6 +216,7 @@ const COLUMNS: Column[] = [
   {
     key: "recruiter",
     label: "Recruiter",
+    sortKey: "recruiter",
     // Visible by default — the sheet's Placements display set is
     // Name · Vendor · Client · Role · Bill · Pay · Recruiter.
     defaultVisible: true,

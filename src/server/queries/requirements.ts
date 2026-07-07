@@ -22,6 +22,16 @@ const REQUIREMENT_SORTS: Record<
   candidate: (d) => ({ candidate: { fullName: d } }),
   job: (d) => ({ job: { title: d } }),
   status: (d) => ({ status: d }),
+  submissions: (d) => ({ submissions: { _count: d } }),
+  vendor: (d) => ({ job: { vendor: { name: d } } }),
+  client: (d) => ({ job: { client: { name: d } } }),
+  pay: (d) => ({ payRate: d }),
+  bill: (d) => ({ billRate: d }),
+  location: (d) => ({ location: d }),
+  engagement: (d) => ({ engagement: d }),
+  recruiter: (d) => ({ recruiter: { fullName: d } }),
+  teamLead: (d) => ({ teamLead: d }),
+  vendorRecruiter: (d) => ({ vendorRecruiterName: d }),
 };
 
 export const REQUIREMENT_SORT_KEYS = Object.keys(REQUIREMENT_SORTS);
