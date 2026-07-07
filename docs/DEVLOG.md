@@ -10,6 +10,38 @@ short instead of long.
 
 ---
 
+## 2026-07-06 · Calendar rendered as one vertical column — a Tailwind class that never got generated
+
+**Situation.** The new branded range calendar rendered its weekday header and
+day grid as a single **vertical column** (Su, Mo, Tu… then 28, 29, 30, 1, 2…
+all stacked) instead of a 7-wide grid. tsc, eslint, and the unit suite were all
+green — this only showed in the running dev browser.
+
+**Diagnosis.** The container was `className="grid grid-cols-7"`. The grid was
+stacking in one column — the textbook symptom of `display: grid` applying while
+`grid-template-columns` does **not** (a grid with no column template flows every
+item into a single implicit column). Sibling classes on the same element
+(`text-center`, `py-1`, `text-[11px]`) rendered fine, so Tailwind *was* scanning
+the file. The tell: `grep grid-cols-7 src/` returned nothing else —
+`grid-cols-7` is used **nowhere else in the app**. `grid` (used everywhere) was
+in the already-built dev CSS; `grid-cols-7`, a brand-new utility, wasn't emitted
+into the running server's stylesheet. So `display:grid` landed, the column
+template didn't.
+
+**Fix.** Replace the utility with an inline style —
+`style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}` — so the layout
+never depends on Tailwind having generated a novel class. (A full dev-server
+restart would also have regenerated it, but inline is robust against the next
+person adding a first-of-its-kind utility.)
+
+**Lesson.** A green tsc/eslint/test run says nothing about whether a Tailwind
+class made it into the CSS. When a *first-use-in-the-codebase* utility silently
+no-ops in dev, suspect stylesheet generation, not your JSX. For structural,
+must-not-fail layout (grid templates), prefer an inline style over betting on
+JIT class emission.
+
+---
+
 ## 2026-07-06 · Duplicate React key on the résumé picker — optimistic state met revalidation
 
 **Situation.** During round-2 testing, the submission form (on the VPR-convert

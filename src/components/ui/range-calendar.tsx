@@ -221,7 +221,10 @@ export function RangeCalendar({
         </button>
       </div>
 
-      <div className="grid grid-cols-7">
+      <div
+        className="grid"
+        style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}
+      >
         {WEEKDAYS.map((w) => (
           <div
             key={w}
