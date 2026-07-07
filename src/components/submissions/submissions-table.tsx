@@ -268,10 +268,13 @@ const DEFAULTS: ColumnPrefs = {
 export function SubmissionsTable({
   rows,
   pageOffset = 0,
+  countLabel,
   storageKey = STORAGE_KEY,
 }: {
   rows: SubmissionListRow[];
   pageOffset?: number;
+  /** e.g. "160 submissions" — shown before the column count. */
+  countLabel?: string;
   /** Override the localStorage key so a scoped view keeps its own column prefs
    *  separate from the main Submissions list. */
   storageKey?: string;
@@ -294,7 +297,7 @@ export function SubmissionsTable({
         <p className="text-xs text-slate-500" suppressHydrationWarning>
           {rows.length === 0
             ? null
-            : `Showing ${visibleCols.length} of ${COLUMNS.length} columns`}
+            : `${countLabel ? `${countLabel} · ` : ""}Showing ${visibleCols.length} of ${COLUMNS.length} columns`}
         </p>
         <ColumnsMenu
           columns={orderedCols.map((c) => ({ key: c.key, label: c.label }))}

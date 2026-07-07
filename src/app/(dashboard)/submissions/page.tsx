@@ -143,11 +143,9 @@ export default async function SubmissionsPage({
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="text-xs text-slate-500">
-            {total} submission{total === 1 ? "" : "s"}
-          </p>
           <SubmissionsTable
             rows={submissions}
+            countLabel={`${total} submission${total === 1 ? "" : "s"}`}
             pageOffset={(page - 1) * PAGE_SIZE}
             storageKey="lumintrack.submissions.columns"
           />

@@ -117,11 +117,9 @@ export default async function PlacementsPage({
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="text-xs text-slate-500">
-            {total} placement{total === 1 ? "" : "s"}
-          </p>
           <PlacementsTable
             rows={rows}
+            countLabel={`${total} placement${total === 1 ? "" : "s"}`}
             pageOffset={(page - 1) * PAGE_SIZE}
             viewer={{ userId: user.id, userRole: user.role }}
           />

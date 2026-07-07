@@ -113,11 +113,9 @@ export default async function CandidatesPage({
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="text-xs text-slate-500">
-            {total} candidate{total === 1 ? "" : "s"}
-          </p>
           <CandidatesTable
             rows={candidates}
+            countLabel={`${total} candidate${total === 1 ? "" : "s"}`}
             pageOffset={(page - 1) * PAGE_SIZE}
           />
           <Pagination page={page} totalPages={totalPages} total={total} />

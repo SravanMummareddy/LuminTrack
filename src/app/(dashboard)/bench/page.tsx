@@ -109,7 +109,12 @@ export default async function BenchRosterPage({
         total: g.res.total,
         paramKey: g.paramKey,
       }));
-    body = <BenchRosterTable groups={groups} />;
+    body = (
+      <BenchRosterTable
+        groups={groups}
+        countLabel={`${total} consultant${total === 1 ? "" : "s"}`}
+      />
+    );
   } else {
     const {
       rows,
@@ -128,6 +133,7 @@ export default async function BenchRosterPage({
           rows={rows}
           pageOffset={(page - 1) * PAGE_SIZE}
           groupByPriority={sort.key === "priority"}
+          countLabel={`${total} consultant${total === 1 ? "" : "s"}`}
         />
         <Pagination page={page} totalPages={totalPages} total={total} />
       </>
@@ -154,12 +160,7 @@ export default async function BenchRosterPage({
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
-          <p className="text-xs text-slate-500">
-            {total} consultant{total === 1 ? "" : "s"}
-          </p>
-          {body}
-        </div>
+        <div className="space-y-3">{body}</div>
       )}
     </div>
   );

@@ -234,10 +234,13 @@ const DEFAULTS: ColumnPrefs = {
 export function PlacementsTable({
   rows,
   pageOffset = 0,
+  countLabel,
   viewer,
 }: {
   rows: PlacementListRow[];
   pageOffset?: number;
+  /** e.g. "12 placements" — shown before the column count. */
+  countLabel?: string;
   viewer: ViewerContext;
 }) {
   const [prefs, setPrefs] = useColumnPrefs(
@@ -258,7 +261,7 @@ export function PlacementsTable({
         <p className="text-xs text-slate-500" suppressHydrationWarning>
           {rows.length === 0
             ? null
-            : `Showing ${visibleCols.length} of ${COLUMNS.length} columns`}
+            : `${countLabel ? `${countLabel} · ` : ""}Showing ${visibleCols.length} of ${COLUMNS.length} columns`}
         </p>
         <ColumnsMenu
           columns={orderedCols.map((c) => ({ key: c.key, label: c.label }))}

@@ -123,11 +123,9 @@ export default async function VendorPortalPage({
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="text-xs text-slate-500">
-            {total} requirement{total === 1 ? "" : "s"}
-          </p>
           <VendorRequirementsTable
             rows={rows}
+            countLabel={`${total} requirement${total === 1 ? "" : "s"}`}
             pageOffset={(page - 1) * PAGE_SIZE}
           />
           <Pagination page={page} totalPages={totalPages} total={total} />

@@ -307,6 +307,7 @@ const DEFAULTS: ColumnPrefs = {
 export function JobsTable({
   rows,
   pageOffset = 0,
+  countLabel,
   canEditRecruiters = false,
   allRecruiters = [],
   storageKey = STORAGE_KEY,
@@ -315,6 +316,8 @@ export function JobsTable({
   rows: JobListRow[];
   /** Row count preceding the first row on this page (e.g. (page-1)*pageSize). */
   pageOffset?: number;
+  /** e.g. "53 jobs" — shown before the column count. */
+  countLabel?: string;
   /** True when the current user can change recruiter assignments inline. */
   canEditRecruiters?: boolean;
   /** Full set of active recruiters available for inline assignment. */
@@ -344,7 +347,7 @@ export function JobsTable({
         <p className="text-xs text-slate-500" suppressHydrationWarning>
           {rows.length === 0
             ? null
-            : `Showing ${visibleCols.length} of ${COLUMNS.length} columns`}
+            : `${countLabel ? `${countLabel} · ` : ""}Showing ${visibleCols.length} of ${COLUMNS.length} columns`}
         </p>
         <ColumnsMenu
           columns={orderedCols.map((c) => ({ key: c.key, label: c.label }))}

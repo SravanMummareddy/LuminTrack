@@ -219,11 +219,9 @@ export default async function JobsPage({
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="text-xs text-slate-500">
-            {total} job{total === 1 ? "" : "s"}
-          </p>
           <JobsTable
             rows={jobs}
+            countLabel={`${total} job${total === 1 ? "" : "s"}`}
             pageOffset={(page - 1) * PAGE_SIZE}
             canEditRecruiters={hasFullAccess(currentUser)}
             allRecruiters={activeRecruiters}

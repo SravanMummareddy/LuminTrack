@@ -202,9 +202,12 @@ const DEFAULTS: ColumnPrefs = {
 export function CandidatesTable({
   rows,
   pageOffset = 0,
+  countLabel,
 }: {
   rows: CandidateListRow[];
   pageOffset?: number;
+  /** e.g. "30 candidates" — shown before the column count. */
+  countLabel?: string;
 }) {
   const [prefs, setPrefs] = useColumnPrefs(
     STORAGE_KEY,
@@ -224,7 +227,7 @@ export function CandidatesTable({
         <p className="text-xs text-slate-500" suppressHydrationWarning>
           {rows.length === 0
             ? null
-            : `Showing ${visibleCols.length} of ${COLUMNS.length} columns`}
+            : `${countLabel ? `${countLabel} · ` : ""}Showing ${visibleCols.length} of ${COLUMNS.length} columns`}
         </p>
         <ColumnsMenu
           columns={orderedCols.map((c) => ({ key: c.key, label: c.label }))}

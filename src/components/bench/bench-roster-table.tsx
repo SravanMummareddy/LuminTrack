@@ -246,11 +246,14 @@ export type BenchGroup = {
 export function BenchRosterTable({
   rows = [],
   pageOffset = 0,
+  countLabel,
   groupByPriority = false,
   groups,
 }: {
   rows?: BenchListRow[];
   pageOffset?: number;
+  /** e.g. "18 consultants" — shown before the column count. */
+  countLabel?: string;
   /** When sorted by priority (the default), render High/Second section headers
    *  — but only while the Priority column itself is hidden, to match the sheet.
    *  Only applies to the flat (`rows`) path. */
@@ -281,7 +284,7 @@ export function BenchRosterTable({
         <p className="text-xs text-slate-500" suppressHydrationWarning>
           {isEmpty
             ? null
-            : `Showing ${visibleCols.length} of ${COLUMNS.length} columns`}
+            : `${countLabel ? `${countLabel} · ` : ""}Showing ${visibleCols.length} of ${COLUMNS.length} columns`}
         </p>
         <ColumnsMenu
           columns={orderedCols.map((c) => ({ key: c.key, label: c.label }))}

@@ -232,9 +232,12 @@ const DEFAULTS: ColumnPrefs = {
 export function VendorRequirementsTable({
   rows,
   pageOffset = 0,
+  countLabel,
 }: {
   rows: VendorRequirementRow[];
   pageOffset?: number;
+  /** e.g. "22 requirements" — shown before the column count. */
+  countLabel?: string;
 }) {
   const [prefs, setPrefs] = useColumnPrefs(
     STORAGE_KEY,
@@ -254,7 +257,7 @@ export function VendorRequirementsTable({
         <p className="text-xs text-slate-500" suppressHydrationWarning>
           {rows.length === 0
             ? null
-            : `Showing ${visibleCols.length} of ${COLUMNS.length} columns`}
+            : `${countLabel ? `${countLabel} · ` : ""}Showing ${visibleCols.length} of ${COLUMNS.length} columns`}
         </p>
         <ColumnsMenu
           columns={orderedCols.map((c) => ({ key: c.key, label: c.label }))}
