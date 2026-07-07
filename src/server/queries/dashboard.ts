@@ -173,6 +173,49 @@ export async function getMyWork(userId: string) {
 export type MyWork = Awaited<ReturnType<typeof getMyWork>>;
 
 /**
+ * The acting user's most recent actions, for the Dashboard's scope=me "Recent
+ * activity" card. Each row links straight to the entity it touched (the audit
+ * `description` is already human-readable, e.g. `Jane submitted to "…"`).
+ */
+export async function getMyRecentActivity(userId: string, limit = 8) {
+  const rows = await prisma.activity.findMany({
+    where: { performedById: userId },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      action: true,
+      description: true,
+      createdAt: true,
+      submissionId: true,
+      requirementId: true,
+      candidateId: true,
+      jobId: true,
+      benchConsultantId: true,
+    },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    action: r.action,
+    description: r.description,
+    createdAt: r.createdAt,
+    href: r.submissionId
+      ? `/submissions/${r.submissionId}`
+      : r.requirementId
+        ? `/vendor-portal/${r.requirementId}`
+        : r.candidateId
+          ? `/candidates/${r.candidateId}`
+          : r.jobId
+            ? `/jobs/${r.jobId}`
+            : r.benchConsultantId
+              ? `/bench/${r.benchConsultantId}`
+              : null,
+  }));
+}
+
+export type MyRecentActivity = Awaited<ReturnType<typeof getMyRecentActivity>>;
+
+/**
  * "My jobs" mini-list for the Dashboard's scope=me view. Returns the OPEN /
  * ON_HOLD jobs assigned to the acting recruiter, newest-assigned first, capped
  * at 5 (matches the other "Needs attention" sub-lists). Display-id sequence

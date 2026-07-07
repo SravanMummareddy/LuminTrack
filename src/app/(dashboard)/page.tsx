@@ -15,7 +15,9 @@ import {
   getDashboardData,
   getMyWork,
   getMyAssignedJobs,
+  getMyRecentActivity,
   getOnboardingStatus,
+  type MyRecentActivity,
 } from "@/server/queries/dashboard";
 import { getExpiringDocuments } from "@/server/queries/candidates";
 import { getRatesPendingPlacements } from "@/server/queries/placements";
@@ -37,6 +39,7 @@ import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist";
 import { MyWorkList } from "@/components/dashboard/needs-attention-list";
+import { RecentActivityCard } from "@/components/dashboard/recent-activity-card";
 import { Table, Th, Td, cardLink } from "@/components/ui/table";
 
 function Card({
@@ -130,6 +133,7 @@ export default async function DashboardPage({
     data,
     myWork,
     myAssignedJobs,
+    recentActivity,
     expiringDocs,
     ratesPendingPlacements,
     clients,
@@ -146,11 +150,14 @@ export default async function DashboardPage({
           pendingRounds: [],
           pendingRequirements: [],
         }),
-    // "My jobs" mini-list — only relevant when the recruiter is viewing
-    // their own scope. Admins on scope=org don't see this card.
+    // "My jobs" mini-list — see below.
     scope === "me" && user
       ? getMyAssignedJobs(user.id)
       : Promise.resolve([] as Awaited<ReturnType<typeof getMyAssignedJobs>>),
+    // Recent activity feed replaces the org-wide recruiter table in "My work".
+    scope === "me" && user
+      ? getMyRecentActivity(user.id)
+      : Promise.resolve([] as MyRecentActivity),
     user
       ? getExpiringDocuments(user, { scope, withinDays: 30 })
       : Promise.resolve([]),
@@ -165,6 +172,20 @@ export default async function DashboardPage({
     listActiveRecruiterOptions(),
     getOnboardingStatus(),
   ]);
+
+  // KPI tiles link to their filtered list. In "My work" the link also scopes to
+  // the acting user (status + scope only — the bar's other filters aren't carried).
+  const meId = scope === "me" && user ? user.id : undefined;
+  const listHref = (
+    base: string,
+    params: Record<string, string | undefined>,
+  ) => {
+    const sp = new URLSearchParams();
+    for (const [k, v] of Object.entries({ ...params, recruiterId: meId }))
+      if (v) sp.set(k, v);
+    const qs = sp.toString();
+    return qs ? `${base}?${qs}` : base;
+  };
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
@@ -287,6 +308,7 @@ export default async function DashboardPage({
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
           label="Active jobs"
+          href={listHref("/jobs", { status: "OPEN" })}
           value={data.activeJobs}
           icon={Briefcase}
           tone="green"
@@ -295,6 +317,7 @@ export default async function DashboardPage({
         />
         <StatCard
           label="Total submissions"
+          href={listHref("/submissions", {})}
           value={data.totalSubmissions}
           icon={Send}
           tone="indigo"
@@ -302,6 +325,7 @@ export default async function DashboardPage({
         />
         <StatCard
           label="Interview rounds"
+          href="/interviews"
           value={data.interviewCount}
           icon={CalendarCheck}
           tone="blue"
@@ -309,6 +333,7 @@ export default async function DashboardPage({
         />
         <StatCard
           label="Selected"
+          href={listHref("/submissions", { status: "SELECTED" })}
           value={data.selected}
           icon={CircleCheck}
           tone="green"
@@ -316,6 +341,7 @@ export default async function DashboardPage({
         />
         <StatCard
           label="Offers released"
+          href={listHref("/submissions", { status: "OFFER_RELEASED" })}
           value={data.offerReleased}
           icon={FileText}
           tone="indigo"
@@ -323,6 +349,7 @@ export default async function DashboardPage({
         />
         <StatCard
           label="Joined"
+          href={listHref("/submissions", { status: "JOINED" })}
           value={data.joined}
           icon={UserCheck}
           tone="green"
@@ -330,6 +357,7 @@ export default async function DashboardPage({
         />
         <StatCard
           label="Rejected"
+          href={listHref("/submissions", { status: "REJECTED" })}
           value={data.rejected}
           icon={CircleX}
           tone="red"
@@ -337,6 +365,7 @@ export default async function DashboardPage({
         />
         <StatCard
           label="On hold"
+          href={listHref("/submissions", { status: "ON_HOLD" })}
           value={data.onHold}
           icon={CirclePause}
           tone="amber"
@@ -344,7 +373,8 @@ export default async function DashboardPage({
         />
       </div>
 
-      <Card title="Recruiter performance">
+      {scope === "org" ? (
+        <Card title="Recruiter performance">
         {data.recruiterPerf.length === 0 ? (
           <p className="py-8 text-center text-sm text-slate-400">
             No recruiter submissions for the selected filters.
@@ -400,7 +430,10 @@ export default async function DashboardPage({
             </tbody>
           </Table>
         )}
-      </Card>
+        </Card>
+      ) : (
+        <RecentActivityCard items={recentActivity} />
+      )}
     </div>
   );
 }
