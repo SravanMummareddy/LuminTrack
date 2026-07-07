@@ -124,6 +124,14 @@ export default async function JobDetailPage({
   ]);
   if (!job) notFound();
   const canManageReq = canManageRequirements(currentUser ?? undefined);
+  // VPR-first: candidates are submitted against a requirement, never the job
+  // directly. Jump straight to the convert form when there's a single open VPR,
+  // otherwise scroll to the requirements section to pick or create one.
+  const openRequirements = requirements.filter((r) => r.status === "OPEN");
+  const submitHref =
+    openRequirements.length === 1
+      ? `/vendor-portal/${openRequirements[0].id}/convert`
+      : "#requirements";
   const effectiveActiveCount = Math.max(
     job.externalActiveCount ?? 0,
     localActiveCount,
@@ -185,6 +193,7 @@ export default async function JobDetailPage({
         vprCount={requirements.length}
         submissionCount={submissionsTotal}
         canManageReq={canManageReq}
+        submitHref={submitHref}
       />
 
       <Card title="Status">
@@ -410,9 +419,9 @@ export default async function JobDetailPage({
           <h2 className="text-sm font-semibold text-slate-700">
             Submitted candidates ({submissionsTotal})
           </h2>
-          <LinkButton href={`/jobs/${job.id}/submissions/new`} size="sm">
+          <LinkButton href={submitHref} size="sm">
             <Plus className="h-4 w-4" />
-            Submit candidate
+            Submit via requirement
           </LinkButton>
         </div>
         {submissionsTotal === 0 ? (
@@ -490,7 +499,7 @@ export default async function JobDetailPage({
         )}
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5">
+      <section id="requirements" className="scroll-mt-4 rounded-lg border border-slate-200 bg-white p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-slate-700">
             Vendor portal requirements ({requirements.length})

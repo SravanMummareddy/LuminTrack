@@ -17,11 +17,15 @@ export function JobPipelineSteps({
   vprCount,
   submissionCount,
   canManageReq,
+  submitHref = "#requirements",
 }: {
   jobId: string;
   vprCount: number;
   submissionCount: number;
   canManageReq: boolean;
+  /** Where "Submit a candidate" goes — a requirement's convert page (VPR-first),
+   *  computed by the job page from its open requirements. */
+  submitHref?: string;
 }) {
   const steps = [
     { label: "Job", done: true, detail: "Requisition created" },
@@ -52,7 +56,7 @@ export function JobPipelineSteps({
         href: `/vendor-portal/new?jobId=${jobId}`,
       };
   } else if (submissionCount === 0) {
-    cta = { label: "Submit a candidate", href: `/jobs/${jobId}/submissions/new` };
+    cta = { label: "Submit a candidate", href: submitHref };
   }
 
   return (

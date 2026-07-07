@@ -110,9 +110,9 @@ export default async function SubmissionsPage({
     <div className="space-y-5">
       <PageHeader
         title="Submissions"
-        description="Every candidate submitted to a job. Create new submissions from a job page."
+        description="Every candidate submitted against a vendor requirement. Submit from a requirement in the Vendor Portal."
       >
-        <LinkButton href="/submissions/new">
+        <LinkButton href="/vendor-portal">
           <Plus className="h-4 w-4" />
           New submission
         </LinkButton>
@@ -130,11 +130,11 @@ export default async function SubmissionsPage({
           <p className="text-sm text-slate-500">
             {hasFilters
               ? "No submissions match these filters."
-              : "No submissions yet. Create the first one to get started."}
+              : "No submissions yet. Submit a candidate from a vendor requirement."}
           </p>
           {!hasFilters && (
             <div className="mt-3 flex justify-center">
-              <LinkButton href="/submissions/new">
+              <LinkButton href="/vendor-portal">
                 <Plus className="h-4 w-4" />
                 New submission
               </LinkButton>

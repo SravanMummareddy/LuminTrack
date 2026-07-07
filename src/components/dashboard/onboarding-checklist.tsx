@@ -52,9 +52,9 @@ export function OnboardingChecklist({
     {
       done: status.hasSubmissions,
       title: "Submit a candidate",
-      description: "Put a candidate forward for a job — the core daily action.",
-      href: "/submissions/new",
-      cta: "New submission",
+      description: "Submit a candidate against a vendor requirement — the core daily action.",
+      href: "/vendor-portal",
+      cta: "Open requirements",
     },
   ];
 

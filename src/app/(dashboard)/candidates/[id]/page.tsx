@@ -178,9 +178,9 @@ export default async function CandidateDetailPage({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <LinkButton href={`/candidates/${candidate.id}/submissions/new`}>
+          <LinkButton href="/vendor-portal">
             <Send className="h-4 w-4" />
-            Submit to a job
+            Submit to a requirement
           </LinkButton>
           <LinkButton
             href={`/candidates/${candidate.id}/edit`}
