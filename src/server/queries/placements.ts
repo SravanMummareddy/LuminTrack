@@ -35,6 +35,8 @@ const PLACEMENT_SORTS: Record<
   pay: (d) => ({ payRate: d }),
   recruiter: (d) => ({ submission: { submittedBy: { fullName: d } } }),
   status: (d) => ({ status: d }),
+  created: (d) => ({ createdAt: d }),
+  updated: (d) => ({ updatedAt: d }),
 };
 
 export const PLACEMENT_SORT_KEYS = Object.keys(PLACEMENT_SORTS);

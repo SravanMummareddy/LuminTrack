@@ -11,7 +11,11 @@ import {
   REQUIREMENT_STATUS_TONE,
   BENCH_ENGAGEMENT_LABEL,
 } from "@/lib/labels";
-import { formatRate, formatVendorRequirementDisplayId } from "@/lib/format";
+import {
+  formatDate,
+  formatRate,
+  formatVendorRequirementDisplayId,
+} from "@/lib/format";
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
 import type { VendorRequirementRow } from "@/server/queries/requirements";
 
@@ -265,6 +269,30 @@ const COLUMNS: Column[] = [
     render: (r) => (
       <Td label="Phone" secondary className="whitespace-nowrap">
         {r.candidate?.phone ?? "—"}
+      </Td>
+    ),
+  },
+  {
+    key: "created",
+    label: "Created",
+    sortKey: "created",
+    sortDefaultDir: "desc",
+    defaultVisible: false,
+    render: (r) => (
+      <Td label="Created" secondary className="whitespace-nowrap">
+        {formatDate(r.createdAt)}
+      </Td>
+    ),
+  },
+  {
+    key: "updated",
+    label: "Updated",
+    sortKey: "updated",
+    sortDefaultDir: "desc",
+    defaultVisible: false,
+    render: (r) => (
+      <Td label="Updated" secondary className="whitespace-nowrap">
+        {formatDate(r.updatedAt)}
       </Td>
     ),
   },

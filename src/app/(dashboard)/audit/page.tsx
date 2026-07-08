@@ -39,11 +39,27 @@ export default async function AuditPage({
     rawAction && ACTIONS.includes(rawAction) ? rawAction : undefined;
   const userIdFilter = get("user");
 
+  // Date-range filter on when the activity was recorded. `to` is inclusive of
+  // the whole day. Invalid dates are ignored rather than 500-ing the query.
+  const fromStr = get("from");
+  const toStr = get("to");
+  const createdAt: { gte?: Date; lte?: Date } = {};
+  if (fromStr) {
+    const d = new Date(fromStr);
+    if (!Number.isNaN(d.getTime())) createdAt.gte = d;
+  }
+  if (toStr) {
+    const d = new Date(`${toStr}T23:59:59.999`);
+    if (!Number.isNaN(d.getTime())) createdAt.lte = d;
+  }
+  const hasDateFilter = createdAt.gte != null || createdAt.lte != null;
+
   const where = {
     ...(actionFilter
       ? { action: actionFilter as keyof typeof ActivityAction }
       : {}),
     ...(userIdFilter ? { performedById: userIdFilter } : {}),
+    ...(hasDateFilter ? { createdAt } : {}),
   };
 
   const [rows, total, users] = await Promise.all([
@@ -152,13 +168,43 @@ export default async function AuditPage({
             ))}
           </select>
         </div>
+        <div className="sm:w-auto">
+          <label
+            htmlFor="from"
+            className="block text-xs font-medium text-slate-500"
+          >
+            From
+          </label>
+          <input
+            type="date"
+            id="from"
+            name="from"
+            defaultValue={fromStr ?? ""}
+            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm sm:w-auto"
+          />
+        </div>
+        <div className="sm:w-auto">
+          <label
+            htmlFor="to"
+            className="block text-xs font-medium text-slate-500"
+          >
+            To
+          </label>
+          <input
+            type="date"
+            id="to"
+            name="to"
+            defaultValue={toStr ?? ""}
+            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm sm:w-auto"
+          />
+        </div>
         <button
           type="submit"
           className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
         >
           Apply
         </button>
-        {(actionFilter || userIdFilter) && (
+        {(actionFilter || userIdFilter || hasDateFilter) && (
           <Link
             href="/audit"
             className="text-sm text-slate-500 hover:text-slate-800"

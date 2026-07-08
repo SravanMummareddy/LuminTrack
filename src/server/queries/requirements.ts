@@ -19,6 +19,7 @@ const REQUIREMENT_SORTS: Record<
   (d: SortDir) => Prisma.VendorRequirementOrderByWithRelationInput
 > = {
   created: (d) => ({ createdAt: d }),
+  updated: (d) => ({ updatedAt: d }),
   candidate: (d) => ({ candidate: { fullName: d } }),
   job: (d) => ({ job: { title: d } }),
   status: (d) => ({ status: d }),

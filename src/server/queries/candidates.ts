@@ -29,6 +29,7 @@ const CANDIDATE_SORTS: Record<
   experience: (d) => ({ totalExperienceYears: d }),
   subs: (d) => ({ submissions: { _count: d } }),
   updated: (d) => ({ updatedAt: d }),
+  created: (d) => ({ createdAt: d }),
   workAuthorization: (d) => ({ workAuthorization: d }),
   currentCompany: (d) => ({ currentCompany: d }),
 };

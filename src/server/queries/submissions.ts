@@ -51,6 +51,8 @@ const SUBMISSION_SORTS: Record<
   payRate: (d) => ({ payRate: d }),
   billRate: (d) => ({ billRate: d }),
   teamLead: (d) => ({ teamLead: d }),
+  created: (d) => ({ createdAt: d }),
+  updated: (d) => ({ updatedAt: d }),
 };
 
 // `daysInStage` is derived (not a column), so it's not in SUBMISSION_SORTS;

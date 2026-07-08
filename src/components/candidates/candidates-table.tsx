@@ -167,6 +167,18 @@ const COLUMNS: Column[] = [
       </Td>
     ),
   },
+  {
+    key: "created",
+    label: "Created",
+    sortKey: "created",
+    sortDefaultDir: "desc",
+    defaultVisible: false,
+    render: (c) => (
+      <Td label="Created" secondary className="whitespace-nowrap">
+        {formatDate(c.createdAt)}
+      </Td>
+    ),
+  },
   // Hidden-by-default extras
   {
     key: "workAuthorization",

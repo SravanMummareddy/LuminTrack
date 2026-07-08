@@ -226,6 +226,30 @@ const COLUMNS: Column[] = [
       </Td>
     ),
   },
+  {
+    key: "created",
+    label: "Created",
+    sortKey: "created",
+    sortDefaultDir: "desc",
+    defaultVisible: false,
+    render: (p) => (
+      <Td label="Created" secondary className="whitespace-nowrap">
+        {formatDate(p.createdAt)}
+      </Td>
+    ),
+  },
+  {
+    key: "updated",
+    label: "Updated",
+    sortKey: "updated",
+    sortDefaultDir: "desc",
+    defaultVisible: false,
+    render: (p) => (
+      <Td label="Updated" secondary className="whitespace-nowrap">
+        {formatDate(p.updatedAt)}
+      </Td>
+    ),
+  },
 ];
 
 const STORAGE_KEY = "lumintrack.placements.columns";

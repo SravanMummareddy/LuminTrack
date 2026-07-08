@@ -41,6 +41,7 @@ const JOB_SORTS: Record<
   status: (d) => ({ status: d }),
   subs: (d) => ({ submissions: { _count: d } }),
   created: (d) => ({ createdAt: d }),
+  updated: (d) => ({ updatedAt: d }),
   startDate: (d) => ({ startDate: d }),
   lastImported: (d) => ({ lastImportedAt: d }),
   positions: (d) => ({ positions: d }),

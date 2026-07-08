@@ -14,7 +14,7 @@ import {
   BENCH_MARKETING_STATUS_LABEL,
   BENCH_MARKETING_STATUS_TONE,
 } from "@/lib/labels";
-import { formatBenchConsultantDisplayId, formatRate } from "@/lib/format";
+import { formatBenchConsultantDisplayId, formatRate, formatDate } from "@/lib/format";
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
 import type { BenchListRow } from "@/server/queries/bench-consultants";
 
@@ -221,6 +221,30 @@ const COLUMNS: Column[] = [
         ) : (
           "—"
         )}
+      </Td>
+    ),
+  },
+  {
+    key: "created",
+    label: "Created",
+    sortKey: "created",
+    sortDefaultDir: "desc",
+    defaultVisible: false,
+    render: (c) => (
+      <Td label="Created" secondary className="whitespace-nowrap">
+        {formatDate(c.createdAt)}
+      </Td>
+    ),
+  },
+  {
+    key: "updated",
+    label: "Updated",
+    sortKey: "updated",
+    sortDefaultDir: "desc",
+    defaultVisible: false,
+    render: (c) => (
+      <Td label="Updated" secondary className="whitespace-nowrap">
+        {formatDate(c.updatedAt)}
       </Td>
     ),
   },

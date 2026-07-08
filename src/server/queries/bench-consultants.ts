@@ -30,6 +30,7 @@ const BENCH_SORTS: Record<
   status: (d) => ({ marketingStatus: d }),
   recruiter: (d) => ({ recruiter: { fullName: d } }),
   created: (d) => ({ createdAt: d }),
+  updated: (d) => ({ updatedAt: d }),
   experience: (d) => ({ marketingExpYears: d }),
   leastRate: (d) => ({ leastRateC2C: d }),
 };
@@ -107,6 +108,8 @@ export async function listBenchConsultants(filters: BenchListFilters) {
       company: true,
       isActive: true,
       candidateId: true,
+      createdAt: true,
+      updatedAt: true,
       // Company is the linked candidate's current employer (owner's model); the
       // bench's own `company` is only a fallback for unlinked marketed identities.
       candidate: { select: { currentCompany: true } },

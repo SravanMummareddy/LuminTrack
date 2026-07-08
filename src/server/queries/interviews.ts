@@ -96,6 +96,8 @@ const INTERVIEW_SORTS: Record<
   location: (d) => ({ submission: { job: { location: d } } }),
   recruiter: (d) => ({ submission: { submittedBy: { fullName: d } } }),
   result: (d) => ({ result: d }),
+  created: (d) => ({ createdAt: d }),
+  updated: (d) => ({ updatedAt: d }),
 };
 
 export const INTERVIEW_SORT_KEYS = Object.keys(INTERVIEW_SORTS);
@@ -157,6 +159,8 @@ export async function listInterviews(filters: InterviewListFilters) {
       result: true,
       supportNeeded: true,
       feedback: true, // "Remarks" column (spreadsheet Interviews tab)
+      createdAt: true,
+      updatedAt: true,
       submission: {
         select: {
           id: true,

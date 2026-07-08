@@ -275,6 +275,18 @@ const COLUMNS: Column[] = [
       </Td>
     ),
   },
+  {
+    key: "updated",
+    label: "Updated",
+    sortKey: "updated",
+    sortDefaultDir: "desc",
+    defaultVisible: false,
+    render: (job) => (
+      <Td label="Updated" secondary className="whitespace-nowrap">
+        {formatDate(job.updatedAt)}
+      </Td>
+    ),
+  },
 ];
 
 const STORAGE_KEY = "lumintrack.jobs.columns";
