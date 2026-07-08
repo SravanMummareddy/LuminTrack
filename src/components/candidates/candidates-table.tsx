@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { Table, Th, Td, cardLink } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
@@ -13,6 +14,7 @@ import {
 } from "@/lib/format";
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
 import type { CandidateListRow } from "@/server/queries/candidates";
+import { CandidateBulkBar } from "@/components/candidates/candidate-bulk-bar";
 
 type Column = {
   key: string;
@@ -217,17 +219,36 @@ export function CandidatesTable({
   rows,
   pageOffset = 0,
   countLabel,
+  canDelete = false,
 }: {
   rows: CandidateListRow[];
   pageOffset?: number;
   /** e.g. "30 candidates" — shown before the column count. */
   countLabel?: string;
+  /** Whether the viewer can bulk-delete (admin). Archive/tag are open to all. */
+  canDelete?: boolean;
 }) {
   const [prefs, setPrefs] = useColumnPrefs(
     STORAGE_KEY,
     STORAGE_VERSION,
     DEFAULTS,
   );
+
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const pageIds = rows.map((r) => r.id);
+  const allSelected =
+    pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  const toggleAll = () =>
+    setSelected(allSelected ? new Set() : new Set(pageIds));
+  const toggleOne = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const checkboxClass =
+    "h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-200";
 
   const byKey = new Map(COLUMNS.map((c) => [c.key, c]));
   const orderedCols = prefs.order
@@ -251,6 +272,14 @@ export function CandidatesTable({
         />
       </div>
 
+      {selected.size > 0 && (
+        <CandidateBulkBar
+          selectedIds={[...selected]}
+          canDelete={canDelete}
+          onDone={() => setSelected(new Set())}
+        />
+      )}
+
       <MobileSort
         options={visibleCols
           .filter((c) => c.sortKey)
@@ -264,6 +293,15 @@ export function CandidatesTable({
       <Table>
         <thead className="border-b border-slate-200 bg-slate-50">
           <tr>
+            <Th className="w-8">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleAll}
+                aria-label="Select all on this page"
+                className={checkboxClass}
+              />
+            </Th>
             {visibleCols.map((c) =>
               c.sortKey ? (
                 <SortableHeader
@@ -286,7 +324,19 @@ export function CandidatesTable({
         </thead>
         <tbody className="divide-y divide-slate-100">
           {rows.map((row, idx) => (
-            <tr key={row.id} className="hover:bg-slate-50">
+            <tr
+              key={row.id}
+              className={selected.has(row.id) ? "bg-indigo-50/60" : "hover:bg-slate-50"}
+            >
+              <td className="w-8 px-3 align-middle">
+                <input
+                  type="checkbox"
+                  checked={selected.has(row.id)}
+                  onChange={() => toggleOne(row.id)}
+                  aria-label={`Select ${row.fullName}`}
+                  className={checkboxClass}
+                />
+              </td>
               {visibleCols.map((c) => (
                 <RenderCell
                   key={c.key}

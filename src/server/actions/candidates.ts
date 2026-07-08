@@ -387,3 +387,89 @@ export async function eraseCandidateNow(
   revalidatePath("/candidates");
   redirect(`/candidates/${candidateId}`);
 }
+
+/** Selected candidate ids from a bulk-action form (deduped, capped so a runaway
+ *  request can't touch the whole table). */
+function bulkIds(formData: FormData): string[] {
+  return [...new Set(formData.getAll("ids").map(String).filter(Boolean))].slice(
+    0,
+    200,
+  );
+}
+
+/** Bulk archive (soft-hide) the selected candidates. Skips trashed ones. */
+export async function bulkArchiveCandidates(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const ids = bulkIds(formData);
+  if (!ids.length) return;
+  await prisma.$transaction(async (tx) => {
+    await tx.candidate.updateMany({
+      where: { id: { in: ids }, deletedAt: null },
+      data: { isActive: false },
+    });
+    for (const id of ids) {
+      await logActivity(tx, {
+        entityType: "CANDIDATE",
+        action: "CANDIDATE_UPDATED",
+        description: "Archived candidate (bulk)",
+        performedById: user.id,
+        candidateId: id,
+      });
+    }
+  });
+  revalidatePath("/candidates");
+}
+
+/** Bulk add a tag to the selected candidates (deduped per candidate). */
+export async function bulkTagCandidates(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const ids = bulkIds(formData);
+  const tag = String(formData.get("tag") ?? "").trim().toLowerCase();
+  if (!ids.length || !tag) return;
+  const candidates = await prisma.candidate.findMany({
+    where: { id: { in: ids }, deletedAt: null },
+    select: { id: true, tags: true },
+  });
+  await prisma.$transaction(async (tx) => {
+    for (const c of candidates) {
+      if (c.tags.includes(tag)) continue;
+      await tx.candidate.update({
+        where: { id: c.id },
+        data: { tags: { set: [...c.tags, tag] } },
+      });
+      await logActivity(tx, {
+        entityType: "CANDIDATE",
+        action: "CANDIDATE_UPDATED",
+        description: `Added tag "${tag}" (bulk)`,
+        performedById: user.id,
+        candidateId: c.id,
+      });
+    }
+  });
+  revalidatePath("/candidates");
+}
+
+/** Bulk move the selected candidates to trash (reversible). Admin/manager only. */
+export async function bulkTrashCandidates(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  if (!hasFullAccess(user)) return;
+  const ids = bulkIds(formData);
+  if (!ids.length) return;
+  const now = new Date();
+  await prisma.$transaction(async (tx) => {
+    await tx.candidate.updateMany({
+      where: { id: { in: ids }, deletedAt: null, erasedAt: null },
+      data: { deletedAt: now, isActive: false },
+    });
+    for (const id of ids) {
+      await logActivity(tx, {
+        entityType: "CANDIDATE",
+        action: "CANDIDATE_UPDATED",
+        description: "Moved to trash (bulk)",
+        performedById: user.id,
+        candidateId: id,
+      });
+    }
+  });
+  revalidatePath("/candidates");
+}

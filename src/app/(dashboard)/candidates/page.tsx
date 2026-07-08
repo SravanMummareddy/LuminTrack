@@ -170,6 +170,7 @@ export default async function CandidatesPage({
             rows={candidates}
             countLabel={`${total} candidate${total === 1 ? "" : "s"}`}
             pageOffset={(page - 1) * PAGE_SIZE}
+            canDelete={isAdmin}
           />
           <Pagination page={page} totalPages={totalPages} total={total} />
         </div>
