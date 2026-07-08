@@ -43,12 +43,11 @@ export default async function BenchRosterPage({
     priority: clean(sp.priority),
     status: statusMode,
     recruiterId: parseList(sp.recruiterId),
-    discipline: clean(sp.discipline),
+    discipline: parseList(sp.discipline),
   };
-  const disciplineFilter: Discipline | undefined =
-    current.discipline === "IT" || current.discipline === "NON_IT"
-      ? (current.discipline as Discipline)
-      : undefined;
+  const disciplineFilter: Discipline[] = (current.discipline ?? []).filter(
+    (d): d is Discipline => d === "IT" || d === "NON_IT",
+  );
 
   const sort = parseSort(
     clean(sp.sort),

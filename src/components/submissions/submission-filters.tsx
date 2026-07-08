@@ -24,6 +24,7 @@ export function SubmissionFilters({
       param: "status",
       label: "Status",
       primary: true,
+      multi: true,
       options: [
         { value: "", label: "All statuses" },
         ...SUBMISSION_STATUSES.map((s) => ({ value: s, label: SUBMISSION_STATUS_LABEL[s] })),
@@ -69,6 +70,7 @@ export function SubmissionFilters({
       param: "sisterCompanySourceId",
       label: "Source",
       searchable: true,
+      multi: true,
       options: [
         { value: "", label: "All sources" },
         ...sources.map((s) => ({ value: s.id, label: s.name })),

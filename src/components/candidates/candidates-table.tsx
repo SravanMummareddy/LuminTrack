@@ -6,8 +6,8 @@ import { Table, Th, Td, cardLink } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { MobileSort } from "@/components/ui/mobile-sort";
 import { Badge } from "@/components/ui/badge";
+import { DisciplineBadge } from "@/components/ui/discipline-badge";
 import { ColumnsMenu } from "@/components/ui/columns-menu";
-import { DISCIPLINE_LABEL, DISCIPLINE_TONE } from "@/lib/labels";
 import {
   formatDate,
   formatExperience,
@@ -211,13 +211,7 @@ const COLUMNS: Column[] = [
     defaultVisible: false,
     render: (c) => (
       <Td label="Discipline" secondary>
-        {c.discipline ? (
-          <Badge tone={DISCIPLINE_TONE[c.discipline]}>
-            {DISCIPLINE_LABEL[c.discipline]}
-          </Badge>
-        ) : (
-          "—"
-        )}
+        <DisciplineBadge discipline={c.discipline} />
       </Td>
     ),
   },

@@ -31,6 +31,7 @@ export function JobFilters({
       param: "status",
       label: "Status",
       primary: true,
+      multi: true,
       options: [
         { value: "", label: "All statuses" },
         ...JOB_STATUSES.map((s) => ({ value: s, label: JOB_STATUS_LABEL[s] })),
@@ -40,6 +41,7 @@ export function JobFilters({
       kind: "select",
       param: "discipline",
       label: "Discipline",
+      multi: true,
       options: [
         { value: "", label: "All disciplines" },
         ...DISCIPLINES.map((d) => ({ value: d, label: DISCIPLINE_LABEL[d] })),

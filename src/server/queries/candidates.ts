@@ -12,7 +12,7 @@ export type CandidateListFilters = {
   currentCompany?: string;
   minExperience?: number;
   isActive?: boolean;
-  discipline?: Discipline;
+  discipline?: Discipline[];
   createdRange?: DateRange;
   sort?: SortState;
   page?: number;
@@ -79,7 +79,7 @@ export async function listCandidates(filters: CandidateListFilters) {
   if (filters.minExperience != null)
     where.totalExperienceYears = { gte: filters.minExperience };
   if (filters.isActive != null) where.isActive = filters.isActive;
-  if (filters.discipline) where.discipline = filters.discipline;
+  if (filters.discipline?.length) where.discipline = { in: filters.discipline };
   if (filters.createdRange?.gte || filters.createdRange?.lte)
     where.createdAt = filters.createdRange;
 

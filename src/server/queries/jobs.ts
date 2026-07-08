@@ -16,10 +16,10 @@ export type JobListFilters = {
   q?: string;
   clientId?: string[];
   vendorId?: string[];
-  sisterCompanySourceId?: string;
+  sisterCompanySourceId?: string[];
   recruiterId?: string[];
-  status?: JobStatus;
-  discipline?: Discipline;
+  status?: JobStatus[];
+  discipline?: Discipline[];
   location?: string;
   source?: JobSource;
   createdRange?: DateRange;
@@ -72,14 +72,18 @@ export async function listJobs(filters: JobListFilters) {
     }));
   if (filters.clientId?.length) where.clientId = { in: filters.clientId };
   if (filters.vendorId?.length) where.vendorId = { in: filters.vendorId };
-  if (filters.sisterCompanySourceId)
-    // OTHER_SOURCE matches jobs with a free-text source (no managed-source FK).
-    where.sisterCompanySourceId =
-      filters.sisterCompanySourceId === OTHER_SOURCE
-        ? null
-        : filters.sisterCompanySourceId;
-  if (filters.status) where.status = filters.status;
-  if (filters.discipline) where.discipline = filters.discipline;
+  if (filters.sisterCompanySourceId?.length) {
+    // OTHER_SOURCE matches jobs with a free-text source (no managed-source FK);
+    // real source ids match by FK. A mix ORs the two.
+    const ids = filters.sisterCompanySourceId.filter((s) => s !== OTHER_SOURCE);
+    const includeOther = filters.sisterCompanySourceId.includes(OTHER_SOURCE);
+    const or: Prisma.JobWhereInput[] = [];
+    if (ids.length) or.push({ sisterCompanySourceId: { in: ids } });
+    if (includeOther) or.push({ sisterCompanySourceId: null });
+    where.OR = or;
+  }
+  if (filters.status?.length) where.status = { in: filters.status };
+  if (filters.discipline?.length) where.discipline = { in: filters.discipline };
   if (filters.location)
     where.location = { contains: filters.location, mode: "insensitive" };
   if (filters.recruiterId?.length)

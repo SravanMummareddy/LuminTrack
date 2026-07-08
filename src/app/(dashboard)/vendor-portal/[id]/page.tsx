@@ -100,18 +100,21 @@ export default async function RequirementDetailPage({
           <p className="font-mono text-xs text-slate-500">
             {formatVendorRequirementDisplayId(requirement)}
           </p>
+          {/* Title the requirement by its job (requisition) — a VPR collects
+              many submissions, so it has no single candidate. */}
           <h1 className="mt-1 text-2xl font-semibold text-slate-900">
-            {requirement.candidate?.fullName ?? "Unassigned requirement"}
+            {requirement.job.title}
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            for{" "}
+          <p className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-slate-500">
+            <span>{requirement.job.client?.name ?? "—"}</span>
+            {requirement.location && <span>· {requirement.location}</span>}
+            <span aria-hidden>·</span>
             <Link
               href={`/jobs/${requirement.job.id}`}
               className="text-indigo-600 hover:underline"
             >
-              {requirement.job.title}
-            </Link>{" "}
-            · {requirement.job.client?.name ?? "—"}
+              View job
+            </Link>
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -251,35 +254,6 @@ export default async function RequirementDetailPage({
             {requirement.createdBy?.fullName ?? "—"}
           </SummaryItem>
         </dl>
-      </Card>
-
-      <Card title="Candidate">
-        {requirement.candidate ? (
-          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-            <SummaryItem label="Name">
-              <Link
-                href={`/candidates/${requirement.candidate.id}`}
-                className="text-indigo-600 hover:underline"
-              >
-                {requirement.candidate.fullName}
-              </Link>
-            </SummaryItem>
-            <SummaryItem label="Company">
-              {requirement.candidate.currentCompany ?? "—"}
-            </SummaryItem>
-            <SummaryItem label="Email">
-              {requirement.candidate.email ?? "—"}
-            </SummaryItem>
-            <SummaryItem label="Phone">
-              {requirement.candidate.phone ?? "—"}
-            </SummaryItem>
-          </dl>
-        ) : (
-          <p className="text-sm text-slate-500">
-            No candidate chosen yet — you can pick one when you move this to a
-            submission, or set it now via Edit.
-          </p>
-        )}
       </Card>
 
       {(requirement.jobDuties || requirement.submissionNotes) && (
