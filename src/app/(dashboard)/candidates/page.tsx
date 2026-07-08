@@ -134,10 +134,10 @@ export default async function CandidatesPage({
   return (
     <div className="space-y-5">
       <PageHeader title="Candidates" description="Every candidate profile — the full talent pool. (Bench = those actively marketed; Placements = those already working.)">
-        {isAdmin && trashCount > 0 && (
+        {isAdmin && (
           <LinkButton href="/candidates?trash=1" variant="secondary">
             <Trash2 className="h-4 w-4" />
-            Trash ({trashCount})
+            Trash{trashCount > 0 ? ` (${trashCount})` : ""}
           </LinkButton>
         )}
         <LinkButton href="/candidates/new">
