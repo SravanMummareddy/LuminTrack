@@ -16,6 +16,7 @@ import type {
   SubmissionStatus,
   InterviewType,
   InterviewResult,
+  Discipline,
 } from "../src/generated/prisma/enums";
 
 // A bulk one-shot script: use a direct TCP connection (DIRECT_URL, the pg
@@ -717,6 +718,13 @@ async function main() {
         vendorRate,
         clientRate,
         status,
+        // IT-heavy split for a tech-recruiting firm; ~15% left null so the
+        // "not set" state is represented too.
+        discipline: (chance(0.15)
+          ? null
+          : chance(0.75)
+            ? "IT"
+            : "NON_IT") as Discipline | null,
         description: `${title} opening at ${client.name}. ${randInt(
           4,
           10,
@@ -848,6 +856,12 @@ async function main() {
         workAuthorization: pick(WORK_AUTH),
         totalExperienceYears: randInt(2, 16) + (chance(0.5) ? 0.5 : 0),
         currentCompany: pick(CURRENT_COMPANIES),
+        // IT vs Non-IT domain; ~15% left null (not yet classified).
+        discipline: (chance(0.15)
+          ? null
+          : chance(0.75)
+            ? "IT"
+            : "NON_IT") as Discipline | null,
         skills: pickN(SKILLS, randInt(4, 8)),
         linkedinUrl: `https://www.linkedin.com/in/${first}-${last}-${i}`.toLowerCase(),
         notes: chance(0.35) ? pick(CANDIDATE_NOTES) : null,
