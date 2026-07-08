@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { changePasswordSchema } from "@/lib/validation/user";
 
+// Passwords must satisfy the Balanced policy (>=10 chars, 3 of 4 char classes).
 const valid = {
-  currentPassword: "oldsecret1",
-  newPassword: "newsecret1",
-  confirmPassword: "newsecret1",
+  currentPassword: "OldSecret2025",
+  newPassword: "NewSecret2026",
+  confirmPassword: "NewSecret2026",
 };
 
 describe("changePasswordSchema", () => {
@@ -12,7 +13,7 @@ describe("changePasswordSchema", () => {
     expect(changePasswordSchema.safeParse(valid).success).toBe(true);
   });
 
-  it("rejects a new password shorter than 8 chars", () => {
+  it("rejects a new password that fails the strength policy", () => {
     const r = changePasswordSchema.safeParse({
       ...valid,
       newPassword: "short1",
@@ -37,9 +38,9 @@ describe("changePasswordSchema", () => {
 
   it("rejects when the new password equals the current one", () => {
     const r = changePasswordSchema.safeParse({
-      currentPassword: "samesecret1",
-      newPassword: "samesecret1",
-      confirmPassword: "samesecret1",
+      currentPassword: "SameSecret2026",
+      newPassword: "SameSecret2026",
+      confirmPassword: "SameSecret2026",
     });
     expect(r.success).toBe(false);
     if (!r.success)

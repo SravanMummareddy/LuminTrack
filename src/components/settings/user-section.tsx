@@ -6,6 +6,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Field, Input, Select } from "@/components/ui/field";
+import { PasswordRequirements } from "@/components/ui/password-requirements";
 import { Table, Th, Td } from "@/components/ui/table";
 import {
   SettingsListFilter,
@@ -160,6 +161,7 @@ function UserForm({
   onDone: () => void;
 }) {
   const [state, formAction, pending] = useActionState(saveUser, EMPTY_FORM_STATE);
+  const [password, setPassword] = useState("");
 
   useEffect(() => {
     if (state.ok) onDone();
@@ -202,9 +204,7 @@ function UserForm({
         required={!entity}
         error={state.fieldErrors?.password}
         hint={
-          entity
-            ? "Leave blank to keep the current password."
-            : "Minimum 8 characters."
+          entity ? "Leave blank to keep the current password." : undefined
         }
       >
         <Input
@@ -212,8 +212,15 @@ function UserForm({
           name="password"
           type="password"
           autoComplete="new-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
           required={!entity}
         />
+        {/* On edit the field is optional, so only nudge once they start typing;
+            on create show the checklist up front. */}
+        {(!entity || password.length > 0) && (
+          <PasswordRequirements value={password} />
+        )}
       </Field>
 
       <label

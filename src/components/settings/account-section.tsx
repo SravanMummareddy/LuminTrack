@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { Lock, Eye, EyeOff, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
+import { PasswordRequirements } from "@/components/ui/password-requirements";
 import { useToast } from "@/components/ui/toast";
 import { changeOwnPassword, updateOwnProfile } from "@/server/actions/users";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
@@ -106,6 +107,7 @@ function PasswordForm({ onDone }: { onDone: () => void }) {
     changeOwnPassword,
     EMPTY_FORM_STATE,
   );
+  const [newPassword, setNewPassword] = useState("");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -147,15 +149,17 @@ function PasswordForm({ onDone }: { onDone: () => void }) {
           label="New password"
           htmlFor="newPassword"
           required
-          hint="At least 8 characters."
           error={state.fieldErrors?.newPassword}
         >
           <PasswordInput
             id="newPassword"
             name="newPassword"
             autoComplete="new-password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
             required
           />
+          <PasswordRequirements value={newPassword} />
         </Field>
 
         <Field

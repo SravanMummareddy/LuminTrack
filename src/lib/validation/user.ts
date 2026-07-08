@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { emptyToUndefined } from "./common";
+import { passwordIssues } from "@/lib/password-policy";
 
 const base = z.object({
   fullName: z.string().trim().min(1, "Full name is required.").max(120),
@@ -8,7 +9,14 @@ const base = z.object({
   isActive: z.boolean(),
 });
 
-const password = z.string().min(8, "Password must be at least 8 characters.");
+// Strength policy lives in @/lib/password-policy (shared with the live
+// checklist UI). superRefine surfaces each unmet rule as its own issue so the
+// form can list exactly what's missing.
+const password = z.string().superRefine((value, ctx) => {
+  for (const issue of passwordIssues(value)) {
+    ctx.addIssue({ code: "custom", message: `Password needs: ${issue}` });
+  }
+});
 
 /** New users must be given a password. */
 export const userCreateSchema = base.extend({ password });
