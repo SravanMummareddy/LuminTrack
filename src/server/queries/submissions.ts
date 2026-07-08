@@ -19,11 +19,11 @@ import {
 
 export type SubmissionListFilters = {
   q?: string;
-  status?: SubmissionStatus;
+  status?: SubmissionStatus[];
   recruiterId?: string[];
   clientId?: string[];
   vendorId?: string[];
-  sisterCompanySourceId?: string;
+  sisterCompanySourceId?: string[];
   submittedRange?: DateRange;
   sort?: SortState;
   page?: number;
@@ -126,7 +126,7 @@ async function attachDaysInStage<T extends { id: string; submittedAt: Date }>(
 export async function listSubmissions(filters: SubmissionListFilters) {
   const where: Prisma.SubmissionWhereInput = {};
 
-  if (filters.status) where.status = filters.status;
+  if (filters.status?.length) where.status = { in: filters.status };
   if (filters.recruiterId?.length)
     where.submittedById = { in: filters.recruiterId };
   if (filters.submittedRange?.gte || filters.submittedRange?.lte)
@@ -135,12 +135,16 @@ export async function listSubmissions(filters: SubmissionListFilters) {
   const job: Prisma.JobWhereInput = {};
   if (filters.clientId?.length) job.clientId = { in: filters.clientId };
   if (filters.vendorId?.length) job.vendorId = { in: filters.vendorId };
-  if (filters.sisterCompanySourceId)
-    // OTHER_SOURCE matches jobs with a free-text source (no managed-source FK).
-    job.sisterCompanySourceId =
-      filters.sisterCompanySourceId === OTHER_SOURCE
-        ? null
-        : filters.sisterCompanySourceId;
+  if (filters.sisterCompanySourceId?.length) {
+    // OTHER_SOURCE matches jobs with a free-text source (no managed-source FK);
+    // real ids match by FK. A mix ORs the two.
+    const ids = filters.sisterCompanySourceId.filter((s) => s !== OTHER_SOURCE);
+    const includeOther = filters.sisterCompanySourceId.includes(OTHER_SOURCE);
+    const or: Prisma.JobWhereInput[] = [];
+    if (ids.length) or.push({ sisterCompanySourceId: { in: ids } });
+    if (includeOther) or.push({ sisterCompanySourceId: null });
+    job.OR = or;
+  }
   if (Object.keys(job).length) where.job = job;
 
   const terms = searchTerms(filters.q);

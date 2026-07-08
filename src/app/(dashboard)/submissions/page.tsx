@@ -28,10 +28,12 @@ function clean(value: string | string[] | undefined): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
-function asSubmissionStatus(value: string | undefined): SubmissionStatus | undefined {
-  return value && (SUBMISSION_STATUSES as string[]).includes(value)
-    ? (value as SubmissionStatus)
-    : undefined;
+function asSubmissionStatusList(
+  values: string[] | undefined,
+): SubmissionStatus[] {
+  return (values ?? []).filter((v) =>
+    (SUBMISSION_STATUSES as string[]).includes(v),
+  ) as SubmissionStatus[];
 }
 
 export default async function SubmissionsPage({
@@ -43,11 +45,11 @@ export default async function SubmissionsPage({
 
   const current = {
     q: clean(sp.q),
-    status: clean(sp.status),
+    status: parseList(sp.status),
     recruiterId: parseList(sp.recruiterId),
     clientId: parseList(sp.clientId),
     vendorId: parseList(sp.vendorId),
-    sisterCompanySourceId: clean(sp.sisterCompanySourceId),
+    sisterCompanySourceId: parseList(sp.sisterCompanySourceId),
     preset: clean(sp.preset),
     from: clean(sp.from),
     to: clean(sp.to),
@@ -64,7 +66,7 @@ export default async function SubmissionsPage({
 
   const filters: SubmissionListFilters = {
     q: current.q,
-    status: asSubmissionStatus(current.status),
+    status: asSubmissionStatusList(current.status),
     recruiterId: current.recruiterId,
     clientId: current.clientId,
     vendorId: current.vendorId,

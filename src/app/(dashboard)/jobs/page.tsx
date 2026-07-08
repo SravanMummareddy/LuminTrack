@@ -34,18 +34,20 @@ function clean(value: string | string[] | undefined): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
-function asJobStatus(value: string | undefined): JobStatus | undefined {
-  return value && (JOB_STATUSES as string[]).includes(value)
-    ? (value as JobStatus)
-    : undefined;
+function asJobStatusList(values: string[] | undefined): JobStatus[] {
+  return (values ?? []).filter((v) =>
+    (JOB_STATUSES as string[]).includes(v),
+  ) as JobStatus[];
 }
 
 function asJobSource(value: string | undefined): JobSource | undefined {
   return value === "manual" || value === "randstad" ? value : undefined;
 }
 
-function asDiscipline(value: string | undefined): Discipline | undefined {
-  return value === "IT" || value === "NON_IT" ? value : undefined;
+function asDisciplineList(values: string[] | undefined): Discipline[] {
+  return (values ?? []).filter(
+    (v) => v === "IT" || v === "NON_IT",
+  ) as Discipline[];
 }
 
 export default async function JobsPage({
@@ -59,10 +61,10 @@ export default async function JobsPage({
     q: clean(sp.q),
     clientId: parseList(sp.clientId),
     vendorId: parseList(sp.vendorId),
-    sisterCompanySourceId: clean(sp.sisterCompanySourceId),
+    sisterCompanySourceId: parseList(sp.sisterCompanySourceId),
     recruiterId: parseList(sp.recruiterId),
-    status: clean(sp.status),
-    discipline: clean(sp.discipline),
+    status: parseList(sp.status),
+    discipline: parseList(sp.discipline),
     location: clean(sp.location),
     source: clean(sp.source),
     preset: clean(sp.preset),
@@ -88,8 +90,8 @@ export default async function JobsPage({
     vendorId: current.vendorId,
     sisterCompanySourceId: current.sisterCompanySourceId,
     recruiterId: current.recruiterId,
-    status: asJobStatus(current.status),
-    discipline: asDiscipline(current.discipline),
+    status: asJobStatusList(current.status),
+    discipline: asDisciplineList(current.discipline),
     location: current.location,
     source: activeSource,
     createdRange: parseDateRange({
@@ -151,6 +153,7 @@ export default async function JobsPage({
       current.sisterCompanySourceId ||
       current.recruiterId ||
       current.status ||
+      current.discipline ||
       current.location ||
       (current.preset && current.preset !== "all"),
   );

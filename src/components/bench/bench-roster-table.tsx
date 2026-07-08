@@ -12,9 +12,8 @@ import {
   BENCH_PRIORITY_LABEL,
   BENCH_MARKETING_STATUS_LABEL,
   BENCH_MARKETING_STATUS_TONE,
-  DISCIPLINE_LABEL,
-  DISCIPLINE_TONE,
 } from "@/lib/labels";
+import { DisciplineBadge } from "@/components/ui/discipline-badge";
 import { formatBenchConsultantDisplayId, formatRate, formatDate } from "@/lib/format";
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
 import { cn } from "@/lib/cn";
@@ -127,14 +126,7 @@ const COLUMNS: Column[] = [
     key: "discipline",
     label: "Discipline",
     defaultVisible: false,
-    cell: (c) =>
-      c.candidate?.discipline ? (
-        <Badge tone={DISCIPLINE_TONE[c.candidate.discipline]}>
-          {DISCIPLINE_LABEL[c.candidate.discipline]}
-        </Badge>
-      ) : (
-        "—"
-      ),
+    cell: (c) => <DisciplineBadge discipline={c.candidate?.discipline} />,
   },
   {
     key: "visa",

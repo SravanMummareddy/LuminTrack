@@ -16,7 +16,14 @@ import {
 import { CANDIDATE_TRASH_RETENTION_DAYS } from "@/server/candidate-erase";
 import { getCurrentUser } from "@/lib/session";
 import { hasFullAccess } from "@/lib/permissions";
-import { parseDateRange, parseSort, parsePage, PAGE_SIZE } from "@/lib/filters";
+import {
+  parseDateRange,
+  parseSort,
+  parsePage,
+  parseList,
+  PAGE_SIZE,
+} from "@/lib/filters";
+import type { Discipline } from "@/generated/prisma/enums";
 
 function clean(value: string | string[] | undefined): string | undefined {
   const single = Array.isArray(value) ? value[0] : value;
@@ -42,7 +49,7 @@ export default async function CandidatesPage({
     currentCompany: clean(sp.currentCompany),
     minExperience: clean(sp.minExperience),
     status: clean(sp.status),
-    discipline: clean(sp.discipline),
+    discipline: parseList(sp.discipline),
     preset: clean(sp.preset),
     from: clean(sp.from),
     to: clean(sp.to),
@@ -70,10 +77,9 @@ export default async function CandidatesPage({
         : current.status === "inactive"
           ? false
           : undefined,
-    discipline:
-      current.discipline === "IT" || current.discipline === "NON_IT"
-        ? current.discipline
-        : undefined,
+    discipline: (current.discipline ?? []).filter(
+      (d): d is Discipline => d === "IT" || d === "NON_IT",
+    ),
     createdRange: parseDateRange({
       preset: current.preset,
       from: current.from,

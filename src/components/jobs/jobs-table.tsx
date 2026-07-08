@@ -11,9 +11,8 @@ import {
   JOB_STATUS_LABEL,
   JOB_STATUS_TONE,
   jobSourceLabel,
-  DISCIPLINE_LABEL,
-  DISCIPLINE_TONE,
 } from "@/lib/labels";
+import { DisciplineBadge } from "@/components/ui/discipline-badge";
 import { formatDate, formatJobDisplayId } from "@/lib/format";
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
 import type { JobListRow } from "@/server/queries/jobs";
@@ -139,13 +138,7 @@ const COLUMNS: Column[] = [
     defaultVisible: false,
     render: (job) => (
       <Td label="Discipline" secondary>
-        {job.discipline ? (
-          <Badge tone={DISCIPLINE_TONE[job.discipline]}>
-            {DISCIPLINE_LABEL[job.discipline]}
-          </Badge>
-        ) : (
-          "—"
-        )}
+        <DisciplineBadge discipline={job.discipline} />
       </Td>
     ),
   },

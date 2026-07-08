@@ -16,7 +16,7 @@ export type BenchListFilters = {
    *  Ignored when an explicit `marketingStatus` is set. */
   onBench?: boolean;
   recruiterId?: string[];
-  discipline?: Discipline;
+  discipline?: Discipline[];
   sort?: SortState;
   page?: number;
 };
@@ -67,7 +67,8 @@ export async function listBenchConsultants(filters: BenchListFilters) {
   if (filters.recruiterId?.length) where.recruiterId = { in: filters.recruiterId };
   // Discipline now lives on the linked candidate (source of truth), so filter
   // through the relation.
-  if (filters.discipline) where.candidate = { discipline: filters.discipline };
+  if (filters.discipline?.length)
+    where.candidate = { discipline: { in: filters.discipline } };
   const terms = searchTerms(filters.q);
   if (terms.length)
     where.AND = terms.map((t) => ({

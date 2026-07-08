@@ -58,6 +58,7 @@ export function BenchFilters({
       kind: "select",
       param: "discipline",
       label: "Discipline",
+      multi: true,
       options: [
         { value: "", label: "All disciplines" },
         ...DISCIPLINES.map((d) => ({ value: d, label: DISCIPLINE_LABEL[d] })),
