@@ -631,6 +631,19 @@ npm run test:integration  # integration suite vs Dockerized Postgres (see below)
   `DATABASE_URL_TEST` (defaults to the local Docker URL). Lives in
   `tests/integration/*.test.ts`. Skipped automatically if the test DB is
   unreachable, so it never blocks the unit suite or CI's no-DB job.
+- **E2E suite** (`npm run test:e2e`) — **Playwright** driving real Chromium
+  against the running app + seeded DB (the top of the pyramid). **Contract:**
+  app on `:3000` (`npm run dev`; the config reuses a running server) + demo seed
+  (`npx tsx prisma/seed-demo.ts`) — specs log in as the seeded admin
+  (`sriman@`) + recruiter (`hrishikesh@`), password `LuminTrack2026!`.
+  `global-setup` mints both sessions once (`e2e/.auth/*.json`); runs serially
+  (`workers: 1`, one shared DB). Covers auth gate, every route's render, RBAC
+  (recruiter vs admin), bulk status, candidate create, the Job→VPR→submission
+  navigation, saved views, keyboard shortcuts, password policy, and list
+  sort/filter/pagination. `e2e/db.ts` uses raw `pg` only to *pick fixtures*,
+  never to assert. Full details + the coverage table in
+  [`e2e/README.md`](./e2e/README.md). Runs against the Neon dev/test DB (app is
+  Neon-bound); reseed to restore a pristine state after a run.
 
 ## Environment (.env — gitignored; see .env.example)
 

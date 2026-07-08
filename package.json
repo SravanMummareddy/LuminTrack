@@ -12,6 +12,9 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:db:up": "docker compose -f docker-compose.test.yml up -d --wait && DIRECT_URL=postgresql://postgres:postgres@localhost:5433/lumintrack_test prisma migrate deploy",
     "test:db:down": "docker compose -f docker-compose.test.yml down -v",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report e2e/.report",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
@@ -38,6 +41,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@prisma/adapter-pg": "^7.8.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
