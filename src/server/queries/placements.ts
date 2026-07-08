@@ -108,11 +108,15 @@ export async function listPlacements(filters: PlacementListFilters) {
     skip: (page - 1) * PAGE_SIZE,
     take: PAGE_SIZE,
     include: {
-      candidate: { select: { id: true, fullName: true } },
+      candidate: {
+        select: { id: true, fullName: true, deletedAt: true, erasedAt: true },
+      },
       job: {
         select: {
           id: true,
           title: true,
+          deletedAt: true,
+          erasedAt: true,
           client: { select: { name: true } },
           vendor: { select: { name: true } },
         },

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { cn } from "@/lib/cn";
 
 type Variant = "primary" | "secondary" | "danger" | "ghost";
-type Size = "md" | "sm";
+export type Size = "md" | "sm";
 
 const variantClass: Record<Variant, string> = {
   primary: "border-transparent bg-indigo-600 text-white hover:bg-indigo-700",

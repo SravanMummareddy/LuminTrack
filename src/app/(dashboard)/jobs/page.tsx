@@ -8,8 +8,10 @@ import { JOB_TRASH_RETENTION_DAYS } from "@/server/job-erase";
 import { Pagination } from "@/components/ui/pagination";
 import { JobFilters } from "@/components/jobs/job-filters";
 import { JobsTable } from "@/components/jobs/jobs-table";
+import { JobTrashList } from "@/components/jobs/job-trash-list";
 import {
   listJobs,
+  countTrashedJobs,
   getLastIlaborImport,
   JOB_SORT_KEYS,
   JOB_DEFAULT_SORT,
@@ -105,6 +107,7 @@ export default async function JobsPage({
     sources,
     recruiters,
     lastImport,
+    trashCount,
   ] = await Promise.all([
     listJobs(filters),
     listClients(),
@@ -114,6 +117,7 @@ export default async function JobsPage({
     // Only fetched (used) on the Randstad tab as admin, but cheap enough to
     // always run in parallel — it's a single indexed findFirst.
     getLastIlaborImport(),
+    isAdmin ? countTrashedJobs() : Promise.resolve(0),
   ]);
 
   const showLastImportBanner =
@@ -183,7 +187,7 @@ export default async function JobsPage({
             </LinkButton>
             <LinkButton href="/jobs?trash=1" variant="secondary">
               <Trash2 className="h-4 w-4" />
-              Trash
+              Trash{trashCount > 0 ? ` (${trashCount})` : ""}
             </LinkButton>
           </>
         ) : null}
@@ -246,6 +250,11 @@ export default async function JobsPage({
                 ? "No jobs match these filters."
                 : "No jobs yet. Add your first job to get started."}
           </p>
+        </div>
+      ) : isTrashView ? (
+        <div className="space-y-3">
+          <JobTrashList rows={jobs} retentionDays={JOB_TRASH_RETENTION_DAYS} />
+          <Pagination page={page} totalPages={totalPages} total={total} />
         </div>
       ) : (
         <div className="space-y-3">

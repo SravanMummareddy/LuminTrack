@@ -83,11 +83,12 @@ export async function hardEraseJob(
         performedById: performer,
       });
     } else {
-      // Tombstone — keep the row + its submissions (recruiter history), anonymize.
+      // Tombstone — keep the row + its submissions (recruiter history). Keep the
+      // title too (owner decision): erased jobs read "Title (deleted)" in history,
+      // the suffix derived at display from erasedAt. Free-text notes are cleared.
       await tx.job.update({
         where: { id: jobId },
         data: {
-          title: `Removed requisition #${job.seq}`,
           description: null,
           notes: null,
           status: "CANCELLED",

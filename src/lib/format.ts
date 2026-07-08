@@ -24,6 +24,20 @@ export function formatTime(date: Date | string): string {
   return format(new Date(date), "h:mm a");
 }
 
+/**
+ * Suffix marking a removed entity in history/reference lists. A candidate or job
+ * that has been trashed or permanently erased keeps its real name (owner
+ * decision); wherever that name still appears against a submission/placement/etc.
+ * we append " (deleted)" so recruiters can read the history and see it's gone.
+ * Returns "" for live records.
+ */
+export function deletedSuffix(entity: {
+  deletedAt?: Date | string | null;
+  erasedAt?: Date | string | null;
+}): string {
+  return entity.deletedAt || entity.erasedAt ? " (deleted)" : "";
+}
+
 /** Formats a numeric rate (Prisma Decimal, number, or string) as USD per hour. */
 export function formatRate(
   value: { toString(): string } | number | string | null | undefined,

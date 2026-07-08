@@ -88,7 +88,9 @@ export async function hardEraseCandidate(
     await tx.candidate.update({
       where: { id: candidateId },
       data: {
-        fullName: `Erased candidate #${candidate.seq}`,
+        // Keep the real name (owner decision): erased records read "Name (deleted)"
+        // in history — the `(deleted)` suffix is derived at display from erasedAt.
+        // Everything else identifying is still scrubbed + files shredded below.
         email: null,
         phone: null,
         currentLocation: null,

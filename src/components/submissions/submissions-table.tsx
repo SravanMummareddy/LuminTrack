@@ -8,7 +8,7 @@ import { MobileSort } from "@/components/ui/mobile-sort";
 import { ColumnsMenu } from "@/components/ui/columns-menu";
 import { BENCH_ENGAGEMENT_LABEL } from "@/lib/labels";
 import { SubmissionStatusCell } from "@/components/submissions/submission-status-cell";
-import { formatDate, formatSubmissionDisplayId } from "@/lib/format";
+import { formatDate, formatSubmissionDisplayId, deletedSuffix } from "@/lib/format";
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
 import { STALE_STAGE_DAYS } from "@/lib/analytics";
 import type { SubmissionListRow } from "@/server/queries/submissions";
@@ -63,6 +63,7 @@ const COLUMNS: Column[] = [
           className={`${cardLink} font-medium text-indigo-600 hover:underline`}
         >
           {s.candidate.fullName}
+          {deletedSuffix(s.candidate)}
         </Link>
       </Td>
     ),
@@ -79,6 +80,7 @@ const COLUMNS: Column[] = [
           className={`${cardLinkRaise} text-slate-700 hover:underline`}
         >
           {s.job.title}
+          {deletedSuffix(s.job)}
         </Link>
       </Td>
     ),

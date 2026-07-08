@@ -19,6 +19,8 @@ export function CandidateDangerZone({
   candidateName,
   retentionDays,
   isActive,
+  hasActivePlacement = false,
+  inFlightCount = 0,
 }: {
   candidateId: string;
   candidateName: string;
@@ -26,6 +28,10 @@ export function CandidateDangerZone({
   /** When true the candidate is still Active — trashing is blocked until it's
    *  Deactivated (via the Deactivate button at the top of the page). */
   isActive: boolean;
+  /** Active/extended placement — BLOCKS the trash server-side (end it first). */
+  hasActivePlacement?: boolean;
+  /** Non-terminal submissions — kept, but flagged so the admin knows. */
+  inFlightCount?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [state, formAction, pending] = useActionState(
@@ -96,6 +102,22 @@ export function CandidateDangerZone({
             shredded. Erasing sooner is done from the trash view.
           </p>
 
+          {hasActivePlacement ? (
+            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              This candidate has an <strong>active placement</strong> — end it
+              before moving them to trash.
+            </p>
+          ) : inFlightCount > 0 ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              <strong>
+                {inFlightCount} submission{inFlightCount === 1 ? "" : "s"} in the
+                pipeline
+              </strong>{" "}
+              — kept in history (they&apos;ll show &ldquo;{candidateName}
+              (deleted)&rdquo;).
+            </div>
+          ) : null}
+
           <a
             href={archiveHref}
             className="flex items-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 hover:bg-amber-100"
@@ -118,7 +140,11 @@ export function CandidateDangerZone({
             >
               Cancel
             </Button>
-            <Button type="submit" variant="danger" disabled={pending}>
+            <Button
+              type="submit"
+              variant="danger"
+              disabled={pending || hasActivePlacement}
+            >
               {pending
                 ? "Moving to trash…"
                 : isActive

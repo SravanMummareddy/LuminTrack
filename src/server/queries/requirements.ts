@@ -221,7 +221,9 @@ export async function getVendorRequirement(id: string) {
           seq: true,
           status: true,
           submittedAt: true,
-          candidate: { select: { id: true, fullName: true } },
+          candidate: {
+            select: { id: true, fullName: true, deletedAt: true, erasedAt: true },
+          },
           submittedBy: { select: { fullName: true } },
         },
       },

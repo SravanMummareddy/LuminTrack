@@ -679,6 +679,7 @@ async function main() {
     payBase: number;
     clientRate: number | null;
     assigneeIds: string[];
+    status: JobStatus;
   }[] = [];
 
   const JOB_STATUS_W: [JobStatus, number][] = [
@@ -811,6 +812,7 @@ async function main() {
       payBase,
       clientRate,
       assigneeIds: assignees.map((r) => r.id),
+      status,
     });
   }
 
@@ -1068,6 +1070,15 @@ async function main() {
     const vendorRecruiterName = chance(0.5) ? pick(VENDOR_RECRUITER_NAMES) : null;
     // Scoped right after the job is created, so it always predates its submissions.
     const createdAt = new Date(job.createdAt.getTime() + 6 * HOUR);
+    // Mirror the runtime job→VPR cascade: a requirement under a terminal job is
+    // never left OPEN (that's the misleading "job Filled, requirement Open"
+    // state). FILLED → CONVERTED (fulfilled), CLOSED/CANCELLED → CANCELLED.
+    const vprStatus =
+      job.status === "FILLED"
+        ? "CONVERTED"
+        : job.status === "CLOSED" || job.status === "CANCELLED"
+          ? "CANCELLED"
+          : "OPEN";
     const req = await prisma.vendorRequirement.create({
       data: {
         jobId: job.id,
@@ -1080,7 +1091,7 @@ async function main() {
         vendorRecruiterName,
         teamLead,
         submissionNotes: chance(0.4) ? pick(CANDIDATE_NOTES) : null,
-        status: "OPEN",
+        status: vprStatus,
         createdById: admin.id,
         createdAt,
         updatedAt: createdAt,
@@ -1529,8 +1540,14 @@ async function main() {
   // has been submitted against yet — plus a couple CANCELLED so the status
   // filter has something to do. Team lead is derived from the recruiter's team.
   console.log("Creating extra (awaiting) vendor portal requirements…");
+  // An "awaiting candidates" (OPEN) requirement only makes sense on a job that's
+  // still accepting — otherwise we recreate the misleading "job Filled,
+  // requirement Open" state. Scope these to non-terminal jobs.
+  const openJobs = jobs.filter(
+    (j) => j.status === "OPEN" || j.status === "ON_HOLD",
+  );
   for (let i = 0; i < 8; i++) {
-    const job = pick(jobs);
+    const job = pick(openJobs);
     const recruiter = pick(recruiters);
     // ~70% already have a candidate picked; the rest are candidate-less plans.
     const candidate = chance(0.7) ? pick(candidates) : null;

@@ -232,6 +232,47 @@ export async function closeVendorRequirement(formData: FormData): Promise<void> 
   redirect(`/vendor-portal/${id}`);
 }
 
+/**
+ * Permanently delete a requirement — allowed ONLY when it has zero submissions
+ * (a mistaken/empty planning row, nothing to lose). Once a VPR has submissions we
+ * refuse and the caller should Cancel instead, so the submission→requirement
+ * provenance is never orphaned. The VPR's own audit rows cascade away with it
+ * (Activity.requirementId is onDelete:Cascade), so we log REQUIREMENT_DELETED on
+ * the parent JOB — that trail survives.
+ */
+export async function deleteVendorRequirement(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  if (!canManageRequirements(user)) return;
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) return;
+
+  const existing = await prisma.vendorRequirement.findUnique({
+    where: { id },
+    select: { id: true, seq: true, jobId: true, _count: { select: { submissions: true } } },
+  });
+  // Guard: no VPR, or it has submissions → not deletable (Cancel instead).
+  if (!existing || existing._count.submissions > 0) {
+    redirect(`/vendor-portal/${id}`);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    // Delete first — this cascades the VPR's own Activity rows. Then log on the
+    // job so the audit entry isn't swept away with them.
+    await tx.vendorRequirement.delete({ where: { id } });
+    await logActivity(tx, {
+      entityType: "JOB",
+      action: "REQUIREMENT_DELETED",
+      description: `Deleted empty requirement VPR-${String(existing.seq).padStart(3, "0")} (0 submissions)`,
+      performedById: user.id,
+      jobId: existing.jobId,
+    });
+  });
+
+  revalidatePath("/vendor-portal");
+  revalidatePath(`/jobs/${existing.jobId}`);
+  redirect("/vendor-portal");
+}
+
 /** Aborts the submit transaction when a shared submission gate fires (duplicate
  *  / iLabor closed / cap) so nothing partial is written. Caught by the action
  *  and surfaced as a `needsConfirm` prompt. */

@@ -11,7 +11,7 @@ import {
   PLACEMENT_STATUS_TONE,
   MARGIN_AMBER_THRESHOLD_PCT,
 } from "@/lib/labels";
-import { formatDate, formatPlacementDisplayId } from "@/lib/format";
+import { formatDate, formatPlacementDisplayId, deletedSuffix } from "@/lib/format";
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
 import type { PlacementListRow } from "@/server/queries/placements";
 
@@ -71,6 +71,7 @@ const COLUMNS: Column[] = [
           className={`${cardLink} font-medium text-indigo-600 hover:underline`}
         >
           {p.candidate.fullName}
+          {deletedSuffix(p.candidate)}
         </Link>
       </Td>
     ),
@@ -87,6 +88,7 @@ const COLUMNS: Column[] = [
           className={`${cardLinkRaise} text-slate-700 hover:underline`}
         >
           {p.job.title}
+          {deletedSuffix(p.job)}
         </Link>
       </Td>
     ),
