@@ -567,6 +567,8 @@ function isBulkStatusTarget(value: string): value is BulkStatusTarget {
   return (BULK_STATUS_TARGETS as readonly string[]).includes(value);
 }
 
+export type BulkStatusResult = { changed: number; skipped: number };
+
 /**
  * Bulk status change from the submissions list. Deliberately limited to the safe
  * branch outcomes (On hold / Rejected / Backed out): a submission is only touched
@@ -575,12 +577,18 @@ function isBulkStatusTarget(value: string): value is BulkStatusTarget {
  * ever fires. Advance / Mark-joined stay per-submission (they run the iLabor,
  * duplicate, and rate-chain gates + the placement cascade, which shouldn't be
  * bypassed in bulk). Each changed row gets its own audit entry.
+ *
+ * Returns the real changed/skipped counts so the caller's toast reflects what
+ * actually happened rather than how many rows were selected.
  */
-export async function bulkChangeSubmissionStatus(formData: FormData): Promise<void> {
+export async function bulkChangeSubmissionStatus(
+  formData: FormData,
+): Promise<BulkStatusResult> {
   const user = await requireUser();
   const ids = bulkIds(formData);
   const target = String(formData.get("status") ?? "").trim();
-  if (ids.length === 0 || !isBulkStatusTarget(target)) return;
+  if (ids.length === 0 || !isBulkStatusTarget(target))
+    return { changed: 0, skipped: ids.length };
   const next = target as SubmissionStatus;
 
   const submissions = await prisma.submission.findMany({
@@ -604,17 +612,23 @@ export async function bulkChangeSubmissionStatus(formData: FormData): Promise<vo
       ? String(formData.get("reason") ?? "").trim() || null
       : null;
 
+  let changed = 0;
   const touched: { jobId: string; candidateId: string }[] = [];
   for (const s of submissions) {
     // Only apply when the target is a valid branch outcome from this row's
     // current status — this is the invariant guard.
     if (!branchActions(s.status).includes(next)) continue;
 
-    await prisma.$transaction(async (tx) => {
-      await tx.submission.update({
-        where: { id: s.id },
+    const applied = await prisma.$transaction(async (tx) => {
+      // Optimistic-concurrency guard: the update only lands if the row is still
+      // at the status we validated against. If it raced (e.g. into JOINED, which
+      // owns a placement) since the read above, `count` is 0 and we skip it —
+      // so bulk can never flip a row past its lifecycle hooks on a stale snapshot.
+      const res = await tx.submission.updateMany({
+        where: { id: s.id, status: s.status },
         data: { status: next },
       });
+      if (res.count === 0) return false;
       await logActivity(tx, {
         entityType: "SUBMISSION",
         action,
@@ -625,8 +639,13 @@ export async function bulkChangeSubmissionStatus(formData: FormData): Promise<vo
         performedById: user.id,
         submissionId: s.id,
       });
+      return true;
     });
-    touched.push({ jobId: s.jobId, candidateId: s.candidateId });
+
+    if (applied) {
+      changed++;
+      touched.push({ jobId: s.jobId, candidateId: s.candidateId });
+    }
   }
 
   revalidatePath("/submissions");
@@ -634,4 +653,6 @@ export async function bulkChangeSubmissionStatus(formData: FormData): Promise<vo
     revalidatePath(`/jobs/${t}`);
   for (const c of new Set(touched.map((x) => x.candidateId)))
     revalidatePath(`/candidates/${c}`);
+
+  return { changed, skipped: ids.length - changed };
 }
