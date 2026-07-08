@@ -29,7 +29,64 @@ from all code. Do not reintroduce it.
 **Source of truth:** the header comment + `rateChainWarnings()` in `src/lib/rates.ts` (chain
 = Client ≥ Bill ≥ Pay); the live chain warning is `src/components/ui/rate-chain-warning.tsx`.
 
-## 🚧 Current work — Rate model, clientRate, company-wide scorecard, rate guardrail (2026-06-22, PRs #32–#35, on `main`)
+## ✅ CURRENT STATE — feedback rounds 1–2 SHIPPED + LIVE on prod (2026-07-08)
+
+**`main` @ `a7062da` (PR #41), deployed to prod, tsc clean, 166 unit tests.** Repo is a
+single clean branch (`main`); all feedback branches merged + deleted. **Live demo:**
+`lumin-track.vercel.app` — admin `sriman@lumintrack.com` / team-lead + recruiter
+`hrishikesh@lumintrack.com`, password `LuminTrack2026!`. **Two Neon DBs:** dev
+`ep-billowing-mountain-at6ftznc` (active `.env`), prod `ep-orange-dew-aqe9z6f3`
+(`.env.neon-prod.bak`, gitignored — the DB Vercel prod uses). Both reseeded clean
+(`npx tsx prisma/seed-demo.ts`, direct `PrismaPg`/`DIRECT_URL` adapter). **Vercel does NOT
+run `migrate deploy`** — apply prod migrations manually against the prod `DIRECT_URL`
+(`set -a; . ./.env.neon-prod.bak; set +a; npx prisma migrate deploy`).
+
+**The app is now a three-tier pipeline: Job → VendorRequirement (VPR, 1:many) →
+Submission.** Job = bare requisition (title/client/vendor/location/status/positions +
+Client rate only). VPR = team-lead-scoped commercial terms (Bill/Pay/engagement/team-lead),
+`status` OPEN/CONVERTED/CANCELLED, analytics-invisible. Submission = the tracked record
+(recruiter performance). Nav: **Jobs · Vendor Portal Requirements · Submissions**.
+
+**Feedback round 1 (discipline, candidate-first bench, trash/lifecycle, Blob):**
+- **IT/Non-IT `discipline`** on **Candidate + Job** (enum `Discipline`, `DISCIPLINES`/
+  `DISCIPLINE_LABEL` in `labels.ts`, `DisciplineBadge` chip). Removed from BenchConsultant
+  (bench reads its linked candidate's). Multi-select filters via `parseEnumList` +
+  `parseList` (`src/lib/filters.ts`) on jobs/candidates/submissions/bench.
+- **Candidate-first bench** — adding a bench consultant picks/creates a **Candidate**
+  (source of truth); every bench person is a submittable candidate.
+- **Unified trash/erase ladder (Candidates + Jobs):** Active → Inactive → Trash (30d) →
+  Erased (backup-to-Blob first). `deletedAt`/`erasedAt` on both; queries filter
+  `deletedAt: null`. `candidate-erase.ts` / `job-erase.ts` (+ `build-*-archive.ts`);
+  purge crons. Recycle bin in Settings → "Erased backups".
+- **Résumés + Documents = private Vercel Blob uploads** (Google Drive fully retired). Served
+  via `/api/resumes/[id]` + `/api/documents/[id]` (auth + sensitive-doc gate). `blob-upload.ts`
+  gzips before `put`. Store `store_L1XBCjldTdCtq2Ay`.
+- **Date-hydration fix:** `formatDate` is UTC-deterministic (`Intl.DateTimeFormat`, tz UTC)
+  to kill React #418 in list tables; `formatDateTime`/`formatTime` stay local (wall-clock).
+
+**Feedback round 2 (this deploy — trash/erase UX, VPR consistency, VPR delete):**
+- **VPR consistency:** a VPR under a terminal job is never left OPEN. The runtime cascade
+  (`changeJobStatus`) was already correct; stale rows came from the seed. Seed derives VPR
+  status from the job; `prisma/reconcile-vpr-status.ts` (idempotent) aligns existing rows —
+  RAN on dev + prod. See DEVLOG 2026-07-08.
+- **Erased records keep the real name + show "(deleted)"** (owner decision — lighter erase,
+  not strict RTBF): `hardErase*` no longer scrub the name; `deletedSuffix()` (`lib/format.ts`)
+  applied across submissions/placements/VPR/interviews lists.
+- **Jobs Trash:** `JobTrashList` (per-row Restore + Erase permanently, no status actions) +
+  `countTrashedJobs` badge; erase dialog = shared `JobEraseButton`.
+- **Trash confirms** list linked ACTIVE items (open VPRs / in-flight subs / active placements;
+  active placement blocks) — `job-danger-zone.tsx`, `candidate-danger-zone.tsx`.
+- **Delete a VPR when empty (0 submissions), else Cancel** — `deleteVendorRequirement` logs
+  `REQUIREMENT_DELETED` (migration `20260708190000`) on the parent job.
+- **Round-1 review + P2 fixes:** `listCandidateOptions` filters `deletedAt: null` (was leaking
+  trashed into pickers); submission-form stale-gate suppressed on candidate change
+  (`gateDismissed`); candidate list `whitespace-nowrap` (row-height); upload-saves-to-library copy.
+
+> **Open owner questions (unchanged, still gating rate/scorecard work):** confirm rate chain;
+> retire legacy Candidate rate; "New vendors" company-wide semantics; rate guardrail soft vs
+> hard; cap requirements per job. In the walkthrough DOCX.
+
+## 🚧 (Superseded) Current work — Rate model, clientRate, company-wide scorecard, rate guardrail (2026-06-22, PRs #32–#35, on `main`)
 
 Post-verification baseline: `main` @ `23c4f86`, no open PRs, tsc clean, 113 unit tests.
 Demo reseeded + sent to the stakeholder for verification (creds `sriman@lumintrack.com`
