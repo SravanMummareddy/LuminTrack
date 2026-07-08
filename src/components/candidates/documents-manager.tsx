@@ -209,7 +209,12 @@ export function DocumentsManager({
                                 <span className="text-sm font-semibold text-slate-900">
                                   {d.label}
                                 </span>
-                                <p className="mt-0.5 text-xs text-slate-500">
+                                {/* fmtDate uses the runtime locale — suppress the
+                                    server/client hydration text mismatch. */}
+                                <p
+                                  className="mt-0.5 text-xs text-slate-500"
+                                  suppressHydrationWarning
+                                >
                                   {d.issuedAt
                                     ? `Issued ${fmtDate(d.issuedAt)}`
                                     : "No issue date"}
@@ -225,8 +230,12 @@ export function DocumentsManager({
                               </div>
                               <div className="flex flex-wrap items-center gap-3 text-sm font-medium">
                                 {pill && (
+                                  // Pill text derives from Date.now() (days until
+                                  // expiry), which differs between the server and
+                                  // client render — suppress the mismatch warning.
                                   <span
                                     className={`rounded-full px-2 py-0.5 text-xs ${pill.tone}`}
+                                    suppressHydrationWarning
                                   >
                                     {pill.text}
                                   </span>

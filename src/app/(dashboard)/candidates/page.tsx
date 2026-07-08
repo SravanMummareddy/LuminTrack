@@ -133,6 +133,7 @@ export default async function CandidatesPage({
       current.currentCompany ||
       current.minExperience ||
       current.status ||
+      current.discipline ||
       (current.preset && current.preset !== "all"),
   );
 

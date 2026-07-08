@@ -101,7 +101,11 @@ export function ActivityTimeline({ entries }: { entries: Entry[] }) {
                     {entry.note}
                   </p>
                 )}
-                <p className="mt-0.5 text-xs text-slate-400">
+                {/* Timestamps format in the runtime's local timezone, so the
+                    server (UTC) and browser (viewer's TZ) render different text.
+                    That's expected — suppress the false hydration mismatch and
+                    keep the viewer's local time. */}
+                <p className="mt-0.5 text-xs text-slate-400" suppressHydrationWarning>
                   {entry.performedBy.fullName} ·{" "}
                   {entry.eventAt
                     ? `happened ${formatDateTime(entry.eventAt)} · recorded ${formatDateTime(entry.createdAt)}`
