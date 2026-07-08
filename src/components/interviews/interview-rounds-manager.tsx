@@ -118,7 +118,9 @@ export function InterviewRoundsManager({
                   {interviewModeLabel(r.interviewMode, r.interviewPlatform)}
                 </RoundItem>
                 <RoundItem label="Date & time">
-                  {r.scheduledAt ? formatDateTime(r.scheduledAt) : "—"}
+                  <span suppressHydrationWarning>
+                    {r.scheduledAt ? formatDateTime(r.scheduledAt) : "—"}
+                  </span>
                   {r.scheduledAt && r.scheduledTimezone ? (
                     <span className="ml-1 text-xs text-slate-500">
                       ({r.scheduledTimezone})
@@ -140,8 +142,10 @@ export function InterviewRoundsManager({
                   )}
                 </RoundItem>
                 <RoundItem label="Last updated">
-                  {formatDateTime(r.updatedAt)}
-                  {r.updatedBy ? ` · ${r.updatedBy.fullName}` : ""}
+                  <span suppressHydrationWarning>
+                    {formatDateTime(r.updatedAt)}
+                    {r.updatedBy ? ` · ${r.updatedBy.fullName}` : ""}
+                  </span>
                 </RoundItem>
               </dl>
 

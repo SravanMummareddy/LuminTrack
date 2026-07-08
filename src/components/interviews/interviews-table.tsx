@@ -59,7 +59,9 @@ const COLUMNS: Column[] = [
     defaultVisible: true,
     render: (r) => (
       <Td label="Time" secondary className="whitespace-nowrap">
-        {r.scheduledAt ? formatTime(r.scheduledAt) : "—"}
+        <span suppressHydrationWarning>
+          {r.scheduledAt ? formatTime(r.scheduledAt) : "—"}
+        </span>
       </Td>
     ),
   },

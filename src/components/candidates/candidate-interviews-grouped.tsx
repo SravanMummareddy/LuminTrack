@@ -116,7 +116,9 @@ export function CandidateInterviewsGrouped({
                         {r.interviewerName || "—"}
                       </RoundItem>
                       <RoundItem label="Scheduled">
-                        {r.scheduledAt ? formatDateTime(r.scheduledAt) : "—"}
+                        <span suppressHydrationWarning>
+                          {r.scheduledAt ? formatDateTime(r.scheduledAt) : "—"}
+                        </span>
                       </RoundItem>
                       <RoundItem label="Meeting link">
                         {r.meetingLink ? (
