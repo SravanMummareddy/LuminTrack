@@ -10,6 +10,35 @@ short instead of long.
 
 ---
 
+## 2026-07-08 · Trashed candidates leaking into pickers — a per-query invariant, forgotten once
+
+**Situation.** A full-diff code review of the feedback-round-1 body flagged that
+`listCandidateOptions()` (the lightweight candidate list behind the submission /
+VPR / bench pickers) had **no `where` clause at all** — while every candidate
+*list* view filters `deletedAt: null`.
+
+**Diagnosis.** The trash/erase model hides trashed and erased rows by convention:
+each query adds `deletedAt: null` itself; there is no central enforcement. That
+convention held everywhere except this one picker, so a **trashed — or even
+erased/anonymized ("Erased candidate #N")** — candidate showed up as a selectable
+option, and neither `createSubmission` nor `convertRequirementToSubmission`
+guards `deletedAt` (they only block the `NOT_INTERESTED` / `DO_NOT_CONTACT`
+engagement statuses). Net effect: a deleted person could be submitted, polluting
+scorecards, or re-added to the marketing bench.
+
+**Fix.** One line — `where: { deletedAt: null }` on `listCandidateOptions`,
+matching the invariant. (Same review pass parallelized the archive builder's
+per-file Blob fetches and extracted the duplicated status/discipline coercion
+into `filters.ts` `parseEnumList()`.)
+
+**Lesson.** When a safety property is a *per-query convention* rather than a
+schema/middleware guarantee, "grep for the one place that forgot it" is a
+recurring review job. The durable fix is to lift `deletedAt: null` into a shared
+query layer (a Prisma `$extends` default, opt-out for trash views) so a new query
+can't silently leak trashed rows — logged as a follow-up.
+
+---
+
 ## 2026-07-08 · "Permanent delete" that can't lose data — archive-then-scrub instead of a trash-first guard
 
 **Situation.** Two things collided. (1) `eraseCandidateNow` — the permanent,
