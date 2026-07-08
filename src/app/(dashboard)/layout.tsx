@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/session";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
+import { KeyboardShortcuts } from "@/components/layout/keyboard-shortcuts";
 import { ToastProvider } from "@/components/ui/toast";
 
 export default async function DashboardLayout({
@@ -15,6 +16,7 @@ export default async function DashboardLayout({
   // the login tree stays provider-free.
   return (
     <ToastProvider>
+      <KeyboardShortcuts />
       <div className="flex min-h-screen">
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
