@@ -84,6 +84,20 @@ export function parseList(
 }
 
 /**
+ * Narrows a parsed multi-select list (`parseList` output) to only the values
+ * that belong to a known enum, dropping anything unrecognised. Shared by the
+ * list pages so status/discipline/etc. filters coerce the same way everywhere
+ * (an unknown `?status=GARBAGE` yields `[]` = no filter, not a crash).
+ */
+export function parseEnumList<T extends string>(
+  values: string[] | undefined,
+  allowed: readonly T[],
+): T[] {
+  const set = new Set<string>(allowed);
+  return (values ?? []).filter((v): v is T => set.has(v));
+}
+
+/**
  * Splits the search param into individual terms (comma-separated, e.g.
  * `?q=engineer,cisco`). Each term narrows the results further (AND), so the
  * list queries match rows that contain *every* term across their searched

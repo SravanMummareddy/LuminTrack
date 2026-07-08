@@ -24,6 +24,28 @@ picture see **CLAUDE.md** ("🚧 Current work" sections) and **`docs/DEVLOG.md`*
 - Résumé-preview shows a tall empty box when a Drive link can't embed.
 - Scorecard runs past the right edge at 1440px — wants a horizontal-scroll affordance.
 
+**From the 2026-07-08 prod eyeball** (owner dogfooding `lumin-track.vercel.app`;
+analysis in `~/.claude/plans/i-am-logging-bugs-floofy-hoare.md`):
+- ✅ **FIXED (2026-07-08).** **[P2] Stale gate warning after changing the candidate.**
+  On the VPR→submission **convert** form, changing the Candidate dropdown left the amber
+  gate showing the *previous* candidate's name. `useActionState`'s `state` can't be reset
+  imperatively, so the fix suppresses a gate whose candidate/job context has since changed
+  (`gateDismissed` flag) and clears it on the next action result, plus blanks the override
+  reason fields on anchor change so a "reason to move anyway" never rides into a new
+  context (`submission-form.tsx` — `dismissStaleGate`, `gate = gateDismissed ? undefined :
+  state.needsConfirm`, and the general-error box now also respects it). Covers the
+  duplicate / iLabor / `rate_chain` / `candidate_status` gates. (Edit form has no
+  anchor-change vector — candidate/job are fixed at creation — so it's unaffected.)
+- ✅ **FIXED (2026-07-08).** **[P2] Row height doubles when the "Created" column is shown
+  on `/candidates`.** Added `whitespace-nowrap` to the Name/Email/Phone/Location cells
+  (`candidates-table.tsx`), so extra columns produce horizontal scroll (the `<Table>`
+  already has `overflow-x-auto`) instead of wrapping to two lines. The larger "resizable
+  columns" ask stays in `ENHANCEMENTS.md`.
+- ✅ **ADDRESSED (2026-07-08).** Résumé uploaded via "Upload a new resume" already persists
+  to the candidate's library (`uploadCandidateResume` — verified). Added the missing copy:
+  the inline upload now says "Saved to this candidate's résumé library and selected for
+  this submission."
+
 **Large deferred items** live in [`ENHANCEMENTS.md`](./ENHANCEMENTS.md). **Pending owner
 decisions** (rate model, retire Candidate rate, "New vendors" semantics, guardrail
 strictness, cap requirements per job) are in the walkthrough DOCX.

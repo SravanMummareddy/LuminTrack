@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Pencil, Send, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Pencil, Send, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
 import { ConfirmSubmit } from "@/components/ui/confirm-dialog";
@@ -11,6 +11,7 @@ import {
 import {
   cancelVendorRequirement,
   closeVendorRequirement,
+  deleteVendorRequirement,
 } from "@/server/actions/requirements";
 import { getTimelineFor } from "@/server/queries/timeline";
 import {
@@ -26,6 +27,7 @@ import {
   formatRate,
   formatVendorRequirementDisplayId,
   formatSubmissionDisplayId,
+  deletedSuffix,
 } from "@/lib/format";
 import { getCurrentUser } from "@/lib/session";
 import { canManageRequirements } from "@/lib/permissions";
@@ -169,6 +171,22 @@ export default async function RequirementDetailPage({
               />
             </>
           )}
+          {canManage && submissions.length === 0 && (
+            <ConfirmSubmit
+              action={deleteVendorRequirement}
+              fields={{ id: requirement.id }}
+              title="Delete this requirement?"
+              description="It has no submissions, so it will be permanently removed. This can't be undone. (A requirement with submissions can only be cancelled.)"
+              confirmLabel="Delete requirement"
+              trigger={
+                <span className="inline-flex items-center gap-1.5">
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </span>
+              }
+              triggerClassName={buttonClass("danger", "sm")}
+            />
+          )}
         </div>
       </header>
 
@@ -206,6 +224,7 @@ export default async function RequirementDetailPage({
                     className="font-medium text-indigo-600 hover:underline"
                   >
                     {s.candidate?.fullName ?? "—"}
+                    {s.candidate ? deletedSuffix(s.candidate) : ""}
                   </Link>
                   <span className="ml-2 font-mono text-xs text-slate-400">
                     {formatSubmissionDisplayId(s)}

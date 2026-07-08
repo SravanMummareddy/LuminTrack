@@ -11,7 +11,12 @@ import {
   INTERVIEW_RESULT_LABEL,
   INTERVIEW_RESULT_TONE,
 } from "@/lib/labels";
-import { formatDate, formatTime, formatSubmissionDisplayId } from "@/lib/format";
+import {
+  formatDate,
+  formatTime,
+  formatSubmissionDisplayId,
+  deletedSuffix,
+} from "@/lib/format";
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
 import type { InterviewListRow } from "@/server/queries/interviews";
 
@@ -79,6 +84,7 @@ const COLUMNS: Column[] = [
             className={`${cardLink} font-medium text-indigo-600 hover:underline`}
           >
             {c.fullName}
+            {deletedSuffix(c)}
           </Link>
         </Td>
       );

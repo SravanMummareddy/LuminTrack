@@ -271,6 +271,9 @@ export function getCandidateForEdit(id: string) {
  *  new submission (existing submissions keep their link via the edit form). */
 export function listCandidateOptions() {
   return prisma.candidate.findMany({
+    // Never offer trashed/erased candidates in a picker (submission, VPR,
+    // bench) — mirrors the `deletedAt: null` invariant every list view uses.
+    where: { deletedAt: null },
     orderBy: { fullName: "asc" },
     select: {
       id: true,

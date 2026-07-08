@@ -8,8 +8,10 @@ import { JOB_TRASH_RETENTION_DAYS } from "@/server/job-erase";
 import { Pagination } from "@/components/ui/pagination";
 import { JobFilters } from "@/components/jobs/job-filters";
 import { JobsTable } from "@/components/jobs/jobs-table";
+import { JobTrashList } from "@/components/jobs/job-trash-list";
 import {
   listJobs,
+  countTrashedJobs,
   getLastIlaborImport,
   JOB_SORT_KEYS,
   JOB_DEFAULT_SORT,
@@ -24,9 +26,15 @@ import {
   listSisterCompanies,
   listUsers,
 } from "@/server/queries/org";
-import { parseDateRange, parseSort, parsePage, parseList, PAGE_SIZE } from "@/lib/filters";
-import { JOB_STATUSES } from "@/lib/labels";
-import type { JobStatus, Discipline } from "@/generated/prisma/enums";
+import {
+  parseDateRange,
+  parseSort,
+  parsePage,
+  parseList,
+  parseEnumList,
+  PAGE_SIZE,
+} from "@/lib/filters";
+import { JOB_STATUSES, DISCIPLINES } from "@/lib/labels";
 
 function clean(value: string | string[] | undefined): string | undefined {
   const single = Array.isArray(value) ? value[0] : value;
@@ -34,20 +42,8 @@ function clean(value: string | string[] | undefined): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
-function asJobStatusList(values: string[] | undefined): JobStatus[] {
-  return (values ?? []).filter((v) =>
-    (JOB_STATUSES as string[]).includes(v),
-  ) as JobStatus[];
-}
-
 function asJobSource(value: string | undefined): JobSource | undefined {
   return value === "manual" || value === "randstad" ? value : undefined;
-}
-
-function asDisciplineList(values: string[] | undefined): Discipline[] {
-  return (values ?? []).filter(
-    (v) => v === "IT" || v === "NON_IT",
-  ) as Discipline[];
 }
 
 export default async function JobsPage({
@@ -90,8 +86,8 @@ export default async function JobsPage({
     vendorId: current.vendorId,
     sisterCompanySourceId: current.sisterCompanySourceId,
     recruiterId: current.recruiterId,
-    status: asJobStatusList(current.status),
-    discipline: asDisciplineList(current.discipline),
+    status: parseEnumList(current.status, JOB_STATUSES),
+    discipline: parseEnumList(current.discipline, DISCIPLINES),
     location: current.location,
     source: activeSource,
     createdRange: parseDateRange({
@@ -111,6 +107,7 @@ export default async function JobsPage({
     sources,
     recruiters,
     lastImport,
+    trashCount,
   ] = await Promise.all([
     listJobs(filters),
     listClients(),
@@ -120,6 +117,7 @@ export default async function JobsPage({
     // Only fetched (used) on the Randstad tab as admin, but cheap enough to
     // always run in parallel — it's a single indexed findFirst.
     getLastIlaborImport(),
+    isAdmin ? countTrashedJobs() : Promise.resolve(0),
   ]);
 
   const showLastImportBanner =
@@ -189,7 +187,7 @@ export default async function JobsPage({
             </LinkButton>
             <LinkButton href="/jobs?trash=1" variant="secondary">
               <Trash2 className="h-4 w-4" />
-              Trash
+              Trash{trashCount > 0 ? ` (${trashCount})` : ""}
             </LinkButton>
           </>
         ) : null}
@@ -252,6 +250,11 @@ export default async function JobsPage({
                 ? "No jobs match these filters."
                 : "No jobs yet. Add your first job to get started."}
           </p>
+        </div>
+      ) : isTrashView ? (
+        <div className="space-y-3">
+          <JobTrashList rows={jobs} retentionDays={JOB_TRASH_RETENTION_DAYS} />
+          <Pagination page={page} totalPages={totalPages} total={total} />
         </div>
       ) : (
         <div className="space-y-3">

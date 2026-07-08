@@ -25,7 +25,10 @@ import { CandidateDangerZone } from "@/components/candidates/candidate-danger-zo
 import { CandidateTrashBanner } from "@/components/candidates/candidate-trash-banner";
 import { setCandidateArchived } from "@/server/actions/candidates";
 import { CANDIDATE_TRASH_RETENTION_DAYS } from "@/server/candidate-erase";
-import { getCandidateSubmissions } from "@/server/queries/submissions";
+import {
+  getCandidateSubmissions,
+  countActiveSubmissionsForCandidate,
+} from "@/server/queries/submissions";
 import {
   getActivePlacementForCandidate,
   getCandidatePlacements,
@@ -128,6 +131,7 @@ export default async function CandidateDetailPage({
       total: placementsTotal,
       page: placementsPageNum,
     },
+    inFlightSubmissionCount,
   ] = await Promise.all([
     getCandidateDetail(id),
     getCandidateSubmissions(id, { page: subsPage }),
@@ -137,6 +141,7 @@ export default async function CandidateDetailPage({
     getCandidateDocuments(id, user),
     getActivePlacementForCandidate(id),
     getCandidatePlacements(id, { page: placementsPage }),
+    countActiveSubmissionsForCandidate(id),
   ]);
   if (!candidate) notFound();
   const isAdmin = hasFullAccess(user);
@@ -572,6 +577,8 @@ export default async function CandidateDetailPage({
           candidateName={candidate.fullName}
           retentionDays={CANDIDATE_TRASH_RETENTION_DAYS}
           isActive={candidate.isActive}
+          hasActivePlacement={Boolean(activePlacement)}
+          inFlightCount={inFlightSubmissionCount}
         />
       )}
     </div>

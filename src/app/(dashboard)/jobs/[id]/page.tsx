@@ -40,6 +40,7 @@ import {
   formatJobDisplayId,
   formatSubmissionDisplayId,
   formatVendorRequirementDisplayId,
+  deletedSuffix,
 } from "@/lib/format";
 import { ilaborStatusToJobStatus } from "@/lib/validation/ilabor-import";
 import { RecentlyViewedTracker } from "@/components/layout/recently-viewed";
@@ -538,6 +539,7 @@ export default async function JobDetailPage({
                       className="font-medium text-indigo-600 hover:underline"
                     >
                       {s.candidate.fullName}
+                      {deletedSuffix(s.candidate)}
                     </Link>
                   </Td>
                   <Td label="Submitted by">{s.submittedBy.fullName}</Td>
@@ -594,6 +596,9 @@ export default async function JobDetailPage({
           jobTitle={job.title}
           retentionDays={JOB_TRASH_RETENTION_DAYS}
           status={job.status}
+          openVprCount={openRequirements.length}
+          inFlightCount={localActiveCount}
+          activePlacementCount={activePlacementCount}
         />
       )}
     </div>

@@ -105,20 +105,31 @@ export async function buildCandidateArchive(
   }));
   zip.file("submissions.json", JSON.stringify(submissions, null, 2));
 
+  // Fetch every file's bytes in parallel — a candidate can have several
+  // résumés + documents and each is an independent Blob round-trip.
   const docFolder = zip.folder("documents");
-  for (const d of c.documents) {
-    if (!d.blobPathname) continue;
-    const buf = await fetchOriginal(d.blobPathname);
-    if (buf)
-      docFolder?.file(`${safeName(`${d.category}-${d.label}`)}${extFor(d.contentType)}`, buf);
-  }
+  await Promise.all(
+    c.documents
+      .filter((d) => d.blobPathname)
+      .map(async (d) => {
+        const buf = await fetchOriginal(d.blobPathname!);
+        if (buf)
+          docFolder?.file(
+            `${safeName(`${d.category}-${d.label}`)}${extFor(d.contentType)}`,
+            buf,
+          );
+      }),
+  );
 
   const resFolder = zip.folder("resumes");
-  for (const r of c.resumes) {
-    if (!r.blobPathname) continue;
-    const buf = await fetchOriginal(r.blobPathname);
-    if (buf) resFolder?.file(`${safeName(r.label)}${extFor(r.contentType)}`, buf);
-  }
+  await Promise.all(
+    c.resumes
+      .filter((r) => r.blobPathname)
+      .map(async (r) => {
+        const buf = await fetchOriginal(r.blobPathname!);
+        if (buf) resFolder?.file(`${safeName(r.label)}${extFor(r.contentType)}`, buf);
+      }),
+  );
 
   const zipBuf = await zip.generateAsync({ type: "nodebuffer" });
   return { zip: zipBuf, candidateName: c.fullName, displayId };

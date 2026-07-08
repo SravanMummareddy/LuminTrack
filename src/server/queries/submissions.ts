@@ -67,11 +67,15 @@ export const SUBMISSION_DEFAULT_SORT: SortState = {
 };
 
 const SUBMISSION_INCLUDE = {
-  candidate: { select: { id: true, fullName: true } },
+  candidate: {
+    select: { id: true, fullName: true, deletedAt: true, erasedAt: true },
+  },
   job: {
     select: {
       id: true,
       title: true,
+      deletedAt: true,
+      erasedAt: true,
       client: { select: { name: true } },
       vendor: { select: { name: true } },
     },
@@ -311,7 +315,9 @@ export async function getJobSubmissions(
     skip: (page - 1) * SUB_PAGE_SIZE,
     take: SUB_PAGE_SIZE,
     include: {
-      candidate: { select: { id: true, fullName: true } },
+      candidate: {
+        select: { id: true, fullName: true, deletedAt: true, erasedAt: true },
+      },
       submittedBy: { select: { fullName: true } },
       candidateResume: { select: { label: true } },
       _count: { select: { interviewRounds: true } },
@@ -319,6 +325,28 @@ export async function getJobSubmissions(
   });
 
   return { rows, total, page };
+}
+
+/** Non-terminal submission statuses — a candidate/job still "in the pipeline". */
+const IN_FLIGHT_SUBMISSION_STATUSES: SubmissionStatus[] = [
+  "SUBMITTED",
+  "RESUME_PICKED",
+  "VENDOR_SCREENING_CALL",
+  "CLIENT_INTERVIEW",
+  "SELECTED",
+  "ON_HOLD",
+  "OFFER_RELEASED",
+  "OFFER_ACCEPTED",
+];
+
+/** Count of a candidate's in-flight (non-terminal) submissions — drives the
+ *  "still linked" summary on the trash confirm. */
+export function countActiveSubmissionsForCandidate(
+  candidateId: string,
+): Promise<number> {
+  return prisma.submission.count({
+    where: { candidateId, status: { in: IN_FLIGHT_SUBMISSION_STATUSES } },
+  });
 }
 
 export type JobSubmissionRow = Awaited<

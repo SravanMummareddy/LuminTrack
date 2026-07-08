@@ -21,9 +21,10 @@ import {
   parseSort,
   parsePage,
   parseList,
+  parseEnumList,
   PAGE_SIZE,
 } from "@/lib/filters";
-import type { Discipline } from "@/generated/prisma/enums";
+import { DISCIPLINES } from "@/lib/labels";
 
 function clean(value: string | string[] | undefined): string | undefined {
   const single = Array.isArray(value) ? value[0] : value;
@@ -77,9 +78,7 @@ export default async function CandidatesPage({
         : current.status === "inactive"
           ? false
           : undefined,
-    discipline: (current.discipline ?? []).filter(
-      (d): d is Discipline => d === "IT" || d === "NON_IT",
-    ),
+    discipline: parseEnumList(current.discipline, DISCIPLINES),
     createdRange: parseDateRange({
       preset: current.preset,
       from: current.from,

@@ -18,22 +18,20 @@ import {
   listSisterCompanies,
   listUsers,
 } from "@/server/queries/org";
-import { parseDateRange, parseSort, parsePage, parseList, PAGE_SIZE } from "@/lib/filters";
+import {
+  parseDateRange,
+  parseSort,
+  parsePage,
+  parseList,
+  parseEnumList,
+  PAGE_SIZE,
+} from "@/lib/filters";
 import { SUBMISSION_STATUSES } from "@/lib/labels";
-import type { SubmissionStatus } from "@/generated/prisma/enums";
 
 function clean(value: string | string[] | undefined): string | undefined {
   const single = Array.isArray(value) ? value[0] : value;
   const trimmed = single?.trim();
   return trimmed ? trimmed : undefined;
-}
-
-function asSubmissionStatusList(
-  values: string[] | undefined,
-): SubmissionStatus[] {
-  return (values ?? []).filter((v) =>
-    (SUBMISSION_STATUSES as string[]).includes(v),
-  ) as SubmissionStatus[];
 }
 
 export default async function SubmissionsPage({
@@ -66,7 +64,7 @@ export default async function SubmissionsPage({
 
   const filters: SubmissionListFilters = {
     q: current.q,
-    status: asSubmissionStatusList(current.status),
+    status: parseEnumList(current.status, SUBMISSION_STATUSES),
     recruiterId: current.recruiterId,
     clientId: current.clientId,
     vendorId: current.vendorId,

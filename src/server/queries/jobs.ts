@@ -58,6 +58,13 @@ const JOB_SORTS: Record<
 export const JOB_SORT_KEYS = Object.keys(JOB_SORTS);
 export const JOB_DEFAULT_SORT: SortState = { key: "created", dir: "desc" };
 
+/** Count of jobs in trash (trashed, not yet erased) — drives the Trash badge. */
+export function countTrashedJobs(): Promise<number> {
+  return prisma.job.count({
+    where: { deletedAt: { not: null }, erasedAt: null },
+  });
+}
+
 export async function listJobs(filters: JobListFilters) {
   // Trash view shows trashed-not-erased jobs; the normal list hides anything
   // with a deletedAt (trashed jobs AND erased tombstones keep it set).

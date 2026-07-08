@@ -166,13 +166,22 @@ export async function listInterviews(filters: InterviewListFilters) {
           id: true,
           seq: true,
           candidate: {
-            select: { id: true, fullName: true, skills: true, featuredSkills: true },
+            select: {
+              id: true,
+              fullName: true,
+              skills: true,
+              featuredSkills: true,
+              deletedAt: true,
+              erasedAt: true,
+            },
           },
           job: {
             select: {
               id: true,
               title: true,
               location: true,
+              deletedAt: true,
+              erasedAt: true,
               client: { select: { name: true } },
               vendor: { select: { name: true } },
             },

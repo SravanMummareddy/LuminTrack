@@ -20,11 +20,20 @@ export function JobDangerZone({
   jobTitle,
   retentionDays,
   status,
+  openVprCount = 0,
+  inFlightCount = 0,
+  activePlacementCount = 0,
 }: {
   jobId: string;
   jobTitle: string;
   retentionDays: number;
   status: JobStatus;
+  /** Open VPRs — auto-cancelled on trash. */
+  openVprCount?: number;
+  /** Non-terminal submissions — kept, but flagged so the admin knows. */
+  inFlightCount?: number;
+  /** Active/extended placements — these BLOCK the trash server-side. */
+  activePlacementCount?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [state, formAction, pending] = useActionState(
@@ -33,6 +42,8 @@ export function JobDangerZone({
   );
   const archiveHref = `/api/jobs/${jobId}/archive`;
   const retired = isTerminalJobStatus(status);
+  const blockedByPlacement = activePlacementCount > 0;
+  const hasLinks = openVprCount > 0 || inFlightCount > 0;
 
   return (
     <section className="overflow-hidden rounded-lg border border-red-200">
@@ -96,6 +107,42 @@ export function JobDangerZone({
             cancelled; submissions are kept.
           </p>
 
+          {blockedByPlacement ? (
+            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              This job has{" "}
+              <strong>
+                {activePlacementCount} active placement
+                {activePlacementCount === 1 ? "" : "s"}
+              </strong>{" "}
+              — end{activePlacementCount === 1 ? " it" : " them"} before moving
+              the job to trash.
+            </p>
+          ) : hasLinks ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Still linked to this job:
+              <ul className="mt-1 list-disc pl-5">
+                {openVprCount > 0 && (
+                  <li>
+                    <strong>
+                      {openVprCount} open requirement
+                      {openVprCount === 1 ? "" : "s"}
+                    </strong>{" "}
+                    — will be cancelled
+                  </li>
+                )}
+                {inFlightCount > 0 && (
+                  <li>
+                    <strong>
+                      {inFlightCount} candidate{inFlightCount === 1 ? "" : "s"} in
+                      the pipeline
+                    </strong>{" "}
+                    — kept (their submissions stay)
+                  </li>
+                )}
+              </ul>
+            </div>
+          ) : null}
+
           <a
             href={archiveHref}
             className="flex items-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 hover:bg-amber-100"
@@ -118,7 +165,11 @@ export function JobDangerZone({
             >
               Cancel
             </Button>
-            <Button type="submit" variant="danger" disabled={pending}>
+            <Button
+              type="submit"
+              variant="danger"
+              disabled={pending || blockedByPlacement}
+            >
               {pending
                 ? "Moving to trash…"
                 : retired
