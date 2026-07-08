@@ -131,6 +131,7 @@ enum EntityType {
 enum ActivityAction {
   JOB_CREATED
   JOB_UPDATED
+  JOB_ERASED
   RECRUITER_ASSIGNED
   RECRUITER_UNASSIGNED
   CANDIDATE_CREATED
@@ -348,6 +349,12 @@ model Job {
   status        JobStatus @default(OPEN)
   description   String?
   notes         String?
+  // Lifecycle trash/erase (mirrors Candidate): deletedAt = in trash (hidden,
+  // restorable, auto-erases after the retention window); erasedAt = permanently
+  // erased tombstone (kept so submissions/analytics survive — an empty job is
+  // hard-removed instead of tombstoned). A backup zip is written to Blob first.
+  deletedAt     DateTime?
+  erasedAt      DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -405,6 +412,7 @@ model Job {
 
   @@unique([portalId, portalRefId])
   @@index([status])
+  @@index([deletedAt])
   @@index([clientId])
   @@index([vendorId])
   @@index([sisterCompanySourceId])

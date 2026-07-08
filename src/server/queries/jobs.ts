@@ -24,6 +24,9 @@ export type JobListFilters = {
   createdRange?: DateRange;
   sort?: SortState;
   page?: number;
+  /** Trash view: show only trashed-not-yet-erased jobs (admin). Default false =
+   *  live jobs only (trashed + erased tombstones hidden). */
+  trash?: boolean;
 };
 
 export const RANDSTAD_PORTAL_NAME = "Randstad iLabor";
@@ -54,7 +57,11 @@ export const JOB_SORT_KEYS = Object.keys(JOB_SORTS);
 export const JOB_DEFAULT_SORT: SortState = { key: "created", dir: "desc" };
 
 export async function listJobs(filters: JobListFilters) {
-  const where: Prisma.JobWhereInput = {};
+  // Trash view shows trashed-not-erased jobs; the normal list hides anything
+  // with a deletedAt (trashed jobs AND erased tombstones keep it set).
+  const where: Prisma.JobWhereInput = filters.trash
+    ? { deletedAt: { not: null }, erasedAt: null }
+    : { deletedAt: null };
 
   const terms = searchTerms(filters.q);
   if (terms.length)
@@ -214,6 +221,7 @@ export async function listStaleIlaborJobs(opts: { limit?: number } = {}) {
       portalId: { not: null },
       status: { in: ["OPEN", "ON_HOLD"] },
       lastImportedAt: { lt: cutoff },
+      deletedAt: null,
     },
     orderBy: { lastImportedAt: "asc" },
     take: limit,
@@ -256,7 +264,7 @@ export function getJobDetail(id: string) {
  */
 export async function listJobOptions() {
   const rows = await prisma.job.findMany({
-    where: { status: { in: ["OPEN", "ON_HOLD"] } },
+    where: { status: { in: ["OPEN", "ON_HOLD"] }, deletedAt: null },
     orderBy: { title: "asc" },
     select: {
       id: true,

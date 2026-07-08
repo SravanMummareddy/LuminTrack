@@ -5,21 +5,24 @@ import { RotateCcw, Download, Trash2, AlertTriangle } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
-import {
-  restoreCandidateFromTrash,
-  eraseCandidateNow,
-} from "@/server/actions/candidates";
+import { restoreJobFromTrash, eraseJobNow } from "@/server/actions/jobs";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
 
-export function CandidateTrashBanner({
-  candidateId,
-  candidateName,
+/**
+ * Banner shown on a trashed job's detail page. Restore (keeps its status) or —
+ * the only place erase lives — Erase permanently (type the title to confirm),
+ * which backs up to Blob then removes an empty job or tombstones one with
+ * submission history. Mirrors CandidateTrashBanner.
+ */
+export function JobTrashBanner({
+  jobId,
+  jobTitle,
   deletedAt,
   retentionDays,
   canManage,
 }: {
-  candidateId: string;
-  candidateName: string;
+  jobId: string;
+  jobTitle: string;
   deletedAt: string;
   retentionDays: number;
   canManage: boolean;
@@ -30,15 +33,15 @@ export function CandidateTrashBanner({
     month: "short",
     day: "numeric",
   });
-  const archiveHref = `/api/candidates/${candidateId}/archive`;
+  const archiveHref = `/api/jobs/${jobId}/archive`;
 
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");
   const [state, eraseAction, erasing] = useActionState(
-    eraseCandidateNow,
+    eraseJobNow,
     EMPTY_FORM_STATE,
   );
-  const nameMatches = typed.trim() === candidateName;
+  const titleMatches = typed.trim() === jobTitle;
 
   return (
     <section className="rounded-lg border border-amber-300 bg-amber-50 p-4">
@@ -53,8 +56,8 @@ export function CandidateTrashBanner({
               In trash — scheduled for permanent erasure
             </p>
             <p className="text-xs text-amber-800">
-              Personal data and files will be shredded on {purgeLabel}. Restore
-              to keep them.
+              This job auto-erases on {purgeLabel}. Restore it to keep it (comes
+              back at its current status).
             </p>
           </div>
         </div>
@@ -64,8 +67,8 @@ export function CandidateTrashBanner({
               <Download className="h-4 w-4" aria-hidden />
               Download archive
             </a>
-            <form action={restoreCandidateFromTrash}>
-              <input type="hidden" name="id" value={candidateId} />
+            <form action={restoreJobFromTrash}>
+              <input type="hidden" name="id" value={jobId} />
               <button type="submit" className={buttonClass("primary")}>
                 <RotateCcw className="h-4 w-4" aria-hidden />
                 Restore
@@ -82,13 +85,15 @@ export function CandidateTrashBanner({
       <Dialog
         open={open}
         onClose={() => setOpen(false)}
-        title={`Erase ${candidateName} permanently?`}
+        title={`Erase "${jobTitle}" permanently?`}
       >
         <form action={eraseAction} className="space-y-4">
-          <input type="hidden" name="id" value={candidateId} />
+          <input type="hidden" name="id" value={jobId} />
           <p className="text-sm text-slate-600">
-            This skips the {retentionDays}-day window and erases the person now —
-            personal data blanked, files shredded. It can&apos;t be undone.
+            A backup is saved to Settings → Erased backups first. An empty job is
+            removed entirely; a job with submissions becomes an anonymized
+            &ldquo;Removed requisition&rdquo; so its history stays intact. This
+            can&apos;t be undone.
           </p>
           <a
             href={archiveHref}
@@ -98,24 +103,24 @@ export function CandidateTrashBanner({
             Download the archive first — this is your last chance.
           </a>
           <div>
-            <label htmlFor="confirmName" className="text-xs text-slate-600">
+            <label htmlFor="confirmTitle" className="text-xs text-slate-600">
               Type{" "}
               <span className="font-mono font-medium text-slate-900">
-                {candidateName}
+                {jobTitle}
               </span>{" "}
               to confirm
             </label>
             <Input
-              id="confirmName"
-              name="confirmName"
+              id="confirmTitle"
+              name="confirmTitle"
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
               autoComplete="off"
               className="mt-1"
             />
-            {state.fieldErrors?.confirmName && (
+            {state.fieldErrors?.confirmTitle && (
               <p className="mt-1 text-xs text-red-600">
-                {state.fieldErrors.confirmName}
+                {state.fieldErrors.confirmTitle}
               </p>
             )}
           </div>
@@ -135,7 +140,7 @@ export function CandidateTrashBanner({
             <Button
               type="submit"
               variant="danger"
-              disabled={erasing || !nameMatches}
+              disabled={erasing || !titleMatches}
             >
               {erasing ? "Erasing…" : "Erase permanently"}
             </Button>

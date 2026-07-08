@@ -100,12 +100,12 @@ export function InterviewRoundsManager({
                   <ConfirmSubmit
                     action={deleteInterviewRound}
                     fields={{ id: r.id }}
-                    title="Delete interview round?"
-                    description={`Round ${r.roundOrder} · "${r.roundName}" will be deleted. This can't be undone.`}
-                    confirmLabel="Delete round"
+                    title="Remove interview round?"
+                    description={`Round ${r.roundOrder} · "${r.roundName}" will be removed. This can't be undone.`}
+                    confirmLabel="Remove round"
                     trigger={<Trash2 className="h-4 w-4" aria-hidden />}
                     triggerClassName="text-slate-400 hover:text-red-600"
-                    triggerTitle="Delete round"
+                    triggerTitle="Remove round"
                   />
                 </div>
               </div>

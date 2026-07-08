@@ -176,14 +176,20 @@ export default async function CandidateDetailPage({
             <h1 className="text-xl font-semibold text-slate-900">
               {candidate.fullName}
             </h1>
-            {isErased && <Badge tone="red">Erased</Badge>}
-            {isTrashed && <Badge tone="amber">In trash</Badge>}
-            <Badge tone={candidate.isActive ? "green" : "slate"}>
-              {candidate.isActive ? "Active" : "Inactive"}
-            </Badge>
-            <Badge tone={CANDIDATE_STATUS_TONE[candidate.status]}>
-              {CANDIDATE_STATUS_LABEL[candidate.status]}
-            </Badge>
+            {/* One clear lifecycle badge: the trash/inactive state wins when the
+                candidate isn't Live; only a Live candidate shows the engagement
+                status pill (Active + Available would otherwise read as redundant). */}
+            {isErased ? (
+              <Badge tone="red">Erased</Badge>
+            ) : isTrashed ? (
+              <Badge tone="amber">In trash</Badge>
+            ) : !candidate.isActive ? (
+              <Badge tone="slate">Inactive</Badge>
+            ) : (
+              <Badge tone={CANDIDATE_STATUS_TONE[candidate.status]}>
+                {CANDIDATE_STATUS_LABEL[candidate.status]}
+              </Badge>
+            )}
           </div>
           <p className="mt-1 text-sm text-slate-500">
             <span className="font-mono text-xs text-slate-400">
@@ -217,12 +223,12 @@ export default async function CandidateDetailPage({
                 {candidate.isActive ? (
                   <>
                     <Archive className="h-4 w-4" />
-                    Archive
+                    Deactivate
                   </>
                 ) : (
                   <>
                     <ArchiveRestore className="h-4 w-4" />
-                    Restore
+                    Reactivate
                   </>
                 )}
               </button>
@@ -561,6 +567,7 @@ export default async function CandidateDetailPage({
           candidateId={candidate.id}
           candidateName={candidate.fullName}
           retentionDays={CANDIDATE_TRASH_RETENTION_DAYS}
+          isActive={candidate.isActive}
         />
       )}
     </div>

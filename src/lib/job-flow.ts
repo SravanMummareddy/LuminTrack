@@ -49,6 +49,20 @@ const CANCEL: JobStatusAction = {
   confirm: true,
 };
 
+/**
+ * "Retired" job statuses — the only states a job may be moved to trash from
+ * (the lifecycle ladder: Open/On-hold → Close/Cancel/Fill → Trash → Erase).
+ */
+export const TERMINAL_JOB_STATUSES: JobStatus[] = [
+  "CLOSED",
+  "FILLED",
+  "CANCELLED",
+];
+
+export function isTerminalJobStatus(status: JobStatus): boolean {
+  return TERMINAL_JOB_STATUSES.includes(status);
+}
+
 export function jobStatusActions(status: JobStatus): JobStatusAction[] {
   switch (status) {
     case "OPEN":

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { del } from "@vercel/blob";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/lib/session";
 import { hasFullAccess } from "@/lib/permissions";
@@ -9,6 +10,7 @@ import { logActivity } from "@/server/activity";
 import {
   hardEraseCandidate,
   CANDIDATE_TRASH_RETENTION_DAYS,
+  CANDIDATE_ARCHIVE_PREFIX,
 } from "@/server/candidate-erase";
 import { ensureBenchForCandidate } from "@/server/bench-lifecycle";
 import { candidateSchema, type CandidateInput } from "@/lib/validation/candidate";
@@ -295,12 +297,12 @@ export async function trashCandidate(
 ): Promise<FormState> {
   const user = await requireUser();
   if (!hasFullAccess(user))
-    return { error: "Only managers and team leads can delete a candidate." };
+    return { error: "Only managers and team leads can trash a candidate." };
 
   const candidateId = String(formData.get("id") ?? "").trim();
   const candidate = await prisma.candidate.findUnique({
     where: { id: candidateId },
-    select: { deletedAt: true, erasedAt: true },
+    select: { deletedAt: true, erasedAt: true, isActive: true },
   });
   if (!candidate) return { error: "Candidate not found." };
   if (candidate.erasedAt)
@@ -308,6 +310,20 @@ export async function trashCandidate(
   if (candidate.deletedAt)
     return { error: "This candidate is already in trash." };
 
+  // Never trash someone who's actively placed — that would leave an active
+  // placement pointing at a hidden candidate. End the placement first.
+  const activePlacements = await prisma.placement.count({
+    where: { candidateId, status: { in: ["ACTIVE", "EXTENDED"] } },
+  });
+  if (activePlacements > 0)
+    return {
+      error: "This candidate has an active placement — end the placement first.",
+    };
+
+  // The ladder is Active → Inactive → Trash. If the candidate is still Active,
+  // trashing deactivates it in the same step (the UI confirms this) — so the
+  // move is never a dead end, it just passes through Inactive on its way down.
+  const wasActive = candidate.isActive;
   const purgeOn = new Date(
     Date.now() + CANDIDATE_TRASH_RETENTION_DAYS * 86_400_000,
   );
@@ -316,10 +332,16 @@ export async function trashCandidate(
       where: { id: candidateId },
       data: { deletedAt: new Date(), isActive: false },
     });
+    // Take the candidate off the marketing bench when trashed (a trashed
+    // candidate must never still show as actively marketed).
+    await tx.benchConsultant.updateMany({
+      where: { candidateId, marketingStatus: { in: ["ACTIVE", "PAUSED"] } },
+      data: { marketingStatus: "INACTIVE" },
+    });
     await logActivity(tx, {
       entityType: "CANDIDATE",
       action: "CANDIDATE_UPDATED",
-      description: `Moved to trash — auto-erases ${purgeOn.toISOString().slice(0, 10)}`,
+      description: `${wasActive ? "Deactivated + moved" : "Moved"} to trash — auto-erases ${purgeOn.toISOString().slice(0, 10)}`,
       performedById: user.id,
       candidateId,
     });
@@ -329,7 +351,9 @@ export async function trashCandidate(
   redirect(`/candidates/${candidateId}`);
 }
 
-/** Restore a trashed candidate before the retention window lapses. */
+/** Restore a trashed candidate before the retention window lapses. Comes back
+ *  as **Inactive** (not straight to Active) so the lifecycle ladder holds — the
+ *  user explicitly Reactivates when ready. */
 export async function restoreCandidateFromTrash(
   formData: FormData,
 ): Promise<void> {
@@ -340,12 +364,12 @@ export async function restoreCandidateFromTrash(
   await prisma.$transaction(async (tx) => {
     await tx.candidate.update({
       where: { id: candidateId },
-      data: { deletedAt: null, isActive: true },
+      data: { deletedAt: null, isActive: false },
     });
     await logActivity(tx, {
       entityType: "CANDIDATE",
       action: "CANDIDATE_UPDATED",
-      description: "Restored from trash",
+      description: "Restored from trash (Inactive)",
       performedById: user.id,
       candidateId,
     });
@@ -355,9 +379,12 @@ export async function restoreCandidateFromTrash(
 }
 
 /**
- * Skip the retention window and permanently erase a trashed candidate now.
- * Admin/manager only, gated behind typing the candidate's exact name.
- * Irreversible — delegates to the shared hardEraseCandidate helper.
+ * Permanently erase a candidate now — works on a live or trashed candidate
+ * (skips any retention window). Admin/manager only, gated behind typing the
+ * candidate's exact name. `hardEraseCandidate` writes a recoverable archive to
+ * private Blob BEFORE scrubbing, so this is "delete, but backed up" rather than
+ * an unrecoverable hard-delete. Admins can restore or purge the backup from
+ * Settings → Deleted candidates.
  */
 export async function eraseCandidateNow(
   _prev: FormState,
@@ -449,19 +476,55 @@ export async function bulkTagCandidates(formData: FormData): Promise<void> {
   revalidatePath("/candidates");
 }
 
-/** Bulk move the selected candidates to trash (reversible). Admin/manager only. */
-export async function bulkTrashCandidates(formData: FormData): Promise<void> {
+/**
+ * Bulk move the selected candidates to trash (reversible). Admin/manager only.
+ * Still-active rows are deactivated in the same step (the Active→Inactive→Trash
+ * ladder). Mirrors the single-trash guard: anyone with an ACTIVE/EXTENDED
+ * placement is skipped (never hide a candidate who's actively placed).
+ * Returns { moved, skipped } so the caller can report the outcome.
+ */
+export async function bulkTrashCandidates(
+  formData: FormData,
+): Promise<{ moved: number; skipped: number }> {
   const user = await requireUser();
-  if (!hasFullAccess(user)) return;
+  if (!hasFullAccess(user)) return { moved: 0, skipped: 0 };
   const ids = bulkIds(formData);
-  if (!ids.length) return;
+  if (!ids.length) return { moved: 0, skipped: 0 };
+
+  // Eligible = not already trashed/erased AND no active placement.
+  const placedIds = new Set(
+    (
+      await prisma.placement.findMany({
+        where: { candidateId: { in: ids }, status: { in: ["ACTIVE", "EXTENDED"] } },
+        select: { candidateId: true },
+      })
+    ).map((p) => p.candidateId),
+  );
+  const eligible = await prisma.candidate.findMany({
+    where: { id: { in: ids }, deletedAt: null, erasedAt: null },
+    select: { id: true },
+  });
+  const eligibleIds = eligible
+    .map((c) => c.id)
+    .filter((id) => !placedIds.has(id));
+  const skipped = ids.length - eligibleIds.length;
+  if (!eligibleIds.length) return { moved: 0, skipped };
+
   const now = new Date();
   await prisma.$transaction(async (tx) => {
     await tx.candidate.updateMany({
-      where: { id: { in: ids }, deletedAt: null, erasedAt: null },
+      where: { id: { in: eligibleIds } },
       data: { deletedAt: now, isActive: false },
     });
-    for (const id of ids) {
+    // Take trashed candidates off the marketing bench (mirror single trash).
+    await tx.benchConsultant.updateMany({
+      where: {
+        candidateId: { in: eligibleIds },
+        marketingStatus: { in: ["ACTIVE", "PAUSED"] },
+      },
+      data: { marketingStatus: "INACTIVE" },
+    });
+    for (const id of eligibleIds) {
       await logActivity(tx, {
         entityType: "CANDIDATE",
         action: "CANDIDATE_UPDATED",
@@ -472,4 +535,30 @@ export async function bulkTrashCandidates(formData: FormData): Promise<void> {
     }
   });
   revalidatePath("/candidates");
+  return { moved: eligibleIds.length, skipped };
+}
+
+/**
+ * "Remove for good" — permanently delete a stored personal-delete backup from
+ * Blob. After this the candidate's archived data is unrecoverable. Admin/manager
+ * only; confined to the archive prefix so it can't be pointed at other blobs.
+ */
+export async function removeCandidateArchive(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  if (!hasFullAccess(user)) return;
+
+  const pathname = String(formData.get("pathname") ?? "").trim();
+  const url = String(formData.get("url") ?? "").trim();
+  if (!pathname.startsWith(CANDIDATE_ARCHIVE_PREFIX)) return;
+
+  await del(url || pathname);
+  await logActivity(prisma, {
+    entityType: "CANDIDATE",
+    action: "CANDIDATE_ERASED",
+    description: `Removed personal-data backup ${pathname
+      .split("/")
+      .pop()} — no longer recoverable`,
+    performedById: user.id,
+  });
+  revalidatePath("/settings");
 }

@@ -252,10 +252,10 @@ export function DocumentsManager({
                                 <ConfirmSubmit
                                   action={deleteCandidateDocument}
                                   fields={{ id: d.id }}
-                                  title="Delete document?"
+                                  title="Remove document?"
                                   description={`"${d.label}" will be removed from this candidate.`}
-                                  confirmLabel="Delete document"
-                                  trigger="Delete"
+                                  confirmLabel="Remove document"
+                                  trigger="Remove"
                                   triggerClassName="text-red-600 hover:text-red-800"
                                 />
                               </div>

@@ -4,35 +4,35 @@ import { useActionState, useState } from "react";
 import { Trash2, Download, AlertTriangle } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button, buttonClass } from "@/components/ui/button";
-import { trashCandidate } from "@/server/actions/candidates";
+import { trashJob } from "@/server/actions/jobs";
+import { isTerminalJobStatus } from "@/lib/job-flow";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
+import type { JobStatus } from "@/generated/prisma/enums";
 
 /**
- * Danger zone on a live candidate's detail page (admin only). Two rungs of the
- * lifecycle ladder live here: Download archive, and Move to trash. Move to trash
- * is only available once the candidate is **Inactive** (Deactivated) — the
- * ladder is Active → Inactive → Trash → Erase, and erasing happens only from the
- * trash banner, never here.
+ * Danger zone on a live job's detail page (admin only). Download archive + Move
+ * to trash. Trashing is only available once the job is retired (Closed / Filled
+ * / Cancelled) — the ladder is Open → Close → Trash → Erase, and erasing happens
+ * only from the trash banner, never here.
  */
-export function CandidateDangerZone({
-  candidateId,
-  candidateName,
+export function JobDangerZone({
+  jobId,
+  jobTitle,
   retentionDays,
-  isActive,
+  status,
 }: {
-  candidateId: string;
-  candidateName: string;
+  jobId: string;
+  jobTitle: string;
   retentionDays: number;
-  /** When true the candidate is still Active — trashing is blocked until it's
-   *  Deactivated (via the Deactivate button at the top of the page). */
-  isActive: boolean;
+  status: JobStatus;
 }) {
   const [open, setOpen] = useState(false);
   const [state, formAction, pending] = useActionState(
-    trashCandidate,
+    trashJob,
     EMPTY_FORM_STATE,
   );
-  const archiveHref = `/api/candidates/${candidateId}/archive`;
+  const archiveHref = `/api/jobs/${jobId}/archive`;
+  const retired = isTerminalJobStatus(status);
 
   return (
     <section className="overflow-hidden rounded-lg border border-red-200">
@@ -47,7 +47,7 @@ export function CandidateDangerZone({
               Download archive
             </div>
             <p className="text-xs text-slate-500">
-              Zip of profile, submissions, and all document files — to your device.
+              Zip of the requisition + its submissions and requirements — to your device.
             </p>
           </div>
           <a href={archiveHref} className={buttonClass("secondary")}>
@@ -76,24 +76,24 @@ export function CandidateDangerZone({
       <Dialog
         open={open}
         onClose={() => setOpen(false)}
-        title={`Move ${candidateName} to trash?`}
+        title={`Move "${jobTitle}" to trash?`}
       >
         <form action={formAction} className="space-y-4">
-          <input type="hidden" name="id" value={candidateId} />
-          {isActive && (
+          <input type="hidden" name="id" value={jobId} />
+          {!retired && (
             <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              This candidate is still <strong>Active</strong>. Moving it to trash
-              will <strong>deactivate</strong> it first, then hide it.
+              This job is still open. Moving it to trash will{" "}
+              <strong>close</strong> it first, then hide it.
             </p>
           )}
           <p className="text-sm text-slate-600">
-            The candidate is hidden from lists, submissions, and search. You can
-            restore them for{" "}
+            The job is hidden from lists, search, and reports. You can restore it
+            for{" "}
             <span className="font-medium text-slate-900">
               {retentionDays} days
             </span>
-            , after which they&apos;re permanently erased and their files
-            shredded. Erasing sooner is done from the trash view.
+            , after which it&apos;s permanently erased. Its open requirements are
+            cancelled; submissions are kept.
           </p>
 
           <a
@@ -121,9 +121,9 @@ export function CandidateDangerZone({
             <Button type="submit" variant="danger" disabled={pending}>
               {pending
                 ? "Moving to trash…"
-                : isActive
-                  ? "Deactivate & move to trash"
-                  : "Move to trash"}
+                : retired
+                  ? "Move to trash"
+                  : "Close & move to trash"}
             </Button>
           </div>
         </form>

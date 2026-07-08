@@ -44,7 +44,7 @@ export async function globalSearch(q: string): Promise<SearchResult[]> {
         select: { id: true, fullName: true, currentCompany: true },
       }),
       prisma.job.findMany({
-        where: { OR: jobOR },
+        where: { deletedAt: null, OR: jobOR },
         take: 6,
         orderBy: { createdAt: "desc" },
         select: { id: true, title: true, client: { select: { name: true } } },

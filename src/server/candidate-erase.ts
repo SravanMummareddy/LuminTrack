@@ -1,6 +1,38 @@
-import { del } from "@vercel/blob";
+import { del, put } from "@vercel/blob";
 import { prisma } from "@/server/db";
 import { logActivity } from "@/server/activity";
+import { buildCandidateArchive } from "@/server/exporters/build-candidate-archive";
+
+/** Prefix under which permanent-delete backups live in private Blob. The admin
+ *  "Deleted candidates" screen lists this prefix. */
+export const CANDIDATE_ARCHIVE_PREFIX = "archives/candidates/";
+
+/**
+ * Build a full personal-data archive of the candidate and store it in private
+ * Blob — the recoverable backup that MUST exist before we scrub anything. Throws
+ * if the upload fails, so the caller aborts the erase rather than destroying
+ * data with no backup. Returns the stored pathname.
+ */
+async function archiveCandidateToBlob(
+  candidateId: string,
+  displayId: string,
+): Promise<string | null> {
+  const archive = await buildCandidateArchive(candidateId);
+  if (!archive) return null;
+  // Sortable, human-readable key: archives/candidates/CAND-001-2026-07-08-01-40-00.zip
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  const blob = await put(
+    `${CANDIDATE_ARCHIVE_PREFIX}${displayId}-${stamp}.zip`,
+    archive.zip,
+    {
+      access: "private",
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: "application/zip",
+    },
+  );
+  return blob.pathname;
+}
 
 /** How long a trashed candidate stays recoverable before the scheduled job
  *  permanently erases them. */
@@ -41,9 +73,18 @@ export async function hardEraseCandidate(
     ...candidate.documents.map((d) => d.blobUrl),
   ].filter((u): u is string => Boolean(u));
 
+  // Back up FIRST — never scrub without a recoverable archive in Blob. If this
+  // throws (e.g. Blob misconfigured), the erase aborts and the data is intact.
+  const archivedTo = await archiveCandidateToBlob(candidateId, displayId);
+
   await prisma.$transaction(async (tx) => {
     await tx.candidateResume.deleteMany({ where: { candidateId } });
     await tx.candidateDocument.deleteMany({ where: { candidateId } });
+    // Take the (now erased) person off the marketing bench for good.
+    await tx.benchConsultant.updateMany({
+      where: { candidateId, marketingStatus: { in: ["ACTIVE", "PAUSED"] } },
+      data: { marketingStatus: "INACTIVE" },
+    });
     await tx.candidate.update({
       where: { id: candidateId },
       data: {
@@ -70,9 +111,11 @@ export async function hardEraseCandidate(
     await logActivity(tx, {
       entityType: "CANDIDATE",
       action: "CANDIDATE_ERASED",
-      description: performedById
-        ? `Erased personal data + ${blobUrls.length} file(s) for ${displayId}`
-        : `Auto-erased from trash (retention expired) — ${blobUrls.length} file(s) for ${displayId}`,
+      description:
+        (performedById
+          ? `Erased personal data + ${blobUrls.length} file(s) for ${displayId}`
+          : `Auto-erased from trash (retention expired) — ${blobUrls.length} file(s) for ${displayId}`) +
+        (archivedTo ? " · backup archived" : ""),
       performedById: performer,
       candidateId,
     });
@@ -98,7 +141,12 @@ export async function purgeExpiredTrash(): Promise<number> {
   });
   let count = 0;
   for (const c of expired) {
-    if (await hardEraseCandidate(c.id, null)) count += 1;
+    try {
+      if (await hardEraseCandidate(c.id, null)) count += 1;
+    } catch {
+      // A failed archive/erase (e.g. transient Blob error) leaves this candidate
+      // untouched for the next run rather than aborting the whole purge.
+    }
   }
   return count;
 }

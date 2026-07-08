@@ -119,7 +119,7 @@ export function SavedViews({
                     </button>
                     <button
                       type="button"
-                      aria-label={`Delete view ${v.name}`}
+                      aria-label={`Remove view ${v.name}`}
                       onClick={() => deleteView(v.name)}
                       className="shrink-0 rounded p-0.5 text-slate-400 opacity-0 transition hover:text-red-600 group-hover:opacity-100"
                     >

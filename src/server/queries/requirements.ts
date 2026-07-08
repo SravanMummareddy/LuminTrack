@@ -98,10 +98,12 @@ export async function listVendorRequirements(filters: VendorRequirementFilters) 
     where.recruiterId = { in: filters.recruiterId };
   if (filters.jobId) where.jobId = filters.jobId;
 
-  const jobWhere: Prisma.JobWhereInput = {};
+  // Requirements whose job is in trash / erased are hidden (a trashed job's
+  // OPEN requirements are auto-cancelled anyway).
+  const jobWhere: Prisma.JobWhereInput = { deletedAt: null };
   if (filters.clientId?.length) jobWhere.clientId = { in: filters.clientId };
   if (filters.vendorId?.length) jobWhere.vendorId = { in: filters.vendorId };
-  if (Object.keys(jobWhere).length) where.job = jobWhere;
+  where.job = jobWhere;
 
   const terms = searchTerms(filters.q);
   if (terms.length)

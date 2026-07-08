@@ -2,13 +2,21 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { del } from "@vercel/blob";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/lib/session";
 import {
   canManageOrgEntities,
   canEditJobRatesAndAssignment,
+  hasFullAccess,
 } from "@/lib/permissions";
 import { logActivity } from "@/server/activity";
+import { isTerminalJobStatus } from "@/lib/job-flow";
+import {
+  hardEraseJob,
+  JOB_TRASH_RETENTION_DAYS,
+  JOB_ARCHIVE_PREFIX,
+} from "@/server/job-erase";
 import { jobSchema, JOB_STATUS_VALUES } from "@/lib/validation/job";
 import { toFieldErrors } from "@/lib/validation/common";
 import { JOB_STATUS_LABEL, OTHER_SOURCE, NEW_ORG_ENTITY } from "@/lib/labels";
@@ -313,13 +321,32 @@ export async function changeJobStatus(
   if (job.status === status)
     return { error: "Status is already set to that value." };
   const next = status as (typeof JOB_STATUS_VALUES)[number];
+  // Closing/filling/cancelling a job retires its open requirements too — they
+  // can't be worked once the job is done (same cascade as trashing a job). A
+  // job that FILLED succeeded, so its reqs read "fulfilled" (CONVERTED); a job
+  // that closed/cancelled was abandoned, so they read "cancelled".
+  const closing = isTerminalJobStatus(next);
+  const fulfilled = next === "FILLED";
+  const vprVerb = fulfilled ? "fulfilled" : "cancelled";
 
+  let closedVprs = 0;
   await prisma.$transaction(async (tx) => {
     await tx.job.update({ where: { id: jobId }, data: { status: next } });
+    if (closing) {
+      const res = await tx.vendorRequirement.updateMany({
+        where: { jobId, status: "OPEN" },
+        data: { status: fulfilled ? "CONVERTED" : "CANCELLED" },
+      });
+      closedVprs = res.count;
+    }
     await logActivity(tx, {
       entityType: "JOB",
       action: "JOB_UPDATED",
-      description: `Status changed from ${JOB_STATUS_LABEL[job.status]} to ${JOB_STATUS_LABEL[next]}`,
+      description:
+        `Status changed from ${JOB_STATUS_LABEL[job.status]} to ${JOB_STATUS_LABEL[next]}` +
+        (closedVprs > 0
+          ? ` — ${vprVerb} ${closedVprs} open requirement${closedVprs === 1 ? "" : "s"}`
+          : ""),
       oldValue: JOB_STATUS_LABEL[job.status],
       newValue: JOB_STATUS_LABEL[next],
       performedById: user.id,
@@ -329,9 +356,17 @@ export async function changeJobStatus(
 
   revalidatePath("/jobs");
   revalidatePath(`/jobs/${jobId}`);
+  revalidatePath("/vendor-portal");
   return {
     ok: true,
-    toast: { title: `Job status updated to ${JOB_STATUS_LABEL[next]}` },
+    toast: {
+      title: `Job status updated to ${JOB_STATUS_LABEL[next]}`,
+      ...(closedVprs > 0
+        ? {
+            description: `${closedVprs} open requirement${closedVprs === 1 ? "" : "s"} ${vprVerb}.`,
+          }
+        : {}),
+    },
   };
 }
 
@@ -340,16 +375,22 @@ export async function changeJobStatus(
  * changeJobStatus. Skips jobs already at the target status; caps the id set so a
  * request can't touch the whole table.
  */
-export async function bulkChangeJobStatus(formData: FormData): Promise<void> {
+export async function bulkChangeJobStatus(
+  formData: FormData,
+): Promise<{ changed: number; skipped: number }> {
   const user = await requireUser();
   const status = String(formData.get("status") ?? "");
-  if (!(JOB_STATUS_VALUES as readonly string[]).includes(status)) return;
+  if (!(JOB_STATUS_VALUES as readonly string[]).includes(status))
+    return { changed: 0, skipped: 0 };
   const next = status as (typeof JOB_STATUS_VALUES)[number];
+  const closing = isTerminalJobStatus(next);
+  const fulfilled = next === "FILLED";
+  const vprVerb = fulfilled ? "fulfilled" : "cancelled";
 
   const ids = [
     ...new Set(formData.getAll("ids").map(String).filter(Boolean)),
   ].slice(0, 200);
-  if (!ids.length) return;
+  if (!ids.length) return { changed: 0, skipped: 0 };
 
   const jobs = await prisma.job.findMany({
     where: { id: { in: ids }, status: { not: next } },
@@ -358,10 +399,23 @@ export async function bulkChangeJobStatus(formData: FormData): Promise<void> {
   await prisma.$transaction(async (tx) => {
     for (const j of jobs) {
       await tx.job.update({ where: { id: j.id }, data: { status: next } });
+      // Same cascade as the single close/trash: retire the job's open reqs.
+      let closedVprs = 0;
+      if (closing) {
+        const res = await tx.vendorRequirement.updateMany({
+          where: { jobId: j.id, status: "OPEN" },
+          data: { status: fulfilled ? "CONVERTED" : "CANCELLED" },
+        });
+        closedVprs = res.count;
+      }
       await logActivity(tx, {
         entityType: "JOB",
         action: "JOB_UPDATED",
-        description: `Status changed from ${JOB_STATUS_LABEL[j.status]} to ${JOB_STATUS_LABEL[next]} (bulk)`,
+        description:
+          `Status changed from ${JOB_STATUS_LABEL[j.status]} to ${JOB_STATUS_LABEL[next]} (bulk)` +
+          (closedVprs > 0
+            ? ` — ${vprVerb} ${closedVprs} open requirement${closedVprs === 1 ? "" : "s"}`
+            : ""),
         oldValue: JOB_STATUS_LABEL[j.status],
         newValue: JOB_STATUS_LABEL[next],
         performedById: user.id,
@@ -370,4 +424,149 @@ export async function bulkChangeJobStatus(formData: FormData): Promise<void> {
     }
   });
   revalidatePath("/jobs");
+  if (closing) revalidatePath("/vendor-portal");
+  return { changed: jobs.length, skipped: ids.length - jobs.length };
+}
+
+// ── Job lifecycle: trash → restore → erase (admin/manager only) ─────────────
+
+/**
+ * Move a job to trash: hidden everywhere, restorable, and scheduled to auto-erase
+ * after the retention window. The ladder is Open → Close → Trash; if the job is
+ * still Open/On-hold, trashing Closes it first (the UI confirms this). Its OPEN
+ * vendor requirements are auto-cancelled. Blocked only while an ACTIVE placement
+ * exists — end that first. Submissions are kept (they stay in the submissions
+ * list as history).
+ */
+export async function trashJob(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requireUser();
+  if (!hasFullAccess(user))
+    return { error: "Only managers and team leads can trash a job." };
+
+  const jobId = String(formData.get("id") ?? "").trim();
+  const job = await prisma.job.findUnique({
+    where: { id: jobId },
+    select: { status: true, deletedAt: true, erasedAt: true },
+  });
+  if (!job) return { error: "Job not found." };
+  if (job.erasedAt) return { error: "This job has already been erased." };
+  if (job.deletedAt) return { error: "This job is already in trash." };
+
+  const activePlacements = await prisma.placement.count({
+    where: { jobId, status: { in: ["ACTIVE", "EXTENDED"] } },
+  });
+  if (activePlacements > 0)
+    return {
+      error: "This job has an active placement — end the placement first.",
+    };
+
+  const willClose = !isTerminalJobStatus(job.status);
+  const purgeOn = new Date(
+    Date.now() + JOB_TRASH_RETENTION_DAYS * 86_400_000,
+  );
+  await prisma.$transaction(async (tx) => {
+    await tx.job.update({
+      where: { id: jobId },
+      data: {
+        deletedAt: new Date(),
+        // Auto-close an Open/On-hold job on the way to trash.
+        ...(willClose ? { status: "CLOSED" as const } : {}),
+      },
+    });
+    // Auto-cancel any OPEN requirements — they can't be worked once the job's gone.
+    await tx.vendorRequirement.updateMany({
+      where: { jobId, status: "OPEN" },
+      data: { status: "CANCELLED" },
+    });
+    await logActivity(tx, {
+      entityType: "JOB",
+      action: "JOB_UPDATED",
+      description: `${willClose ? "Closed + moved" : "Moved"} to trash — auto-erases ${purgeOn.toISOString().slice(0, 10)}`,
+      performedById: user.id,
+      jobId,
+    });
+  });
+
+  revalidatePath("/jobs");
+  redirect(`/jobs/${jobId}`);
+}
+
+/** Restore a trashed job before the retention window lapses (keeps its status). */
+export async function restoreJobFromTrash(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  if (!hasFullAccess(user)) return;
+  const jobId = String(formData.get("id") ?? "").trim();
+  if (!jobId) return;
+  await prisma.$transaction(async (tx) => {
+    await tx.job.update({
+      where: { id: jobId },
+      data: { deletedAt: null },
+    });
+    await logActivity(tx, {
+      entityType: "JOB",
+      action: "JOB_UPDATED",
+      description: "Restored from trash",
+      performedById: user.id,
+      jobId,
+    });
+  });
+  revalidatePath("/jobs");
+  revalidatePath(`/jobs/${jobId}`);
+}
+
+/**
+ * Permanently erase a trashed job now (admin + type-the-title confirm). Backs up
+ * to Blob then, per the history-protecting policy, either hard-removes an empty
+ * job or tombstones one with submissions. Only reachable from trash.
+ */
+export async function eraseJobNow(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requireUser();
+  if (!hasFullAccess(user))
+    return { error: "Only managers and team leads can erase a job." };
+
+  const jobId = String(formData.get("id") ?? "").trim();
+  const confirmTitle = String(formData.get("confirmTitle") ?? "").trim();
+  const job = await prisma.job.findUnique({
+    where: { id: jobId },
+    select: { title: true, deletedAt: true, erasedAt: true },
+  });
+  if (!job) return { error: "Job not found." };
+  if (job.erasedAt) return { error: "This job has already been erased." };
+  if (!job.deletedAt)
+    return { error: "Move the job to trash before erasing it." };
+  if (confirmTitle !== job.title)
+    return {
+      fieldErrors: { confirmTitle: "Type the job's title exactly to confirm." },
+    };
+
+  await hardEraseJob(jobId, user.id);
+  revalidatePath("/jobs");
+  // The row may be gone (empty job) — send them to the list, not a 404 detail.
+  redirect("/jobs?trash=1");
+}
+
+/**
+ * "Remove for good" — permanently delete a stored job backup zip from Blob.
+ * Admin only; confined to the job-archive prefix.
+ */
+export async function removeJobArchive(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  if (!hasFullAccess(user)) return;
+  const pathname = String(formData.get("pathname") ?? "").trim();
+  const url = String(formData.get("url") ?? "").trim();
+  if (!pathname.startsWith(JOB_ARCHIVE_PREFIX)) return;
+  await del(url || pathname);
+  await logActivity(prisma, {
+    entityType: "JOB",
+    action: "JOB_ERASED",
+    description: `Removed job backup ${pathname.split("/").pop()} — no longer recoverable`,
+    performedById: user.id,
+  });
+  revalidatePath("/settings");
 }

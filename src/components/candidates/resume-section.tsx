@@ -118,10 +118,10 @@ export function ResumeSection({
               <ConfirmSubmit
                 action={deleteCandidateResume}
                 fields={{ id: r.id }}
-                title="Delete resume permanently?"
+                title="Remove résumé permanently?"
                 description={`"${r.label}" isn't used by any submission and will be permanently removed. This can't be undone.`}
-                confirmLabel="Delete permanently"
-                trigger="Delete"
+                confirmLabel="Remove permanently"
+                trigger="Remove"
                 triggerClassName="text-red-600 hover:text-red-800"
               />
             )}

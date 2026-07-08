@@ -10,6 +10,44 @@ short instead of long.
 
 ---
 
+## 2026-07-08 · "Permanent delete" that can't lose data — archive-then-scrub instead of a trash-first guard
+
+**Situation.** Two things collided. (1) `eraseCandidateNow` — the permanent,
+irreversible erase — gated on role, existence, not-already-erased, and a
+type-the-name confirm, but **never required the candidate to be trashed first**,
+so a forged/direct call could scrub a live, never-archived candidate. (2) The
+owner disliked the "you must trash and wait 30 days" architecture: *if an admin
+wants to permanently delete, they should be able to* — just without silently
+losing the data.
+
+**Diagnosis.** A "must be trashed first" server guard would close the safety
+hole but fight requirement (2) — it makes permanent delete a two-step, and the
+real thing protecting the data was still just a 30-day purgatory. The better
+invariant isn't "delete only after trashing," it's **"never scrub without a
+recoverable backup existing."** Move the safety net from a *time window* to a
+*durable artifact*.
+
+**Fix.** `hardEraseCandidate` now builds a full personal-data archive
+(profile + submissions summary + résumé/document files, via the existing
+`buildCandidateArchive`) and `put`s it to **private Blob** under
+`archives/candidates/` *before* the transaction scrubs the row and shreds the
+files. If the upload throws, the erase aborts — data intact. Both erase paths
+inherit this: the admin "Delete permanently" action (now allowed directly on a
+live candidate — the archive, not the trash window, is the net) and the 30-day
+purge cron (whose loop now catches per-candidate so one failed backup doesn't
+abort the batch). Admins review/download/"remove for good" the backups from
+Settings → Deleted candidates (listed straight from the Blob prefix — the
+scrubbed row keeps no queryable PII, which is the privacy-correct choice).
+
+**Lesson.** When a safety requirement ("don't lose data") and a UX requirement
+("let me delete now") seem opposed, the fix is usually to re-express the safety
+requirement as an *artifact* rather than a *gate*. "Back it up first, then let
+them do whatever they want" beats "make them jump through a step." And a
+destructive action should enforce its precondition — here, *a backup exists* —
+at the server boundary, not rely on the UI hiding the button.
+
+---
+
 ## 2026-07-06 · Calendar rendered as one vertical column — a Tailwind class that never got generated
 
 **Situation.** The new branded range calendar rendered its weekday header and

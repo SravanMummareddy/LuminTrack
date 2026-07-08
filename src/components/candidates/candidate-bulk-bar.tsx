@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Archive, Tag, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import {
   bulkArchiveCandidates,
@@ -22,6 +23,7 @@ export function CandidateBulkBar({
 }) {
   const [pending, startTransition] = useTransition();
   const [tag, setTag] = useState("");
+  const [confirmingTrash, setConfirmingTrash] = useState(false);
   const { toast } = useToast();
   const n = selectedIds.length;
 
@@ -36,6 +38,31 @@ export function CandidateBulkBar({
     startTransition(async () => {
       await action(fd);
       toast({ tone: "success", title: successTitle });
+      onDone();
+    });
+  }
+
+  function trash() {
+    const fd = new FormData();
+    for (const id of selectedIds) fd.append("ids", id);
+    startTransition(async () => {
+      const { moved, skipped } = await bulkTrashCandidates(fd);
+      if (moved === 0) {
+        toast({
+          tone: "error",
+          title: "Nothing moved",
+          description: `None of the ${n} selected could be trashed (already trashed, or actively placed).`,
+        });
+      } else {
+        toast({
+          tone: "success",
+          title: `${moved} candidate${moved === 1 ? "" : "s"} moved to trash`,
+          description:
+            skipped > 0
+              ? `${skipped} skipped — actively placed or already trashed.`
+              : undefined,
+        });
+      }
       onDone();
     });
   }
@@ -80,12 +107,10 @@ export function CandidateBulkBar({
             size="sm"
             variant="danger"
             disabled={pending}
-            onClick={() =>
-              run(bulkTrashCandidates, undefined, `Moved ${n} to trash`)
-            }
+            onClick={() => setConfirmingTrash(true)}
           >
             <Trash2 className="h-4 w-4" />
-            Delete
+            Move to trash
           </Button>
         )}
         <Button
@@ -98,6 +123,19 @@ export function CandidateBulkBar({
           <X className="h-4 w-4" />
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={confirmingTrash}
+        onClose={() => setConfirmingTrash(false)}
+        onConfirm={() => {
+          setConfirmingTrash(false);
+          trash();
+        }}
+        title={`Move ${n} candidate${n === 1 ? "" : "s"} to trash?`}
+        description={`They're hidden from lists, search, and submissions, and restorable for 30 days. Still-active ones are deactivated first; anyone with an active placement is skipped.`}
+        confirmLabel="Move to trash"
+        tone="danger"
+      />
     </div>
   );
 }

@@ -364,6 +364,9 @@ export function JobsTable({
       {selected.size > 0 && (
         <JobBulkBar
           selectedIds={[...selected]}
+          selectedStatuses={rows
+            .filter((r) => selected.has(r.id))
+            .map((r) => r.status)}
           onDone={() => setSelected(new Set())}
         />
       )}

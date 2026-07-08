@@ -30,7 +30,7 @@ export function CandidateTrashList({
         <tr>
           <Th>ID</Th>
           <Th>Candidate</Th>
-          <Th>Deleted</Th>
+          <Th>Trashed</Th>
           <Th>Auto-erases</Th>
           <Th />
         </tr>
@@ -57,7 +57,7 @@ export function CandidateTrashList({
                   {c.fullName}
                 </Link>
               </Td>
-              <Td label="Deleted" secondary className="whitespace-nowrap">
+              <Td label="Trashed" secondary className="whitespace-nowrap">
                 {c.deletedAt ? formatDate(c.deletedAt) : "—"}
               </Td>
               <Td label="Auto-erases" secondary className="whitespace-nowrap">
@@ -70,7 +70,7 @@ export function CandidateTrashList({
                     className={buttonClass("secondary", "sm")}
                   >
                     <Download className="h-4 w-4" aria-hidden />
-                    Archive
+                    Download
                   </a>
                   <form action={restoreCandidateFromTrash}>
                     <input type="hidden" name="id" value={c.id} />

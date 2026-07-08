@@ -36,6 +36,6 @@ test.describe("saved views (admin)", () => {
 
     // Clean up so we don't leave test views in localStorage.
     await page.getByRole("button", { name: viewName, exact: true }).first().click();
-    await page.getByRole("button", { name: `Delete view ${viewName}` }).click();
+    await page.getByRole("button", { name: `Remove view ${viewName}` }).click();
   });
 });

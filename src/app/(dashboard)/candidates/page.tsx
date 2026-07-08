@@ -98,7 +98,7 @@ export default async function CandidatesPage({
         </Link>
         <PageHeader
           title="Trash"
-          description={`Deleted candidates, restorable for ${CANDIDATE_TRASH_RETENTION_DAYS} days before they're permanently erased.`}
+          description={`Trashed candidates, restorable for ${CANDIDATE_TRASH_RETENTION_DAYS} days before they're permanently erased.`}
         />
         {total === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">

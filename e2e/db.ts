@@ -168,6 +168,77 @@ export async function getPlacementStatusForSubmission(
   return rows[0]?.status ?? null;
 }
 
+/** Create a bare fresh candidate (no submissions) and return its display id. */
+export async function createBareCandidate(): Promise<{
+  id: string;
+  displayId: string;
+  name: string;
+}> {
+  const c = await db();
+  const { userId } = await seedRefs();
+  const token = `E2EDEL${Date.now().toString(36)}`;
+  const id = `e2e_${token}`;
+  const name = `E2E Delete ${token}`;
+  const { rows } = await c.query<{ seq: number }>(
+    `INSERT INTO "Candidate" (id, "fullName", status, "createdById", "updatedAt")
+     VALUES ($1, $2, 'AVAILABLE', $3, now())
+     RETURNING seq`,
+    [id, name, userId],
+  );
+  return { id, displayId: `CAND-${String(rows[0].seq).padStart(3, "0")}`, name };
+}
+
+/** Create a bare fresh CLOSED (trashable, empty) job and return its display id. */
+export async function createBareJob(): Promise<{
+  id: string;
+  displayId: string;
+  title: string;
+}> {
+  const c = await db();
+  const { userId } = await seedRefs();
+  const { rows: refs } = await c.query<{ client_id: string; vendor_id: string }>(
+    `SELECT (SELECT id FROM "Client" LIMIT 1) AS client_id,
+            (SELECT id FROM "Vendor" LIMIT 1) AS vendor_id`,
+  );
+  const token = `E2EJOB${Date.now().toString(36)}`;
+  const id = `e2e_${token}`;
+  const title = `E2E Job ${token}`;
+  const { rows } = await c.query<{ seq: number }>(
+    `INSERT INTO "Job" (id, title, status, "clientId", "vendorId", "createdById", "updatedAt")
+     VALUES ($1, $2, 'CLOSED', $3, $4, $5, now())
+     RETURNING seq`,
+    [id, title, refs[0].client_id, refs[0].vendor_id, userId],
+  );
+  return { id, displayId: `JOB-${String(rows[0].seq).padStart(5, "0")}`, title };
+}
+
+/** A job's deletedAt/erasedAt (ISO), or null for the whole row if it's gone. */
+export async function getJobRow(
+  id: string,
+): Promise<{ deletedAt: string | null; erasedAt: string | null } | null> {
+  const c = await db();
+  const { rows } = await c.query<{ deletedAt: Date | null; erasedAt: Date | null }>(
+    `SELECT "deletedAt", "erasedAt" FROM "Job" WHERE id = $1`,
+    [id],
+  );
+  if (!rows[0]) return null;
+  return {
+    deletedAt: rows[0].deletedAt ? new Date(rows[0].deletedAt).toISOString() : null,
+    erasedAt: rows[0].erasedAt ? new Date(rows[0].erasedAt).toISOString() : null,
+  };
+}
+
+/** A candidate's erasedAt (ISO) or null if not erased. */
+export async function getCandidateErasedAt(id: string): Promise<string | null> {
+  const c = await db();
+  const { rows } = await c.query<{ erasedAt: Date | null }>(
+    `SELECT "erasedAt" FROM "Candidate" WHERE id = $1`,
+    [id],
+  );
+  const v = rows[0]?.erasedAt;
+  return v ? new Date(v).toISOString() : null;
+}
+
 /** A candidate's lifecycle status. */
 export async function getCandidateStatus(candidateId: string): Promise<string> {
   const c = await db();

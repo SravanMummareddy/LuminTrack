@@ -16,6 +16,9 @@ import { getCurrentUser } from "@/lib/session";
 import { canManageRequirements } from "@/lib/permissions";
 import { JobStatusForm } from "@/components/jobs/job-status-form";
 import { JobPipelineSteps } from "@/components/jobs/job-pipeline-steps";
+import { JobTrashBanner } from "@/components/jobs/job-trash-banner";
+import { JobDangerZone } from "@/components/jobs/job-danger-zone";
+import { JOB_TRASH_RETENTION_DAYS } from "@/server/job-erase";
 import { Pagination } from "@/components/ui/pagination";
 import { SUB_PAGE_SIZE as PAGE_SIZE, parsePage } from "@/lib/filters";
 import {
@@ -97,6 +100,7 @@ export default async function JobDetailPage({
     // snapshot from the last import. The card shows the higher of the
     // two so a stale iLabor number doesn't mislead recruiters.
     localActiveCount,
+    activePlacementCount,
   ] = await Promise.all([
     getJobDetail(id),
     getJobSubmissions(id, { page: subsPage }),
@@ -121,9 +125,16 @@ export default async function JobDetailPage({
         },
       },
     }),
+    // Seats actually filled right now — active placements against this job.
+    prisma.placement.count({
+      where: { jobId: id, status: { in: ["ACTIVE", "EXTENDED"] } },
+    }),
   ]);
   if (!job) notFound();
   const canManageReq = canManageRequirements(currentUser ?? undefined);
+  const isErased = Boolean(job.erasedAt);
+  const isTrashed = Boolean(job.deletedAt) && !isErased;
+  const isLive = !isTrashed && !isErased;
   // VPR-first: candidates are submitted against a requirement, never the job
   // directly. Jump straight to the convert form when there's a single open VPR,
   // otherwise scroll to the requirements section to pick or create one.
@@ -170,6 +181,8 @@ export default async function JobDetailPage({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-semibold text-slate-900">{job.title}</h1>
+            {isErased && <Badge tone="red">Erased</Badge>}
+            {isTrashed && <Badge tone="amber">In trash</Badge>}
             <Badge tone={JOB_STATUS_TONE[job.status]}>
               {JOB_STATUS_LABEL[job.status]}
             </Badge>
@@ -182,23 +195,46 @@ export default async function JobDetailPage({
             {job.client.name} · {job.vendor.name}
           </p>
         </div>
-        <LinkButton href={`/jobs/${job.id}/edit`} variant="secondary">
-          <Pencil className="h-4 w-4" />
-          Edit job
-        </LinkButton>
+        {isLive && (
+          <LinkButton href={`/jobs/${job.id}/edit`} variant="secondary">
+            <Pencil className="h-4 w-4" />
+            Edit job
+          </LinkButton>
+        )}
       </div>
 
-      <JobPipelineSteps
-        jobId={job.id}
-        vprCount={requirements.length}
-        submissionCount={submissionsTotal}
-        canManageReq={canManageReq}
-        submitHref={submitHref}
-      />
+      {isTrashed && job.deletedAt && (
+        <JobTrashBanner
+          jobId={job.id}
+          jobTitle={job.title}
+          deletedAt={job.deletedAt.toISOString()}
+          retentionDays={JOB_TRASH_RETENTION_DAYS}
+          canManage={canManageReq}
+        />
+      )}
 
-      <Card title="Status">
-        <JobStatusForm jobId={job.id} status={job.status} />
-      </Card>
+      {isLive && (
+        <>
+          <JobPipelineSteps
+            jobId={job.id}
+            vprCount={requirements.length}
+            submissionCount={submissionsTotal}
+            canManageReq={canManageReq}
+            submitHref={submitHref}
+          />
+
+          <Card title="Status">
+            <JobStatusForm
+              jobId={job.id}
+              status={job.status}
+              openVprCount={openRequirements.length}
+              inFlightCount={localActiveCount}
+              positions={job.positions}
+              activePlacementCount={activePlacementCount}
+            />
+          </Card>
+        </>
+      )}
 
       {job.portal ? (
         <Card title={`${job.portal.name} requisition`}>
@@ -551,6 +587,15 @@ export default async function JobDetailPage({
       <NotesSection entityType="JOB" entityId={job.id} notes={notes} />
 
       <ActivityTimeline entries={timeline} />
+
+      {canManageReq && isLive && (
+        <JobDangerZone
+          jobId={job.id}
+          jobTitle={job.title}
+          retentionDays={JOB_TRASH_RETENTION_DAYS}
+          status={job.status}
+        />
+      )}
     </div>
   );
 }

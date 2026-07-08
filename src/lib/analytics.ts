@@ -94,7 +94,8 @@ function hasRange(range?: DateRange): boolean {
 
 /** Builds a Prisma `where` for jobs from the shared analytics filters. */
 export function buildJobWhere(f: AnalyticsFilters): Prisma.JobWhereInput {
-  const where: Prisma.JobWhereInput = {};
+  // Trashed jobs + erased tombstones never count toward analytics/dashboard.
+  const where: Prisma.JobWhereInput = { deletedAt: null };
   if (hasRange(f.dateRange)) where.createdAt = f.dateRange;
   if (f.jobStatus) where.status = f.jobStatus;
   if (f.clientId?.length) where.clientId = { in: f.clientId };
