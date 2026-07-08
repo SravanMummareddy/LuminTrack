@@ -1,16 +1,17 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
-// Content-Security-Policy — shipped in *Report-Only* first. `script-src` and
-// `style-src` allow 'unsafe-inline' because Next injects inline hydration
-// scripts and the app uses inline `style={{…}}` heavily; a nonce-based strict
-// policy is a larger follow-up. Everything else is locked to same-origin:
-// `default-src 'self'` blocks external resource loads, `frame-ancestors 'self'`
-// backs up X-Frame-Options against clickjacking, `object-src 'none'` kills
-// plugin embeds, and `base-uri`/`form-action` are pinned. Résumé/document PDFs
-// are served same-origin via /api/*, so `frame-src 'self'` + `img-src blob:`
-// cover the inline preview. Promote to `Content-Security-Policy` (enforcing)
-// once the console shows no violations in a real-browser pass.
+// Content-Security-Policy — enforcing. `script-src` and `style-src` allow
+// 'unsafe-inline' because Next injects inline hydration scripts and the app uses
+// inline `style={{…}}` heavily; a nonce-based strict policy is a larger
+// follow-up. Everything else is locked to same-origin: `default-src 'self'`
+// blocks external resource loads, `frame-ancestors 'self'` backs up
+// X-Frame-Options against clickjacking, `object-src 'none'` kills plugin embeds,
+// and `base-uri`/`form-action` are pinned. Résumé/document PDFs are served
+// same-origin via /api/*, so `frame-src 'self'` + `img-src blob:` cover the
+// inline preview. Verified violation-free across the app in a real-browser pass
+// (2026-07-07). If a new external integration is added, extend the relevant
+// directive (e.g. connect-src) rather than loosening default-src.
 const csp = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
@@ -38,7 +39,7 @@ const securityHeaders = [
     key: "Permissions-Policy",
     value: "camera=(), microphone=(), geolocation=(), browsing-topics=()",
   },
-  { key: "Content-Security-Policy-Report-Only", value: csp },
+  { key: "Content-Security-Policy", value: csp },
 ];
 
 const nextConfig: NextConfig = {

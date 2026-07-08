@@ -83,6 +83,17 @@ export default async function AuditPage({
     return null;
   }
 
+  // The linked record's kind, used as the Entity link label so it reads
+  // "Job" / "Candidate" / … instead of a generic "Open" that collides with
+  // status words in the description column.
+  function entityLabelFor(r: (typeof rows)[number]): string {
+    if (r.submissionId) return "Submission";
+    if (r.candidateId) return "Candidate";
+    if (r.jobId) return "Job";
+    if (r.requirementId) return "Requirement";
+    return "Record";
+  }
+
   return (
     <div className="space-y-5">
       <Link
@@ -204,7 +215,7 @@ export default async function AuditPage({
                         href={href}
                         className="text-indigo-600 hover:underline"
                       >
-                        Open
+                        {entityLabelFor(r)} ↗
                       </Link>
                     ) : (
                       "—"
