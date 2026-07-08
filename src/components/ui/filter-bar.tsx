@@ -6,6 +6,7 @@ import { Search, ChevronDown, X, Check } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { DATE_PRESETS } from "@/lib/filters";
 import { RangeCalendar, formatRangeLabel } from "@/components/ui/range-calendar";
+import { SavedViews } from "@/components/ui/saved-views";
 
 export type FilterOption = { value: string; label: string };
 
@@ -80,10 +81,14 @@ export function FilterBar({
   basePath,
   search,
   filters,
+  viewsKey,
 }: {
   basePath: string;
   search?: SearchConfig;
   filters: FilterDef[];
+  /** When set, renders a "Views" control that saves the current filter+sort
+   *  combo under this localStorage key. Omit to hide saved views. */
+  viewsKey?: string;
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -274,6 +279,12 @@ export function FilterBar({
         >
           Clear all
         </button>
+      )}
+
+      {viewsKey && (
+        <div className="ml-auto">
+          <SavedViews storageKey={viewsKey} basePath={basePath} />
+        </div>
       )}
     </div>
   );

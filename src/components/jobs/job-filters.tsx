@@ -84,6 +84,7 @@ export function JobFilters({
       basePath="/jobs"
       search={{ param: "q", placeholder: "Search job title…" }}
       filters={filters}
+      viewsKey="lumintrack.jobs.views"
     />
   );
 }

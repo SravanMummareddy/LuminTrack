@@ -54,6 +54,7 @@ export function PlacementsFilters({
       basePath="/placements"
       search={{ param: "q", placeholder: "Candidate or job…" }}
       filters={filters}
+      viewsKey="lumintrack.placements.views"
     />
   );
 }

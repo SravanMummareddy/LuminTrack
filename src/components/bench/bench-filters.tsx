@@ -59,6 +59,7 @@ export function BenchFilters({
       basePath="/bench"
       search={{ param: "q", placeholder: "Name, technology, location…" }}
       filters={filters}
+      viewsKey="lumintrack.bench.views"
     />
   );
 }

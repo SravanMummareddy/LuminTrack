@@ -30,6 +30,7 @@ export function CandidateFilters() {
       basePath="/candidates"
       search={{ param: "q", placeholder: "Search candidate name…" }}
       filters={filters}
+      viewsKey="lumintrack.candidates.views"
     />
   );
 }
