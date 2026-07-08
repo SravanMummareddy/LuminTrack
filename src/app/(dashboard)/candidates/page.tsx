@@ -42,6 +42,7 @@ export default async function CandidatesPage({
     currentCompany: clean(sp.currentCompany),
     minExperience: clean(sp.minExperience),
     status: clean(sp.status),
+    discipline: clean(sp.discipline),
     preset: clean(sp.preset),
     from: clean(sp.from),
     to: clean(sp.to),
@@ -69,6 +70,10 @@ export default async function CandidatesPage({
         : current.status === "inactive"
           ? false
           : undefined,
+    discipline:
+      current.discipline === "IT" || current.discipline === "NON_IT"
+        ? current.discipline
+        : undefined,
     createdRange: parseDateRange({
       preset: current.preset,
       from: current.from,

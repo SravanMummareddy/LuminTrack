@@ -19,6 +19,7 @@ import { BENCH_PRIORITIES, BENCH_MARKETING_STATUSES } from "@/lib/labels";
 import type {
   BenchPriority,
   BenchMarketingStatus,
+  Discipline,
 } from "@/generated/prisma/enums";
 
 function clean(value: string | string[] | undefined): string | undefined {
@@ -42,7 +43,12 @@ export default async function BenchRosterPage({
     priority: clean(sp.priority),
     status: statusMode,
     recruiterId: parseList(sp.recruiterId),
+    discipline: clean(sp.discipline),
   };
+  const disciplineFilter: Discipline | undefined =
+    current.discipline === "IT" || current.discipline === "NON_IT"
+      ? (current.discipline as Discipline)
+      : undefined;
 
   const sort = parseSort(
     clean(sp.sort),
@@ -67,6 +73,7 @@ export default async function BenchRosterPage({
     marketingStatus,
     onBench: statusMode === "onbench",
     recruiterId: current.recruiterId,
+    discipline: disciplineFilter,
     sort,
   };
 
@@ -74,7 +81,10 @@ export default async function BenchRosterPage({
   // render High + Second as independently paginated sections (each S.No starts
   // at 1, each pages via its own ?ph= / ?ps= param). Any other sort, or an
   // explicit priority filter, falls back to a single flat paginated list.
-  const grouped = sort.key === "priority" && !priorityFilter;
+  // "Group by priority" toggle (default ON). Grouped = two independently-paged
+  // priority sections; a single-priority filter collapses it back to flat.
+  const groupOn = clean(sp.group) !== "0";
+  const grouped = groupOn && !priorityFilter;
 
   const recruiters = await listActiveRecruiterOptions();
 
@@ -132,7 +142,6 @@ export default async function BenchRosterPage({
         <BenchRosterTable
           rows={rows}
           pageOffset={(page - 1) * PAGE_SIZE}
-          groupByPriority={sort.key === "priority"}
           countLabel={`${total} consultant${total === 1 ? "" : "s"}`}
         />
         <Pagination page={page} totalPages={totalPages} total={total} />

@@ -52,6 +52,7 @@ export default async function EditJobPage({
     endDate: toDateInput(job.endDate),
     workMode: job.workMode ?? "",
     priority: job.priority ?? "",
+    discipline: job.discipline ?? "",
     targetCloseDate: toDateInput(job.targetCloseDate),
     postingUrl: job.postingUrl ?? "",
     workAuthRequirement: job.workAuthRequirement ?? "",

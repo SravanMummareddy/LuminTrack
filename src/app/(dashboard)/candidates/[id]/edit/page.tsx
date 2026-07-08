@@ -43,6 +43,7 @@ export default async function EditCandidatePage({
       ? toDateTimeLocal(candidate.lastContactedAt)
       : "",
     source: candidate.source ?? "",
+    discipline: candidate.discipline ?? "",
   };
 
   return (

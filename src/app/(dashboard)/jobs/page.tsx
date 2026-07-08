@@ -26,7 +26,7 @@ import {
 } from "@/server/queries/org";
 import { parseDateRange, parseSort, parsePage, parseList, PAGE_SIZE } from "@/lib/filters";
 import { JOB_STATUSES } from "@/lib/labels";
-import type { JobStatus } from "@/generated/prisma/enums";
+import type { JobStatus, Discipline } from "@/generated/prisma/enums";
 
 function clean(value: string | string[] | undefined): string | undefined {
   const single = Array.isArray(value) ? value[0] : value;
@@ -44,6 +44,10 @@ function asJobSource(value: string | undefined): JobSource | undefined {
   return value === "manual" || value === "randstad" ? value : undefined;
 }
 
+function asDiscipline(value: string | undefined): Discipline | undefined {
+  return value === "IT" || value === "NON_IT" ? value : undefined;
+}
+
 export default async function JobsPage({
   searchParams,
 }: {
@@ -58,6 +62,7 @@ export default async function JobsPage({
     sisterCompanySourceId: clean(sp.sisterCompanySourceId),
     recruiterId: parseList(sp.recruiterId),
     status: clean(sp.status),
+    discipline: clean(sp.discipline),
     location: clean(sp.location),
     source: clean(sp.source),
     preset: clean(sp.preset),
@@ -84,6 +89,7 @@ export default async function JobsPage({
     sisterCompanySourceId: current.sisterCompanySourceId,
     recruiterId: current.recruiterId,
     status: asJobStatus(current.status),
+    discipline: asDiscipline(current.discipline),
     location: current.location,
     source: activeSource,
     createdRange: parseDateRange({

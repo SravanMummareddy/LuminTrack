@@ -5,6 +5,7 @@ import type {
   InterviewResult,
   WorkMode,
   JobPriority,
+  Discipline,
   CandidateStatus,
   PlacementStatus,
   PlacementEndReason,
@@ -65,6 +66,16 @@ export const JOB_PRIORITY_TONE: Record<JobPriority, BadgeTone> = {
   MEDIUM: "blue",
   HIGH: "amber",
   CRITICAL: "red",
+};
+
+export const DISCIPLINES: Discipline[] = ["IT", "NON_IT"];
+export const DISCIPLINE_LABEL: Record<Discipline, string> = {
+  IT: "IT",
+  NON_IT: "Non-IT",
+};
+export const DISCIPLINE_TONE: Record<Discipline, BadgeTone> = {
+  IT: "indigo",
+  NON_IT: "slate",
 };
 
 // §B4 — candidate engagement state. Independent of `isActive` soft-delete.

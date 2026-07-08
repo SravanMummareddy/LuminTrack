@@ -59,6 +59,7 @@ function readCandidate(formData: FormData) {
     tags: parseTags(formData.get("tags")),
     lastContactedAt: formData.get("lastContactedAt") ?? "",
     source: formData.get("source") ?? "",
+    discipline: formData.get("discipline") ?? "",
   });
 }
 
@@ -81,6 +82,7 @@ function candidateData(d: CandidateInput) {
     tags: d.tags,
     lastContactedAt: d.lastContactedAt ?? null,
     source: d.source ?? null,
+    discipline: d.discipline ?? null,
   };
 }
 

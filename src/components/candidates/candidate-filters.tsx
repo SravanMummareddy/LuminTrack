@@ -1,4 +1,5 @@
 import { FilterBar, type FilterDef } from "@/components/ui/filter-bar";
+import { DISCIPLINES, DISCIPLINE_LABEL } from "@/lib/labels";
 
 /**
  * Candidate list filters as the shared pill `FilterBar`. The bar reads the
@@ -19,6 +20,15 @@ export function CandidateFilters() {
       ],
     },
     { kind: "date", label: "Date added", primary: true },
+    {
+      kind: "select",
+      param: "discipline",
+      label: "Discipline",
+      options: [
+        { value: "", label: "All disciplines" },
+        ...DISCIPLINES.map((d) => ({ value: d, label: DISCIPLINE_LABEL[d] })),
+      ],
+    },
     { kind: "text", param: "location", label: "Location" },
     { kind: "text", param: "workAuthorization", label: "Work auth" },
     { kind: "text", param: "currentCompany", label: "Company" },

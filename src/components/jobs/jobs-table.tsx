@@ -7,7 +7,13 @@ import { SortableHeader } from "@/components/ui/sortable-header";
 import { MobileSort } from "@/components/ui/mobile-sort";
 import { Badge } from "@/components/ui/badge";
 import { ColumnsMenu } from "@/components/ui/columns-menu";
-import { JOB_STATUS_LABEL, JOB_STATUS_TONE, jobSourceLabel } from "@/lib/labels";
+import {
+  JOB_STATUS_LABEL,
+  JOB_STATUS_TONE,
+  jobSourceLabel,
+  DISCIPLINE_LABEL,
+  DISCIPLINE_TONE,
+} from "@/lib/labels";
 import { formatDate, formatJobDisplayId } from "@/lib/format";
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
 import type { JobListRow } from "@/server/queries/jobs";
@@ -123,6 +129,23 @@ const COLUMNS: Column[] = [
         <Badge tone={JOB_STATUS_TONE[job.status]}>
           {JOB_STATUS_LABEL[job.status]}
         </Badge>
+      </Td>
+    ),
+  },
+  {
+    key: "discipline",
+    label: "Discipline",
+    sortKey: "discipline",
+    defaultVisible: false,
+    render: (job) => (
+      <Td label="Discipline" secondary>
+        {job.discipline ? (
+          <Badge tone={DISCIPLINE_TONE[job.discipline]}>
+            {DISCIPLINE_LABEL[job.discipline]}
+          </Badge>
+        ) : (
+          "—"
+        )}
       </Td>
     ),
   },

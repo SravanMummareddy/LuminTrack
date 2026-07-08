@@ -18,6 +18,8 @@ import {
   WORK_MODE_LABEL,
   JOB_PRIORITIES,
   JOB_PRIORITY_LABEL,
+  DISCIPLINES,
+  DISCIPLINE_LABEL,
 } from "@/lib/labels";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 
@@ -46,6 +48,7 @@ export type JobFormValues = {
   endDate: string;
   workMode: string;
   priority: string;
+  discipline: string;
   targetCloseDate: string;
   postingUrl: string;
   workAuthRequirement: string;
@@ -231,6 +234,21 @@ export function JobForm({
             {JOB_STATUSES.map((s) => (
               <option key={s} value={s}>
                 {JOB_STATUS_LABEL[s]}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        <Field label="Discipline" htmlFor="discipline" error={errors.discipline}>
+          <Select
+            id="discipline"
+            name="discipline"
+            defaultValue={values?.discipline ?? ""}
+          >
+            <option value="">—</option>
+            {DISCIPLINES.map((d) => (
+              <option key={d} value={d}>
+                {DISCIPLINE_LABEL[d]}
               </option>
             ))}
           </Select>

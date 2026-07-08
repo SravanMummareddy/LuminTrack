@@ -4,6 +4,8 @@ import {
   BENCH_PRIORITY_LABEL,
   BENCH_MARKETING_STATUSES,
   BENCH_MARKETING_STATUS_LABEL,
+  DISCIPLINES,
+  DISCIPLINE_LABEL,
 } from "@/lib/labels";
 
 /**
@@ -50,6 +52,15 @@ export function BenchFilters({
       options: [
         { value: "", label: "All recruiters" },
         ...recruiters.map((r) => ({ value: r.id, label: r.fullName })),
+      ],
+    },
+    {
+      kind: "select",
+      param: "discipline",
+      label: "Discipline",
+      options: [
+        { value: "", label: "All disciplines" },
+        ...DISCIPLINES.map((d) => ({ value: d, label: DISCIPLINE_LABEL[d] })),
       ],
     },
   ];

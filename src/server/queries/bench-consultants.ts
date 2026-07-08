@@ -3,6 +3,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import type {
   BenchPriority,
   BenchMarketingStatus,
+  Discipline,
 } from "@/generated/prisma/enums";
 import { PAGE_SIZE, searchTerms, type SortDir, type SortState } from "@/lib/filters";
 
@@ -15,6 +16,7 @@ export type BenchListFilters = {
    *  Ignored when an explicit `marketingStatus` is set. */
   onBench?: boolean;
   recruiterId?: string[];
+  discipline?: Discipline;
   sort?: SortState;
   page?: number;
 };
@@ -63,6 +65,9 @@ export async function listBenchConsultants(filters: BenchListFilters) {
   if (filters.marketingStatus) where.marketingStatus = filters.marketingStatus;
   else if (filters.onBench) where.marketingStatus = { in: ["ACTIVE", "PAUSED"] };
   if (filters.recruiterId?.length) where.recruiterId = { in: filters.recruiterId };
+  // Discipline now lives on the linked candidate (source of truth), so filter
+  // through the relation.
+  if (filters.discipline) where.candidate = { discipline: filters.discipline };
   const terms = searchTerms(filters.q);
   if (terms.length)
     where.AND = terms.map((t) => ({
@@ -110,9 +115,9 @@ export async function listBenchConsultants(filters: BenchListFilters) {
       candidateId: true,
       createdAt: true,
       updatedAt: true,
-      // Company is the linked candidate's current employer (owner's model); the
-      // bench's own `company` is only a fallback for unlinked marketed identities.
-      candidate: { select: { currentCompany: true } },
+      // The linked candidate is the source of truth for company + discipline;
+      // the bench's own `company` is only a fallback for unlinked identities.
+      candidate: { select: { currentCompany: true, discipline: true } },
       recruiter: { select: { id: true, fullName: true } },
     },
   });

@@ -2,21 +2,25 @@
 
 import { Fragment } from "react";
 import Link from "next/link";
-import { Table, Th, Td, cardLink } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { MobileSort } from "@/components/ui/mobile-sort";
 import { Badge } from "@/components/ui/badge";
 import { ColumnsMenu } from "@/components/ui/columns-menu";
 import { Pagination } from "@/components/ui/pagination";
+import { GroupToggle } from "@/components/bench/group-toggle";
 import {
   BENCH_PRIORITY_LABEL,
-  BENCH_PRIORITY_TONE,
   BENCH_MARKETING_STATUS_LABEL,
   BENCH_MARKETING_STATUS_TONE,
+  DISCIPLINE_LABEL,
+  DISCIPLINE_TONE,
 } from "@/lib/labels";
 import { formatBenchConsultantDisplayId, formatRate, formatDate } from "@/lib/format";
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
+import { cn } from "@/lib/cn";
 import type { BenchListRow } from "@/server/queries/bench-consultants";
+
+type Priority = BenchListRow["priority"];
 
 type Column = {
   key: string;
@@ -25,12 +29,56 @@ type Column = {
   sortDefaultDir?: "asc" | "desc";
   align?: "right";
   defaultVisible: boolean;
-  render: (row: BenchListRow, rowNumber: number) => React.ReactNode;
+  /** Returns the cell *content* (the table wraps it in a compact <td>). */
+  cell: (row: BenchListRow, rowNumber: number) => React.ReactNode;
 };
 
-function yearsLabel(n: number | null): string | null {
-  if (n === null) return null;
-  return `${n} yr${n === 1 ? "" : "s"}`;
+const muted = "text-slate-400";
+
+/** Text priority chip — label carries the meaning (never color alone); a small
+ *  dot echoes the tier. Coral = High, gray = Second, via the theme tokens. */
+function PriorityChip({ priority }: { priority: Priority }) {
+  const high = priority === "HIGH";
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium",
+        high
+          ? "bg-prio-high-bg text-prio-high-fg"
+          : "bg-prio-second-bg text-prio-second-fg",
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          "h-1.5 w-1.5 rounded-full",
+          high ? "bg-prio-high-dot" : "bg-prio-second-dot",
+        )}
+      />
+      {BENCH_PRIORITY_LABEL[priority]}
+    </span>
+  );
+}
+
+/** Placeholder / test rows (E2E fixtures, or an all-empty row) sink to the
+ *  bottom of their group, greyed — they must never head a group. */
+function isPlaceholder(c: BenchListRow): boolean {
+  if (/\be2e\b/i.test(c.fullName)) return true;
+  const signal = [
+    c.technology,
+    c.currentLocation,
+    c.mVisa || c.workAuthorization || c.aVisa,
+    c.recruiter?.fullName,
+  ].filter(Boolean).length;
+  return signal === 0;
+}
+
+/** Real rows first (server order preserved), placeholders last. */
+function sink(rows: BenchListRow[]): BenchListRow[] {
+  const real: BenchListRow[] = [];
+  const test: BenchListRow[] = [];
+  for (const r of rows) (isPlaceholder(r) ? test : real).push(r);
+  return [...real, ...test];
 }
 
 const COLUMNS: Column[] = [
@@ -39,22 +87,16 @@ const COLUMNS: Column[] = [
     label: "S.No",
     align: "right",
     defaultVisible: true,
-    render: (_r, n) => (
-      <Td label="S.No" secondary className="text-right tabular-nums">
-        {n}
-      </Td>
-    ),
+    cell: (_r, n) => n,
   },
   {
     key: "id",
     label: "ID",
-    // Hidden by default — the sheet's display set is S.No, Name, Technology,
-    // Visa, Experience, Location, Relocation, Recruiter. Available via ColumnsMenu.
     defaultVisible: false,
-    render: (c) => (
-      <Td label="ID" secondary className="whitespace-nowrap font-mono text-xs">
+    cell: (c) => (
+      <span className="font-mono text-[11px] text-slate-400">
         {formatBenchConsultantDisplayId(c)}
-      </Td>
+      </span>
     ),
   },
   {
@@ -62,33 +104,16 @@ const COLUMNS: Column[] = [
     label: "Candidate Name",
     sortKey: "name",
     defaultVisible: true,
-    render: (c) => (
-      <Td heading>
+    cell: (c) => (
+      <>
         <Link
           href={`/bench/${c.id}`}
-          className={`${cardLink} font-medium text-indigo-600 hover:underline`}
+          className="font-medium text-indigo-600 hover:underline"
         >
           {c.fullName}
         </Link>
-        {!c.isActive && (
-          <span className="ml-2 text-xs text-slate-400">(inactive)</span>
-        )}
-      </Td>
-    ),
-  },
-  {
-    key: "priority",
-    label: "Priority",
-    sortKey: "priority",
-    // Hidden by default — priority is shown as section headers (High / Second)
-    // in the default priority sort, matching the sheet. Toggle on via ColumnsMenu.
-    defaultVisible: false,
-    render: (c) => (
-      <Td label="Priority">
-        <Badge tone={BENCH_PRIORITY_TONE[c.priority]}>
-          {BENCH_PRIORITY_LABEL[c.priority]}
-        </Badge>
-      </Td>
+        {!c.isActive && <span className={cn("ml-2 text-[11px]", muted)}>(inactive)</span>}
+      </>
     ),
   },
   {
@@ -96,26 +121,33 @@ const COLUMNS: Column[] = [
     label: "Technology",
     sortKey: "technology",
     defaultVisible: true,
-    render: (c) => (
-      <Td label="Technology" secondary>
-        {c.technology ?? "—"}
-      </Td>
-    ),
+    cell: (c) => c.technology ?? "—",
+  },
+  {
+    key: "discipline",
+    label: "Discipline",
+    defaultVisible: false,
+    cell: (c) =>
+      c.candidate?.discipline ? (
+        <Badge tone={DISCIPLINE_TONE[c.candidate.discipline]}>
+          {DISCIPLINE_LABEL[c.candidate.discipline]}
+        </Badge>
+      ) : (
+        "—"
+      ),
   },
   {
     key: "visa",
     label: "Visa",
     defaultVisible: true,
-    render: (c) => {
+    cell: (c) => {
       const primary = c.mVisa || c.workAuthorization || c.aVisa;
       const secondary = c.mVisa && c.aVisa ? c.aVisa : null;
       return (
-        <Td label="Visa" secondary>
+        <>
           {primary ?? "—"}
-          {secondary && (
-            <div className="text-xs text-slate-400">{secondary}</div>
-          )}
-        </Td>
+          {secondary && <span className={muted}> · {secondary}</span>}
+        </>
       );
     },
   },
@@ -125,16 +157,16 @@ const COLUMNS: Column[] = [
     sortKey: "experience",
     align: "right",
     defaultVisible: true,
-    render: (c) => {
-      const marketing = yearsLabel(c.marketingExpYears);
-      const real = yearsLabel(c.realTimeExpYears);
+    cell: (c) => {
+      const m = c.marketingExpYears;
+      const r = c.realTimeExpYears;
+      if (m == null && r == null) return "—";
+      const primary = m ?? r;
       return (
-        <Td label="Experience" secondary className="text-right tabular-nums">
-          {marketing ?? real ?? "—"}
-          {marketing && real && (
-            <div className="text-xs text-slate-400">{real} real-time</div>
-          )}
-        </Td>
+        <>
+          {primary}y
+          {m != null && r != null && <span className={muted}> · {r}y live</span>}
+        </>
       );
     },
   },
@@ -143,55 +175,37 @@ const COLUMNS: Column[] = [
     label: "Location",
     sortKey: "location",
     defaultVisible: true,
-    render: (c) => (
-      <Td label="Location" secondary>
-        {c.currentLocation ?? "—"}
-      </Td>
-    ),
+    cell: (c) => c.currentLocation ?? "—",
   },
   {
     key: "relocation",
     label: "Relocation",
     defaultVisible: true,
-    render: (c) => (
-      <Td label="Relocation" secondary>
-        {c.relocation ? "Yes" : "No"}
-      </Td>
-    ),
+    cell: (c) => (c.relocation ? "Yes" : "No"),
   },
   {
     key: "recruiter",
     label: "Recruiter",
     sortKey: "recruiter",
     defaultVisible: true,
-    render: (c) => (
-      <Td label="Recruiter" secondary>
-        {c.recruiter?.fullName ?? "—"}
-      </Td>
-    ),
+    cell: (c) => c.recruiter?.fullName ?? "—",
   },
   {
     key: "status",
     label: "Marketing status",
     sortKey: "status",
     defaultVisible: false,
-    render: (c) => (
-      <Td label="Marketing status">
-        <Badge tone={BENCH_MARKETING_STATUS_TONE[c.marketingStatus]}>
-          {BENCH_MARKETING_STATUS_LABEL[c.marketingStatus]}
-        </Badge>
-      </Td>
+    cell: (c) => (
+      <Badge tone={BENCH_MARKETING_STATUS_TONE[c.marketingStatus]}>
+        {BENCH_MARKETING_STATUS_LABEL[c.marketingStatus]}
+      </Badge>
     ),
   },
   {
     key: "company",
     label: "Company",
     defaultVisible: false,
-    render: (c) => (
-      <Td label="Company" secondary>
-        {c.candidate?.currentCompany ?? c.company ?? "—"}
-      </Td>
-    ),
+    cell: (c) => c.candidate?.currentCompany ?? c.company ?? "—",
   },
   {
     key: "leastRate",
@@ -199,30 +213,23 @@ const COLUMNS: Column[] = [
     sortKey: "leastRate",
     align: "right",
     defaultVisible: false,
-    render: (c) => (
-      <Td label="Least C2C" className="text-right tabular-nums">
-        {formatRate(c.leastRateC2C)}
-      </Td>
-    ),
+    cell: (c) => formatRate(c.leastRateC2C),
   },
   {
     key: "linked",
     label: "Candidate",
     defaultVisible: false,
-    render: (c) => (
-      <Td label="Candidate" secondary>
-        {c.candidateId ? (
-          <Link
-            href={`/candidates/${c.candidateId}`}
-            className="text-indigo-600 hover:underline"
-          >
-            View profile
-          </Link>
-        ) : (
-          "—"
-        )}
-      </Td>
-    ),
+    cell: (c) =>
+      c.candidateId ? (
+        <Link
+          href={`/candidates/${c.candidateId}`}
+          className="text-indigo-600 hover:underline"
+        >
+          View profile
+        </Link>
+      ) : (
+        "—"
+      ),
   },
   {
     key: "created",
@@ -230,11 +237,7 @@ const COLUMNS: Column[] = [
     sortKey: "created",
     sortDefaultDir: "desc",
     defaultVisible: false,
-    render: (c) => (
-      <Td label="Created" secondary className="whitespace-nowrap">
-        {formatDate(c.createdAt)}
-      </Td>
-    ),
+    cell: (c) => formatDate(c.createdAt),
   },
   {
     key: "updated",
@@ -242,25 +245,30 @@ const COLUMNS: Column[] = [
     sortKey: "updated",
     sortDefaultDir: "desc",
     defaultVisible: false,
-    render: (c) => (
-      <Td label="Updated" secondary className="whitespace-nowrap">
-        {formatDate(c.updatedAt)}
-      </Td>
-    ),
+    cell: (c) => formatDate(c.updatedAt),
   },
 ];
 
+/** Flat-view-only Priority column — chip per row, leftmost data column,
+ *  sortable. In grouped view the chip lives in the band header instead. */
+const PRIORITY_COLUMN: Column = {
+  key: "__priority",
+  label: "Priority",
+  sortKey: "priority",
+  defaultVisible: true,
+  cell: (c) => <PriorityChip priority={c.priority} />,
+};
+
 const STORAGE_KEY = "lumintrack.bench.columns";
-const STORAGE_VERSION = 2;
+const STORAGE_VERSION = 3;
 const DEFAULTS: ColumnPrefs = {
   visible: COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key),
   order: COLUMNS.map((c) => c.key),
 };
 
-/** One priority group rendered as its own paginated section. S.No restarts at
- *  the group's own page offset, so High and Second each number from 1. */
+/** One priority group with its own independent pagination. */
 export type BenchGroup = {
-  priority: BenchListRow["priority"];
+  priority: Priority;
   rows: BenchListRow[];
   pageOffset: number;
   page: number;
@@ -273,55 +281,51 @@ export function BenchRosterTable({
   rows = [],
   pageOffset = 0,
   countLabel,
-  groupByPriority = false,
   groups,
 }: {
   rows?: BenchListRow[];
   pageOffset?: number;
   /** e.g. "18 consultants" — shown before the column count. */
   countLabel?: string;
-  /** When sorted by priority (the default), render High/Second section headers
-   *  — but only while the Priority column itself is hidden, to match the sheet.
-   *  Only applies to the flat (`rows`) path. */
-  groupByPriority?: boolean;
-  /** When provided, render each priority group as its own section with its own
-   *  pagination (independent High/Second paging). Takes precedence over `rows`. */
+  /** When provided, render as grouped sections (one shared header, slim band
+   *  headers between groups). Otherwise render the flat `rows` list. */
   groups?: BenchGroup[];
 }) {
-  const [prefs, setPrefs] = useColumnPrefs(
-    STORAGE_KEY,
-    STORAGE_VERSION,
-    DEFAULTS,
-  );
+  const [prefs, setPrefs] = useColumnPrefs(STORAGE_KEY, STORAGE_VERSION, DEFAULTS);
 
+  const grouped = Boolean(groups);
   const byKey = new Map(COLUMNS.map((c) => [c.key, c]));
   const orderedCols = prefs.order
     .map((k) => byKey.get(k))
     .filter((c): c is Column => Boolean(c));
   const visibleCols = orderedCols.filter((c) => prefs.visible.includes(c.key));
-  const showGroups =
-    groupByPriority && !visibleCols.some((c) => c.key === "priority");
+  // Flat view leads with the sortable Priority chip column; grouped view carries
+  // priority in the band headers instead, so it isn't repeated per row.
+  const renderCols = grouped ? visibleCols : [PRIORITY_COLUMN, ...visibleCols];
 
-  const isEmpty = groups ? groups.length === 0 : rows.length === 0;
+  const isEmpty = grouped ? groups!.length === 0 : rows.length === 0;
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-slate-500" suppressHydrationWarning>
           {isEmpty
             ? null
             : `${countLabel ? `${countLabel} · ` : ""}Showing ${visibleCols.length} of ${COLUMNS.length} columns`}
         </p>
-        <ColumnsMenu
-          columns={orderedCols.map((c) => ({ key: c.key, label: c.label }))}
-          prefs={prefs}
-          onChange={setPrefs}
-          defaults={DEFAULTS}
-        />
+        <div className="flex items-center gap-2">
+          <GroupToggle />
+          <ColumnsMenu
+            columns={orderedCols.map((c) => ({ key: c.key, label: c.label }))}
+            prefs={prefs}
+            onChange={setPrefs}
+            defaults={DEFAULTS}
+          />
+        </div>
       </div>
 
       <MobileSort
-        options={visibleCols
+        options={renderCols
           .filter((c) => c.sortKey)
           .map((c) => ({
             column: c.sortKey!,
@@ -330,127 +334,159 @@ export function BenchRosterTable({
           }))}
       />
 
-      {groups ? (
-        groups.map((g) => (
-          <div key={g.priority} className="space-y-3">
-            <RosterRows
-              rows={g.rows}
-              pageOffset={g.pageOffset}
-              visibleCols={visibleCols}
-              sectionLabel={BENCH_PRIORITY_LABEL[g.priority]}
-            />
-            <Pagination
-              page={g.page}
-              totalPages={g.totalPages}
-              total={g.total}
-              paramKey={g.paramKey}
-            />
-          </div>
-        ))
-      ) : (
-        <RosterRows
-          rows={rows}
-          pageOffset={pageOffset}
-          visibleCols={visibleCols}
-          inlineGroups={showGroups}
-        />
+      {!isEmpty && (
+        <div className="overflow-x-auto rounded-lg border border-slate-200">
+          <table className="w-full border-collapse text-[12.5px]">
+            <thead className="border-b border-slate-200 bg-slate-50">
+              <tr>
+                {renderCols.map((c) =>
+                  c.sortKey ? (
+                    <SortableHeader
+                      key={c.key}
+                      column={c.sortKey}
+                      label={c.label}
+                      align={c.align}
+                      defaultDir={c.sortDefaultDir}
+                    />
+                  ) : (
+                    <th
+                      key={c.key}
+                      className={cn(
+                        "whitespace-nowrap px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500",
+                        c.align === "right" ? "text-right" : "text-left",
+                      )}
+                    >
+                      {c.label}
+                    </th>
+                  ),
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {grouped
+                ? groups!.map((g) => (
+                    <GroupSection
+                      key={g.priority}
+                      priority={g.priority}
+                      count={g.total}
+                      rows={g.rows}
+                      pageOffset={g.pageOffset}
+                      cols={renderCols}
+                    />
+                  ))
+                : sink(rows).map((row, idx) => (
+                    <DataRow
+                      key={row.id}
+                      row={row}
+                      cols={renderCols}
+                      rowNumber={pageOffset + idx + 1}
+                      zebra={idx % 2 === 1}
+                    />
+                  ))}
+            </tbody>
+          </table>
+        </div>
       )}
+
+      {/* Grouped mode paginates each priority independently — surfaced below the
+          single table, labeled, only when a group actually spills a page. */}
+      {grouped &&
+        groups!
+          .filter((g) => g.totalPages > 1)
+          .map((g) => (
+            <div key={g.priority} className="flex items-center gap-2">
+              <span className="text-xs font-medium text-slate-500">
+                {BENCH_PRIORITY_LABEL[g.priority]}
+              </span>
+              <Pagination
+                page={g.page}
+                totalPages={g.totalPages}
+                total={g.total}
+                paramKey={g.paramKey}
+              />
+            </div>
+          ))}
     </div>
   );
 }
 
-/** Renders the table head + body for a set of rows. `sectionLabel` prepends a
- *  single group header (used in per-group paginated mode); `inlineGroups`
- *  inserts a header row whenever the priority changes (the flat default view). */
-function RosterRows({
+/** A grouped section = a slim band header (chip + count) then its data rows.
+ *  The band is the only place a coral wash appears; data rows stay neutral. */
+function GroupSection({
+  priority,
+  count,
   rows,
   pageOffset,
-  visibleCols,
-  sectionLabel,
-  inlineGroups = false,
+  cols,
 }: {
+  priority: Priority;
+  count: number;
   rows: BenchListRow[];
   pageOffset: number;
-  visibleCols: Column[];
-  sectionLabel?: string;
-  inlineGroups?: boolean;
+  cols: Column[];
 }) {
+  const high = priority === "HIGH";
   return (
-    <Table>
-      <thead className="border-b border-slate-200 bg-slate-50">
-        <tr>
-          {visibleCols.map((c) =>
-            c.sortKey ? (
-              <SortableHeader
-                key={c.key}
-                column={c.sortKey}
-                label={c.label}
-                align={c.align}
-                defaultDir={c.sortDefaultDir}
-              />
-            ) : (
-              <Th
-                key={c.key}
-                className={c.align === "right" ? "text-right" : ""}
-              >
-                {c.label}
-              </Th>
-            ),
+    <>
+      <tr>
+        <td
+          colSpan={cols.length}
+          className={cn(
+            "border-t border-slate-200 px-4 py-1.5",
+            high ? "bg-prio-high-band" : "bg-slate-50",
           )}
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-slate-100">
-        {sectionLabel && (
-          <tr className="bg-slate-50">
-            <td
-              colSpan={visibleCols.length}
-              className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500"
-            >
-              {sectionLabel}
-            </td>
-          </tr>
-        )}
-        {rows.map((row, idx) => {
-          const showHeader =
-            inlineGroups && (idx === 0 || rows[idx - 1].priority !== row.priority);
-          return (
-            <Fragment key={row.id}>
-              {showHeader && (
-                <tr className="bg-slate-50">
-                  <td
-                    colSpan={visibleCols.length}
-                    className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500"
-                  >
-                    {BENCH_PRIORITY_LABEL[row.priority]}
-                  </td>
-                </tr>
-              )}
-              <tr className="hover:bg-slate-50">
-                {visibleCols.map((c) => (
-                  <RenderCell
-                    key={c.key}
-                    column={c}
-                    row={row}
-                    rowNumber={pageOffset + idx + 1}
-                  />
-                ))}
-              </tr>
-            </Fragment>
-          );
-        })}
-      </tbody>
-    </Table>
+        >
+          <div className="flex items-center gap-2">
+            <PriorityChip priority={priority} />
+            <span className="text-[11px] tabular-nums text-slate-500">{count}</span>
+          </div>
+        </td>
+      </tr>
+      {sink(rows).map((row, idx) => (
+        <DataRow
+          key={row.id}
+          row={row}
+          cols={cols}
+          rowNumber={pageOffset + idx + 1}
+          zebra={idx % 2 === 1}
+        />
+      ))}
+    </>
   );
 }
 
-function RenderCell({
-  column,
+/** A single ~32px Finder row: zebra base, accent-tint hover, single-line cells. */
+function DataRow({
   row,
+  cols,
   rowNumber,
+  zebra,
 }: {
-  column: Column;
   row: BenchListRow;
+  cols: Column[];
   rowNumber: number;
+  zebra: boolean;
 }) {
-  return <>{column.render(row, rowNumber)}</>;
+  const placeholder = isPlaceholder(row);
+  return (
+    <tr
+      className={cn(
+        "border-t border-slate-100 transition-colors hover:bg-indigo-100",
+        zebra ? "bg-slate-50" : "bg-white",
+        placeholder && "text-slate-400 opacity-60",
+      )}
+    >
+      {cols.map((c) => (
+        <td
+          key={c.key}
+          className={cn(
+            "whitespace-nowrap px-4 py-1.5 align-middle leading-tight text-slate-600",
+            c.align === "right" && "text-right tabular-nums",
+          )}
+        >
+          {c.cell(row, rowNumber)}
+        </td>
+      ))}
+    </tr>
+  );
 }

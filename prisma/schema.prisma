@@ -79,6 +79,13 @@ enum JobStatus {
   CANCELLED
 }
 
+// Broad discipline of a requisition / bench consultant — IT vs everything else.
+// Nullable on both models (existing rows are unclassified until set).
+enum Discipline {
+  IT
+  NON_IT
+}
+
 // Submission pipeline stage — also the final outcome (no separate outcome field).
 enum SubmissionStatus {
   SUBMITTED
@@ -390,6 +397,7 @@ model Job {
   // §A2: LuminTrack-native job planning fields (not in iLabor either).
   workMode              WorkMode?
   priority              JobPriority?
+  discipline            Discipline?
   targetCloseDate       DateTime?
   postingUrl            String?
   workAuthRequirement   String?
@@ -468,6 +476,9 @@ model Candidate {
   // (LinkedIn InMail / referral / job-board / inbound / etc.); a fixed enum
   // here would calcify ahead of real usage data.
   source              String?
+  // Broad IT vs Non-IT classification of the person (source of truth; the bench
+  // overlay reads this rather than carrying its own copy).
+  discipline          Discipline?
   // Soft-delete "trash" marker. Non-null = moved to trash (hidden everywhere,
   // restorable); a scheduled job hard-erases rows past the retention window.
   deletedAt           DateTime?

@@ -3,6 +3,38 @@
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Priority chip + band tokens (warm coral = High, neutral gray = Second).
+     They resolve to the :root vars below so a future dark mode can remap them
+     without touching the utilities. Utilities generated: bg-prio-high-bg,
+     text-prio-high-fg, bg-prio-high-dot, bg-prio-high-band, and the -second-*. */
+  --color-prio-high-bg: var(--prio-high-bg);
+  --color-prio-high-fg: var(--prio-high-fg);
+  --color-prio-high-dot: var(--prio-high-dot);
+  --color-prio-high-band: var(--prio-high-band);
+  --color-prio-second-bg: var(--prio-second-bg);
+  --color-prio-second-fg: var(--prio-second-fg);
+  --color-prio-second-dot: var(--prio-second-dot);
+}
+
+:root {
+  --prio-high-bg: #faece7;
+  --prio-high-fg: #712b13;
+  --prio-high-dot: #d85a30;
+  --prio-high-band: #fdf4f0; /* lightest coral wash — the band only, never rows */
+  --prio-second-bg: #f1efe8;
+  --prio-second-fg: #444441;
+  --prio-second-dot: #888780;
+}
+
+/* Dark values kept dormant under `.dark` — the app is light-only today, so we
+   avoid prefers-color-scheme (which would flip only the chips). Ready to switch
+   on when a real dark mode lands. */
+.dark {
+  --prio-high-bg: #4a1b0c;
+  --prio-high-fg: #f0997b;
+  --prio-second-bg: #2c2c2a;
+  --prio-second-fg: #b4b2a9;
 }
 
 body {

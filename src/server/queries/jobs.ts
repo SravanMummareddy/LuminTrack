@@ -1,6 +1,6 @@
 import { prisma } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
-import type { JobStatus } from "@/generated/prisma/enums";
+import type { JobStatus, Discipline } from "@/generated/prisma/enums";
 import { OTHER_SOURCE } from "@/lib/labels";
 import { PAGE_SIZE, searchTerms, type DateRange, type SortDir, type SortState } from "@/lib/filters";
 
@@ -19,6 +19,7 @@ export type JobListFilters = {
   sisterCompanySourceId?: string;
   recruiterId?: string[];
   status?: JobStatus;
+  discipline?: Discipline;
   location?: string;
   source?: JobSource;
   createdRange?: DateRange;
@@ -42,6 +43,7 @@ const JOB_SORTS: Record<
   source: (d) => ({ sisterCompanySource: { name: d } }),
   location: (d) => ({ location: d }),
   status: (d) => ({ status: d }),
+  discipline: (d) => ({ discipline: d }),
   subs: (d) => ({ submissions: { _count: d } }),
   created: (d) => ({ createdAt: d }),
   updated: (d) => ({ updatedAt: d }),
@@ -77,6 +79,7 @@ export async function listJobs(filters: JobListFilters) {
         ? null
         : filters.sisterCompanySourceId;
   if (filters.status) where.status = filters.status;
+  if (filters.discipline) where.discipline = filters.discipline;
   if (filters.location)
     where.location = { contains: filters.location, mode: "insensitive" };
   if (filters.recruiterId?.length)

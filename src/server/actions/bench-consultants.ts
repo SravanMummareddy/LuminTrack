@@ -12,6 +12,10 @@ import {
 } from "@/lib/validation/bench";
 import { toFieldErrors } from "@/lib/validation/common";
 import type { FormState } from "@/lib/form-state";
+import { Prisma } from "@/generated/prisma/client";
+
+/** Matches the bench form's "➕ Create new candidate" sentinel. */
+const NEW_CANDIDATE = "__new__";
 
 function parseSkills(raw: FormDataEntryValue | null): string[] {
   if (typeof raw !== "string") return [];
@@ -122,21 +126,87 @@ export async function createBenchConsultant(
   // strip them rather than persist blanks.
   if (!canViewBenchCredentials(user)) stripCredentials(data);
 
-  const consultant = await prisma.$transaction(async (tx) => {
-    const created = await tx.benchConsultant.create({
-      data: { ...data, createdById: user.id },
+  // Every bench consultant IS a candidate. Either an existing candidate was
+  // picked (link it), or the "➕ Create new candidate" sentinel means we create
+  // one from the shared fields. A candidate can be on the bench only once.
+  const linkExisting = Boolean(d.candidateId) && d.candidateId !== NEW_CANDIDATE;
+  // A brand-new candidate must be contactable (same rule the Candidate form
+  // enforces) — otherwise it can't be edited later without adding a contact.
+  if (!linkExisting && !d.email && !d.phone) {
+    return {
+      error: "A new candidate needs an email or a phone number.",
+      fieldErrors: {
+        email: "Add an email or phone — it becomes the candidate's contact.",
+      },
+    };
+  }
+  if (linkExisting) {
+    const already = await prisma.benchConsultant.findUnique({
+      where: { candidateId: d.candidateId as string },
+      select: { id: true },
     });
-    await logActivity(tx, {
-      entityType: "CONSULTANT",
-      action: "BENCH_CONSULTANT_CREATED",
-      description: `Bench consultant "${created.fullName}" added`,
-      performedById: user.id,
-      benchConsultantId: created.id,
+    if (already)
+      return {
+        error: "That candidate is already on the bench.",
+        fieldErrors: { candidateId: "Already on the bench." },
+      };
+  }
+
+  let consultant;
+  try {
+    consultant = await prisma.$transaction(async (tx) => {
+      let candidateId = linkExisting ? (d.candidateId as string) : null;
+      if (!linkExisting) {
+        const cand = await tx.candidate.create({
+          data: {
+            fullName: d.fullName,
+            email: d.email ?? null,
+            phone: d.phone ?? null,
+            currentLocation: d.currentLocation ?? null,
+            workAuthorization: d.workAuthorization ?? null,
+            skills: d.skills,
+            status: "AVAILABLE",
+            isActive: true,
+            createdById: user.id,
+          },
+          select: { id: true, fullName: true },
+        });
+        candidateId = cand.id;
+        await logActivity(tx, {
+          entityType: "CANDIDATE",
+          action: "CANDIDATE_CREATED",
+          description: `Candidate "${cand.fullName}" created (from bench)`,
+          performedById: user.id,
+          candidateId: cand.id,
+        });
+      }
+      const created = await tx.benchConsultant.create({
+        // The resolved candidateId overrides whatever the sentinel was.
+        data: { ...data, candidateId, createdById: user.id },
+      });
+      await logActivity(tx, {
+        entityType: "CONSULTANT",
+        action: "BENCH_CONSULTANT_CREATED",
+        description: `Bench consultant "${created.fullName}" added`,
+        performedById: user.id,
+        benchConsultantId: created.id,
+      });
+      return created;
     });
-    return created;
-  });
+  } catch (e) {
+    if (
+      e instanceof Prisma.PrismaClientKnownRequestError &&
+      e.code === "P2002"
+    )
+      return {
+        error: "That candidate is already on the bench.",
+        fieldErrors: { candidateId: "Already on the bench." },
+      };
+    throw e;
+  }
 
   revalidatePath("/bench");
+  revalidatePath("/candidates");
   redirect(`/bench/${consultant.id}`);
 }
 

@@ -43,6 +43,7 @@ import {
   CANDIDATE_STATUS_TONE,
   PLACEMENT_STATUS_LABEL,
   PLACEMENT_STATUS_TONE,
+  DISCIPLINE_LABEL,
   jobSourceLabel,
 } from "@/lib/labels";
 import { MarkContactedButton } from "@/components/candidates/mark-contacted-button";
@@ -303,6 +304,9 @@ export default async function CandidateDetailPage({
           </DescItem>
           <DescItem label="Current company">
             {candidate.currentCompany || "—"}
+          </DescItem>
+          <DescItem label="Discipline">
+            {candidate.discipline ? DISCIPLINE_LABEL[candidate.discipline] : "—"}
           </DescItem>
           <DescItem label="LinkedIn">
             {candidate.linkedinUrl ? (

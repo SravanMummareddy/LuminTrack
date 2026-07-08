@@ -7,6 +7,7 @@ import { SortableHeader } from "@/components/ui/sortable-header";
 import { MobileSort } from "@/components/ui/mobile-sort";
 import { Badge } from "@/components/ui/badge";
 import { ColumnsMenu } from "@/components/ui/columns-menu";
+import { DISCIPLINE_LABEL, DISCIPLINE_TONE } from "@/lib/labels";
 import {
   formatDate,
   formatExperience,
@@ -201,6 +202,22 @@ const COLUMNS: Column[] = [
     render: (c) => (
       <Td label="Current company" secondary>
         {c.currentCompany || "—"}
+      </Td>
+    ),
+  },
+  {
+    key: "discipline",
+    label: "Discipline",
+    defaultVisible: false,
+    render: (c) => (
+      <Td label="Discipline" secondary>
+        {c.discipline ? (
+          <Badge tone={DISCIPLINE_TONE[c.discipline]}>
+            {DISCIPLINE_LABEL[c.discipline]}
+          </Badge>
+        ) : (
+          "—"
+        )}
       </Td>
     ),
   },

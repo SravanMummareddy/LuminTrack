@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import Link from "next/link";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { SearchSelect } from "@/components/ui/search-select";
 import { Button } from "@/components/ui/button";
@@ -51,6 +52,9 @@ export type BenchConsultantFormValues = {
 
 type BenchAction = (prev: FormState, formData: FormData) => Promise<FormState>;
 type Option = { id: string; fullName: string };
+
+/** Sentinel value for the candidate picker's "➕ Create new candidate" action. */
+const NEW_CAND = "__new__";
 
 type Fields = Omit<
   BenchConsultantFormValues,
@@ -127,15 +131,92 @@ export function BenchConsultantForm({
   const markDirty = () => setDirty((d) => (d ? d : true));
   useUnsavedChanges(dirty);
 
+  const isEdit = Boolean(values);
+  const creatingNew = fields.candidateId === NEW_CAND;
+
   return (
     <form action={formAction} onInput={markDirty} className="space-y-6">
       {values && <input type="hidden" name="id" value={values.id} />}
 
-      {/* ── Identity + marketing tier ─────────────────────────────── */}
+      {/* ── Identity: every bench consultant IS a candidate ───────────
+          Create mode → pick an existing candidate or create a new one.
+          Edit mode → the linked candidate is fixed (shown read-only). */}
       <section className="space-y-4">
-        <Field label="Consultant name" htmlFor="fullName" required error={errors.fullName}>
-          <Input id="fullName" name="fullName" value={fields.fullName} onChange={set("fullName")} required />
-        </Field>
+        {isEdit ? (
+          <>
+            <Field label="Candidate">
+              <div className="flex items-center gap-2 text-sm text-slate-700">
+                <span className="font-medium">{fields.fullName}</span>
+                {fields.candidateId && (
+                  <Link
+                    href={`/candidates/${fields.candidateId}`}
+                    className="text-indigo-600 hover:underline"
+                  >
+                    View candidate
+                  </Link>
+                )}
+              </div>
+            </Field>
+            <input type="hidden" name="fullName" value={fields.fullName} />
+            <input type="hidden" name="candidateId" value={fields.candidateId} />
+          </>
+        ) : (
+          <>
+            <Field
+              label="Candidate"
+              htmlFor="candidateId"
+              required
+              hint="Pick an existing candidate or create a new one — every bench consultant is also a candidate."
+              error={errors.candidateId}
+            >
+              <SearchSelect
+                id="candidateId"
+                name="candidateId"
+                value={fields.candidateId}
+                onChange={(v) =>
+                  setFields((f) =>
+                    v === NEW_CAND
+                      ? { ...f, candidateId: NEW_CAND, fullName: "" }
+                      : {
+                          ...f,
+                          candidateId: v,
+                          fullName:
+                            candidates.find((c) => c.id === v)?.fullName ?? "",
+                        },
+                  )
+                }
+                placeholder="Search candidates…"
+                options={candidates.map((c) => ({
+                  value: c.id,
+                  label: c.fullName,
+                }))}
+                actionOption={{ value: NEW_CAND, label: "➕ Create new candidate" }}
+              />
+            </Field>
+            {creatingNew ? (
+              <Field
+                label="New candidate name"
+                htmlFor="fullName"
+                required
+                hint="Also add an email or phone below — a new candidate needs a contact."
+                error={errors.fullName}
+              >
+                <Input
+                  id="fullName"
+                  name="fullName"
+                  value={fields.fullName}
+                  onChange={set("fullName")}
+                  required
+                  placeholder="Full name"
+                />
+              </Field>
+            ) : (
+              fields.fullName && (
+                <input type="hidden" name="fullName" value={fields.fullName} />
+              )
+            )}
+          </>
+        )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Priority" htmlFor="priority" error={errors.priority}>
@@ -204,26 +285,6 @@ export function BenchConsultantForm({
 
       <Field label="Skills" htmlFor="skills" hint="Separate skills with commas." error={errors.skills}>
         <Input id="skills" name="skills" value={fields.skills} onChange={set("skills")} placeholder="Java, Spring Boot, AWS" />
-      </Field>
-
-      {/* ── Link to an existing candidate (optional) ──────────────── */}
-      <Field
-        label="Linked candidate"
-        htmlFor="candidateId"
-        hint="Optional — link to the ATS candidate record. Can also be created when you submit them."
-        error={errors.candidateId}
-      >
-        <SearchSelect
-          id="candidateId"
-          name="candidateId"
-          value={fields.candidateId}
-          onChange={(v) => setFields((f) => ({ ...f, candidateId: v }))}
-          placeholder="Search candidates…"
-          options={[
-            { value: "", label: "— Not linked —" },
-            ...candidates.map((c) => ({ value: c.id, label: c.fullName })),
-          ]}
-        />
       </Field>
 
       {/* ── More details (collapsible) ────────────────────────────── */}

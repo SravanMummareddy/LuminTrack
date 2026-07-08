@@ -1,6 +1,6 @@
 import { prisma } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
-import type { UserRole } from "@/generated/prisma/enums";
+import type { UserRole, Discipline } from "@/generated/prisma/enums";
 import { PAGE_SIZE, searchTerms, type DateRange, type SortDir, type SortState } from "@/lib/filters";
 import { canViewSensitiveDocs } from "@/lib/permissions";
 
@@ -12,6 +12,7 @@ export type CandidateListFilters = {
   currentCompany?: string;
   minExperience?: number;
   isActive?: boolean;
+  discipline?: Discipline;
   createdRange?: DateRange;
   sort?: SortState;
   page?: number;
@@ -78,6 +79,7 @@ export async function listCandidates(filters: CandidateListFilters) {
   if (filters.minExperience != null)
     where.totalExperienceYears = { gte: filters.minExperience };
   if (filters.isActive != null) where.isActive = filters.isActive;
+  if (filters.discipline) where.discipline = filters.discipline;
   if (filters.createdRange?.gte || filters.createdRange?.lte)
     where.createdAt = filters.createdRange;
 
