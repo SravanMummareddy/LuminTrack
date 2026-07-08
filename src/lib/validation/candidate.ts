@@ -34,6 +34,8 @@ export const candidateSchema = z
     currentLocation: optionalText,
     workAuthorization: optionalText,
     totalExperienceYears: optionalExperience,
+    realTimeExperienceYears: optionalExperience,
+    technology: optionalText,
     currentCompany: optionalText,
     skills: z.array(z.string().trim().min(1)).max(60).default([]),
     featuredSkills: z.array(z.string().trim().min(1)).max(3).default([]),
@@ -44,6 +46,8 @@ export const candidateSchema = z
     tags: z.array(z.string().trim().min(1)).max(30).default([]),
     lastContactedAt: optionalDate,
     source: optionalText,
+    isWorking: z.boolean().default(false),
+    workingType: optionalText,
     discipline: z.preprocess(
       (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
       z.enum(["IT", "NON_IT"]).optional(),

@@ -6,6 +6,7 @@ import {
 } from "@/components/candidates/candidate-form";
 import { updateCandidate } from "@/server/actions/candidates";
 import { getCandidateForEdit } from "@/server/queries/candidates";
+import { listLookupValues } from "@/server/queries/lookups";
 
 function toDateTimeLocal(value: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -31,6 +32,9 @@ export default async function EditCandidatePage({
     currentLocation: candidate.currentLocation ?? "",
     workAuthorization: candidate.workAuthorization ?? "",
     totalExperienceYears: candidate.totalExperienceYears?.toString() ?? "",
+    realTimeExperienceYears:
+      candidate.realTimeExperienceYears?.toString() ?? "",
+    technology: candidate.technology ?? "",
     currentCompany: candidate.currentCompany ?? "",
     skills: candidate.skills,
     featuredSkills: candidate.featuredSkills,
@@ -43,8 +47,15 @@ export default async function EditCandidatePage({
       ? toDateTimeLocal(candidate.lastContactedAt)
       : "",
     source: candidate.source ?? "",
+    isWorking: candidate.isWorking,
+    workingType: candidate.workingType ?? "",
     discipline: candidate.discipline ?? "",
   };
+
+  const [workAuthOptions, workingTypeOptions] = await Promise.all([
+    listLookupValues("WORK_AUTH"),
+    listLookupValues("WORKING_TYPE"),
+  ]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -54,6 +65,8 @@ export default async function EditCandidatePage({
           action={updateCandidate}
           values={values}
           submitLabel="Save changes"
+          workAuthOptions={workAuthOptions}
+          workingTypeOptions={workingTypeOptions}
         />
       </div>
     </div>

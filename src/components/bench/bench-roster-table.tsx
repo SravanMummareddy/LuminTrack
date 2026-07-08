@@ -64,7 +64,7 @@ function PriorityChip({ priority }: { priority: Priority }) {
 function isPlaceholder(c: BenchListRow): boolean {
   if (/\be2e\b/i.test(c.fullName)) return true;
   const signal = [
-    c.technology,
+    c.candidate?.technology,
     c.currentLocation,
     c.mVisa || c.workAuthorization || c.aVisa,
     c.recruiter?.fullName,
@@ -111,7 +111,6 @@ const COLUMNS: Column[] = [
         >
           {c.fullName}
         </Link>
-        {!c.isActive && <span className={cn("ml-2 text-[11px]", muted)}>(inactive)</span>}
       </>
     ),
   },
@@ -120,7 +119,7 @@ const COLUMNS: Column[] = [
     label: "Technology",
     sortKey: "technology",
     defaultVisible: true,
-    cell: (c) => c.technology ?? "—",
+    cell: (c) => c.candidate?.technology ?? "—",
   },
   {
     key: "discipline",
@@ -186,7 +185,7 @@ const COLUMNS: Column[] = [
     key: "status",
     label: "Marketing status",
     sortKey: "status",
-    defaultVisible: false,
+    defaultVisible: true,
     cell: (c) => (
       <Badge tone={BENCH_MARKETING_STATUS_TONE[c.marketingStatus]}>
         {BENCH_MARKETING_STATUS_LABEL[c.marketingStatus]}

@@ -3,15 +3,20 @@ import { BenchConsultantForm } from "@/components/bench/bench-consultant-form";
 import { createBenchConsultant } from "@/server/actions/bench-consultants";
 import { listActiveRecruiterOptions } from "@/server/queries/org";
 import { listCandidateOptions } from "@/server/queries/candidates";
+import { listLookupValues } from "@/server/queries/lookups";
 import { requireUser } from "@/lib/session";
 import { canViewBenchCredentials } from "@/lib/permissions";
 
 export default async function NewBenchConsultantPage() {
   const user = await requireUser();
-  const [recruiters, candidates] = await Promise.all([
-    listActiveRecruiterOptions(),
-    listCandidateOptions(),
-  ]);
+  const [recruiters, candidates, workAuthOptions, callTypeOptions, payrollTypeOptions] =
+    await Promise.all([
+      listActiveRecruiterOptions(),
+      listCandidateOptions(),
+      listLookupValues("WORK_AUTH"),
+      listLookupValues("CALL_TYPE"),
+      listLookupValues("PAYROLL_TYPE"),
+    ]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -26,6 +31,9 @@ export default async function NewBenchConsultantPage() {
           recruiters={recruiters}
           candidates={candidates}
           canEditCredentials={canViewBenchCredentials(user)}
+          workAuthOptions={workAuthOptions}
+          callTypeOptions={callTypeOptions}
+          payrollTypeOptions={payrollTypeOptions}
         />
       </div>
     </div>

@@ -572,7 +572,21 @@ async function main() {
   await prisma.vendor.deleteMany();
   await prisma.client.deleteMany();
   await prisma.sisterCompanySource.deleteMany();
+  await prisma.lookupOption.deleteMany();
   await prisma.user.deleteMany();
+
+  // ── Learned dropdown values (a few non-default extras, to show the
+  //    "remembered" behaviour alongside the curated defaults) ──
+  await prisma.lookupOption.createMany({
+    data: [
+      { category: "WORK_AUTH", value: "H-1B1" },
+      { category: "WORK_AUTH", value: "GC-EAD (i485)" },
+      { category: "WORKING_TYPE", value: "Contract-to-hire" },
+      { category: "CALL_TYPE", value: "C2C only" },
+      { category: "PAYROLL_TYPE", value: "1099-NEC" },
+    ],
+    skipDuplicates: true,
+  });
 
   // ── Users ──
   console.log("Creating users…");
@@ -845,6 +859,12 @@ async function main() {
       ["NOT_INTERESTED", 1],
       ["DO_NOT_CONTACT", 1],
     ]);
+    // Total (headline) vs real-time (actual hands-on) experience — the latter is
+    // a few years lower. Both live on the candidate (source of truth).
+    const totalExp = randInt(2, 16) + (chance(0.5) ? 0.5 : 0);
+    const realTimeExp = Math.max(1, totalExp - randInt(1, 4));
+    // "Working now?" — independent of Placement (may be an external engagement).
+    const isWorking = chance(0.35);
 
     const candidate = await prisma.candidate.create({
       data: {
@@ -856,7 +876,11 @@ async function main() {
         )}`,
         currentLocation: pick(LOCATIONS),
         workAuthorization: pick(WORK_AUTH),
-        totalExperienceYears: randInt(2, 16) + (chance(0.5) ? 0.5 : 0),
+        totalExperienceYears: totalExp,
+        realTimeExperienceYears: realTimeExp,
+        technology: pick(BENCH_TECHS),
+        isWorking,
+        workingType: isWorking ? pick(["C2C", "W2", "Full-time", "Contract-to-hire"]) : null,
         currentCompany: pick(CURRENT_COMPANIES),
         // IT vs Non-IT domain; ~15% left null (not yet classified).
         discipline: (chance(0.15)
@@ -1491,7 +1515,6 @@ async function main() {
         aVisa: chance(0.4) ? pick(BENCH_VISAS) : null,
         marketingExpYears: mkExp,
         realTimeExpYears: Math.max(1, mkExp - randInt(1, 3)),
-        technology: pick(BENCH_TECHS),
         skills: pickN(SKILLS, randInt(3, 6)),
         reference: chance(0.6) ? pick(BENCH_REFERENCES) : null,
         company: chance(0.5) ? pick(CURRENT_COMPANIES) : null,

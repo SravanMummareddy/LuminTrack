@@ -55,9 +55,12 @@ export function canManageSensitiveDocs(viewer: Viewer | null | undefined): boole
 }
 
 // Bench-Sales — the marketing email/password stored on a BenchConsultant are
-// shared portal credentials. Detail-page only, never a list column or export.
+// shared portal credentials. Any signed-in recruiter may need them to reach out
+// to or market a consultant (owner decision 2026-07-08), so all authenticated
+// users can view/edit them. Still detail-page only — never a list column or
+// export.
 export function canViewBenchCredentials(viewer: Viewer | null | undefined): boolean {
-  return hasFullAccess(viewer);
+  return Boolean(viewer?.role);
 }
 
 // Vendor Portal Requirements — the pre-submission planning layer. Managers and

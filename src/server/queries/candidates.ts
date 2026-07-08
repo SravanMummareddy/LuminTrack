@@ -42,6 +42,7 @@ const CANDIDATE_SORTS: Record<
   created: (d) => ({ createdAt: d }),
   workAuthorization: (d) => ({ workAuthorization: d }),
   currentCompany: (d) => ({ currentCompany: d }),
+  technology: (d) => ({ technology: d }),
 };
 
 export const CANDIDATE_SORT_KEYS = Object.keys(CANDIDATE_SORTS);
@@ -132,12 +133,24 @@ export async function listCandidates(filters: CandidateListFilters) {
 // Prisma `Decimal` isn't serializable across the RSC → Client boundary.
 // The list tables are Client Components, so flatten to plain numbers here.
 function serializeCandidateRow<
-  T extends { totalExperienceYears: { toString(): string } | null },
->(c: T): Omit<T, "totalExperienceYears"> & { totalExperienceYears: number | null } {
+  T extends {
+    totalExperienceYears: { toString(): string } | null;
+    realTimeExperienceYears: { toString(): string } | null;
+  },
+>(
+  c: T,
+): Omit<T, "totalExperienceYears" | "realTimeExperienceYears"> & {
+  totalExperienceYears: number | null;
+  realTimeExperienceYears: number | null;
+} {
   return {
     ...c,
     totalExperienceYears:
       c.totalExperienceYears == null ? null : Number(c.totalExperienceYears),
+    realTimeExperienceYears:
+      c.realTimeExperienceYears == null
+        ? null
+        : Number(c.realTimeExperienceYears),
   };
 }
 

@@ -13,6 +13,7 @@ import {
   CANDIDATE_ARCHIVE_PREFIX,
 } from "@/server/candidate-erase";
 import { ensureBenchForCandidate } from "@/server/bench-lifecycle";
+import { rememberLookup } from "@/server/lookups";
 import { candidateSchema, type CandidateInput } from "@/lib/validation/candidate";
 import { toFieldErrors } from "@/lib/validation/common";
 import {
@@ -48,6 +49,8 @@ function readCandidate(formData: FormData) {
     currentLocation: formData.get("currentLocation") ?? "",
     workAuthorization: formData.get("workAuthorization") ?? "",
     totalExperienceYears: formData.get("totalExperienceYears") ?? "",
+    realTimeExperienceYears: formData.get("realTimeExperienceYears") ?? "",
+    technology: formData.get("technology") ?? "",
     currentCompany: formData.get("currentCompany") ?? "",
     skills: parseSkills(formData.get("skills")),
     // Featured (≤3) — form sends them as repeated `featuredSkills` entries.
@@ -59,6 +62,8 @@ function readCandidate(formData: FormData) {
     tags: parseTags(formData.get("tags")),
     lastContactedAt: formData.get("lastContactedAt") ?? "",
     source: formData.get("source") ?? "",
+    isWorking: formData.get("isWorking") != null,
+    workingType: formData.get("workingType") ?? "",
     discipline: formData.get("discipline") ?? "",
   });
 }
@@ -72,6 +77,8 @@ function candidateData(d: CandidateInput) {
     currentLocation: d.currentLocation ?? null,
     workAuthorization: d.workAuthorization ?? null,
     totalExperienceYears: d.totalExperienceYears ?? null,
+    realTimeExperienceYears: d.realTimeExperienceYears ?? null,
+    technology: d.technology ?? null,
     currentCompany: d.currentCompany ?? null,
     skills: d.skills,
     featuredSkills: d.featuredSkills,
@@ -82,6 +89,9 @@ function candidateData(d: CandidateInput) {
     tags: d.tags,
     lastContactedAt: d.lastContactedAt ?? null,
     source: d.source ?? null,
+    isWorking: d.isWorking,
+    // Working type only meaningful when working; blank it otherwise.
+    workingType: d.isWorking ? d.workingType ?? null : null,
     discipline: d.discipline ?? null,
   };
 }
@@ -120,6 +130,9 @@ export async function createCandidate(
       performedById: user.id,
       candidateId: created.id,
     });
+    // Remember any new free-text work-auth / working-type for future dropdowns.
+    await rememberLookup(tx, "WORK_AUTH", created.workAuthorization);
+    await rememberLookup(tx, "WORKING_TYPE", created.workingType);
     // Lifecycle bench: every available candidate is on the bench (being
     // marketed) from creation. Skip retired/non-available ones.
     if (created.status === "AVAILABLE" && created.isActive) {
@@ -200,6 +213,8 @@ export async function updateCandidate(
   compare("location", existing.currentLocation, d.currentLocation);
   compare("work authorization", existing.workAuthorization, d.workAuthorization);
   compare("experience", existing.totalExperienceYears?.toString(), d.totalExperienceYears);
+  compare("real-time experience", existing.realTimeExperienceYears?.toString(), d.realTimeExperienceYears);
+  compare("technology", existing.technology, d.technology);
   compare("current company", existing.currentCompany, d.currentCompany);
   compare("skills", existing.skills.join(", "), d.skills.join(", "));
   compare("featured skills", existing.featuredSkills.join(", "), d.featuredSkills.join(", "));
@@ -214,12 +229,16 @@ export async function updateCandidate(
     d.lastContactedAt?.toISOString() ?? "",
   );
   compare("source", existing.source, d.source);
+  compare("working now", existing.isWorking, d.isWorking);
+  compare("working type", existing.workingType, d.isWorking ? d.workingType : null);
 
   await prisma.$transaction(async (tx) => {
     await tx.candidate.update({
       where: { id: candidateId },
       data: candidateData(d),
     });
+    await rememberLookup(tx, "WORK_AUTH", d.workAuthorization);
+    if (d.isWorking) await rememberLookup(tx, "WORKING_TYPE", d.workingType);
     if (changed.length)
       await logActivity(tx, {
         entityType: "CANDIDATE",

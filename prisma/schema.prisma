@@ -453,6 +453,13 @@ model Candidate {
   currentLocation     String?
   workAuthorization   String?
   totalExperienceYears Decimal? @db.Decimal(4, 1)
+  // Actual hands-on experience, distinct from the (often inflated) marketed
+  // figure. The bench overlay reads this rather than carrying its own copy.
+  realTimeExperienceYears Decimal? @db.Decimal(4, 1)
+  // Single primary focus technology (source of truth; the bench overlay reads
+  // this). Usually one of the candidate's skills; free-text so an unlisted tech
+  // still works.
+  technology          String?
   currentCompany      String?
   skills              String[]         @default([])
   // ≤3 starred skills shown first in list views. Subset of `skills` (enforced
@@ -480,6 +487,11 @@ model Candidate {
   // Broad IT vs Non-IT classification of the person (source of truth; the bench
   // overlay reads this rather than carrying its own copy).
   discipline          Discipline?
+  // Is the person currently working anywhere (incl. an external org not placed
+  // through us)? Independent of Placement, which tracks only through-us
+  // engagements. `workingType` = C2C / W2 / Full-time / free-text (learned).
+  isWorking           Boolean  @default(false)
+  workingType         String?
   // Soft-delete "trash" marker. Non-null = moved to trash (hidden everywhere,
   // restorable); a scheduled job hard-erases rows past the retention window.
   deletedAt           DateTime?
@@ -593,7 +605,6 @@ model BenchConsultant {
   // Two experience figures per the sheet: marketed vs actual real-time.
   marketingExpYears Decimal? @db.Decimal(4, 1)
   realTimeExpYears  Decimal? @db.Decimal(4, 1)
-  technology  String?
   skills      String[] @default([])
   reference   String?
   company     String?
@@ -949,4 +960,18 @@ model VendorRequirement {
   @@index([jobId])
   @@index([candidateId])
   @@index([recruiterId])
+}
+
+/// Learned free-text dropdown values — one row per (category, value). A curated
+/// static default list (see src/lib/lookups.ts) is unioned with these at read
+/// time, and the app upserts a new typed value on save so it reappears next
+/// time. Categories: WORK_AUTH, WORKING_TYPE, CALL_TYPE, PAYROLL_TYPE.
+model LookupOption {
+  id        String   @id @default(cuid())
+  category  String
+  value     String
+  createdAt DateTime @default(now())
+
+  @@unique([category, value])
+  @@index([category])
 }

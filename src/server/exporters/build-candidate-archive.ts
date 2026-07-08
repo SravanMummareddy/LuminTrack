@@ -80,6 +80,11 @@ export async function buildCandidateArchive(
     workAuthorization: c.workAuthorization,
     totalExperienceYears:
       c.totalExperienceYears != null ? Number(c.totalExperienceYears) : null,
+    realTimeExperienceYears:
+      c.realTimeExperienceYears != null
+        ? Number(c.realTimeExperienceYears)
+        : null,
+    technology: c.technology,
     currentCompany: c.currentCompany,
     skills: c.skills,
     featuredSkills: c.featuredSkills,

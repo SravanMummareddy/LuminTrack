@@ -41,7 +41,6 @@ describe("permissions — gates default to deny", () => {
   const gates = {
     canViewSensitiveDocs,
     canManageSensitiveDocs,
-    canViewBenchCredentials,
     canManageRequirements,
     canEditJobRatesAndAssignment,
     hasFullAccess,
@@ -66,4 +65,21 @@ describe("permissions — gates default to deny", () => {
       });
     });
   }
+
+  // Bench credentials are the exception: ANY signed-in user (incl. recruiters)
+  // may view/edit them so they can reach out to and market consultants (owner
+  // decision 2026-07-08). Still denies null/undefined/role-less viewers.
+  describe("canViewBenchCredentials", () => {
+    it("allows managers, team leads, AND recruiters", () => {
+      expect(canViewBenchCredentials(MANAGER)).toBe(true);
+      expect(canViewBenchCredentials(TEAM_LEAD)).toBe(true);
+      expect(canViewBenchCredentials(RECRUITER)).toBe(true);
+    });
+    it("denies null / undefined / role-less viewers", () => {
+      expect(canViewBenchCredentials(null)).toBe(false);
+      expect(canViewBenchCredentials(undefined)).toBe(false);
+      // @ts-expect-error — exercising a malformed viewer at runtime
+      expect(canViewBenchCredentials({})).toBe(false);
+    });
+  });
 });
