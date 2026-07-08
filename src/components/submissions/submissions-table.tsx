@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { Table, Th, Td, cardLink, cardLinkRaise } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
@@ -11,6 +12,7 @@ import { formatDate, formatSubmissionDisplayId } from "@/lib/format";
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
 import { STALE_STAGE_DAYS } from "@/lib/analytics";
 import type { SubmissionListRow } from "@/server/queries/submissions";
+import { SubmissionBulkBar } from "@/components/submissions/submission-bulk-bar";
 
 type Column = {
   key: string;
@@ -316,6 +318,22 @@ export function SubmissionsTable({
     DEFAULTS,
   );
 
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const pageIds = rows.map((r) => r.id);
+  const allSelected =
+    pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  const toggleAll = () =>
+    setSelected(allSelected ? new Set() : new Set(pageIds));
+  const toggleOne = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const checkboxClass =
+    "h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-200";
+
   const byKey = new Map(COLUMNS.map((c) => [c.key, c]));
   const orderedCols = prefs.order
     .map((k) => byKey.get(k))
@@ -338,6 +356,13 @@ export function SubmissionsTable({
         />
       </div>
 
+      {selected.size > 0 && (
+        <SubmissionBulkBar
+          selectedIds={[...selected]}
+          onDone={() => setSelected(new Set())}
+        />
+      )}
+
       <MobileSort
         options={visibleCols
           .filter((c) => c.sortKey)
@@ -351,6 +376,15 @@ export function SubmissionsTable({
       <Table>
         <thead className="border-b border-slate-200 bg-slate-50">
           <tr>
+            <Th className="w-8">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleAll}
+                aria-label="Select all on this page"
+                className={checkboxClass}
+              />
+            </Th>
             {visibleCols.map((c) =>
               c.sortKey ? (
                 <SortableHeader
@@ -373,7 +407,21 @@ export function SubmissionsTable({
         </thead>
         <tbody className="divide-y divide-slate-100">
           {rows.map((row, idx) => (
-            <tr key={row.id} className="hover:bg-slate-50">
+            <tr
+              key={row.id}
+              className={
+                selected.has(row.id) ? "bg-indigo-50/60" : "hover:bg-slate-50"
+              }
+            >
+              <td className="w-8 px-3 align-middle">
+                <input
+                  type="checkbox"
+                  checked={selected.has(row.id)}
+                  onChange={() => toggleOne(row.id)}
+                  aria-label={`Select ${row.candidate.fullName}`}
+                  className={checkboxClass}
+                />
+              </td>
               {visibleCols.map((c) => (
                 <RenderCell
                   key={c.key}

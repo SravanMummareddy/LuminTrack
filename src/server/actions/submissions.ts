@@ -24,6 +24,7 @@ import {
   terminatePlacementOnRevert,
 } from "@/server/placement-lifecycle";
 import { createSubmissionRecord } from "@/server/submission-create";
+import { branchActions } from "@/lib/submission-flow";
 
 function readSubmission(formData: FormData) {
   return submissionSchema.safeParse({
@@ -542,4 +543,95 @@ export async function changeSubmissionStatus(
           : undefined,
     },
   };
+}
+
+/** Dedupe + cap the `ids` list a bulk action operates on. */
+function bulkIds(formData: FormData): string[] {
+  const raw = formData
+    .getAll("ids")
+    .map((v) => String(v).trim())
+    .filter(Boolean);
+  return [...new Set(raw)].slice(0, 200);
+}
+
+// The only statuses a bulk change may target. These are the "branch" outcomes
+// (see branchActions in submission-flow.ts) — none of them is JOINED, so bulk
+// can never trigger the placement-creation cascade; and JOINED is terminal, so
+// none of the *source* rows can be JOINED either (branchActions returns [] for
+// terminals), so bulk can never trigger a placement teardown. That keeps the
+// pipeline invariants intact without re-implementing the gates.
+const BULK_STATUS_TARGETS = ["ON_HOLD", "REJECTED", "BACKED_OUT"] as const;
+type BulkStatusTarget = (typeof BULK_STATUS_TARGETS)[number];
+
+function isBulkStatusTarget(value: string): value is BulkStatusTarget {
+  return (BULK_STATUS_TARGETS as readonly string[]).includes(value);
+}
+
+/**
+ * Bulk status change from the submissions list. Deliberately limited to the safe
+ * branch outcomes (On hold / Rejected / Backed out): a submission is only touched
+ * when `branchActions(current)` allows the target — so terminal rows, JOINED rows,
+ * and rows already at the target are silently skipped, and no placement cascade
+ * ever fires. Advance / Mark-joined stay per-submission (they run the iLabor,
+ * duplicate, and rate-chain gates + the placement cascade, which shouldn't be
+ * bypassed in bulk). Each changed row gets its own audit entry.
+ */
+export async function bulkChangeSubmissionStatus(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const ids = bulkIds(formData);
+  const target = String(formData.get("status") ?? "").trim();
+  if (ids.length === 0 || !isBulkStatusTarget(target)) return;
+  const next = target as SubmissionStatus;
+
+  const submissions = await prisma.submission.findMany({
+    where: { id: { in: ids } },
+    select: {
+      id: true,
+      status: true,
+      jobId: true,
+      candidateId: true,
+      candidate: { select: { fullName: true } },
+      job: { select: { title: true } },
+    },
+  });
+
+  const action: ActivityAction =
+    next === "REJECTED" ? "CANDIDATE_REJECTED" : "SUBMISSION_STATUS_CHANGED";
+  // REJECTED / ON_HOLD carry an optional preset reason category, mirroring the
+  // single-status form.
+  const reason =
+    next === "REJECTED" || next === "ON_HOLD"
+      ? String(formData.get("reason") ?? "").trim() || null
+      : null;
+
+  const touched: { jobId: string; candidateId: string }[] = [];
+  for (const s of submissions) {
+    // Only apply when the target is a valid branch outcome from this row's
+    // current status — this is the invariant guard.
+    if (!branchActions(s.status).includes(next)) continue;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.submission.update({
+        where: { id: s.id },
+        data: { status: next },
+      });
+      await logActivity(tx, {
+        entityType: "SUBMISSION",
+        action,
+        description: `${s.candidate.fullName} on "${s.job.title}": status changed from ${SUBMISSION_STATUS_LABEL[s.status]} to ${SUBMISSION_STATUS_LABEL[next]} (bulk)`,
+        oldValue: SUBMISSION_STATUS_LABEL[s.status],
+        newValue: SUBMISSION_STATUS_LABEL[next],
+        reason,
+        performedById: user.id,
+        submissionId: s.id,
+      });
+    });
+    touched.push({ jobId: s.jobId, candidateId: s.candidateId });
+  }
+
+  revalidatePath("/submissions");
+  for (const t of new Set(touched.map((x) => x.jobId)))
+    revalidatePath(`/jobs/${t}`);
+  for (const c of new Set(touched.map((x) => x.candidateId)))
+    revalidatePath(`/candidates/${c}`);
 }
