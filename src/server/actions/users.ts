@@ -10,6 +10,7 @@ import {
   userCreateSchema,
   userUpdateSchema,
   changePasswordSchema,
+  profileSchema,
 } from "@/lib/validation/user";
 import { toFieldErrors } from "@/lib/validation/common";
 import type { FormState } from "@/lib/form-state";
@@ -152,4 +153,44 @@ export async function changeOwnPassword(
   });
 
   return { ok: true, toast: { title: "Password updated" } };
+}
+
+/**
+ * Self-service profile edit: any signed-in user can update their own name and
+ * email. Role/active status stay admin-only (not accepted here). Logs
+ * USER_UPDATED about themselves.
+ */
+export async function updateOwnProfile(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const actor = await requireUser();
+  const parsed = profileSchema.safeParse({
+    fullName: formData.get("fullName") ?? "",
+    email: formData.get("email") ?? "",
+  });
+  if (!parsed.success) return { fieldErrors: toFieldErrors(parsed.error) };
+
+  const email = parsed.data.email.toLowerCase();
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: actor.id },
+        data: { fullName: parsed.data.fullName, email },
+      });
+      await logActivity(tx, {
+        entityType: "USER",
+        action: "USER_UPDATED",
+        description: `Updated own profile (${email})`,
+        performedById: actor.id,
+      });
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error))
+      return { fieldErrors: { email: "A user with this email already exists." } };
+    throw error;
+  }
+
+  revalidatePath("/settings");
+  return { ok: true, toast: { title: "Profile updated" } };
 }

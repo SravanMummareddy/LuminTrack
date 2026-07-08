@@ -78,7 +78,12 @@ export default async function SettingsPage({
       />
     );
   } else {
-    content = <AccountSection />;
+    content = (
+      <AccountSection
+        fullName={user?.fullName ?? ""}
+        email={user?.email ?? ""}
+      />
+    );
   }
 
   return (

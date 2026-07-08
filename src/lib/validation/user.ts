@@ -21,6 +21,14 @@ export const userUpdateSchema = base.extend({
 export type UserCreateInput = z.infer<typeof userCreateSchema>;
 export type UserUpdateInput = z.infer<typeof userUpdateSchema>;
 
+/** Self-service profile edit — a user changing their own name/email. Role and
+ *  active status are deliberately not editable here (admin-only). */
+export const profileSchema = z.object({
+  fullName: z.string().trim().min(1, "Full name is required.").max(120),
+  email: z.email("Enter a valid email address."),
+});
+export type ProfileInput = z.infer<typeof profileSchema>;
+
 /** Self-service password change — verify the current password, then set a new
  *  one (min 8, must differ from current, must be confirmed). */
 export const changePasswordSchema = z
