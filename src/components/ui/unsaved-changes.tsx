@@ -69,3 +69,48 @@ export function GuardedCancel({
     </>
   );
 }
+
+/**
+ * A dirty-aware in-form link (e.g. "View candidate" on the bench edit form).
+ * Soft navigation doesn't fire `beforeunload`, so a plain <Link> silently drops
+ * unsaved edits — this asks to discard first when the form is dirty, else it
+ * navigates straight through. Renders as a text link, not a button.
+ */
+export function GuardedLink({
+  href,
+  dirty,
+  children,
+  className = "text-indigo-600 hover:underline",
+}: {
+  href: string;
+  dirty: boolean;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        type="button"
+        className={className}
+        onClick={() => (dirty ? setOpen(true) : router.push(href))}
+      >
+        {children}
+      </button>
+      <ConfirmDialog
+        open={open}
+        onClose={() => setOpen(false)}
+        onConfirm={() => {
+          setOpen(false);
+          router.push(href);
+        }}
+        title="Discard changes?"
+        description="You have unsaved changes on this form. Leaving now will lose them."
+        confirmLabel="Discard changes"
+        cancelLabel="Keep editing"
+      />
+    </>
+  );
+}

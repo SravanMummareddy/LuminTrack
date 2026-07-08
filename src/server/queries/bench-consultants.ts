@@ -26,7 +26,8 @@ const BENCH_SORTS: Record<
   (d: SortDir) => Prisma.BenchConsultantOrderByWithRelationInput
 > = {
   name: (d) => ({ fullName: d }),
-  technology: (d) => ({ technology: d }),
+  // Technology lives on the linked candidate (source of truth) now.
+  technology: (d) => ({ candidate: { technology: d } }),
   location: (d) => ({ currentLocation: d }),
   priority: (d) => ({ priority: d }),
   status: (d) => ({ marketingStatus: d }),
@@ -74,7 +75,7 @@ export async function listBenchConsultants(filters: BenchListFilters) {
     where.AND = terms.map((t) => ({
       OR: [
         { fullName: { contains: t, mode: "insensitive" } },
-        { technology: { contains: t, mode: "insensitive" } },
+        { candidate: { technology: { contains: t, mode: "insensitive" } } },
         { currentLocation: { contains: t, mode: "insensitive" } },
       ],
     }));
@@ -100,7 +101,6 @@ export async function listBenchConsultants(filters: BenchListFilters) {
       id: true,
       seq: true,
       fullName: true,
-      technology: true,
       mVisa: true,
       aVisa: true,
       workAuthorization: true,
@@ -116,9 +116,12 @@ export async function listBenchConsultants(filters: BenchListFilters) {
       candidateId: true,
       createdAt: true,
       updatedAt: true,
-      // The linked candidate is the source of truth for company + discipline;
-      // the bench's own `company` is only a fallback for unlinked identities.
-      candidate: { select: { currentCompany: true, discipline: true } },
+      // The linked candidate is the source of truth for company + discipline +
+      // technology; the bench's own `company` is only a fallback for unlinked
+      // identities.
+      candidate: {
+        select: { currentCompany: true, discipline: true, technology: true },
+      },
       recruiter: { select: { id: true, fullName: true } },
     },
   });
@@ -145,13 +148,35 @@ export async function getBenchConsultant(
     omit: opts.includeCredentials ? {} : { marketingPassword: true },
     include: {
       recruiter: { select: { id: true, fullName: true } },
-      candidate: { select: { id: true, seq: true, fullName: true } },
+      // Technology + real-time experience are candidate-owned (source of truth).
+      candidate: {
+        select: {
+          id: true,
+          seq: true,
+          fullName: true,
+          technology: true,
+          realTimeExperienceYears: true,
+        },
+      },
       createdBy: { select: { id: true, fullName: true } },
     },
   });
 }
 
-/** Raw row for the edit form (Decimals stringified for input defaults). */
+/** The linked bench row for a candidate (id + status), or null if not on the
+ *  bench. Powers the "Marketing" line on the candidate detail page. */
+export async function getBenchLinkForCandidate(candidateId: string) {
+  return prisma.benchConsultant.findUnique({
+    where: { candidateId },
+    select: { id: true, marketingStatus: true },
+  });
+}
+
+/** Raw row for the edit form (Decimals stringified for input defaults). The
+ *  linked candidate carries technology (source of truth), so include it. */
 export async function getBenchConsultantForEdit(id: string) {
-  return prisma.benchConsultant.findUnique({ where: { id } });
+  return prisma.benchConsultant.findUnique({
+    where: { id },
+    include: { candidate: { select: { technology: true } } },
+  });
 }

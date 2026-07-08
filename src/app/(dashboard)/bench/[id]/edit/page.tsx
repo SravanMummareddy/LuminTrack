@@ -8,6 +8,7 @@ import { updateBenchConsultant } from "@/server/actions/bench-consultants";
 import { getBenchConsultantForEdit } from "@/server/queries/bench-consultants";
 import { listActiveRecruiterOptions } from "@/server/queries/org";
 import { listCandidateOptions } from "@/server/queries/candidates";
+import { listLookupValues } from "@/server/queries/lookups";
 import { requireUser } from "@/lib/session";
 import { canViewBenchCredentials } from "@/lib/permissions";
 
@@ -25,11 +26,15 @@ export default async function EditBenchConsultantPage({
 }) {
   const { id } = await params;
   const user = await requireUser();
-  const [c, recruiters, candidates] = await Promise.all([
-    getBenchConsultantForEdit(id),
-    listActiveRecruiterOptions(),
-    listCandidateOptions(),
-  ]);
+  const [c, recruiters, candidates, workAuthOptions, callTypeOptions, payrollTypeOptions] =
+    await Promise.all([
+      getBenchConsultantForEdit(id),
+      listActiveRecruiterOptions(),
+      listCandidateOptions(),
+      listLookupValues("WORK_AUTH"),
+      listLookupValues("CALL_TYPE"),
+      listLookupValues("PAYROLL_TYPE"),
+    ]);
   if (!c) notFound();
 
   const canCreds = canViewBenchCredentials(user);
@@ -45,7 +50,7 @@ export default async function EditBenchConsultantPage({
     aVisa: c.aVisa ?? "",
     marketingExpYears: dec(c.marketingExpYears),
     realTimeExpYears: dec(c.realTimeExpYears),
-    technology: c.technology ?? "",
+    technology: c.candidate?.technology ?? "",
     skills: c.skills,
     reference: c.reference ?? "",
     company: c.company ?? "",
@@ -82,6 +87,9 @@ export default async function EditBenchConsultantPage({
           recruiters={recruiters}
           candidates={candidates}
           canEditCredentials={canCreds}
+          workAuthOptions={workAuthOptions}
+          callTypeOptions={callTypeOptions}
+          payrollTypeOptions={payrollTypeOptions}
         />
       </div>
     </div>

@@ -404,11 +404,14 @@ export const BENCH_MARKETING_STATUSES: BenchMarketingStatus[] = [
   "PLACED",
   "INACTIVE",
 ];
+// The single bench-lifecycle axis (the old separate `isActive` "Active on
+// bench" flag is retired — see reconcile-bench-status.ts). Labels are
+// self-explanatory so a row never shows a contradictory pair.
 export const BENCH_MARKETING_STATUS_LABEL: Record<BenchMarketingStatus, string> = {
-  ACTIVE: "Active",
+  ACTIVE: "On bench",
   PAUSED: "Paused",
   PLACED: "Placed",
-  INACTIVE: "Inactive",
+  INACTIVE: "Off bench",
 };
 export const BENCH_MARKETING_STATUS_TONE: Record<BenchMarketingStatus, BadgeTone> = {
   ACTIVE: "green",

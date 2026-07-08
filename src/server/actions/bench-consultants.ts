@@ -6,6 +6,8 @@ import { prisma } from "@/server/db";
 import { requireUser } from "@/lib/session";
 import { canViewBenchCredentials } from "@/lib/permissions";
 import { logActivity } from "@/server/activity";
+import { rememberLookup } from "@/server/lookups";
+import { ensureBenchForCandidate } from "@/server/bench-lifecycle";
 import {
   benchConsultantSchema,
   type BenchConsultantInput,
@@ -50,7 +52,9 @@ function readBenchConsultant(formData: FormData) {
     priority: formData.get("priority") ?? "SECOND",
     marketingStatus: formData.get("marketingStatus") ?? "ACTIVE",
     notes: formData.get("notes") ?? "",
-    isActive: formData.get("isActive") != null,
+    // `isActive` is a retired axis — the bench lifecycle is `marketingStatus`
+    // alone now. Kept true so the deprecated column never contradicts the pill.
+    isActive: true,
     recruiterId: formData.get("recruiterId") ?? "",
     candidateId: formData.get("candidateId") ?? "",
   });
@@ -68,7 +72,7 @@ function benchData(d: BenchConsultantInput) {
     aVisa: d.aVisa ?? null,
     marketingExpYears: d.marketingExpYears ?? null,
     realTimeExpYears: d.realTimeExpYears ?? null,
-    technology: d.technology ?? null,
+    // `technology` is candidate-owned now (see writes below) — not a bench column.
     skills: d.skills,
     reference: d.reference ?? null,
     company: d.company ?? null,
@@ -81,7 +85,9 @@ function benchData(d: BenchConsultantInput) {
     marketingEmail: d.marketingEmail ?? null,
     marketingPassword: d.marketingPassword ?? null,
     marketingNumber: d.marketingNumber ?? null,
-    personalNumber: d.personalNumber ?? null,
+    // Redundant with the contact phone — default to it when left blank so the
+    // marketing card always has a reachable personal number.
+    personalNumber: d.personalNumber ?? d.phone ?? null,
     priority: d.priority,
     marketingStatus: d.marketingStatus,
     notes: d.notes ?? null,
@@ -121,6 +127,9 @@ export async function createBenchConsultant(
   const d = parsed.data;
 
   const data = benchData(d);
+  // A Visa = the actual visa = the work authorization. Prefill it when blank so
+  // the bench mirrors the candidate.
+  if (!data.aVisa) data.aVisa = d.workAuthorization ?? null;
   // Only credential-cleared users (admins) may set the gated marketing
   // credentials. For everyone else the form never renders those inputs, so we
   // strip them rather than persist blanks.
@@ -143,13 +152,37 @@ export async function createBenchConsultant(
   if (linkExisting) {
     const already = await prisma.benchConsultant.findUnique({
       where: { candidateId: d.candidateId as string },
-      select: { id: true },
+      select: { id: true, marketingStatus: true },
     });
-    if (already)
+    if (already) {
+      // Re-adding a candidate who was taken off the bench: reactivate the
+      // existing row (all its stored details are kept — no retype) instead of
+      // erroring. A row that's still on the bench / placed is a real duplicate.
+      if (already.marketingStatus === "INACTIVE") {
+        await prisma.$transaction(async (tx) => {
+          await tx.benchConsultant.update({
+            where: { id: already.id },
+            data: { marketingStatus: "ACTIVE" },
+          });
+          await logActivity(tx, {
+            entityType: "CONSULTANT",
+            action: "BENCH_CONSULTANT_UPDATED",
+            description: "Re-added to bench (marketing status INACTIVE → ACTIVE)",
+            oldValue: "INACTIVE",
+            newValue: "ACTIVE",
+            performedById: user.id,
+            benchConsultantId: already.id,
+          });
+        });
+        revalidatePath("/bench");
+        revalidatePath("/candidates");
+        redirect(`/bench/${already.id}`);
+      }
       return {
         error: "That candidate is already on the bench.",
         fieldErrors: { candidateId: "Already on the bench." },
       };
+    }
   }
 
   let consultant;
@@ -164,6 +197,7 @@ export async function createBenchConsultant(
             phone: d.phone ?? null,
             currentLocation: d.currentLocation ?? null,
             workAuthorization: d.workAuthorization ?? null,
+            technology: d.technology ?? null,
             skills: d.skills,
             status: "AVAILABLE",
             isActive: true,
@@ -179,6 +213,13 @@ export async function createBenchConsultant(
           performedById: user.id,
           candidateId: cand.id,
         });
+      } else if (d.technology && candidateId) {
+        // Linking an existing candidate: push a provided technology onto the
+        // candidate (source of truth). Blank leaves their current value intact.
+        await tx.candidate.update({
+          where: { id: candidateId },
+          data: { technology: d.technology },
+        });
       }
       const created = await tx.benchConsultant.create({
         // The resolved candidateId overrides whatever the sentinel was.
@@ -191,6 +232,9 @@ export async function createBenchConsultant(
         performedById: user.id,
         benchConsultantId: created.id,
       });
+      await rememberLookup(tx, "WORK_AUTH", d.workAuthorization);
+      await rememberLookup(tx, "CALL_TYPE", d.callType);
+      await rememberLookup(tx, "PAYROLL_TYPE", d.payrollType);
       return created;
     });
   } catch (e) {
@@ -226,7 +270,10 @@ export async function updateBenchConsultant(
     };
   const d = parsed.data;
 
-  const existing = await prisma.benchConsultant.findUnique({ where: { id } });
+  const existing = await prisma.benchConsultant.findUnique({
+    where: { id },
+    include: { candidate: { select: { id: true, technology: true } } },
+  });
   if (!existing) return { error: "This consultant no longer exists." };
 
   // Record which fields changed for a meaningful audit entry (credentials are
@@ -239,14 +286,13 @@ export async function updateBenchConsultant(
   compare("email", existing.email, d.email);
   compare("phone", existing.phone, d.phone);
   compare("location", existing.currentLocation, d.currentLocation);
-  compare("technology", existing.technology, d.technology);
+  compare("technology", existing.candidate?.technology, d.technology);
   compare("skills", existing.skills.join(", "), d.skills.join(", "));
   compare("priority", existing.priority, d.priority);
   compare("marketing status", existing.marketingStatus, d.marketingStatus);
   compare("recruiter", existing.recruiterId, d.recruiterId);
   compare("linked candidate", existing.candidateId, d.candidateId);
   compare("notes", existing.notes, d.notes);
-  compare("active", existing.isActive, d.isActive);
 
   const data = benchData(d);
   const canCreds = canViewBenchCredentials(user);
@@ -259,6 +305,15 @@ export async function updateBenchConsultant(
 
   await prisma.$transaction(async (tx) => {
     await tx.benchConsultant.update({ where: { id }, data });
+    // Technology is candidate-owned — write it through to the linked candidate.
+    if (existing.candidateId)
+      await tx.candidate.update({
+        where: { id: existing.candidateId },
+        data: { technology: d.technology ?? null },
+      });
+    await rememberLookup(tx, "WORK_AUTH", d.workAuthorization);
+    await rememberLookup(tx, "CALL_TYPE", d.callType);
+    await rememberLookup(tx, "PAYROLL_TYPE", d.payrollType);
     if (changed.length)
       await logActivity(tx, {
         entityType: "CONSULTANT",
@@ -300,6 +355,103 @@ export async function removeFromBench(formData: FormData): Promise<void> {
       description: `Removed from bench (marketing status ${existing.marketingStatus} → INACTIVE)`,
       oldValue: existing.marketingStatus,
       newValue: "INACTIVE",
+      performedById: user.id,
+      benchConsultantId: id,
+    });
+  });
+  revalidatePath("/bench");
+  revalidatePath(`/bench/${id}`);
+}
+
+/**
+ * "Add to bench" straight from a candidate page. Reactivates an existing linked
+ * bench row (any off-bench status → ACTIVE), or creates one seeded from the
+ * candidate if none exists. Idempotent for a candidate already on the bench.
+ */
+export async function addCandidateToBench(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const candidateId = String(formData.get("candidateId") ?? "").trim();
+  if (!candidateId) return;
+  const existing = await prisma.benchConsultant.findUnique({
+    where: { candidateId },
+    select: { id: true, marketingStatus: true },
+  });
+  await prisma.$transaction(async (tx) => {
+    if (existing) {
+      if (existing.marketingStatus !== "ACTIVE") {
+        await tx.benchConsultant.update({
+          where: { id: existing.id },
+          data: { marketingStatus: "ACTIVE" },
+        });
+        await logActivity(tx, {
+          entityType: "CONSULTANT",
+          action: "BENCH_CONSULTANT_UPDATED",
+          description: `Added to bench from candidate (${existing.marketingStatus} → ACTIVE)`,
+          oldValue: existing.marketingStatus,
+          newValue: "ACTIVE",
+          performedById: user.id,
+          benchConsultantId: existing.id,
+        });
+      }
+      return;
+    }
+    const cand = await tx.candidate.findUnique({
+      where: { id: candidateId },
+      select: {
+        fullName: true,
+        email: true,
+        phone: true,
+        currentLocation: true,
+        workAuthorization: true,
+        skills: true,
+      },
+    });
+    if (!cand) return;
+    await ensureBenchForCandidate(tx, {
+      candidateId,
+      fullName: cand.fullName,
+      email: cand.email,
+      phone: cand.phone,
+      currentLocation: cand.currentLocation,
+      workAuthorization: cand.workAuthorization,
+      skills: cand.skills,
+      recruiterId: user.role === "RECRUITER" ? user.id : null,
+      performedById: user.id,
+    });
+  });
+  revalidatePath("/bench");
+  revalidatePath(`/candidates/${candidateId}`);
+}
+
+/**
+ * Put a consultant (back) onto the active bench. Serves two owner scenarios:
+ *  - "Market — project ending": a PLACED consultant whose engagement is winding
+ *    down is marketed again (stays placed AND on the bench — the two are
+ *    independent). Placement-lifecycle sync only fires on placement transitions,
+ *    so it won't clobber this manual ACTIVE.
+ *  - Re-adding an INACTIVE (Off bench) row from the detail page.
+ * No-op if already ACTIVE.
+ */
+export async function remarketConsultant(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) return;
+  const existing = await prisma.benchConsultant.findUnique({
+    where: { id },
+    select: { marketingStatus: true },
+  });
+  if (!existing || existing.marketingStatus === "ACTIVE") return;
+  await prisma.$transaction(async (tx) => {
+    await tx.benchConsultant.update({
+      where: { id },
+      data: { marketingStatus: "ACTIVE" },
+    });
+    await logActivity(tx, {
+      entityType: "CONSULTANT",
+      action: "BENCH_CONSULTANT_UPDATED",
+      description: `Marketing resumed (status ${existing.marketingStatus} → ACTIVE)`,
+      oldValue: existing.marketingStatus,
+      newValue: "ACTIVE",
       performedById: user.id,
       benchConsultantId: id,
     });

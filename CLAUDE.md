@@ -29,6 +29,39 @@ from all code. Do not reintroduce it.
 **Source of truth:** the header comment + `rateChainWarnings()` in `src/lib/rates.ts` (chain
 = Client ≥ Bill ≥ Pay); the live chain warning is `src/components/ui/rate-chain-warning.tsx`.
 
+## 🚧 Current work — feedback round 3: Candidate + Bench forms & marketing lifecycle (BUILT on `main`, tsc clean, 164 tests, NOT yet committed/deployed — 2026-07-08)
+
+Plan: `~/.claude/plans/mossy-skipping-umbrella.md`. Owner feedback from live-testing the
+Add-candidate + Bench screens, built in 5 phases (all done + browser-verified on dev):
+- **P1 (no schema):** candidate "Source" → **"Reference"** (label only, column stays
+  `source`); `LocationInput` (existing, ~1k US cities) swapped onto the candidate + bench
+  **Current location** fields (jobs/VPR already had it).
+- **P2 (migration `20260708200000`):** **Candidate.technology** + **realTimeExperienceYears**
+  added; **Bench.technology dropped** (bench reads the candidate's — mirrors the discipline
+  move). Technology is a skills-sourced combobox (typing a new tech adds it to Skills). New
+  generic **`SuggestInput`** (`src/components/ui/suggest-input.tsx`) = free-text + suggestions
+  (generalizes LocationInput; unlike the strict `SearchSelect` it keeps any typed value).
+- **P3 (migration `20260708210000`):** **`LookupOption`** table (category+value, learned
+  values) backs work-auth / working-type / call-type / payroll-type dropdowns —
+  `listLookupValues(cat)` (defaults ∪ learned, `src/lib/lookups.ts` + `src/server/queries/lookups.ts`)
+  + `rememberLookup(tx,cat,val)` (`src/server/lookups.ts`). New **Candidate.isWorking +
+  workingType** ("Working now?" — **independent of Placement**; Placements = through-us only).
+- **P4 (no schema; `reconcile-bench-status.ts`):** **collapsed the two bench status axes into
+  one** — `marketingStatus` relabeled **On bench / Paused / Placed / Off bench**, single badge;
+  `isActive` retired (forced true, deprecated). Candidate detail gained a **Marketing (bench)**
+  line + Add-to-bench/Market-again. **Re-market** action (`remarketConsultant`) keeps a PLACED
+  consultant in BOTH placement and bench; re-adding an off-bench consultant **reactivates** the
+  retained row (no retype). `bench.aVisa` auto-fills from `candidate.workAuthorization`.
+- **P5:** bench "View candidate" link now dirty-guarded (`GuardedLink`); `personalNumber`
+  defaults to the contact phone; **marketing credentials now visible to ALL recruiters**
+  (`canViewBenchCredentials` = any signed-in user — owner decision); Back button on bench detail.
+
+**Owner decisions (this round):** recruiters see full marketing section incl. password;
+Source==Reference (relabel); collapse bench status to one axis; manual Re-market for
+placed-and-ending consultants. **Deploy TODO:** commit → apply both migrations to prod
+`ep-orange-dew` + run `reconcile-bench-status.ts --confirm` → reseed. Dev already migrated +
+reseeded.
+
 ## ✅ CURRENT STATE — feedback rounds 1–2 SHIPPED + LIVE on prod (2026-07-08)
 
 **`main` @ `a7062da` (PR #41), deployed to prod, tsc clean, 166 unit tests.** Repo is a

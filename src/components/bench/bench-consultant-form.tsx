@@ -1,13 +1,15 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import Link from "next/link";
+import { useActionState, useMemo, useState } from "react";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
+import { LocationInput } from "@/components/ui/location-input";
+import { SuggestInput } from "@/components/ui/suggest-input";
 import { SearchSelect } from "@/components/ui/search-select";
 import { Button } from "@/components/ui/button";
 import {
   useUnsavedChanges,
   GuardedCancel,
+  GuardedLink,
 } from "@/components/ui/unsaved-changes";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 import {
@@ -100,6 +102,9 @@ export function BenchConsultantForm({
   recruiters,
   candidates,
   canEditCredentials,
+  workAuthOptions = [],
+  callTypeOptions = [],
+  payrollTypeOptions = [],
 }: {
   action: BenchAction;
   values?: BenchConsultantFormValues;
@@ -107,11 +112,13 @@ export function BenchConsultantForm({
   recruiters: Option[];
   candidates: Option[];
   canEditCredentials: boolean;
+  workAuthOptions?: string[];
+  callTypeOptions?: string[];
+  payrollTypeOptions?: string[];
 }) {
   const [state, formAction, pending] = useActionState(action, EMPTY_FORM_STATE);
   const [fields, setFields] = useState<Fields>(() => initialFields(values));
   const [relocation, setRelocation] = useState(values?.relocation ?? false);
-  const [isActive, setIsActive] = useState(values?.isActive ?? true);
   const [showMore, setShowMore] = useState(false);
 
   const set =
@@ -122,6 +129,27 @@ export function BenchConsultantForm({
       >,
     ) =>
       setFields((f) => ({ ...f, [name]: e.target.value }));
+
+  // Technology is candidate-owned; on the bench form it's a skills-sourced
+  // combobox. A committed value not already in Skills is added to Skills too.
+  const parsedSkills = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          fields.skills.split(",").map((s) => s.trim()).filter(Boolean),
+        ),
+      ),
+    [fields.skills],
+  );
+  function rememberTechInSkills(value: string) {
+    const tech = value.trim();
+    if (!tech) return;
+    setFields((f) => {
+      const skills = f.skills.split(",").map((s) => s.trim()).filter(Boolean);
+      if (skills.some((s) => s.toLowerCase() === tech.toLowerCase())) return f;
+      return { ...f, skills: [...skills, tech].join(", ") };
+    });
+  }
 
   const errors = state.fieldErrors ?? {};
   const cancelHref = values ? `/bench/${values.id}` : "/bench";
@@ -148,12 +176,12 @@ export function BenchConsultantForm({
               <div className="flex items-center gap-2 text-sm text-slate-700">
                 <span className="font-medium">{fields.fullName}</span>
                 {fields.candidateId && (
-                  <Link
+                  <GuardedLink
                     href={`/candidates/${fields.candidateId}`}
-                    className="text-indigo-600 hover:underline"
+                    dirty={dirty}
                   >
                     View candidate
-                  </Link>
+                  </GuardedLink>
                 )}
               </div>
             </Field>
@@ -246,8 +274,8 @@ export function BenchConsultantForm({
               ]}
             />
           </Field>
-          <Field label="Technology" htmlFor="technology" error={errors.technology}>
-            <Input id="technology" name="technology" value={fields.technology} onChange={set("technology")} placeholder="e.g. Java / AWS" />
+          <Field label="Technology" htmlFor="technology" hint="Primary focus tech — pick from skills or type a new one." error={errors.technology}>
+            <SuggestInput id="technology" name="technology" value={fields.technology} suggestions={parsedSkills} onChange={set("technology")} onCommit={rememberTechInSkills} placeholder="e.g. Java" />
           </Field>
         </div>
 
@@ -259,7 +287,7 @@ export function BenchConsultantForm({
             <Input id="phone" name="phone" value={fields.phone} onChange={set("phone")} />
           </Field>
           <Field label="Current location" htmlFor="currentLocation" error={errors.currentLocation}>
-            <Input id="currentLocation" name="currentLocation" value={fields.currentLocation} onChange={set("currentLocation")} />
+            <LocationInput id="currentLocation" name="currentLocation" value={fields.currentLocation} onChange={set("currentLocation")} placeholder="e.g. Memphis, TN" />
           </Field>
           <Field label="Least rate on C2C" htmlFor="leastRateC2C" error={errors.leastRateC2C}>
             <Input id="leastRateC2C" name="leastRateC2C" type="number" min="0" step="0.01" value={fields.leastRateC2C} onChange={set("leastRateC2C")} placeholder="$/hr" />
@@ -310,17 +338,17 @@ export function BenchConsultantForm({
               <Field label="Project type" htmlFor="projectType" error={errors.projectType}>
                 <Input id="projectType" name="projectType" value={fields.projectType} onChange={set("projectType")} placeholder="Contract / C2H / Full-time" />
               </Field>
-              <Field label="Call type" htmlFor="callType" error={errors.callType}>
-                <Input id="callType" name="callType" value={fields.callType} onChange={set("callType")} placeholder="C2C / W2 / Any" />
+              <Field label="Call type" htmlFor="callType" hint="Engagement types you'll take calls for." error={errors.callType}>
+                <SuggestInput id="callType" name="callType" value={fields.callType} suggestions={callTypeOptions} onChange={set("callType")} placeholder="C2C / W2 / Any" />
               </Field>
               <Field label="Payroll type" htmlFor="payrollType" error={errors.payrollType}>
-                <Input id="payrollType" name="payrollType" value={fields.payrollType} onChange={set("payrollType")} placeholder="W2 / C2C / 1099" />
+                <SuggestInput id="payrollType" name="payrollType" value={fields.payrollType} suggestions={payrollTypeOptions} onChange={set("payrollType")} placeholder="W2 / C2C / 1099" />
               </Field>
               <Field label="Marketing start date" htmlFor="marketingStartDate" error={errors.marketingStartDate}>
                 <Input id="marketingStartDate" name="marketingStartDate" type="date" value={fields.marketingStartDate} onChange={set("marketingStartDate")} />
               </Field>
-              <Field label="Work authorization (free-text)" htmlFor="workAuthorization" error={errors.workAuthorization}>
-                <Input id="workAuthorization" name="workAuthorization" value={fields.workAuthorization} onChange={set("workAuthorization")} />
+              <Field label="Work authorization (A Visa / actual)" htmlFor="workAuthorization" error={errors.workAuthorization}>
+                <SuggestInput id="workAuthorization" name="workAuthorization" value={fields.workAuthorization} suggestions={workAuthOptions} onChange={set("workAuthorization")} placeholder="e.g. Green Card" />
               </Field>
             </div>
 
@@ -355,22 +383,20 @@ export function BenchConsultantForm({
             <Field label="Marketing number" htmlFor="marketingNumber" error={errors.marketingNumber}>
               <Input id="marketingNumber" name="marketingNumber" value={fields.marketingNumber} onChange={set("marketingNumber")} />
             </Field>
-            <Field label="Personal number" htmlFor="personalNumber" error={errors.personalNumber}>
+            <Field label="Personal number" htmlFor="personalNumber" hint="Defaults to the contact phone if left blank." error={errors.personalNumber}>
               <Input id="personalNumber" name="personalNumber" value={fields.personalNumber} onChange={set("personalNumber")} />
             </Field>
           </div>
         </section>
       )}
 
-      <div>
-        <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-          <input type="checkbox" name="isActive" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-200" />
-          Active on bench
-        </label>
-        <p className="mt-1 text-xs text-slate-500">
-          Uncheck to retire a consultant who is no longer being marketed.
-        </p>
-      </div>
+      <p className="text-xs text-slate-500">
+        Use <span className="font-medium">Marketing status</span> above to control
+        the bench: <span className="font-medium">On bench</span> /{" "}
+        <span className="font-medium">Paused</span> are being marketed;{" "}
+        <span className="font-medium">Placed</span> /{" "}
+        <span className="font-medium">Off bench</span> are not.
+      </p>
 
       {state.error || errors.form ? (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">

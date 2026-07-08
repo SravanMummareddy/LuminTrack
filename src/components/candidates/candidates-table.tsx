@@ -188,6 +188,17 @@ const COLUMNS: Column[] = [
   },
   // Hidden-by-default extras
   {
+    key: "technology",
+    label: "Technology",
+    sortKey: "technology",
+    defaultVisible: false,
+    render: (c) => (
+      <Td label="Technology" secondary>
+        {c.technology || "—"}
+      </Td>
+    ),
+  },
+  {
     key: "workAuthorization",
     label: "Work auth",
     sortKey: "workAuthorization",

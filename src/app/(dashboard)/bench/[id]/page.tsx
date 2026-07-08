@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -6,7 +7,10 @@ import { buttonClass } from "@/components/ui/button";
 import { ActivityTimeline } from "@/components/timeline/activity-timeline";
 import { BenchCredentials } from "@/components/bench/bench-credentials";
 import { getBenchConsultant } from "@/server/queries/bench-consultants";
-import { removeFromBench } from "@/server/actions/bench-consultants";
+import {
+  removeFromBench,
+  remarketConsultant,
+} from "@/server/actions/bench-consultants";
 import { getTimelineFor } from "@/server/queries/timeline";
 import {
   BENCH_PRIORITY_LABEL,
@@ -41,7 +45,7 @@ export default async function BenchConsultantDetailPage({
   const timeline = await getTimelineFor("CONSULTANT", id);
 
   const details: { label: string; value: React.ReactNode }[] = [
-    { label: "Technology", value: c.technology ?? "—" },
+    { label: "Technology", value: c.candidate?.technology ?? "—" },
     { label: "M Visa", value: c.mVisa ?? "—" },
     { label: "A Visa", value: c.aVisa ?? "—" },
     { label: "Work authorization", value: c.workAuthorization ?? "—" },
@@ -67,6 +71,13 @@ export default async function BenchConsultantDetailPage({
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
+      <Link
+        href="/bench"
+        className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to bench
+      </Link>
       <PageHeader title={c.fullName} description={formatBenchConsultantDisplayId(c)}>
         <Link href={`/bench/${c.id}/edit`} className={buttonClass("secondary")}>
           Edit
@@ -79,6 +90,22 @@ export default async function BenchConsultantDetailPage({
             </button>
           </form>
         )}
+        {c.marketingStatus === "PLACED" && (
+          <form action={remarketConsultant}>
+            <input type="hidden" name="id" value={c.id} />
+            <button type="submit" className={buttonClass("secondary")}>
+              Market — project ending
+            </button>
+          </form>
+        )}
+        {c.marketingStatus === "INACTIVE" && (
+          <form action={remarketConsultant}>
+            <input type="hidden" name="id" value={c.id} />
+            <button type="submit" className={buttonClass("primary")}>
+              Add back to bench
+            </button>
+          </form>
+        )}
       </PageHeader>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -88,7 +115,6 @@ export default async function BenchConsultantDetailPage({
         <Badge tone={BENCH_MARKETING_STATUS_TONE[c.marketingStatus]}>
           {BENCH_MARKETING_STATUS_LABEL[c.marketingStatus]}
         </Badge>
-        {!c.isActive && <Badge tone="slate">Inactive</Badge>}
         {c.candidate ? (
           <Link
             href={`/candidates/${c.candidate.id}`}

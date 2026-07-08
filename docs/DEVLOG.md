@@ -10,6 +10,55 @@ short instead of long.
 
 ---
 
+## 2026-07-08 · Bench had TWO status axes that could contradict each other
+
+**Situation.** The owner saw a bench row labelled "Active on bench" (a checkbox)
+while its pill said **Paused** — a contradiction. He asked where marketing status
+is even set, and how it differs from active/inactive.
+
+**Diagnosis.** `BenchConsultant` carried two independent lifecycle axes, both
+rendered as UI: `isActive` (a boolean "Active on bench" checkbox) and
+`marketingStatus` (ACTIVE/PAUSED/PLACED/INACTIVE). They were free to disagree
+(isActive=true + marketingStatus=PAUSED), and the roster/detail drew *both*, so the
+UI read as self-contradictory. Two axes modelling the same concept ("are we
+marketing this person?") is the root cause — not a rendering bug.
+
+**Fix.** Collapse to ONE axis. `marketingStatus` became the single source of truth
+with self-explanatory labels (**On bench / Paused / Placed / Off bench**), rendered
+as a single badge. Removed the "Active on bench" checkbox; the action now forces
+`isActive: true` (deprecated column, never contradicts). `reconcile-bench-status.ts`
+flips any legacy `isActive=false` row to `INACTIVE` so nothing is lost. Same shape
+as the earlier candidate one-lifecycle-badge fix.
+
+**Lesson.** When two fields can disagree about the same thing, delete one — don't
+reconcile them at every render. One axis, self-describing labels, one badge: the
+contradiction becomes unrepresentable.
+
+## 2026-07-08 · "Working now" ≠ "Placed" — three orthogonal axes, not one
+
+**Situation.** The owner wanted a "working now?" flag on candidates, AND a placed
+consultant (project ending) to still be markable on the bench, AND a consultant
+working at *another* org to be marketed here without appearing in Placements.
+
+**Diagnosis.** These only conflict if you conflate three things. The owner's model
+keeps them independent: **Placement** = an engagement that went *through us*
+(revenue record); **Candidate.isWorking** = working *anywhere*, incl. external;
+**bench marketingStatus** = are we marketing them. Deriving "on bench" from "has no
+placement" (the old shortcut) breaks all three cases.
+
+**Fix.** Added `Candidate.isWorking` + `workingType` (independent of Placement),
+kept Placement strictly through-us, and a manual **Re-market** action puts a PLACED
+consultant back on the active bench without touching the placement (placement→bench
+sync only fires on placement transitions, so it won't clobber the manual ACTIVE).
+Re-adding a removed consultant reactivates the retained row (no retype) instead of
+erroring on the `candidateId` unique constraint. Technology + real-time experience
+moved onto the Candidate (source of truth; the bench overlay reads them), mirroring
+the earlier discipline move.
+
+**Lesson.** When a user's scenarios seem contradictory, you've usually merged two
+orthogonal axes. Name each axis explicitly and the "contradictions" resolve into
+ordinary combinations.
+
 ## 2026-07-08 · "Job Filled but requirement Open" — the code was right, the data was wrong
 
 **Situation.** The owner flagged a VPR detail showing status **Open** under a job

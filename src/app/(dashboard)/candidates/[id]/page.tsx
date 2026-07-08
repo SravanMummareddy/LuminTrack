@@ -34,6 +34,12 @@ import {
   getCandidatePlacements,
 } from "@/server/queries/placements";
 import { getCandidateInterviewsGroupedByJob } from "@/server/queries/interviews";
+import { getBenchLinkForCandidate } from "@/server/queries/bench-consultants";
+import { addCandidateToBench } from "@/server/actions/bench-consultants";
+import {
+  BENCH_MARKETING_STATUS_LABEL,
+  BENCH_MARKETING_STATUS_TONE,
+} from "@/lib/labels";
 import { CandidateInterviewsGrouped } from "@/components/candidates/candidate-interviews-grouped";
 import { getTimelineFor } from "@/server/queries/timeline";
 import { getNotesFor } from "@/server/queries/notes";
@@ -132,6 +138,7 @@ export default async function CandidateDetailPage({
       page: placementsPageNum,
     },
     inFlightSubmissionCount,
+    benchLink,
   ] = await Promise.all([
     getCandidateDetail(id),
     getCandidateSubmissions(id, { page: subsPage }),
@@ -142,6 +149,7 @@ export default async function CandidateDetailPage({
     getActivePlacementForCandidate(id),
     getCandidatePlacements(id, { page: placementsPage }),
     countActiveSubmissionsForCandidate(id),
+    getBenchLinkForCandidate(id),
   ]);
   if (!candidate) notFound();
   const isAdmin = hasFullAccess(user);
@@ -307,6 +315,10 @@ export default async function CandidateDetailPage({
           <DescItem label="Experience">
             {formatExperience(candidate.totalExperienceYears)}
           </DescItem>
+          <DescItem label="Real-time experience">
+            {formatExperience(candidate.realTimeExperienceYears)}
+          </DescItem>
+          <DescItem label="Technology">{candidate.technology || "—"}</DescItem>
           <DescItem label="Current company">
             {candidate.currentCompany || "—"}
           </DescItem>
@@ -332,7 +344,53 @@ export default async function CandidateDetailPage({
           <DescItem label="Last updated">
             {formatDate(candidate.updatedAt)}
           </DescItem>
-          <DescItem label="Source">{candidate.source || "—"}</DescItem>
+          <DescItem label="Reference">{candidate.source || "—"}</DescItem>
+          <DescItem label="Working now">
+            {candidate.isWorking
+              ? `Yes${candidate.workingType ? ` — ${candidate.workingType}` : ""}`
+              : "No"}
+          </DescItem>
+          <DescItem label="Marketing (bench)">
+            {benchLink ? (
+              <span className="flex flex-wrap items-center gap-2">
+                <Badge tone={BENCH_MARKETING_STATUS_TONE[benchLink.marketingStatus]}>
+                  {BENCH_MARKETING_STATUS_LABEL[benchLink.marketingStatus]}
+                </Badge>
+                <Link
+                  href={`/bench/${benchLink.id}`}
+                  className="text-indigo-600 hover:underline"
+                >
+                  View on bench
+                </Link>
+                {benchLink.marketingStatus !== "ACTIVE" &&
+                  benchLink.marketingStatus !== "PAUSED" &&
+                  !isTrashed &&
+                  !isErased && (
+                    <form action={addCandidateToBench}>
+                      <input type="hidden" name="candidateId" value={candidate.id} />
+                      <button
+                        type="submit"
+                        className="text-indigo-600 hover:underline"
+                      >
+                        Market again
+                      </button>
+                    </form>
+                  )}
+              </span>
+            ) : isTrashed || isErased ? (
+              <span className="text-slate-400">Not on bench</span>
+            ) : (
+              <form action={addCandidateToBench}>
+                <input type="hidden" name="candidateId" value={candidate.id} />
+                <button
+                  type="submit"
+                  className={buttonClass("secondary", "sm")}
+                >
+                  Add to bench
+                </button>
+              </form>
+            )}
+          </DescItem>
           <DescItem label="Last contacted">
             <div className="flex flex-wrap items-center gap-2">
               <span>

@@ -49,6 +49,8 @@ export async function ensureBenchForCandidate(
       phone: args.phone ?? null,
       currentLocation: args.currentLocation ?? null,
       workAuthorization: args.workAuthorization ?? null,
+      // A Visa = the actual visa = the candidate's work authorization.
+      aVisa: args.workAuthorization ?? null,
       skills: args.skills ?? [],
       // On the bench, actively being marketed, until placed or removed.
       marketingStatus: "ACTIVE",
