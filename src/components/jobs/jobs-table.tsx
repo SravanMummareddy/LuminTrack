@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { Table, Th, Td, cardLink } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
@@ -10,6 +11,7 @@ import { JOB_STATUS_LABEL, JOB_STATUS_TONE, jobSourceLabel } from "@/lib/labels"
 import { formatDate, formatJobDisplayId } from "@/lib/format";
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
 import type { JobListRow } from "@/server/queries/jobs";
+import { JobBulkBar } from "@/components/jobs/job-bulk-bar";
 
 /**
  * Column registry. Each column is independent — toggling visibility or
@@ -321,6 +323,22 @@ export function JobsTable({
     columnDefaults,
   );
 
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const pageIds = rows.map((r) => r.id);
+  const allSelected =
+    pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  const toggleAll = () =>
+    setSelected(allSelected ? new Set() : new Set(pageIds));
+  const toggleOne = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const checkboxClass =
+    "h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-200";
+
   const byKey = new Map(COLUMNS.map((c) => [c.key, c]));
   const orderedCols = prefs.order
     .map((k) => byKey.get(k))
@@ -343,6 +361,13 @@ export function JobsTable({
         />
       </div>
 
+      {selected.size > 0 && (
+        <JobBulkBar
+          selectedIds={[...selected]}
+          onDone={() => setSelected(new Set())}
+        />
+      )}
+
       <MobileSort
         options={visibleCols
           .filter((c) => c.sortKey)
@@ -356,6 +381,15 @@ export function JobsTable({
       <Table>
         <thead className="border-b border-slate-200 bg-slate-50">
           <tr>
+            <Th className="w-8">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleAll}
+                aria-label="Select all on this page"
+                className={checkboxClass}
+              />
+            </Th>
             {visibleCols.map((c) =>
               c.sortKey ? (
                 <SortableHeader
@@ -375,7 +409,19 @@ export function JobsTable({
         </thead>
         <tbody className="divide-y divide-slate-100">
           {rows.map((job, idx) => (
-            <tr key={job.id} className="hover:bg-slate-50">
+            <tr
+              key={job.id}
+              className={selected.has(job.id) ? "bg-indigo-50/60" : "hover:bg-slate-50"}
+            >
+              <td className="w-8 px-3 align-middle">
+                <input
+                  type="checkbox"
+                  checked={selected.has(job.id)}
+                  onChange={() => toggleOne(job.id)}
+                  aria-label={`Select ${job.title}`}
+                  className={checkboxClass}
+                />
+              </td>
               {visibleCols.map((c) => (
                 <RenderCell
                   key={c.key}

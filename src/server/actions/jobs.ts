@@ -334,3 +334,40 @@ export async function changeJobStatus(
     toast: { title: `Job status updated to ${JOB_STATUS_LABEL[next]}` },
   };
 }
+
+/**
+ * Bulk status change for the selected jobs. Same permissions + per-job audit as
+ * changeJobStatus. Skips jobs already at the target status; caps the id set so a
+ * request can't touch the whole table.
+ */
+export async function bulkChangeJobStatus(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const status = String(formData.get("status") ?? "");
+  if (!(JOB_STATUS_VALUES as readonly string[]).includes(status)) return;
+  const next = status as (typeof JOB_STATUS_VALUES)[number];
+
+  const ids = [
+    ...new Set(formData.getAll("ids").map(String).filter(Boolean)),
+  ].slice(0, 200);
+  if (!ids.length) return;
+
+  const jobs = await prisma.job.findMany({
+    where: { id: { in: ids }, status: { not: next } },
+    select: { id: true, status: true },
+  });
+  await prisma.$transaction(async (tx) => {
+    for (const j of jobs) {
+      await tx.job.update({ where: { id: j.id }, data: { status: next } });
+      await logActivity(tx, {
+        entityType: "JOB",
+        action: "JOB_UPDATED",
+        description: `Status changed from ${JOB_STATUS_LABEL[j.status]} to ${JOB_STATUS_LABEL[next]} (bulk)`,
+        oldValue: JOB_STATUS_LABEL[j.status],
+        newValue: JOB_STATUS_LABEL[next],
+        performedById: user.id,
+        jobId: j.id,
+      });
+    }
+  });
+  revalidatePath("/jobs");
+}
