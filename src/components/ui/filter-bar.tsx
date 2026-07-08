@@ -139,7 +139,14 @@ export function FilterBar({
   function valueLabel(def: FilterDef): string {
     if (def.kind === "date") {
       const p = params.get("preset");
-      if (p === "custom") return "Custom";
+      if (p === "custom") {
+        const label = formatRangeLabel(
+          params.get("from") ?? undefined,
+          params.get("to") ?? undefined,
+        );
+        // Fall back to "Custom" only if neither endpoint is set yet.
+        return label === "Pick a start and end date" ? "Custom" : label;
+      }
       return DATE_PRESETS.find((d) => d.value === p)?.label ?? "";
     }
     if (def.kind === "select") {

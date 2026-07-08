@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { LucideIcon } from "lucide-react";
+import { Info, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { BadgeTone } from "@/lib/labels";
 
@@ -39,7 +39,6 @@ export function StatCard({
       className={cn(
         "flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-4",
         href && "transition hover:border-indigo-300 hover:shadow-sm",
-        tooltip && "cursor-help",
       )}
     >
       <div
@@ -54,7 +53,12 @@ export function StatCard({
         <div className="text-2xl font-semibold tabular-nums text-slate-900">
           {value}
         </div>
-        <div className="truncate text-xs font-medium text-slate-500">{label}</div>
+        <div className="flex items-center gap-1 text-xs font-medium text-slate-500">
+          <span className="truncate">{label}</span>
+          {tooltip && (
+            <Info className="h-3 w-3 shrink-0 text-slate-400" aria-hidden />
+          )}
+        </div>
         {hint && <div className="truncate text-xs text-slate-400">{hint}</div>}
       </div>
     </div>

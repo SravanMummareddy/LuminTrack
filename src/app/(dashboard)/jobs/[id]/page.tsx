@@ -434,6 +434,71 @@ export default async function JobDetailPage({
 
       </Card>
 
+      <section id="requirements" className="scroll-mt-4 rounded-lg border border-slate-200 bg-white p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-slate-700">
+            Vendor portal requirements ({requirements.length})
+          </h2>
+          {canManageReq && (
+            <LinkButton href={`/vendor-portal/new?jobId=${job.id}`} size="sm">
+              <Plus className="h-4 w-4" />
+              Create requirement
+            </LinkButton>
+          )}
+        </div>
+        {requirements.length === 0 ? (
+          <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
+            No planned requirements for this job yet.
+          </p>
+        ) : (
+          <Table>
+            <thead className="border-b border-slate-200 bg-slate-50">
+              <tr>
+                <Th>ID</Th>
+                <Th>Candidate</Th>
+                <Th>Recruiter</Th>
+                <Th>Engagement</Th>
+                <Th className="text-right">Pay</Th>
+                <Th className="text-right">Bill</Th>
+                <Th>Status</Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {requirements.map((r) => (
+                <tr key={r.id} className="hover:bg-slate-50">
+                  <Td label="ID" secondary className="font-mono text-xs">
+                    <Link
+                      href={`/vendor-portal/${r.id}`}
+                      className="text-indigo-600 hover:underline"
+                    >
+                      {formatVendorRequirementDisplayId(r)}
+                    </Link>
+                  </Td>
+                  <Td label="Candidate">{r.candidate?.fullName ?? "—"}</Td>
+                  <Td label="Recruiter" secondary>
+                    {r.recruiter?.fullName ?? "—"}
+                  </Td>
+                  <Td label="Engagement" secondary>
+                    {r.engagement ? BENCH_ENGAGEMENT_LABEL[r.engagement] : "—"}
+                  </Td>
+                  <Td label="Pay" className="text-right tabular-nums">
+                    {formatRate(r.payRate)}
+                  </Td>
+                  <Td label="Bill" className="text-right tabular-nums">
+                    {formatRate(r.billRate)}
+                  </Td>
+                  <Td label="Status">
+                    <Badge tone={REQUIREMENT_STATUS_TONE[r.status]}>
+                      {REQUIREMENT_STATUS_LABEL[r.status]}
+                    </Badge>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </section>
+
       <section className="rounded-lg border border-slate-200 bg-white p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-slate-700">
@@ -516,71 +581,6 @@ export default async function JobDetailPage({
               pageSize={PAGE_SIZE}
             />
           </div>
-        )}
-      </section>
-
-      <section id="requirements" className="scroll-mt-4 rounded-lg border border-slate-200 bg-white p-5">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-slate-700">
-            Vendor portal requirements ({requirements.length})
-          </h2>
-          {canManageReq && (
-            <LinkButton href={`/vendor-portal/new?jobId=${job.id}`} size="sm">
-              <Plus className="h-4 w-4" />
-              Create requirement
-            </LinkButton>
-          )}
-        </div>
-        {requirements.length === 0 ? (
-          <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
-            No planned requirements for this job yet.
-          </p>
-        ) : (
-          <Table>
-            <thead className="border-b border-slate-200 bg-slate-50">
-              <tr>
-                <Th>ID</Th>
-                <Th>Candidate</Th>
-                <Th>Recruiter</Th>
-                <Th>Engagement</Th>
-                <Th className="text-right">Pay</Th>
-                <Th className="text-right">Bill</Th>
-                <Th>Status</Th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {requirements.map((r) => (
-                <tr key={r.id} className="hover:bg-slate-50">
-                  <Td label="ID" secondary className="font-mono text-xs">
-                    <Link
-                      href={`/vendor-portal/${r.id}`}
-                      className="text-indigo-600 hover:underline"
-                    >
-                      {formatVendorRequirementDisplayId(r)}
-                    </Link>
-                  </Td>
-                  <Td label="Candidate">{r.candidate?.fullName ?? "—"}</Td>
-                  <Td label="Recruiter" secondary>
-                    {r.recruiter?.fullName ?? "—"}
-                  </Td>
-                  <Td label="Engagement" secondary>
-                    {r.engagement ? BENCH_ENGAGEMENT_LABEL[r.engagement] : "—"}
-                  </Td>
-                  <Td label="Pay" className="text-right tabular-nums">
-                    {formatRate(r.payRate)}
-                  </Td>
-                  <Td label="Bill" className="text-right tabular-nums">
-                    {formatRate(r.billRate)}
-                  </Td>
-                  <Td label="Status">
-                    <Badge tone={REQUIREMENT_STATUS_TONE[r.status]}>
-                      {REQUIREMENT_STATUS_LABEL[r.status]}
-                    </Badge>
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
         )}
       </section>
 
