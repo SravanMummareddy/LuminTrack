@@ -56,6 +56,14 @@ Add-candidate + Bench screens, built in 5 phases (all done + browser-verified on
   defaults to the contact phone; **marketing credentials now visible to ALL recruiters**
   (`canViewBenchCredentials` = any signed-in user — owner decision); Back button on bench detail.
 
+- **Round 3.1 follow-up (migration `20260708220000`):** consolidated the scattered marketing
+  fields into the orange **"Marketing details"** card (renamed from "Marketing credentials",
+  dropped the now-wrong "Admin only" badge, grouped marketing recruiter/start-date/experience
+  with the email/password/number; personal number removed — redundant with contact phone). New
+  **`BenchConsultant.relocationCities`** — when "Open to relocation" is unchecked the form
+  reveals a specific-cities input; detail shows "Only to: …". `BenchCredentials` export renamed
+  `BenchMarketingDetails`.
+
 **Owner decisions (this round):** recruiters see full marketing section incl. password;
 Source==Reference (relabel); collapse bench status to one axis; manual Re-market for
 placed-and-ending consultants. **Deploy TODO:** commit → apply both migrations to prod

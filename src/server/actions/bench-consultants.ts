@@ -44,6 +44,7 @@ function readBenchConsultant(formData: FormData) {
     callType: formData.get("callType") ?? "",
     payrollType: formData.get("payrollType") ?? "",
     relocation: formData.get("relocation") != null,
+    relocationCities: formData.get("relocationCities") ?? "",
     marketingStartDate: formData.get("marketingStartDate") ?? "",
     marketingEmail: formData.get("marketingEmail") ?? "",
     marketingPassword: formData.get("marketingPassword") ?? "",
@@ -81,6 +82,8 @@ function benchData(d: BenchConsultantInput) {
     callType: d.callType ?? null,
     payrollType: d.payrollType ?? null,
     relocation: d.relocation,
+    // Specific cities only matter when NOT open to relocating generally.
+    relocationCities: d.relocation ? null : d.relocationCities ?? null,
     marketingStartDate: d.marketingStartDate ?? null,
     marketingEmail: d.marketingEmail ?? null,
     marketingPassword: d.marketingPassword ?? null,

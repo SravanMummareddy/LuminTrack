@@ -59,6 +59,7 @@ export default async function EditBenchConsultantPage({
     callType: c.callType ?? "",
     payrollType: c.payrollType ?? "",
     relocation: c.relocation,
+    relocationCities: c.relocationCities ?? "",
     marketingStartDate: dateInput(c.marketingStartDate),
     // Credentials only round-trip into the form for users allowed to see them.
     marketingEmail: canCreds ? c.marketingEmail ?? "" : "",

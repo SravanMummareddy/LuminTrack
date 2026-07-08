@@ -46,6 +46,7 @@ export const benchConsultantSchema = z.object({
   callType: optionalText,
   payrollType: optionalText,
   relocation: z.boolean().default(false),
+  relocationCities: optionalText,
   marketingStartDate: optionalDate,
   // Marketing credentials — gated on the read path (canViewBenchCredentials).
   marketingEmail: optionalEmail,
