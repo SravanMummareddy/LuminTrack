@@ -2,11 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { del } from "@vercel/blob";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/lib/session";
 import { hasFullAccess } from "@/lib/permissions";
 import { logActivity } from "@/server/activity";
+import {
+  hardEraseCandidate,
+  CANDIDATE_TRASH_RETENTION_DAYS,
+} from "@/server/candidate-erase";
 import { ensureBenchForCandidate } from "@/server/bench-lifecycle";
 import { candidateSchema, type CandidateInput } from "@/lib/validation/candidate";
 import { toFieldErrors } from "@/lib/validation/common";
@@ -256,7 +259,7 @@ export async function markCandidateContacted(formData: FormData): Promise<void> 
 
 /**
  * One-click archive / restore — the everyday, reversible "remove from view".
- * Flips Candidate.isActive; keeps all data. Distinct from eraseCandidate.
+ * Flips Candidate.isActive; keeps all data. Distinct from trashing/erasing.
  */
 export async function setCandidateArchived(formData: FormData): Promise<void> {
   const user = await requireUser();
@@ -281,13 +284,82 @@ export async function setCandidateArchived(formData: FormData): Promise<void> {
 }
 
 /**
- * Right-to-be-forgotten. Blanks the candidate's personal fields and DELETES
- * their résumé + document rows and the Blob files. Submissions / placements /
- * interviews are left untouched — they keep pointing at the now-anonymized
- * record, so history and recruiter metrics are unaffected. Admin/manager only,
- * gated behind typing the candidate's exact name. Irreversible.
+ * Move a candidate to trash: hidden everywhere and scheduled for permanent
+ * erasure after CANDIDATE_TRASH_RETENTION_DAYS. Fully reversible via
+ * restoreCandidateFromTrash until the retention window lapses. Admin/manager
+ * only. Nothing is redacted or shredded yet — that's the scheduled job's job.
  */
-export async function eraseCandidate(
+export async function trashCandidate(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requireUser();
+  if (!hasFullAccess(user))
+    return { error: "Only managers and team leads can delete a candidate." };
+
+  const candidateId = String(formData.get("id") ?? "").trim();
+  const candidate = await prisma.candidate.findUnique({
+    where: { id: candidateId },
+    select: { deletedAt: true, erasedAt: true },
+  });
+  if (!candidate) return { error: "Candidate not found." };
+  if (candidate.erasedAt)
+    return { error: "This candidate has already been erased." };
+  if (candidate.deletedAt)
+    return { error: "This candidate is already in trash." };
+
+  const purgeOn = new Date(
+    Date.now() + CANDIDATE_TRASH_RETENTION_DAYS * 86_400_000,
+  );
+  await prisma.$transaction(async (tx) => {
+    await tx.candidate.update({
+      where: { id: candidateId },
+      data: { deletedAt: new Date(), isActive: false },
+    });
+    await logActivity(tx, {
+      entityType: "CANDIDATE",
+      action: "CANDIDATE_UPDATED",
+      description: `Moved to trash — auto-erases ${purgeOn.toISOString().slice(0, 10)}`,
+      performedById: user.id,
+      candidateId,
+    });
+  });
+
+  revalidatePath("/candidates");
+  redirect(`/candidates/${candidateId}`);
+}
+
+/** Restore a trashed candidate before the retention window lapses. */
+export async function restoreCandidateFromTrash(
+  formData: FormData,
+): Promise<void> {
+  const user = await requireUser();
+  if (!hasFullAccess(user)) return;
+  const candidateId = String(formData.get("id") ?? "").trim();
+  if (!candidateId) return;
+  await prisma.$transaction(async (tx) => {
+    await tx.candidate.update({
+      where: { id: candidateId },
+      data: { deletedAt: null, isActive: true },
+    });
+    await logActivity(tx, {
+      entityType: "CANDIDATE",
+      action: "CANDIDATE_UPDATED",
+      description: "Restored from trash",
+      performedById: user.id,
+      candidateId,
+    });
+  });
+  revalidatePath("/candidates");
+  revalidatePath(`/candidates/${candidateId}`);
+}
+
+/**
+ * Skip the retention window and permanently erase a trashed candidate now.
+ * Admin/manager only, gated behind typing the candidate's exact name.
+ * Irreversible — delegates to the shared hardEraseCandidate helper.
+ */
+export async function eraseCandidateNow(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
@@ -297,16 +369,9 @@ export async function eraseCandidate(
 
   const candidateId = String(formData.get("id") ?? "").trim();
   const confirmName = String(formData.get("confirmName") ?? "").trim();
-
   const candidate = await prisma.candidate.findUnique({
     where: { id: candidateId },
-    select: {
-      seq: true,
-      fullName: true,
-      erasedAt: true,
-      resumes: { select: { blobUrl: true } },
-      documents: { select: { blobUrl: true } },
-    },
+    select: { fullName: true, erasedAt: true },
   });
   if (!candidate) return { error: "Candidate not found." };
   if (candidate.erasedAt)
@@ -318,53 +383,7 @@ export async function eraseCandidate(
       },
     };
 
-  const displayId = `CAND-${String(candidate.seq).padStart(3, "0")}`;
-  const blobUrls = [
-    ...candidate.resumes.map((r) => r.blobUrl),
-    ...candidate.documents.map((d) => d.blobUrl),
-  ].filter((u): u is string => Boolean(u));
-
-  // Redact the record + drop the file rows + audit, atomically. The candidate
-  // row is kept (anonymized) so linked submissions/placements stay intact.
-  await prisma.$transaction(async (tx) => {
-    await tx.candidateResume.deleteMany({ where: { candidateId } });
-    await tx.candidateDocument.deleteMany({ where: { candidateId } });
-    await tx.candidate.update({
-      where: { id: candidateId },
-      data: {
-        fullName: `Erased candidate #${candidate.seq}`,
-        email: null,
-        phone: null,
-        currentLocation: null,
-        workAuthorization: null,
-        totalExperienceYears: null,
-        currentCompany: null,
-        skills: [],
-        featuredSkills: [],
-        linkedinUrl: null,
-        resumeBlobUrl: null,
-        notes: null,
-        tags: [],
-        lastContactedAt: null,
-        source: null,
-        status: "DO_NOT_CONTACT",
-        isActive: false,
-        erasedAt: new Date(),
-      },
-    });
-    await logActivity(tx, {
-      entityType: "CANDIDATE",
-      action: "CANDIDATE_ERASED",
-      description: `Erased personal data + ${blobUrls.length} file(s) for ${displayId}`,
-      performedById: user.id,
-      candidateId,
-    });
-  });
-
-  // Shred the actual files. Best-effort, AFTER the DB commit — a failed blob
-  // delete leaves a harmless orphan rather than blocking the erasure.
-  await Promise.allSettled(blobUrls.map((u) => del(u)));
-
+  await hardEraseCandidate(candidateId, user.id);
   revalidatePath("/candidates");
   redirect(`/candidates/${candidateId}`);
 }

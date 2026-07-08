@@ -22,7 +22,9 @@ import {
 import { requireUser } from "@/lib/session";
 import { canManageSensitiveDocs, hasFullAccess } from "@/lib/permissions";
 import { CandidateDangerZone } from "@/components/candidates/candidate-danger-zone";
+import { CandidateTrashBanner } from "@/components/candidates/candidate-trash-banner";
 import { setCandidateArchived } from "@/server/actions/candidates";
+import { CANDIDATE_TRASH_RETENTION_DAYS } from "@/server/candidate-erase";
 import { getCandidateSubmissions } from "@/server/queries/submissions";
 import {
   getActivePlacementForCandidate,
@@ -138,6 +140,7 @@ export default async function CandidateDetailPage({
   if (!candidate) notFound();
   const isAdmin = hasFullAccess(user);
   const isErased = Boolean(candidate.erasedAt);
+  const isTrashed = Boolean(candidate.deletedAt) && !isErased;
   const submissionsTotalPages = Math.max(
     1,
     Math.ceil(submissionsTotal / PAGE_SIZE),
@@ -174,6 +177,7 @@ export default async function CandidateDetailPage({
               {candidate.fullName}
             </h1>
             {isErased && <Badge tone="red">Erased</Badge>}
+            {isTrashed && <Badge tone="amber">In trash</Badge>}
             <Badge tone={candidate.isActive ? "green" : "slate"}>
               {candidate.isActive ? "Active" : "Inactive"}
             </Badge>
@@ -189,7 +193,7 @@ export default async function CandidateDetailPage({
             {candidate.currentCompany || "Company not set"}
           </p>
         </div>
-        {!isErased && (
+        {!isErased && !isTrashed && (
           <div className="flex shrink-0 items-center gap-2">
             <LinkButton href="/vendor-portal">
               <Send className="h-4 w-4" />
@@ -226,6 +230,16 @@ export default async function CandidateDetailPage({
           </div>
         )}
       </div>
+
+      {isTrashed && candidate.deletedAt && (
+        <CandidateTrashBanner
+          candidateId={candidate.id}
+          candidateName={candidate.fullName}
+          deletedAt={candidate.deletedAt.toISOString()}
+          retentionDays={CANDIDATE_TRASH_RETENTION_DAYS}
+          canManage={isAdmin}
+        />
+      )}
 
       {activePlacement && (
         <section className="rounded-lg border border-indigo-200 bg-indigo-50 p-4">
@@ -542,10 +556,11 @@ export default async function CandidateDetailPage({
 
       <ActivityTimeline entries={timeline} />
 
-      {isAdmin && !isErased && (
+      {isAdmin && !isErased && !isTrashed && (
         <CandidateDangerZone
           candidateId={candidate.id}
           candidateName={candidate.fullName}
+          retentionDays={CANDIDATE_TRASH_RETENTION_DAYS}
         />
       )}
     </div>

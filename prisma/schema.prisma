@@ -460,9 +460,12 @@ model Candidate {
   // (LinkedIn InMail / referral / job-board / inbound / etc.); a fixed enum
   // here would calcify ahead of real usage data.
   source              String?
+  // Soft-delete "trash" marker. Non-null = moved to trash (hidden everywhere,
+  // restorable); a scheduled job hard-erases rows past the retention window.
+  deletedAt           DateTime?
   // Right-to-be-forgotten marker. Non-null = personal data erased + files
   // shredded; the row is retained (anonymized) so linked submissions/placements
-  // keep their history. See eraseCandidate.
+  // keep their history. See hardEraseCandidate.
   erasedAt            DateTime?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -484,6 +487,7 @@ model Candidate {
   @@index([phone])
   @@index([fullName])
   @@index([status])
+  @@index([deletedAt])
 }
 
 // A candidate's saved résumés — one candidate keeps many labelled Drive links,

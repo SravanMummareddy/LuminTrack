@@ -42,7 +42,9 @@ const candidateListInclude = {
 } satisfies Prisma.CandidateInclude;
 
 export async function listCandidates(filters: CandidateListFilters) {
-  const where: Prisma.CandidateWhereInput = {};
+  // Trashed + erased candidates are hidden from the roster entirely (a trashed
+  // one is pending deletion; an erased one is an anonymized tombstone).
+  const where: Prisma.CandidateWhereInput = { deletedAt: null };
 
   const terms = searchTerms(filters.q);
   if (terms.length)
