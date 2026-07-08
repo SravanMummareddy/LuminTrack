@@ -10,6 +10,38 @@ short instead of long.
 
 ---
 
+## 2026-07-08 · "Job Filled but requirement Open" — the code was right, the data was wrong
+
+**Situation.** The owner flagged a VPR detail showing status **Open** under a job
+that was **Filled**, with an amber banner telling him to "reopen the job or close
+this requirement." Misleading — a filled job shouldn't have an open requirement
+begging for candidates.
+
+**Diagnosis.** The instinct is "the close-job cascade is broken." It wasn't: both
+`changeJobStatus` and `bulkChangeJobStatus` correctly flip OPEN VPRs to CONVERTED
+(FILLED) / CANCELLED (CLOSED·CANCELLED) when a job goes terminal, and there is no
+auto-fill path that bypasses them. The stale rows came entirely from **seed data**:
+`seed-demo.ts` created VPRs with a hard-coded `status: "OPEN"` regardless of the
+parent job's (randomly-weighted) status, and a second "extra awaiting requirements"
+loop picked a *random* job — terminal ones included — and forced OPEN. The runtime
+invariant was never enforced at the point the data was manufactured.
+
+**Fix.** Two-pronged, because both existing rows and future seeds needed it:
+(1) `prisma/reconcile-vpr-status.ts` — idempotent one-off that aligns OPEN VPRs
+under terminal jobs to CONVERTED/CANCELLED (25 rows on the dev DB, incl. the
+owner's VPR-484). (2) Seed now derives the VPR status from the job (`FILLED →
+CONVERTED`, `CLOSED/CANCELLED → CANCELLED`) and scopes the "awaiting" extras to
+non-terminal jobs only. Post-reseed the reconciler finds zero.
+
+**Lesson.** When a UI shows an "impossible" state, check whether the *writer* that
+produced the row ran through the same invariant the *runtime action* enforces.
+Seeds and backfills are writers too — they bypass the action layer, so any
+invariant that lives only in an action (not the schema) has to be re-implemented
+wherever data is authored. A cheap reconcile script both fixes prod and doubles as
+the test that the seed fix actually holds.
+
+---
+
 ## 2026-07-08 · Trashed candidates leaking into pickers — a per-query invariant, forgotten once
 
 **Situation.** A full-diff code review of the feedback-round-1 body flagged that
