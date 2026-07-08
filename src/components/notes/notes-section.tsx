@@ -78,7 +78,7 @@ export function NotesSection({
               <p className="whitespace-pre-wrap text-sm text-slate-800">
                 {note.body}
               </p>
-              <p className="mt-0.5 text-xs text-slate-400">
+              <p className="mt-0.5 text-xs text-slate-400" suppressHydrationWarning>
                 {note.createdBy.fullName} · {formatDateTime(note.createdAt)}
               </p>
             </li>

@@ -1,7 +1,19 @@
 import { format } from "date-fns";
 
+// Date-only display is rendered in a fixed zone (UTC) so a Server Component
+// (UTC) and a Client Component (the viewer's zone) produce identical text —
+// otherwise a near-midnight date differs by a day and React throws hydration
+// mismatch #418 in the list tables. Time-of-day helpers below stay local,
+// where the exact wall-clock time matters (interviews, activity timeline).
+const DATE_FMT = new Intl.DateTimeFormat("en-US", {
+  timeZone: "UTC",
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
+
 export function formatDate(date: Date | string): string {
-  return format(new Date(date), "MMM d, yyyy");
+  return DATE_FMT.format(new Date(date));
 }
 
 export function formatDateTime(date: Date | string): string {
