@@ -586,6 +586,10 @@ export async function bulkChangeSubmissionStatus(
 ): Promise<BulkStatusResult> {
   const user = await requireUser();
   const ids = bulkIds(formData);
+  // Bulk status is restricted to admins / team leads — the blast radius (many
+  // rows across the whole team's pipeline in one click) is larger than a
+  // recruiter should wield. Single-submission status changes stay open to all.
+  if (!hasFullAccess(user)) return { changed: 0, skipped: ids.length };
   const target = String(formData.get("status") ?? "").trim();
   if (ids.length === 0 || !isBulkStatusTarget(target))
     return { changed: 0, skipped: ids.length };

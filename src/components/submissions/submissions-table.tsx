@@ -303,6 +303,7 @@ export function SubmissionsTable({
   pageOffset = 0,
   countLabel,
   storageKey = STORAGE_KEY,
+  canBulk = false,
 }: {
   rows: SubmissionListRow[];
   pageOffset?: number;
@@ -311,6 +312,9 @@ export function SubmissionsTable({
   /** Override the localStorage key so a scoped view keeps its own column prefs
    *  separate from the main Submissions list. */
   storageKey?: string;
+  /** Whether the viewer can bulk-change status (admin / team lead). When false,
+   *  the selection checkboxes + bulk bar are hidden entirely. */
+  canBulk?: boolean;
 }) {
   const [prefs, setPrefs] = useColumnPrefs(
     storageKey,
@@ -356,7 +360,7 @@ export function SubmissionsTable({
         />
       </div>
 
-      {selected.size > 0 && (
+      {canBulk && selected.size > 0 && (
         <SubmissionBulkBar
           selectedIds={[...selected]}
           onDone={() => setSelected(new Set())}
@@ -376,15 +380,17 @@ export function SubmissionsTable({
       <Table>
         <thead className="border-b border-slate-200 bg-slate-50">
           <tr>
-            <Th className="w-8">
-              <input
-                type="checkbox"
-                checked={allSelected}
-                onChange={toggleAll}
-                aria-label="Select all on this page"
-                className={checkboxClass}
-              />
-            </Th>
+            {canBulk && (
+              <Th className="w-8">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  aria-label="Select all on this page"
+                  className={checkboxClass}
+                />
+              </Th>
+            )}
             {visibleCols.map((c) =>
               c.sortKey ? (
                 <SortableHeader
@@ -410,18 +416,22 @@ export function SubmissionsTable({
             <tr
               key={row.id}
               className={
-                selected.has(row.id) ? "bg-indigo-50/60" : "hover:bg-slate-50"
+                canBulk && selected.has(row.id)
+                  ? "bg-indigo-50/60"
+                  : "hover:bg-slate-50"
               }
             >
-              <td className="w-8 px-3 align-middle">
-                <input
-                  type="checkbox"
-                  checked={selected.has(row.id)}
-                  onChange={() => toggleOne(row.id)}
-                  aria-label={`Select ${row.candidate.fullName}`}
-                  className={checkboxClass}
-                />
-              </td>
+              {canBulk && (
+                <td className="w-8 px-3 align-middle">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(row.id)}
+                    onChange={() => toggleOne(row.id)}
+                    aria-label={`Select ${row.candidate.fullName}`}
+                    className={checkboxClass}
+                  />
+                </td>
+              )}
               {visibleCols.map((c) => (
                 <RenderCell
                   key={c.key}
