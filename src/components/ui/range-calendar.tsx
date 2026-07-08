@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Hand, Check, Keyboard } from "lucide-react";
 import {
   addMonths,
   eachDayOfInterval,
@@ -35,6 +35,10 @@ function fromIso(s?: string): Date | null {
 function toInput(d: Date | null): string {
   return d ? format(d, "MM/dd/yyyy") : "";
 }
+/** The chip label — "Jul 6, 2026" or the placeholder. */
+function toChip(d: Date | null, placeholder: string): string {
+  return d ? format(d, "MMM d, yyyy") : placeholder;
+}
 /** Forgiving parse of what the user typed — several common formats, but only
  *  once enough characters exist to be a real date (avoids committing "1/1/1"). */
 function tryParseTyped(v: string): Date | null {
@@ -60,16 +64,17 @@ export function formatRangeLabel(from?: string, to?: string): string {
   return "Pick a start and end date";
 }
 
-const fieldCls =
-  "mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-800 outline-none focus:border-indigo-400";
 const jumpCls =
   "rounded-md border border-slate-200 bg-white px-1.5 py-1 text-sm font-medium text-slate-800 outline-none focus:border-indigo-400";
+const typedFieldCls =
+  "mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-800 outline-none focus:border-indigo-400";
 
 /**
- * A branded date-range picker: type into the Start / End fields OR pick on the
- * calendar — the two stay in sync. Month + year dropdowns (plus arrows) jump
- * across months so a multi-month range is a couple of clicks, not arrow-mashing.
- * Replaces the native `<input type="date">` OS calendar (un-styled, no confirm).
+ * A branded, calendar-first date-range picker. The Start / End values show as
+ * read-only chips that fill in as you click the grid — the chip you're about to
+ * set is highlighted, and a guided line tells you the next step. Clicking a chip
+ * re-targets that end. Typing is still available behind "Type dates instead" for
+ * power users. Month + year dropdowns (plus arrows) jump across months.
  * Parent owns `from`/`to` as `yyyy-MM-dd` strings and applies on its own button.
  */
 export function RangeCalendar({
@@ -85,6 +90,12 @@ export function RangeCalendar({
   const toD = fromIso(to);
   const [month, setMonth] = useState<Date>(startOfMonth(fromD ?? new Date()));
   const [hover, setHover] = useState<Date | null>(null);
+  // Which endpoint the next calendar click sets — drives the chip highlight and
+  // the guided helper. Starts on "start" and flips to "end" after the first pick.
+  const [picking, setPicking] = useState<"start" | "end">(
+    fromD && !toD ? "end" : "start",
+  );
+  const [showTyping, setShowTyping] = useState(false);
   // The typed fields hold their own text so half-finished input isn't discarded;
   // a valid parse commits up to `onChange`, and calendar clicks write back here.
   const [startText, setStartText] = useState(() => toInput(fromD));
@@ -98,7 +109,9 @@ export function RangeCalendar({
   const gridEnd = endOfWeek(endOfMonth(month));
   const days = eachDayOfInterval({ start: gridStart, end: gridEnd });
 
-  const previewEnd = fromD && !toD ? hover : toD;
+  // Live preview while anchoring the end (fresh range, or editing the end chip).
+  const anchoringEnd = Boolean(fromD) && (picking === "end" || !toD);
+  const previewEnd = anchoringEnd ? (hover ?? toD) : toD;
   function inRange(d: Date): boolean {
     if (!fromD || !previewEnd) return false;
     const lo = isBefore(previewEnd, fromD) ? previewEnd : fromD;
@@ -106,22 +119,29 @@ export function RangeCalendar({
     return !isBefore(d, lo) && !isAfter(d, hi);
   }
 
-  function pick(d: Date): void {
-    let nf: Date | null;
-    let nt: Date | null;
-    if (!fromD || (fromD && toD)) {
-      nf = d;
-      nt = null;
-    } else if (isBefore(d, fromD)) {
-      nf = d;
-      nt = fromD;
-    } else {
-      nf = fromD;
-      nt = d;
-    }
+  function commit(nf: Date | null, nt: Date | null): void {
     onChange(nf ? toKey(nf) : null, nt ? toKey(nt) : null);
     setStartText(toInput(nf));
     setEndText(toInput(nt));
+  }
+
+  function pick(d: Date): void {
+    if (picking === "end" && fromD) {
+      // Setting the end — keep the start, swap if they clicked before it.
+      if (isBefore(d, fromD)) commit(d, fromD);
+      else commit(fromD, d);
+      setPicking("start");
+      return;
+    }
+    // Setting the start. If an end already exists and the pick is on/before it,
+    // keep the end; otherwise start a fresh range and move on to the end.
+    if (toD && !isAfter(d, toD)) {
+      commit(d, toD);
+      setPicking("start");
+    } else {
+      commit(d, null);
+      setPicking("end");
+    }
   }
 
   function typeStart(v: string): void {
@@ -144,33 +164,74 @@ export function RangeCalendar({
     onChange(null, null);
     setStartText("");
     setEndText("");
+    setPicking("start");
     setMonth(startOfMonth(new Date()));
   }
 
+  const helper = !fromD
+    ? { icon: <Hand className="h-3.5 w-3.5" />, text: "Click a start date", tone: "text-indigo-600" }
+    : !toD
+      ? { icon: <Hand className="h-3.5 w-3.5" />, text: "Now click an end date", tone: "text-indigo-600" }
+      : { icon: <Check className="h-3.5 w-3.5" />, text: "Range selected — adjust or apply", tone: "text-emerald-600" };
+
   return (
     <div className="w-64" onMouseLeave={() => setHover(null)}>
-      <div className="mb-2 flex items-end gap-2">
-        <label className="flex-1 text-[11px] font-medium text-slate-500">
-          Start
-          <input
-            value={startText}
-            onChange={(e) => typeStart(e.target.value)}
-            placeholder="mm/dd/yyyy"
-            inputMode="numeric"
-            className={fieldCls}
-          />
-        </label>
-        <label className="flex-1 text-[11px] font-medium text-slate-500">
-          End
-          <input
-            value={endText}
-            onChange={(e) => typeEnd(e.target.value)}
-            placeholder="mm/dd/yyyy"
-            inputMode="numeric"
-            className={fieldCls}
-          />
-        </label>
+      <div className="mb-2 flex gap-2">
+        <button
+          type="button"
+          onClick={() => setPicking("start")}
+          className={cn(
+            "flex-1 rounded-md border px-2.5 py-1.5 text-left transition",
+            picking === "start"
+              ? "border-indigo-500 bg-indigo-50"
+              : "border-slate-200 bg-white hover:border-slate-300",
+          )}
+        >
+          <span className="block text-[11px] font-medium text-slate-500">
+            Start
+          </span>
+          <span
+            className={cn(
+              "block text-sm",
+              fromD ? "text-slate-800" : "text-slate-400",
+            )}
+          >
+            {toChip(fromD, "Select start")}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setPicking("end")}
+          className={cn(
+            "flex-1 rounded-md border px-2.5 py-1.5 text-left transition",
+            picking === "end"
+              ? "border-indigo-500 bg-indigo-50"
+              : "border-slate-200 bg-white hover:border-slate-300",
+          )}
+        >
+          <span className="block text-[11px] font-medium text-slate-500">
+            End
+          </span>
+          <span
+            className={cn(
+              "block text-sm",
+              toD ? "text-slate-800" : "text-slate-400",
+            )}
+          >
+            {toChip(toD, "Select end")}
+          </span>
+        </button>
       </div>
+
+      <p
+        className={cn(
+          "mb-2 flex items-center gap-1.5 px-0.5 text-[11px] font-medium",
+          helper.tone,
+        )}
+      >
+        {helper.icon}
+        {helper.text}
+      </p>
 
       <div className="mb-1 flex items-center justify-between gap-1">
         <button
@@ -238,7 +299,7 @@ export function RangeCalendar({
           const isEndpoint =
             (fromD && isSameDay(d, fromD)) ||
             (toD && isSameDay(d, toD)) ||
-            Boolean(fromD && !toD && hover && isSameDay(d, hover));
+            Boolean(anchoringEnd && hover && isSameDay(d, hover));
           const ranged = inRange(d) && !isEndpoint;
           return (
             <div
@@ -250,7 +311,7 @@ export function RangeCalendar({
                 onMouseEnter={() => setHover(d)}
                 onClick={() => pick(d)}
                 className={cn(
-                  "flex h-8 w-8 items-center justify-center text-sm",
+                  "flex h-9 w-9 items-center justify-center text-sm",
                   isEndpoint
                     ? "rounded-full bg-indigo-600 font-medium text-white"
                     : ranged
@@ -268,8 +329,16 @@ export function RangeCalendar({
         })}
       </div>
 
-      {(from || to) && (
-        <div className="mt-1 text-right">
+      <div className="mt-1.5 flex items-center justify-between gap-2 px-0.5">
+        <button
+          type="button"
+          onClick={() => setShowTyping((v) => !v)}
+          className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-600"
+        >
+          <Keyboard className="h-3.5 w-3.5" />
+          {showTyping ? "Hide typing" : "Type dates instead"}
+        </button>
+        {(from || to) && (
           <button
             type="button"
             onClick={clear}
@@ -277,6 +346,31 @@ export function RangeCalendar({
           >
             Clear
           </button>
+        )}
+      </div>
+
+      {showTyping && (
+        <div className="mt-2 flex items-end gap-2 border-t border-slate-100 pt-2">
+          <label className="flex-1 text-[11px] font-medium text-slate-500">
+            Start
+            <input
+              value={startText}
+              onChange={(e) => typeStart(e.target.value)}
+              placeholder="mm/dd/yyyy"
+              inputMode="numeric"
+              className={typedFieldCls}
+            />
+          </label>
+          <label className="flex-1 text-[11px] font-medium text-slate-500">
+            End
+            <input
+              value={endText}
+              onChange={(e) => typeEnd(e.target.value)}
+              placeholder="mm/dd/yyyy"
+              inputMode="numeric"
+              className={typedFieldCls}
+            />
+          </label>
         </div>
       )}
     </div>
