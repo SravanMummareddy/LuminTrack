@@ -15,7 +15,16 @@ export type CandidateListFilters = {
   createdRange?: DateRange;
   sort?: SortState;
   page?: number;
+  /** Trash view: show only trashed-but-not-yet-erased candidates. */
+  trash?: boolean;
 };
+
+/** Count of candidates in trash (restorable, not yet erased). */
+export function countTrashedCandidates(): Promise<number> {
+  return prisma.candidate.count({
+    where: { deletedAt: { not: null }, erasedAt: null },
+  });
+}
 
 /** Columns the Candidates list can be sorted by → their Prisma `orderBy`. */
 const CANDIDATE_SORTS: Record<
@@ -42,9 +51,12 @@ const candidateListInclude = {
 } satisfies Prisma.CandidateInclude;
 
 export async function listCandidates(filters: CandidateListFilters) {
-  // Trashed + erased candidates are hidden from the roster entirely (a trashed
-  // one is pending deletion; an erased one is an anonymized tombstone).
-  const where: Prisma.CandidateWhereInput = { deletedAt: null };
+  // Default roster hides trashed + erased candidates (a trashed one is pending
+  // deletion; an erased one is an anonymized tombstone). The trash view flips
+  // that to show only restorable (trashed, not-yet-erased) candidates.
+  const where: Prisma.CandidateWhereInput = filters.trash
+    ? { deletedAt: { not: null }, erasedAt: null }
+    : { deletedAt: null };
 
   const terms = searchTerms(filters.q);
   if (terms.length)

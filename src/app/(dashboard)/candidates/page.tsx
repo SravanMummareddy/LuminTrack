@@ -1,15 +1,21 @@
-import { Plus } from "lucide-react";
+import Link from "next/link";
+import { Plus, Trash2, ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { LinkButton } from "@/components/ui/button";
 import { Pagination } from "@/components/ui/pagination";
 import { CandidateFilters } from "@/components/candidates/candidate-filters";
 import { CandidatesTable } from "@/components/candidates/candidates-table";
+import { CandidateTrashList } from "@/components/candidates/candidate-trash-list";
 import {
   listCandidates,
+  countTrashedCandidates,
   CANDIDATE_SORT_KEYS,
   CANDIDATE_DEFAULT_SORT,
   type CandidateListFilters,
 } from "@/server/queries/candidates";
+import { CANDIDATE_TRASH_RETENTION_DAYS } from "@/server/candidate-erase";
+import { getCurrentUser } from "@/lib/session";
+import { hasFullAccess } from "@/lib/permissions";
 import { parseDateRange, parseSort, parsePage, PAGE_SIZE } from "@/lib/filters";
 
 function clean(value: string | string[] | undefined): string | undefined {
@@ -24,6 +30,9 @@ export default async function CandidatesPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const sp = await searchParams;
+  const user = await getCurrentUser();
+  const isAdmin = hasFullAccess(user);
+  const isTrashView = clean(sp.trash) === "1" && isAdmin;
 
   const current = {
     q: clean(sp.q),
@@ -67,11 +76,49 @@ export default async function CandidatesPage({
     }),
     sort,
     page: parsePage(clean(sp.page)),
+    trash: isTrashView,
   };
 
-  const { rows: candidates, total, page } = await listCandidates(filters);
+  const [{ rows: candidates, total, page }, trashCount] = await Promise.all([
+    listCandidates(filters),
+    isAdmin ? countTrashedCandidates() : Promise.resolve(0),
+  ]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  if (isTrashView) {
+    return (
+      <div className="space-y-5">
+        <Link
+          href="/candidates"
+          className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to candidates
+        </Link>
+        <PageHeader
+          title="Trash"
+          description={`Deleted candidates, restorable for ${CANDIDATE_TRASH_RETENTION_DAYS} days before they're permanently erased.`}
+        />
+        {total === 0 ? (
+          <div className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">
+            <p className="text-sm text-slate-500">Trash is empty.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-xs text-slate-500">
+              {total} candidate{total === 1 ? "" : "s"} in trash
+            </p>
+            <CandidateTrashList
+              rows={candidates}
+              retentionDays={CANDIDATE_TRASH_RETENTION_DAYS}
+            />
+            <Pagination page={page} totalPages={totalPages} total={total} />
+          </div>
+        )}
+      </div>
+    );
+  }
 
   const hasFilters = Boolean(
     current.q ||
@@ -87,6 +134,12 @@ export default async function CandidatesPage({
   return (
     <div className="space-y-5">
       <PageHeader title="Candidates" description="Every candidate profile — the full talent pool. (Bench = those actively marketed; Placements = those already working.)">
+        {isAdmin && trashCount > 0 && (
+          <LinkButton href="/candidates?trash=1" variant="secondary">
+            <Trash2 className="h-4 w-4" />
+            Trash ({trashCount})
+          </LinkButton>
+        )}
         <LinkButton href="/candidates/new">
           <Plus className="h-4 w-4" />
           Add candidate
