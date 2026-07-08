@@ -375,6 +375,29 @@ question isn't lost.
 
 ---
 
+## Resizable / auto-fit list columns · **M** (2026-07-08)
+
+**Status:** queued.
+
+Owner asked (dogfooding prod, 2026-07-08) for "auto-adjust column width" on the list
+tables after noticing rows double in height when an extra column (e.g. "Created") is
+shown on `/candidates`. Two parts:
+
+- **The immediate pain** (rows exploding in height) is *not* this item — it's a cheap
+  `whitespace-nowrap`/truncate fix logged as a P2 in `bugs.md` (2026-07-08 prod eyeball).
+  Do that first; it removes the symptom without any of the work below.
+- **This item** = genuine user-resizable / drag-to-fit columns: resize handles on `<Th>`,
+  min/max width clamps, and persisting per-column widths. Currently `useColumnPrefs`
+  (`src/lib/use-column-prefs.ts`) only stores `visible[]` + `order[]` — no width field —
+  so this needs a schema-version bump on the localStorage prefs, drag-handle UI, and a
+  switch to `table-layout: fixed`. Applies to all list tables (Jobs/Candidates/Submissions/
+  Bench/Placements/Interviews) via the shared `columns-menu.tsx` + table primitives.
+
+Cheap middle ground if a full resize UI isn't wanted: `table-layout: fixed` + sensible
+per-column `min-w`/`w` presets → stable, balanced widths without any resize interaction.
+
+---
+
 ## Deferred indefinitely (not in any milestone)
 
 These were explicitly declined on 2026-05-26:

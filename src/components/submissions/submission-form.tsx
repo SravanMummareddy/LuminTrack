@@ -172,12 +172,20 @@ export function SubmissionForm({
   // form reset fires AFTER commit, so a render-time re-key gets clobbered by it.
   // The extra render is intentional and bounded to one per action response.
   const [selectSyncKey, setSelectSyncKey] = useState(0);
+  // A gate's message (state.error) is baked server-side for a specific
+  // candidate/job. If the user changes that anchor without resubmitting, the gate
+  // is stale — hide it until the next action result. Cleared on every new
+  // response so a fresh gate always shows.
+  const [gateDismissed, setGateDismissed] = useState(false);
   useEffect(() => {
     // Re-key after React 19's post-action <form> reset, which only runs after
     // commit; a render-time bump would be clobbered by it. Bounded to one extra
     // render per action response.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectSyncKey((k) => k + 1);
+    // A new action response is the current gate context — un-dismiss.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setGateDismissed(false);
   }, [state]);
 
   const set =
@@ -241,6 +249,20 @@ export function SubmissionForm({
     });
   };
 
+  // Hide the (now stale) gate and clear any override reasons — they were typed
+  // against the previous candidate/job and must not ride into a new gate context
+  // (a reason logged to the wrong candidate is a real data-integrity slip).
+  const dismissStaleGate = () => {
+    setGateDismissed(true);
+    setFields((f) => ({
+      ...f,
+      overridePreset: "",
+      overrideNote: "",
+      convertReason: "",
+      candidateStatusReason: "",
+    }));
+  };
+
   // Switching candidate clears the résumé pick — a résumé belongs to one
   // candidate. Warn if there was anything to lose rather than wiping silently.
   const onCandidateChange = (nextCandidateId: string) => {
@@ -248,6 +270,8 @@ export function SubmissionForm({
     // the pick and the just-uploaded list when the candidate changes.
     setUploadedResumes([]);
     resetUpload();
+    // The prior gate + any override reasons belonged to the old candidate.
+    dismissStaleGate();
     setFields((f) => {
       const hadResume = f.resumeSelection !== "";
       setResumeCleared(hadResume);
@@ -260,6 +284,7 @@ export function SubmissionForm({
   };
 
   const onJobChange = (nextJobId: string) => {
+    dismissStaleGate();
     setFields((f) => ({
       ...f,
       jobId: nextJobId,
@@ -322,7 +347,9 @@ export function SubmissionForm({
   const effectiveCandidateId =
     mode === "candidate-locked" ? (candidate?.id ?? "") : fields.candidateId;
 
-  const gate = state.needsConfirm;
+  // Suppress a gate whose candidate/job context the user has since changed — its
+  // baked message + the button state would be stale (see dismissStaleGate).
+  const gate = gateDismissed ? undefined : state.needsConfirm;
   const isGate = gate !== undefined && gate !== true;
   // Convert-only warn gates (candidate placed / archived résumé / zero rates /
   // bill < pay) take a single free-text reason, not a preset.
@@ -591,6 +618,10 @@ export function SubmissionForm({
               {uploadError && (
                 <p className="text-xs text-red-700">{uploadError}</p>
               )}
+              <p className="text-xs text-slate-500">
+                Saved to this candidate&apos;s résumé library and selected for this
+                submission.
+              </p>
               <div className="flex gap-2">
                 <Button
                   type="button"
@@ -835,7 +866,7 @@ export function SubmissionForm({
         );
       })()}
 
-      {state.error && !isGate && (
+      {state.error && !isGate && !gateDismissed && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
           {state.error}
         </p>

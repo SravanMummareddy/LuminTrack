@@ -55,7 +55,7 @@ const COLUMNS: Column[] = [
     sortKey: "name",
     defaultVisible: true,
     render: (c) => (
-      <Td heading>
+      <Td heading className="whitespace-nowrap">
         <span className="flex items-center gap-2">
           <Link
             href={`/candidates/${c.id}`}
@@ -74,7 +74,7 @@ const COLUMNS: Column[] = [
     sortKey: "email",
     defaultVisible: true,
     render: (c) => (
-      <Td label="Email" secondary>
+      <Td label="Email" secondary className="whitespace-nowrap">
         {c.email || "—"}
       </Td>
     ),
@@ -85,7 +85,7 @@ const COLUMNS: Column[] = [
     sortKey: "phone",
     defaultVisible: true,
     render: (c) => (
-      <Td label="Phone" secondary>
+      <Td label="Phone" secondary className="whitespace-nowrap">
         {c.phone || "—"}
       </Td>
     ),
@@ -95,7 +95,11 @@ const COLUMNS: Column[] = [
     label: "Location",
     sortKey: "location",
     defaultVisible: true,
-    render: (c) => <Td label="Location">{c.currentLocation || "—"}</Td>,
+    render: (c) => (
+      <Td label="Location" className="whitespace-nowrap">
+        {c.currentLocation || "—"}
+      </Td>
+    ),
   },
   {
     key: "experience",
