@@ -39,6 +39,7 @@ export type BenchConsultantFormValues = {
   callType: string;
   payrollType: string;
   relocation: boolean;
+  relocationCities: string;
   marketingStartDate: string;
   marketingEmail: string;
   marketingPassword: string;
@@ -82,6 +83,7 @@ function initialFields(v?: BenchConsultantFormValues): Fields {
     leastRateC2C: v?.leastRateC2C ?? "",
     callType: v?.callType ?? "",
     payrollType: v?.payrollType ?? "",
+    relocationCities: v?.relocationCities ?? "",
     marketingStartDate: v?.marketingStartDate ?? "",
     marketingEmail: v?.marketingEmail ?? "",
     marketingPassword: v?.marketingPassword ?? "",
@@ -356,6 +358,11 @@ export function BenchConsultantForm({
               <input type="checkbox" name="relocation" checked={relocation} onChange={(e) => setRelocation(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-200" />
               Open to relocation
             </label>
+            {!relocation && (
+              <Field label="Cities open to relocating to" htmlFor="relocationCities" hint="Optional — specific cities they'd still consider." error={errors.relocationCities}>
+                <Input id="relocationCities" name="relocationCities" value={fields.relocationCities} onChange={set("relocationCities")} placeholder="e.g. Dallas, Austin" />
+              </Field>
+            )}
 
             <Field label="Notes" htmlFor="notes" error={errors.notes}>
               <Textarea id="notes" name="notes" rows={3} value={fields.notes} onChange={set("notes")} />
@@ -382,9 +389,6 @@ export function BenchConsultantForm({
             </Field>
             <Field label="Marketing number" htmlFor="marketingNumber" error={errors.marketingNumber}>
               <Input id="marketingNumber" name="marketingNumber" value={fields.marketingNumber} onChange={set("marketingNumber")} />
-            </Field>
-            <Field label="Personal number" htmlFor="personalNumber" hint="Defaults to the contact phone if left blank." error={errors.personalNumber}>
-              <Input id="personalNumber" name="personalNumber" value={fields.personalNumber} onChange={set("personalNumber")} />
             </Field>
           </div>
         </section>

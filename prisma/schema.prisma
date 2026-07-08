@@ -614,6 +614,9 @@ model BenchConsultant {
   callType    String?
   payrollType String?
   relocation  Boolean  @default(false)
+  // When not open to relocation generally, specific cities they'd still
+  // consider (free-text, e.g. "Dallas, Austin").
+  relocationCities String?
   marketingStartDate DateTime?
   // Marketing credentials — gated (canViewBenchCredentials), detail-page only,
   // never a list column or business-export field.

@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
 import { ActivityTimeline } from "@/components/timeline/activity-timeline";
-import { BenchCredentials } from "@/components/bench/bench-credentials";
+import { BenchMarketingDetails } from "@/components/bench/bench-credentials";
 import { getBenchConsultant } from "@/server/queries/bench-consultants";
 import {
   removeFromBench,
@@ -49,21 +49,22 @@ export default async function BenchConsultantDetailPage({
     { label: "M Visa", value: c.mVisa ?? "—" },
     { label: "A Visa", value: c.aVisa ?? "—" },
     { label: "Work authorization", value: c.workAuthorization ?? "—" },
-    { label: "Marketing experience", value: years(c.marketingExpYears) },
     { label: "Real-time experience", value: years(c.realTimeExpYears) },
     { label: "Current location", value: c.currentLocation ?? "—" },
-    { label: "Relocation", value: c.relocation ? "Yes" : "No" },
+    {
+      label: "Relocation",
+      value: c.relocation
+        ? "Yes — open to relocate"
+        : c.relocationCities
+          ? `Only to: ${c.relocationCities}`
+          : "No",
+    },
     { label: "Least rate on C2C", value: formatRate(c.leastRateC2C) },
     { label: "Call type", value: c.callType ?? "—" },
     { label: "Payroll type", value: c.payrollType ?? "—" },
     { label: "Project type", value: c.projectType ?? "—" },
     { label: "Company", value: c.company ?? "—" },
     { label: "Reference", value: c.reference ?? "—" },
-    {
-      label: "Marketing start",
-      value: c.marketingStartDate ? formatDate(c.marketingStartDate) : "—",
-    },
-    { label: "Marketing recruiter", value: c.recruiter?.fullName ?? "—" },
     { label: "Contact email", value: c.email ?? "—" },
     { label: "Contact phone", value: c.phone ?? "—" },
     { label: "Skills", value: c.skills.length ? c.skills.join(", ") : "—" },
@@ -145,11 +146,17 @@ export default async function BenchConsultantDetailPage({
       </div>
 
       {canCreds && (
-        <BenchCredentials
+        <BenchMarketingDetails
+          marketingRecruiter={c.recruiter?.fullName ?? null}
+          marketingStartDate={
+            c.marketingStartDate ? formatDate(c.marketingStartDate) : null
+          }
+          marketingExperience={
+            c.marketingExpYears != null ? years(c.marketingExpYears) : null
+          }
           marketingEmail={c.marketingEmail}
           marketingPassword={c.marketingPassword ?? null}
           marketingNumber={c.marketingNumber}
-          personalNumber={c.personalNumber}
         />
       )}
 

@@ -1522,7 +1522,17 @@ async function main() {
         leastRateC2C: randInt(55, 95),
         callType: pick(CALL_TYPES),
         payrollType: pick(PAYROLL_TYPES),
-        relocation: chance(0.5),
+        ...(() => {
+          const relocation = chance(0.5);
+          return {
+            relocation,
+            // Some non-relocating consultants still name specific cities.
+            relocationCities:
+              !relocation && chance(0.5)
+                ? pickN(LOCATIONS, randInt(1, 2)).join(", ")
+                : null,
+          };
+        })(),
         marketingStartDate: c.createdAt,
         marketingEmail: hasCreds
           ? `${first}.${last}.mktg`.toLowerCase().replace(/\s+/g, "") + "@bench-marketing.com"
