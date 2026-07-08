@@ -185,6 +185,8 @@ enum ActivityAction {
   USER_CREATED
   USER_UPDATED
   USER_PASSWORD_CHANGED
+  // Right-to-be-forgotten: candidate personal data erased + files shredded.
+  CANDIDATE_ERASED
 }
 
 // Bench-Sales roster — marketing priority tier (sheet's "High Priority" /
@@ -458,6 +460,10 @@ model Candidate {
   // (LinkedIn InMail / referral / job-board / inbound / etc.); a fixed enum
   // here would calcify ahead of real usage data.
   source              String?
+  // Right-to-be-forgotten marker. Non-null = personal data erased + files
+  // shredded; the row is retained (anonymized) so linked submissions/placements
+  // keep their history. See eraseCandidate.
+  erasedAt            DateTime?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 

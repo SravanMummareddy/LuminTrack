@@ -1,7 +1,14 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ExternalLink, Pencil, Send } from "lucide-react";
-import { LinkButton } from "@/components/ui/button";
+import {
+  ArrowLeft,
+  ExternalLink,
+  Pencil,
+  Send,
+  Archive,
+  ArchiveRestore,
+} from "lucide-react";
+import { LinkButton, buttonClass } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, Th, Td } from "@/components/ui/table";
 import { ActivityTimeline } from "@/components/timeline/activity-timeline";
@@ -13,7 +20,9 @@ import {
   getCandidateDocuments,
 } from "@/server/queries/candidates";
 import { requireUser } from "@/lib/session";
-import { canManageSensitiveDocs } from "@/lib/permissions";
+import { canManageSensitiveDocs, hasFullAccess } from "@/lib/permissions";
+import { CandidateDangerZone } from "@/components/candidates/candidate-danger-zone";
+import { setCandidateArchived } from "@/server/actions/candidates";
 import { getCandidateSubmissions } from "@/server/queries/submissions";
 import {
   getActivePlacementForCandidate,
@@ -127,6 +136,8 @@ export default async function CandidateDetailPage({
     getCandidatePlacements(id, { page: placementsPage }),
   ]);
   if (!candidate) notFound();
+  const isAdmin = hasFullAccess(user);
+  const isErased = Boolean(candidate.erasedAt);
   const submissionsTotalPages = Math.max(
     1,
     Math.ceil(submissionsTotal / PAGE_SIZE),
@@ -162,6 +173,7 @@ export default async function CandidateDetailPage({
             <h1 className="text-xl font-semibold text-slate-900">
               {candidate.fullName}
             </h1>
+            {isErased && <Badge tone="red">Erased</Badge>}
             <Badge tone={candidate.isActive ? "green" : "slate"}>
               {candidate.isActive ? "Active" : "Inactive"}
             </Badge>
@@ -177,19 +189,42 @@ export default async function CandidateDetailPage({
             {candidate.currentCompany || "Company not set"}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <LinkButton href="/vendor-portal">
-            <Send className="h-4 w-4" />
-            Submit to a requirement
-          </LinkButton>
-          <LinkButton
-            href={`/candidates/${candidate.id}/edit`}
-            variant="secondary"
-          >
-            <Pencil className="h-4 w-4" />
-            Edit candidate
-          </LinkButton>
-        </div>
+        {!isErased && (
+          <div className="flex shrink-0 items-center gap-2">
+            <LinkButton href="/vendor-portal">
+              <Send className="h-4 w-4" />
+              Submit to a requirement
+            </LinkButton>
+            <LinkButton
+              href={`/candidates/${candidate.id}/edit`}
+              variant="secondary"
+            >
+              <Pencil className="h-4 w-4" />
+              Edit candidate
+            </LinkButton>
+            <form action={setCandidateArchived}>
+              <input type="hidden" name="id" value={candidate.id} />
+              <input
+                type="hidden"
+                name="archived"
+                value={candidate.isActive ? "1" : "0"}
+              />
+              <button type="submit" className={buttonClass("secondary")}>
+                {candidate.isActive ? (
+                  <>
+                    <Archive className="h-4 w-4" />
+                    Archive
+                  </>
+                ) : (
+                  <>
+                    <ArchiveRestore className="h-4 w-4" />
+                    Restore
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+        )}
       </div>
 
       {activePlacement && (
@@ -506,6 +541,13 @@ export default async function CandidateDetailPage({
       />
 
       <ActivityTimeline entries={timeline} />
+
+      {isAdmin && !isErased && (
+        <CandidateDangerZone
+          candidateId={candidate.id}
+          candidateName={candidate.fullName}
+        />
+      )}
     </div>
   );
 }
