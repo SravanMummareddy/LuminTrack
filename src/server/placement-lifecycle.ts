@@ -23,10 +23,8 @@ export async function ensurePlacementOnJoined(
     submissionId: string;
     candidateId: string;
     jobId: string;
-    candidateRate: Prisma.Decimal | null;
-    // The bench-sales pay/bill pair from the submission, when the recruiter
-    // entered it. Preferred over candidateRate so the placement carries a real
-    // margin instead of a duplicated single rate (bill === pay → $0 margin).
+    // The pay/bill pair from the submission, when the recruiter entered it.
+    // Absent → the placement seeds $0/$0, which the UI flags as "Rates pending."
     payRate?: Prisma.Decimal | null;
     billRate?: Prisma.Decimal | null;
     // What the end client releases — carried through to the placement (optional).
@@ -98,12 +96,10 @@ export async function ensurePlacementOnJoined(
     return { placementId: existing.id, placementSeq: existing.seq };
   }
 
-  // Auto-create the Placement. Prefer the submission's real pay/bill pair so the
-  // placement carries a meaningful margin; fall back to the single candidateRate
-  // (legacy) or $0/$0, which the UI flags as "Rates pending."
-  const fallbackRate = args.candidateRate ?? 0;
-  const seedBillRate = args.billRate ?? fallbackRate;
-  const seedPayRate = args.payRate ?? fallbackRate;
+  // Auto-create the Placement from the submission's pay/bill pair. When they're
+  // absent the placement seeds $0/$0, which the UI flags as "Rates pending."
+  const seedBillRate = args.billRate ?? 0;
+  const seedPayRate = args.payRate ?? 0;
   const startDate = args.eventAt ?? new Date();
   try {
     const placement = await tx.placement.create({

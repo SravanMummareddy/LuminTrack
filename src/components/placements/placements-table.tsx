@@ -28,7 +28,9 @@ type Column = {
 };
 
 function canSeeRates(row: PlacementListRow, ctx: ViewerContext): boolean {
-  return ctx.userRole === "ADMIN" || row.submission.submittedBy.id === ctx.userId;
+  // Managers / team leads see all rates; a recruiter sees rates only on their
+  // own placements (matches the server-side canEditRates policy).
+  return ctx.userRole !== "RECRUITER" || row.submission.submittedBy.id === ctx.userId;
 }
 
 function formatMoney(value: number): string {
@@ -92,6 +94,7 @@ const COLUMNS: Column[] = [
   {
     key: "vendor",
     label: "Vendor",
+    sortKey: "vendor",
     defaultVisible: true,
     render: (p) => (
       <Td label="Vendor" secondary>
@@ -137,6 +140,7 @@ const COLUMNS: Column[] = [
   {
     key: "bill",
     label: "Bill",
+    sortKey: "bill",
     align: "right",
     defaultVisible: true,
     render: (p, _n, ctx) => (
@@ -148,6 +152,7 @@ const COLUMNS: Column[] = [
   {
     key: "pay",
     label: "Pay",
+    sortKey: "pay",
     align: "right",
     defaultVisible: true,
     render: (p, _n, ctx) => (
@@ -211,12 +216,37 @@ const COLUMNS: Column[] = [
   {
     key: "recruiter",
     label: "Recruiter",
+    sortKey: "recruiter",
     // Visible by default — the sheet's Placements display set is
     // Name · Vendor · Client · Role · Bill · Pay · Recruiter.
     defaultVisible: true,
     render: (p) => (
       <Td label="Recruiter" secondary>
         {p.submission.submittedBy.fullName}
+      </Td>
+    ),
+  },
+  {
+    key: "created",
+    label: "Created",
+    sortKey: "created",
+    sortDefaultDir: "desc",
+    defaultVisible: false,
+    render: (p) => (
+      <Td label="Created" secondary className="whitespace-nowrap">
+        {formatDate(p.createdAt)}
+      </Td>
+    ),
+  },
+  {
+    key: "updated",
+    label: "Updated",
+    sortKey: "updated",
+    sortDefaultDir: "desc",
+    defaultVisible: false,
+    render: (p) => (
+      <Td label="Updated" secondary className="whitespace-nowrap">
+        {formatDate(p.updatedAt)}
       </Td>
     ),
   },
@@ -232,10 +262,13 @@ const DEFAULTS: ColumnPrefs = {
 export function PlacementsTable({
   rows,
   pageOffset = 0,
+  countLabel,
   viewer,
 }: {
   rows: PlacementListRow[];
   pageOffset?: number;
+  /** e.g. "12 placements" — shown before the column count. */
+  countLabel?: string;
   viewer: ViewerContext;
 }) {
   const [prefs, setPrefs] = useColumnPrefs(
@@ -256,7 +289,7 @@ export function PlacementsTable({
         <p className="text-xs text-slate-500" suppressHydrationWarning>
           {rows.length === 0
             ? null
-            : `Showing ${visibleCols.length} of ${COLUMNS.length} columns`}
+            : `${countLabel ? `${countLabel} · ` : ""}Showing ${visibleCols.length} of ${COLUMNS.length} columns`}
         </p>
         <ColumnsMenu
           columns={orderedCols.map((c) => ({ key: c.key, label: c.label }))}

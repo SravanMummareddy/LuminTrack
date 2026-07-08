@@ -10,6 +10,173 @@ short instead of long.
 
 ---
 
+## 2026-07-08 · "Permanent delete" that can't lose data — archive-then-scrub instead of a trash-first guard
+
+**Situation.** Two things collided. (1) `eraseCandidateNow` — the permanent,
+irreversible erase — gated on role, existence, not-already-erased, and a
+type-the-name confirm, but **never required the candidate to be trashed first**,
+so a forged/direct call could scrub a live, never-archived candidate. (2) The
+owner disliked the "you must trash and wait 30 days" architecture: *if an admin
+wants to permanently delete, they should be able to* — just without silently
+losing the data.
+
+**Diagnosis.** A "must be trashed first" server guard would close the safety
+hole but fight requirement (2) — it makes permanent delete a two-step, and the
+real thing protecting the data was still just a 30-day purgatory. The better
+invariant isn't "delete only after trashing," it's **"never scrub without a
+recoverable backup existing."** Move the safety net from a *time window* to a
+*durable artifact*.
+
+**Fix.** `hardEraseCandidate` now builds a full personal-data archive
+(profile + submissions summary + résumé/document files, via the existing
+`buildCandidateArchive`) and `put`s it to **private Blob** under
+`archives/candidates/` *before* the transaction scrubs the row and shreds the
+files. If the upload throws, the erase aborts — data intact. Both erase paths
+inherit this: the admin "Delete permanently" action (now allowed directly on a
+live candidate — the archive, not the trash window, is the net) and the 30-day
+purge cron (whose loop now catches per-candidate so one failed backup doesn't
+abort the batch). Admins review/download/"remove for good" the backups from
+Settings → Deleted candidates (listed straight from the Blob prefix — the
+scrubbed row keeps no queryable PII, which is the privacy-correct choice).
+
+**Lesson.** When a safety requirement ("don't lose data") and a UX requirement
+("let me delete now") seem opposed, the fix is usually to re-express the safety
+requirement as an *artifact* rather than a *gate*. "Back it up first, then let
+them do whatever they want" beats "make them jump through a step." And a
+destructive action should enforce its precondition — here, *a backup exists* —
+at the server boundary, not rely on the UI hiding the button.
+
+---
+
+## 2026-07-06 · Calendar rendered as one vertical column — a Tailwind class that never got generated
+
+**Situation.** The new branded range calendar rendered its weekday header and
+day grid as a single **vertical column** (Su, Mo, Tu… then 28, 29, 30, 1, 2…
+all stacked) instead of a 7-wide grid. tsc, eslint, and the unit suite were all
+green — this only showed in the running dev browser.
+
+**Diagnosis.** The container was `className="grid grid-cols-7"`. The grid was
+stacking in one column — the textbook symptom of `display: grid` applying while
+`grid-template-columns` does **not** (a grid with no column template flows every
+item into a single implicit column). Sibling classes on the same element
+(`text-center`, `py-1`, `text-[11px]`) rendered fine, so Tailwind *was* scanning
+the file. The tell: `grep grid-cols-7 src/` returned nothing else —
+`grid-cols-7` is used **nowhere else in the app**. `grid` (used everywhere) was
+in the already-built dev CSS; `grid-cols-7`, a brand-new utility, wasn't emitted
+into the running server's stylesheet. So `display:grid` landed, the column
+template didn't.
+
+**Fix.** Replace the utility with an inline style —
+`style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}` — so the layout
+never depends on Tailwind having generated a novel class. (A full dev-server
+restart would also have regenerated it, but inline is robust against the next
+person adding a first-of-its-kind utility.)
+
+**Lesson.** A green tsc/eslint/test run says nothing about whether a Tailwind
+class made it into the CSS. When a *first-use-in-the-codebase* utility silently
+no-ops in dev, suspect stylesheet generation, not your JSX. For structural,
+must-not-fail layout (grid templates), prefer an inline style over betting on
+JIT class emission.
+
+---
+
+## 2026-07-06 · Duplicate React key on the résumé picker — optimistic state met revalidation
+
+**Situation.** During round-2 testing, the submission form (on the VPR-convert
+path) threw a console error: `Encountered two children with the same key,
+cmra2yvq40008pwze5xmjwdmi` at the résumé `<option>` map. The list visibly worked,
+but React warned the same résumé id was rendered twice.
+
+**Diagnosis.** The picker's options come from
+`resumes = [...activeCandidate.resumes, ...uploadedResumes]`. `uploadedResumes`
+is client state appended optimistically right after an inline
+`uploadCandidateResume`. But that server action calls `revalidatePath`, so the
+parent Server Component re-fetches `listCandidateOptions()` and the freshly
+uploaded résumé now appears in `activeCandidate.resumes` **too** — while still
+sitting in the client's `uploadedResumes`. Same id in both arrays → duplicate
+key. The two sources of truth (optimistic client list + revalidated server list)
+overlap for one render cycle.
+
+**Fix.** Dedupe the merged list by id, server row first
+(`submission-form.tsx`). One-line-idea fix: a `Set<string>` guard while merging,
+rather than trying to clear `uploadedResumes` on revalidation (which you can't
+observe cleanly from the client).
+
+**Lesson.** Whenever you merge an **optimistic client list** with a
+**revalidated server list** of the same entity, they *will* overlap for a beat —
+always key the union through a dedupe, don't assume the two are disjoint.
+
+---
+
+## 2026-07-06 · The seed died on a bare `ErrorEvent` — right driver, wrong transport
+
+**Situation.** After moving résumés and documents to Vercel Blob, `npx tsx
+prisma/seed-demo.ts` failed immediately at "Wiping existing data…" with a
+useless, message-less `ErrorEvent { type: 'error' }` — a raw WebSocket error
+object, no stack, no SQL. The app itself (the running dev server) talked to the
+same database fine.
+
+**Diagnosis.** The instinct was "my Blob changes broke it," so I tested the two
+things I'd touched: a minimal `SELECT 1` through the exact same adapter +
+connection string **connected fine**, and adding the new `@vercel/blob` /
+`blob-upload` imports to that test **still** connected fine. So it wasn't the
+connection or the imports — it was the *transport under load*. The seed uses
+`PrismaNeon`, the app's **serverless WebSocket** driver. A long-lived Next dev
+server keeps that socket warm, but a fresh one-shot script that opens the socket
+and immediately fires ~20 `deleteMany`s hits a cold Neon compute and the
+WebSocket drops mid-run — surfacing as the bare `ErrorEvent`. The migrations and
+integration tests never hit this because they use the **direct `pg`** adapter
+over `DIRECT_URL`, not the WebSocket driver.
+
+**Fix.** Point the seed at the same transport the other batch tools already use:
+`PrismaPg` (direct TCP) over `DIRECT_URL` instead of `PrismaNeon` over the pooled
+WebSocket URL. One import swap + one connection-string swap. Reseed ran clean.
+
+**Lesson.** A message-less `ErrorEvent` is a transport failure, not a query
+failure — don't debug the SQL. And match the driver to the *workload shape*:
+the serverless WebSocket driver is tuned for a warm, long-lived server, not a
+cold bulk script. When a script misbehaves against a serverless DB, reach for
+the direct connection the migrations already trust.
+
+---
+
+## 2026-07-06 · The feature we "built" already existed — we'd broken it
+
+**Situation.** Stakeholder feedback: "I add jobs manually, keep it simple, let me
+track each recruiter." A first pass ("Phase 1") merged Job and Submission into a
+single one-form "Jobs" list and retired the Vendor Portal Requirements (VPR) tab —
+on the theory that the owner's "job" *was* a submission. Then the owner clarified
+the real workflow: a team lead scopes a requirement (adds bill/pay), *then* recruiters
+submit candidates against it. That's three tiers, not one.
+
+**Diagnosis.** The owner's own spreadsheet had **two separate tabs** ("Vendor Portal
+Requirements" and "Bench Submissions") with the same fields at different stages — a
+staging record and a tracked record. The app's *original* design was already exactly
+that: `Job → VendorRequirement → Submission`, with bill/pay living on the VPR and the
+submission being the analytics-visible record. Phase 1 hadn't added a feature; it had
+flattened a correct three-tier model into one and deleted the middle tier. The only
+real gaps vs. the owner's ideal were narrow: the Job form carried bill/pay it shouldn't,
+and the VPR→Submission convert was 1:1 when the owner wanted one requirement to receive
+several candidates.
+
+**Fix.** Revert, don't rebuild. The de-clutter work and the Phase-1 merge were
+*intermingled* in two files (dashboard `page.tsx`, `queries/dashboard.ts`) and the
+branch had no commits, so a hard reset would have lost the good work. Instead:
+`git checkout HEAD -- <the 7 pure-Phase-1 files>` to restore originals, **surgical
+edits** to the 2 mixed files (kept de-clutter, restored the VPR nudge), and parked the
+3 new files. Then the two genuine refinements: trim the Job form to client-rate-only
+(bill/pay moved to a collapsible, no data loss), and change VPR→Submission to 1:many
+(drop `convertedSubmissionId @unique`, add `Submission.vendorRequirementId`; the VPR
+stays OPEN and accumulates submissions).
+
+**Lesson.** Before building a "new" workflow, check whether the app already models it —
+a pivot request is often a request to *use* an existing structure differently, not to
+replace it. And when good and bad changes are tangled on an uncommitted branch,
+categorize every changed file (keep / revert / mixed) and reach for `git checkout
+<file>` + surgical edits over a blanket reset. The categorization *is* the fix.
+
+---
+
 ## 2026-06-22 · A new `Decimal` column that leaked across the RSC→Client boundary
 
 **Situation.** After adding a `clientRate` column and shipping it, the `/submissions`

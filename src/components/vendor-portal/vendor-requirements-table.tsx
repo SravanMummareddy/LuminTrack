@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Table, Th, Td, cardLink, cardLinkRaise } from "@/components/ui/table";
+import { Table, Th, Td, cardLinkRaise } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { MobileSort } from "@/components/ui/mobile-sort";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,11 @@ import {
   REQUIREMENT_STATUS_TONE,
   BENCH_ENGAGEMENT_LABEL,
 } from "@/lib/labels";
-import { formatRate, formatVendorRequirementDisplayId } from "@/lib/format";
+import {
+  formatDate,
+  formatRate,
+  formatVendorRequirementDisplayId,
+} from "@/lib/format";
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
 import type { VendorRequirementRow } from "@/server/queries/requirements";
 
@@ -43,25 +47,69 @@ const COLUMNS: Column[] = [
     defaultVisible: true,
     render: (r) => (
       <Td label="ID" secondary className="whitespace-nowrap font-mono text-xs">
-        {formatVendorRequirementDisplayId(r)}
+        <Link
+          href={`/vendor-portal/${r.id}`}
+          className="text-indigo-600 hover:underline"
+        >
+          {formatVendorRequirementDisplayId(r)}
+        </Link>
+      </Td>
+    ),
+  },
+  {
+    key: "submissions",
+    label: "Submissions",
+    sortKey: "submissions",
+    align: "right",
+    defaultVisible: true,
+    render: (r) => (
+      <Td label="Submissions" className="text-right tabular-nums">
+        <Link
+          href={`/vendor-portal/${r.id}`}
+          className={
+            r._count.submissions > 0
+              ? "font-medium text-indigo-600 hover:underline"
+              : "text-slate-300 hover:underline"
+          }
+        >
+          {r._count.submissions}
+        </Link>
       </Td>
     ),
   },
   {
     key: "candidate",
-    label: "Candidate",
-    sortKey: "candidate",
+    // The candidates actually submitted against this requirement (VPR-first).
+    // First couple as chips + "+N" for the rest; the cell links to the detail.
+    label: "Candidates",
     defaultVisible: true,
-    render: (r) => (
-      <Td heading>
-        <Link
-          href={`/vendor-portal/${r.id}`}
-          className={`${cardLink} font-medium text-indigo-600 hover:underline`}
-        >
-          {r.candidate?.fullName ?? "— (unassigned)"}
-        </Link>
-      </Td>
-    ),
+    render: (r) => {
+      const extra = r._count.submissions - r.submissions.length;
+      return (
+        <Td label="Candidates">
+          {r._count.submissions === 0 ? (
+            <span className="text-sm text-slate-400">No candidates yet</span>
+          ) : (
+            <Link
+              href={`/vendor-portal/${r.id}`}
+              className="inline-flex flex-wrap items-center gap-1"
+            >
+              {r.submissions.map((s) => (
+                <span
+                  key={s.id}
+                  className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700"
+                >
+                  {s.candidate?.fullName ?? "—"}
+                </span>
+              ))}
+              {extra > 0 && (
+                <span className="text-xs text-slate-400">+{extra}</span>
+              )}
+            </Link>
+          )}
+        </Td>
+      );
+    },
   },
   {
     key: "job",
@@ -69,10 +117,10 @@ const COLUMNS: Column[] = [
     sortKey: "job",
     defaultVisible: true,
     render: (r) => (
-      <Td label="Job">
+      <Td heading>
         <Link
           href={`/jobs/${r.job.id}`}
-          className={`${cardLinkRaise} text-slate-700 hover:underline`}
+          className={`${cardLinkRaise} font-medium text-slate-800 hover:underline`}
         >
           {r.job.title}
         </Link>
@@ -82,6 +130,7 @@ const COLUMNS: Column[] = [
   {
     key: "vendor",
     label: "Vendor",
+    sortKey: "vendor",
     defaultVisible: true,
     render: (r) => (
       <Td label="Vendor" secondary>
@@ -92,6 +141,7 @@ const COLUMNS: Column[] = [
   {
     key: "client",
     label: "Client",
+    sortKey: "client",
     defaultVisible: true,
     render: (r) => (
       <Td label="Client" secondary>
@@ -102,6 +152,7 @@ const COLUMNS: Column[] = [
   {
     key: "pay",
     label: "Pay",
+    sortKey: "pay",
     align: "right",
     defaultVisible: true,
     render: (r) => (
@@ -113,6 +164,7 @@ const COLUMNS: Column[] = [
   {
     key: "bill",
     label: "Bill",
+    sortKey: "bill",
     align: "right",
     defaultVisible: true,
     render: (r) => (
@@ -124,6 +176,7 @@ const COLUMNS: Column[] = [
   {
     key: "location",
     label: "Location",
+    sortKey: "location",
     defaultVisible: true,
     render: (r) => (
       <Td label="Location" secondary>
@@ -134,6 +187,7 @@ const COLUMNS: Column[] = [
   {
     key: "engagement",
     label: "C2C/W2",
+    sortKey: "engagement",
     defaultVisible: true,
     render: (r) => (
       <Td label="C2C/W2" secondary>
@@ -144,6 +198,7 @@ const COLUMNS: Column[] = [
   {
     key: "recruiter",
     label: "Recruiter",
+    sortKey: "recruiter",
     defaultVisible: true,
     render: (r) => (
       <Td label="Recruiter" secondary>
@@ -168,6 +223,7 @@ const COLUMNS: Column[] = [
   {
     key: "teamLead",
     label: "Team lead",
+    sortKey: "teamLead",
     defaultVisible: false,
     render: (r) => (
       <Td label="Team lead" secondary>
@@ -188,6 +244,7 @@ const COLUMNS: Column[] = [
   {
     key: "vendorRecruiter",
     label: "Vendor recruiter",
+    sortKey: "vendorRecruiter",
     defaultVisible: false,
     render: (r) => (
       <Td label="Vendor recruiter" secondary>
@@ -216,23 +273,26 @@ const COLUMNS: Column[] = [
     ),
   },
   {
-    key: "resume",
-    label: "Résumé",
+    key: "created",
+    label: "Created",
+    sortKey: "created",
+    sortDefaultDir: "desc",
     defaultVisible: false,
     render: (r) => (
-      <Td label="Résumé" secondary>
-        {r.resumeDriveLink ? (
-          <a
-            href={r.resumeDriveLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`${cardLinkRaise} text-indigo-600 hover:underline`}
-          >
-            View
-          </a>
-        ) : (
-          "—"
-        )}
+      <Td label="Created" secondary className="whitespace-nowrap">
+        {formatDate(r.createdAt)}
+      </Td>
+    ),
+  },
+  {
+    key: "updated",
+    label: "Updated",
+    sortKey: "updated",
+    sortDefaultDir: "desc",
+    defaultVisible: false,
+    render: (r) => (
+      <Td label="Updated" secondary className="whitespace-nowrap">
+        {formatDate(r.updatedAt)}
       </Td>
     ),
   },
@@ -248,9 +308,12 @@ const DEFAULTS: ColumnPrefs = {
 export function VendorRequirementsTable({
   rows,
   pageOffset = 0,
+  countLabel,
 }: {
   rows: VendorRequirementRow[];
   pageOffset?: number;
+  /** e.g. "22 requirements" — shown before the column count. */
+  countLabel?: string;
 }) {
   const [prefs, setPrefs] = useColumnPrefs(
     STORAGE_KEY,
@@ -270,7 +333,7 @@ export function VendorRequirementsTable({
         <p className="text-xs text-slate-500" suppressHydrationWarning>
           {rows.length === 0
             ? null
-            : `Showing ${visibleCols.length} of ${COLUMNS.length} columns`}
+            : `${countLabel ? `${countLabel} · ` : ""}Showing ${visibleCols.length} of ${COLUMNS.length} columns`}
         </p>
         <ColumnsMenu
           columns={orderedCols.map((c) => ({ key: c.key, label: c.label }))}

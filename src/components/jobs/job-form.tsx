@@ -1,11 +1,14 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import Link from "next/link";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { LocationInput } from "@/components/ui/location-input";
 import { SearchSelect } from "@/components/ui/search-select";
-import { Button, buttonClass } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import {
+  useUnsavedChanges,
+  GuardedCancel,
+} from "@/components/ui/unsaved-changes";
 import {
   JOB_STATUSES,
   JOB_STATUS_LABEL,
@@ -15,13 +18,12 @@ import {
   WORK_MODE_LABEL,
   JOB_PRIORITIES,
   JOB_PRIORITY_LABEL,
-  BENCH_ENGAGEMENTS,
-  BENCH_ENGAGEMENT_LABEL,
+  DISCIPLINES,
+  DISCIPLINE_LABEL,
 } from "@/lib/labels";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 
 type Option = { id: string; name: string; isActive: boolean };
-type Recruiter = { id: string; fullName: string; isActive: boolean };
 
 export type JobFormValues = {
   id: string;
@@ -34,10 +36,8 @@ export type JobFormValues = {
   location: string;
   clientRate: string;
   vendorRate: string;
-  candidateRate: string;
   description: string;
   notes: string;
-  recruiterIds: string[];
   positions: string;
   reqType: string;
   department: string;
@@ -48,6 +48,7 @@ export type JobFormValues = {
   endDate: string;
   workMode: string;
   priority: string;
+  discipline: string;
   targetCloseDate: string;
   postingUrl: string;
   workAuthRequirement: string;
@@ -66,28 +67,31 @@ export function JobForm({
   clients,
   vendors,
   sources,
-  recruiters,
   values,
   submitLabel,
-  canManageRequirements = false,
   canCreateOrgEntities = false,
+  canManageRatesAndAssignment = true,
 }: {
   action: JobAction;
   clients: Option[];
   vendors: Option[];
   sources: Option[];
-  recruiters: Recruiter[];
   values?: JobFormValues;
   submitLabel: string;
-  /** Show the optional "plan a vendor requirement" section (create mode only). */
-  canManageRequirements?: boolean;
-  /** Allow adding a new client/vendor inline (admins only). */
+  /** Allow adding a new client/vendor inline (managers/team leads only). */
   canCreateOrgEntities?: boolean;
+  /** Show the commercial rate fields. Recruiters may edit basic job details but
+   *  not rates — those are hidden for them (and the server enforces the same). */
+  canManageRatesAndAssignment?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(action, EMPTY_FORM_STATE);
   const errors = state.fieldErrors ?? {};
-  const assigned = new Set(values?.recruiterIds ?? []);
   const cancelHref = values ? `/jobs/${values.id}` : "/jobs";
+
+  // Unsaved-changes guard — any user input arms the leave prompt + Cancel confirm.
+  const [dirty, setDirty] = useState(false);
+  const markDirty = () => setDirty((d) => (d ? d : true));
+  useUnsavedChanges(dirty);
 
   // The source is either a managed source (FK) or a free-text entry. When a
   // saved job has no FK but a `sourceOther`, the select shows the "Other" option.
@@ -108,7 +112,7 @@ export function JobForm({
   const isNewVendor = vendorValue === NEW_ORG_ENTITY;
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form action={formAction} onInput={markDirty} className="space-y-5">
       {values && <input type="hidden" name="id" value={values.id} />}
 
       <Field label="Job title" htmlFor="title" required error={errors.title}>
@@ -220,8 +224,13 @@ export function JobForm({
           )}
         </Field>
 
-        <Field label="Status" htmlFor="status" error={errors.status}>
-          <Select id="status" name="status" defaultValue={values?.status ?? "OPEN"}>
+        <Field label="Status" htmlFor="status" required error={errors.status}>
+          <Select
+            id="status"
+            name="status"
+            defaultValue={values?.status ?? "OPEN"}
+            required
+          >
             {JOB_STATUSES.map((s) => (
               <option key={s} value={s}>
                 {JOB_STATUS_LABEL[s]}
@@ -230,53 +239,38 @@ export function JobForm({
           </Select>
         </Field>
 
-        <Field
-          label="Client rate"
-          htmlFor="clientRate"
-          error={errors.clientRate}
-          hint="$/hr the end client releases (optional — often not disclosed)."
-        >
-          <Input
-            id="clientRate"
-            name="clientRate"
-            type="number"
-            min="0"
-            step="0.01"
-            defaultValue={values?.clientRate ?? ""}
-          />
+        <Field label="Discipline" htmlFor="discipline" error={errors.discipline}>
+          <Select
+            id="discipline"
+            name="discipline"
+            defaultValue={values?.discipline ?? ""}
+          >
+            <option value="">—</option>
+            {DISCIPLINES.map((d) => (
+              <option key={d} value={d}>
+                {DISCIPLINE_LABEL[d]}
+              </option>
+            ))}
+          </Select>
         </Field>
 
-        <Field
-          label="Vendor rate"
-          htmlFor="vendorRate"
-          error={errors.vendorRate}
-          hint="$/hr the vendor releases to us — our bill side."
-        >
-          <Input
-            id="vendorRate"
-            name="vendorRate"
-            type="number"
-            min="0"
-            step="0.01"
-            defaultValue={values?.vendorRate ?? ""}
-          />
-        </Field>
-
-        <Field
-          label="Candidate rate"
-          htmlFor="candidateRate"
-          error={errors.candidateRate}
-          hint="$/hr target for the candidate — prefills the submission."
-        >
-          <Input
-            id="candidateRate"
-            name="candidateRate"
-            type="number"
-            min="0"
-            step="0.01"
-            defaultValue={values?.candidateRate ?? ""}
-          />
-        </Field>
+        {canManageRatesAndAssignment && (
+          <Field
+            label="Client rate"
+            htmlFor="clientRate"
+            error={errors.clientRate}
+            hint="$/hr the end client releases. Bill & pay rates are set later on the vendor requirement."
+          >
+            <Input
+              id="clientRate"
+              name="clientRate"
+              type="number"
+              min="0"
+              step="0.01"
+              defaultValue={values?.clientRate ?? ""}
+            />
+          </Field>
+        )}
       </div>
 
       <Field label="Location" htmlFor="location" error={errors.location}>
@@ -313,6 +307,23 @@ export function JobForm({
               placeholder="1"
             />
           </Field>
+          {canManageRatesAndAssignment && (
+            <Field
+              label="Vendor rate"
+              htmlFor="vendorRate"
+              error={errors.vendorRate}
+              hint="$/hr the vendor releases to us. Usually set on the requirement instead."
+            >
+              <Input
+                id="vendorRate"
+                name="vendorRate"
+                type="number"
+                min="0"
+                step="0.01"
+                defaultValue={values?.vendorRate ?? ""}
+              />
+            </Field>
+          )}
           <Field
             label="Position type"
             htmlFor="reqType"
@@ -490,115 +501,6 @@ export function JobForm({
         />
       </Field>
 
-      <div>
-        <span className="block text-sm font-medium text-slate-700">
-          Assigned recruiters
-        </span>
-        <p className="mt-0.5 text-xs text-slate-500">
-          Optional — you can assign later from the job detail page.
-        </p>
-        {recruiters.length === 0 ? (
-          <p className="mt-1 text-xs text-slate-500">
-            No users yet — add recruiters under Settings.
-          </p>
-        ) : (
-          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {recruiters.map((r) => (
-              <label
-                key={r.id}
-                className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700"
-              >
-                <input
-                  type="checkbox"
-                  name="recruiterIds"
-                  value={r.id}
-                  defaultChecked={assigned.has(r.id)}
-                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-200"
-                />
-                <span>{optionLabel(r.fullName, r.isActive)}</span>
-              </label>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Optional vendor-requirement section — create mode only, gated to
-          admins / team leads. Fields are submitted only when the checkbox is
-          ticked (the server reads `createRequirement`'s presence). */}
-      {!values && canManageRequirements && (
-        <details className="rounded-md border border-slate-200 bg-slate-50/50">
-          <summary className="cursor-pointer px-4 py-2.5 text-sm font-medium text-slate-700">
-            Also plan a vendor portal requirement (optional)
-          </summary>
-          <div className="space-y-4 border-t border-slate-200 p-4">
-            <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-              <input
-                type="checkbox"
-                name="createRequirement"
-                value="1"
-                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-200"
-              />
-              Create a vendor requirement for this job
-            </label>
-            <p className="text-xs text-slate-500">
-              Pre-decide the commercial terms now. A recruiter moves it to a
-              submission later (you can add a candidate then or by editing it).
-            </p>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Recruiter" htmlFor="req_recruiterId">
-                <Select id="req_recruiterId" name="req_recruiterId" defaultValue="">
-                  <option value="">— Unassigned</option>
-                  {recruiters.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {optionLabel(r.fullName, r.isActive)}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Engagement" htmlFor="req_engagement">
-                <Select id="req_engagement" name="req_engagement" defaultValue="">
-                  <option value="">—</option>
-                  {BENCH_ENGAGEMENTS.map((e) => (
-                    <option key={e} value={e}>
-                      {BENCH_ENGAGEMENT_LABEL[e]}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
-
-            <Field label="Location" htmlFor="req_location" hint="Defaults to the job location if left blank.">
-              <LocationInput id="req_location" name="req_location" />
-            </Field>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Field label="Client rate" htmlFor="req_clientRate">
-                <Input id="req_clientRate" name="req_clientRate" type="number" min="0" step="0.01" inputMode="decimal" />
-              </Field>
-              <Field label="Bill rate" htmlFor="req_billRate">
-                <Input id="req_billRate" name="req_billRate" type="number" min="0" step="0.01" inputMode="decimal" />
-              </Field>
-              <Field label="Pay rate" htmlFor="req_payRate">
-                <Input id="req_payRate" name="req_payRate" type="number" min="0" step="0.01" inputMode="decimal" />
-              </Field>
-              <Field label="Candidate rate" htmlFor="req_candidateRate">
-                <Input id="req_candidateRate" name="req_candidateRate" type="number" min="0" step="0.01" inputMode="decimal" />
-              </Field>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Vendor recruiter name" htmlFor="req_vendorRecruiterName">
-                <Input id="req_vendorRecruiterName" name="req_vendorRecruiterName" />
-              </Field>
-              <Field label="Team lead" htmlFor="req_teamLead" hint="Auto-filled from the recruiter's team lead if blank.">
-                <Input id="req_teamLead" name="req_teamLead" />
-              </Field>
-            </div>
-          </div>
-        </details>
-      )}
-
       {state.error && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
           {state.error}
@@ -606,9 +508,7 @@ export function JobForm({
       )}
 
       <div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
-        <Link href={cancelHref} className={buttonClass("secondary")}>
-          Cancel
-        </Link>
+        <GuardedCancel href={cancelHref} dirty={dirty} />
         <Button type="submit" disabled={pending}>
           {pending ? "Saving…" : submitLabel}
         </Button>

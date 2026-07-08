@@ -74,10 +74,11 @@ export default async function InterviewsPage({
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="text-xs text-slate-500">
-            {total} interview{total === 1 ? "" : "s"}
-          </p>
-          <InterviewsTable rows={rows} pageOffset={(page - 1) * PAGE_SIZE} />
+          <InterviewsTable
+            rows={rows}
+            pageOffset={(page - 1) * PAGE_SIZE}
+            countLabel={`${total} interview${total === 1 ? "" : "s"}`}
+          />
           <Pagination page={page} totalPages={totalPages} total={total} />
         </div>
       )}

@@ -1,7 +1,6 @@
 import { z } from "zod";
 import {
   optionalText,
-  optionalUrl,
   optionalNonNegativeNumber,
   optionalDateTime,
   emptyToUndefined,
@@ -24,27 +23,20 @@ export const SUBMISSION_STATUS_VALUES = [
 
 /**
  * Résumé fields shared by the create- and edit-submission forms. The résumé is
- * optional and provided one of three ways (`resumeChoice`): an existing library
- * résumé, a brand-new one entered inline, or none. FormData sends flat strings,
- * so the cross-field rules run in `superRefine` rather than a discriminated union.
+ * optional: either an existing library résumé (`resumeChoice: "existing"` +
+ * `candidateResumeId`) or none. New résumés are uploaded — inline or on the
+ * candidate profile — before the submission is saved, so they arrive as an
+ * existing pick, not as flat fields here.
  */
 const resumeFields = {
-  candidateRate: optionalNonNegativeNumber,
   submissionNotes: optionalText,
-  resumeChoice: z.enum(["existing", "new", "none"]).catch("none"),
+  resumeChoice: z.enum(["existing", "none"]).catch("none"),
   candidateResumeId: z.preprocess(emptyToUndefined, z.string().optional()),
-  newResumeLabel: z.preprocess(
-    emptyToUndefined,
-    z.string().trim().max(120).optional(),
-  ),
-  newResumeLink: optionalUrl,
 };
 
 type ResumeFields = {
-  resumeChoice: "existing" | "new" | "none";
+  resumeChoice: "existing" | "none";
   candidateResumeId?: string;
-  newResumeLabel?: string;
-  newResumeLink?: string;
 };
 
 /** Bench-Sales fields shared by the create- and edit-submission forms. All
@@ -71,20 +63,6 @@ function refineResumeChoice(d: ResumeFields, ctx: z.RefinementCtx) {
       path: ["candidateResumeId"],
       message: "Pick a resume.",
     });
-  if (d.resumeChoice === "new") {
-    if (!d.newResumeLabel)
-      ctx.addIssue({
-        code: "custom",
-        path: ["newResumeLabel"],
-        message: "Give the resume a label.",
-      });
-    if (!d.newResumeLink)
-      ctx.addIssue({
-        code: "custom",
-        path: ["newResumeLink"],
-        message: "Paste a Google Drive link.",
-      });
-  }
 }
 
 /** A new submission — candidate, job, and submitting recruiter are all fixed here. */

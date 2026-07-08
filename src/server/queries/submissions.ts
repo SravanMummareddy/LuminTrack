@@ -2,7 +2,6 @@ import { prisma } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
 import type { SubmissionStatus } from "@/generated/prisma/enums";
 import { OTHER_SOURCE } from "@/lib/labels";
-import { RANDSTAD_PORTAL_NAME } from "@/server/queries/jobs";
 import {
   currentStageDays,
   STALE_STAGE_DAYS,
@@ -26,9 +25,6 @@ export type SubmissionListFilters = {
   vendorId?: string[];
   sisterCompanySourceId?: string;
   submittedRange?: DateRange;
-  // Option B "Vendor Portal" scope: only submissions to portal-sourced
-  // (Randstad iLabor) jobs.
-  vendorPortalOnly?: boolean;
   sort?: SortState;
   page?: number;
   /** "Mine, stale >7d" quick filter — narrows to `currentUserId`'s early-
@@ -50,6 +46,13 @@ const SUBMISSION_SORTS: Record<
   status: (d) => ({ status: d }),
   rounds: (d) => ({ interviewRounds: { _count: d } }),
   submitted: (d) => ({ submittedAt: d }),
+  engagement: (d) => ({ engagement: d }),
+  vendorRecruiter: (d) => ({ vendorRecruiterName: d }),
+  payRate: (d) => ({ payRate: d }),
+  billRate: (d) => ({ billRate: d }),
+  teamLead: (d) => ({ teamLead: d }),
+  created: (d) => ({ createdAt: d }),
+  updated: (d) => ({ updatedAt: d }),
 };
 
 // `daysInStage` is derived (not a column), so it's not in SUBMISSION_SORTS;
@@ -74,7 +77,7 @@ const SUBMISSION_INCLUDE = {
     },
   },
   submittedBy: { select: { fullName: true } },
-  candidateResume: { select: { label: true, driveLink: true } },
+  candidateResume: { select: { label: true } },
   _count: { select: { interviewRounds: true } },
 } satisfies Prisma.SubmissionInclude;
 
@@ -86,7 +89,6 @@ type RawSubmissionRow = Prisma.SubmissionGetPayload<{
 function flattenRow(s: RawSubmissionRow) {
   return {
     ...s,
-    candidateRate: s.candidateRate == null ? null : Number(s.candidateRate),
     payRate: s.payRate == null ? null : Number(s.payRate),
     billRate: s.billRate == null ? null : Number(s.billRate),
     clientRate: s.clientRate == null ? null : Number(s.clientRate),
@@ -131,8 +133,6 @@ export async function listSubmissions(filters: SubmissionListFilters) {
     where.submittedAt = filters.submittedRange;
 
   const job: Prisma.JobWhereInput = {};
-  if (filters.vendorPortalOnly)
-    job.portal = { is: { name: RANDSTAD_PORTAL_NAME } };
   if (filters.clientId?.length) job.clientId = { in: filters.clientId };
   if (filters.vendorId?.length) job.vendorId = { in: filters.vendorId };
   if (filters.sisterCompanySourceId)
@@ -225,7 +225,13 @@ export function getSubmissionDetail(id: string) {
         },
       },
       submittedBy: { select: { fullName: true } },
-      candidateResume: { select: { label: true } },
+      candidateResume: {
+        select: {
+          label: true,
+          blobPathname: true,
+          contentType: true,
+        },
+      },
       interviewRounds: {
         orderBy: { roundOrder: "asc" },
         include: { updatedBy: { select: { fullName: true } } },
@@ -246,11 +252,9 @@ export async function getSubmissionForEdit(id: string) {
     select: {
       id: true,
       candidateId: true,
-      candidateRate: true,
       submissionNotes: true,
       submittedAt: true,
       candidateResumeId: true,
-      resumeDriveLink: true,
       engagement: true,
       vendorRecruiterName: true,
       jobDuties: true,
@@ -281,7 +285,7 @@ export async function getSubmissionForEdit(id: string) {
       ],
     },
     orderBy: { createdAt: "asc" },
-    select: { id: true, label: true, driveLink: true, isActive: true },
+    select: { id: true, label: true, isActive: true },
   });
 
   return { ...submission, candidate: { ...submission.candidate, resumes } };

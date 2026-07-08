@@ -21,6 +21,7 @@
  */
 import "dotenv/config";
 import { readFileSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
 import { PrismaNeon } from "@prisma/adapter-neon";
 import { PrismaClient } from "../src/generated/prisma/client";
 
@@ -75,7 +76,12 @@ async function main() {
   }
   const confirmed = confirmFlag === "--confirm";
 
-  const raw = readFileSync(inputPath, "utf-8");
+  // Scheduled backups are stored gzipped (`*.json.gz`); a manual export is plain
+  // JSON. Detect the gzip magic bytes (0x1f 0x8b) and inflate transparently, so
+  // either file restores without a manual gunzip step.
+  const bytes = readFileSync(inputPath);
+  const isGzip = bytes.length > 1 && bytes[0] === 0x1f && bytes[1] === 0x8b;
+  const raw = (isGzip ? gunzipSync(bytes) : bytes).toString("utf-8");
   const backup = JSON.parse(raw) as {
     exportedAt: string;
     version: number;

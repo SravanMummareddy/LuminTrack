@@ -1,6 +1,6 @@
 import { prisma } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
-import type { UserRole } from "@/generated/prisma/enums";
+import type { UserRole, Discipline } from "@/generated/prisma/enums";
 import { PAGE_SIZE, searchTerms, type DateRange, type SortDir, type SortState } from "@/lib/filters";
 import { canViewSensitiveDocs } from "@/lib/permissions";
 
@@ -12,10 +12,20 @@ export type CandidateListFilters = {
   currentCompany?: string;
   minExperience?: number;
   isActive?: boolean;
+  discipline?: Discipline;
   createdRange?: DateRange;
   sort?: SortState;
   page?: number;
+  /** Trash view: show only trashed-but-not-yet-erased candidates. */
+  trash?: boolean;
 };
+
+/** Count of candidates in trash (restorable, not yet erased). */
+export function countTrashedCandidates(): Promise<number> {
+  return prisma.candidate.count({
+    where: { deletedAt: { not: null }, erasedAt: null },
+  });
+}
 
 /** Columns the Candidates list can be sorted by → their Prisma `orderBy`. */
 const CANDIDATE_SORTS: Record<
@@ -29,6 +39,9 @@ const CANDIDATE_SORTS: Record<
   experience: (d) => ({ totalExperienceYears: d }),
   subs: (d) => ({ submissions: { _count: d } }),
   updated: (d) => ({ updatedAt: d }),
+  created: (d) => ({ createdAt: d }),
+  workAuthorization: (d) => ({ workAuthorization: d }),
+  currentCompany: (d) => ({ currentCompany: d }),
 };
 
 export const CANDIDATE_SORT_KEYS = Object.keys(CANDIDATE_SORTS);
@@ -39,7 +52,12 @@ const candidateListInclude = {
 } satisfies Prisma.CandidateInclude;
 
 export async function listCandidates(filters: CandidateListFilters) {
-  const where: Prisma.CandidateWhereInput = {};
+  // Default roster hides trashed + erased candidates (a trashed one is pending
+  // deletion; an erased one is an anonymized tombstone). The trash view flips
+  // that to show only restorable (trashed, not-yet-erased) candidates.
+  const where: Prisma.CandidateWhereInput = filters.trash
+    ? { deletedAt: { not: null }, erasedAt: null }
+    : { deletedAt: null };
 
   const terms = searchTerms(filters.q);
   if (terms.length)
@@ -61,6 +79,7 @@ export async function listCandidates(filters: CandidateListFilters) {
   if (filters.minExperience != null)
     where.totalExperienceYears = { gte: filters.minExperience };
   if (filters.isActive != null) where.isActive = filters.isActive;
+  if (filters.discipline) where.discipline = filters.discipline;
   if (filters.createdRange?.gte || filters.createdRange?.lte)
     where.createdAt = filters.createdRange;
 
@@ -259,7 +278,7 @@ export function listCandidateOptions() {
       resumes: {
         where: { isActive: true },
         orderBy: { createdAt: "asc" },
-        select: { id: true, label: true, driveLink: true },
+        select: { id: true, label: true },
       },
     },
   });

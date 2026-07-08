@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -42,3 +43,18 @@ next-env.d.ts
 
 /src/generated/prisma
 .playwright-mcp/
+
+# Playwright E2E — reusable auth sessions + local run artifacts
+/e2e/.auth/
+/e2e/.results/
+/e2e/.report/
+/playwright-report/
+
+# agent scratch + local test/review output (committed deliverables in test-results are tracked explicitly)
+/test-results/
+/scratch-*
+*.output
+
+# local screenshot/upload dropbox (iLabor sample is tracked explicitly)
+/uploads/*
+!/uploads/ilabor_data_sample.json

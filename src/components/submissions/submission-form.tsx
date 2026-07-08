@@ -1,12 +1,19 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
-import { Button, buttonClass } from "@/components/ui/button";
+import { SearchSelect } from "@/components/ui/search-select";
+import { Button } from "@/components/ui/button";
 import { RateChainWarning } from "@/components/ui/rate-chain-warning";
+import {
+  useUnsavedChanges,
+  GuardedCancel,
+} from "@/components/ui/unsaved-changes";
+import { uploadCandidateResume } from "@/server/actions/resumes";
+import { fetchSubmissionPrefill } from "@/server/actions/submission-prefill";
+import { RESUME_ACCEPT, resumeFileError } from "@/lib/validation/resume";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
-import { isLikelyDriveUrl, DRIVE_LINK_WARNING } from "@/lib/validation/resume";
 import {
   BENCH_ENGAGEMENTS,
   BENCH_ENGAGEMENT_LABEL,
@@ -14,7 +21,7 @@ import {
   OVERRIDE_REASON_LABEL,
 } from "@/lib/labels";
 
-type ResumeOption = { id: string; label: string; driveLink: string };
+type ResumeOption = { id: string; label: string };
 type CandidateOption = {
   id: string;
   fullName: string;
@@ -26,7 +33,6 @@ type JobOption = {
   title: string;
   displayId: string;
   clientName: string | null;
-  candidateRate: string;
 };
 type Recruiter = { id: string; fullName: string; isActive: boolean };
 
@@ -48,11 +54,8 @@ type Fields = {
   candidateId: string;
   jobId: string;
   submittedById: string;
-  candidateRate: string;
   // "" = no résumé, "__new__" = add a new one, otherwise a saved résumé id.
   resumeSelection: string;
-  newResumeLabel: string;
-  newResumeLink: string;
   submissionNotes: string;
   engagement: string;
   vendorRecruiterName: string;
@@ -68,9 +71,12 @@ type Fields = {
   // archived résumé, zero rates, bill < pay) paused the move. Any non-empty
   // value clears all four; latched so it rides through a follow-up gate.
   convertReason: string;
+  // Reason for submitting a Not-interested / Do-not-contact candidate. Its own
+  // field (not overrideNote) so it can be latched persistently and survive a
+  // follow-up gate (e.g. rates-pending) on either the direct or convert path.
+  candidateStatusReason: string;
 };
 
-const NEW_RESUME = "__new__";
 
 // Convert-only warn gates — cleared by a single free-text `convertOverrideReason`
 // (vs. the duplicate/iLabor gates which take a preset reason).
@@ -89,8 +95,8 @@ export function SubmissionForm({
   jobOptions = [],
   candidates = [],
   recruiters,
+  teamLeads = [],
   defaultRecruiterId,
-  defaultCandidateRate,
   cancelHref,
   requirementId,
   prefill,
@@ -106,8 +112,9 @@ export function SubmissionForm({
   /** Candidate picker options — used when mode is "job-locked" or "open". */
   candidates?: CandidateOption[];
   recruiters: Recruiter[];
+  /** Team-lead / manager users for the "Team lead" picker (stores the name). */
+  teamLeads?: { id: string; fullName: string }[];
   defaultRecruiterId: string;
-  defaultCandidateRate: string;
   cancelHref: string;
   /**
    * Convert mode — when set, this form moves a Vendor Portal Requirement to a
@@ -126,10 +133,7 @@ export function SubmissionForm({
     candidateId: candidate?.id ?? "",
     jobId: job?.id ?? "",
     submittedById: defaultRecruiterId,
-    candidateRate: defaultCandidateRate,
     resumeSelection: "",
-    newResumeLabel: "",
-    newResumeLink: "",
     submissionNotes: "",
     engagement: "",
     vendorRecruiterName: "",
@@ -141,17 +145,12 @@ export function SubmissionForm({
     overridePreset: "",
     overrideNote: "",
     convertReason: "",
+    candidateStatusReason: "",
     ...prefill,
   });
   // Surfaced after a candidate switch clears a résumé pick, so the wipe isn't
   // silent (it used to vanish a freshly-typed Drive link with no warning).
   const [resumeCleared, setResumeCleared] = useState(false);
-  // The rate prefills from the job's target rate. Flag it as an unconfirmed
-  // default until the recruiter edits it, so they don't submit the job's
-  // number as if it were the negotiated candidate rate.
-  const [rateUnconfirmed, setRateUnconfirmed] = useState(
-    defaultCandidateRate !== "",
-  );
   // A recruiter who self-claims an unassigned job can hit a SECOND gate right
   // after (iLabor closed/cap, or a duplicate). The claim flag used to live only
   // inside the not-assigned prompt, so it was dropped on the next submit and the
@@ -190,39 +189,111 @@ export function SubmissionForm({
     ) =>
       setFields((f) => ({ ...f, [name]: e.target.value }));
 
+  // Inline "upload a new résumé" — uploads eagerly to private Blob (a separate
+  // action call), then adds the created résumé to the picker and selects it, so
+  // the submission itself just references an existing candidateResumeId. The
+  // file never rides along in the main submit POST.
+  const [uploadedResumes, setUploadedResumes] = useState<ResumeOption[]>([]);
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploadLabel, setUploadLabel] = useState("");
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadPending, startUpload] = useTransition();
+  const [, startPrefill] = useTransition();
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const resetUpload = () => {
+    setShowUpload(false);
+    setUploadLabel("");
+    setUploadError(null);
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const handleUpload = (candidateId: string) => {
+    const file = fileRef.current?.files?.[0] ?? null;
+    if (!uploadLabel.trim()) {
+      setUploadError("Give this resume a label.");
+      return;
+    }
+    if (!file) {
+      setUploadError("Choose a file to upload.");
+      return;
+    }
+    const fileErr = resumeFileError(file);
+    if (fileErr) {
+      setUploadError(fileErr);
+      return;
+    }
+    const fd = new FormData();
+    fd.set("candidateId", candidateId);
+    fd.set("label", uploadLabel.trim());
+    fd.set("file", file);
+    setUploadError(null);
+    startUpload(async () => {
+      const res = await uploadCandidateResume(EMPTY_FORM_STATE, fd);
+      if (res.ok && res.createdResume) {
+        setUploadedResumes((prev) => [...prev, res.createdResume!]);
+        setFields((f) => ({ ...f, resumeSelection: res.createdResume!.id }));
+        setResumeCleared(false);
+        resetUpload();
+      } else {
+        setUploadError(res.error ?? res.fieldErrors?.file ?? "Upload failed.");
+      }
+    });
+  };
+
   // Switching candidate clears the résumé pick — a résumé belongs to one
   // candidate. Warn if there was anything to lose rather than wiping silently.
-  const onCandidateChange = (e: React.ChangeEvent<HTMLSelectElement>) =>
+  const onCandidateChange = (nextCandidateId: string) => {
+    // A résumé (saved or freshly uploaded) belongs to one candidate — drop both
+    // the pick and the just-uploaded list when the candidate changes.
+    setUploadedResumes([]);
+    resetUpload();
     setFields((f) => {
-      const hadResume =
-        f.resumeSelection !== "" ||
-        f.newResumeLabel.trim() !== "" ||
-        f.newResumeLink.trim() !== "";
+      const hadResume = f.resumeSelection !== "";
       setResumeCleared(hadResume);
       return {
         ...f,
-        candidateId: e.target.value,
+        candidateId: nextCandidateId,
         resumeSelection: "",
-        newResumeLabel: "",
-        newResumeLink: "",
       };
     });
+  };
 
-  // Picking a job in candidate-locked / open mode seeds the rate default from
-  // that job (only when the recruiter hasn't already typed one).
-  const onJobChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const nextJobId = e.target.value;
-    const picked = jobOptions.find((j) => j.id === nextJobId);
-    const seeded = fields.candidateRate === "" && !!picked?.candidateRate;
+  const onJobChange = (nextJobId: string) => {
     setFields((f) => ({
       ...f,
       jobId: nextJobId,
-      candidateRate: f.candidateRate === "" ? (picked?.candidateRate ?? "") : f.candidateRate,
     }));
-    if (seeded) setRateUnconfirmed(true);
+    // Prefill the commercial terms from the job's OPEN vendor requirement, so
+    // the open / candidate-locked entry points behave like the job page + the
+    // convert flow (rates flow down instead of being re-typed).
+    if (!nextJobId) return;
+    startPrefill(async () => {
+      const p = await fetchSubmissionPrefill(nextJobId);
+      if (!p) return;
+      setFields((f) => ({
+        ...f,
+        payRate: p.payRate,
+        billRate: p.billRate,
+        clientRate: p.clientRate,
+        engagement: p.engagement,
+        vendorRecruiterName: p.vendorRecruiterName,
+        teamLead: p.teamLead,
+        jobDuties: p.jobDuties,
+        submissionNotes: p.submissionNotes,
+      }));
+    });
   };
 
   const errors = state.fieldErrors ?? {};
+
+  // Unsaved-changes guard: any user input flips `dirty` (idempotent — the
+  // functional updater bails out of re-render once already true), arming the
+  // browser's leave prompt and the branded Cancel confirm. A successful submit
+  // redirects (soft nav, no unload) so it never prompts.
+  const [dirty, setDirty] = useState(false);
+  const markDirty = () => setDirty((d) => (d ? d : true));
+  useUnsavedChanges(dirty);
 
   // The candidate whose résumés the picker offers — the fixed one in
   // candidate-locked mode, otherwise whichever is selected.
@@ -230,13 +301,21 @@ export function SubmissionForm({
     mode === "candidate-locked"
       ? candidate
       : candidates.find((c) => c.id === fields.candidateId);
-  const resumes = activeCandidate?.resumes ?? [];
-  const resumeChoice =
-    fields.resumeSelection === ""
-      ? "none"
-      : fields.resumeSelection === NEW_RESUME
-        ? "new"
-        : "existing";
+  // Dedupe by id: after an inline upload, `uploadCandidateResume` revalidates
+  // the page, so the new résumé reappears in `activeCandidate.resumes` while
+  // still present in the optimistic `uploadedResumes` list — same id twice
+  // would trip React's duplicate-key warning. Server row wins (listed first).
+  const resumes = (() => {
+    const seen = new Set<string>();
+    const merged: ResumeOption[] = [];
+    for (const r of [...(activeCandidate?.resumes ?? []), ...uploadedResumes]) {
+      if (seen.has(r.id)) continue;
+      seen.add(r.id);
+      merged.push(r);
+    }
+    return merged;
+  })();
+  const resumeChoice = fields.resumeSelection === "" ? "none" : "existing";
 
   // The effective ids the action receives, accounting for the locked anchors.
   const effectiveJobId = mode === "job-locked" ? (job?.id ?? "") : fields.jobId;
@@ -250,231 +329,33 @@ export function SubmissionForm({
   const isConvertGate =
     typeof gate === "string" && CONVERT_OVERRIDE_GATES.includes(gate);
   // The preset-reason gates (duplicate / iLabor closed / iLabor cap).
-  const isReasonGate = isGate && !isConvertGate && gate !== "not_assigned";
+  const isReasonGate =
+    isGate &&
+    !isConvertGate &&
+    gate !== "not_assigned" &&
+    gate !== "rate_chain" &&
+    gate !== "candidate_status";
 
-  return (
-    <form action={formAction} className="space-y-5">
-      <input type="hidden" name="jobId" value={effectiveJobId} />
-      <input type="hidden" name="candidateId" value={effectiveCandidateId} />
-      <input type="hidden" name="submittedById" value={fields.submittedById} />
-      {isConvert && (
-        <input type="hidden" name="requirementId" value={requirementId} />
-      )}
-      {/* Latched once provided so it rides through a follow-up duplicate/iLabor
-          gate (which would otherwise re-fire all the convert-warn gates). */}
-      {isConvert && fields.convertReason.trim() !== "" && (
-        <input
-          type="hidden"
-          name="convertOverrideReason"
-          value={fields.convertReason}
-        />
-      )}
-      {/* Persisted across gate transitions once the recruiter has claimed —
-          see claimIntent above. Carries the self-claim through a second gate. */}
-      {claimIntent && <input type="hidden" name="claim" value="1" />}
-      <input type="hidden" name="resumeChoice" value={resumeChoice} />
-      <input
-        type="hidden"
-        name="candidateResumeId"
-        value={resumeChoice === "existing" ? fields.resumeSelection : ""}
-      />
-
-      {/* Job — fixed in job-locked mode, a picker otherwise. */}
-      {mode === "job-locked" ? (
-        <Field label="Job">
-          <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-            {job?.title}
-          </p>
-        </Field>
-      ) : (
-        <Field
-          label="Job"
-          htmlFor="jobId"
-          required
-          error={errors.jobId}
-          hint="Only jobs still open for submissions are listed."
-        >
-          <Select
-            key={`jobId-${selectSyncKey}`}
-            id="jobId"
-            value={fields.jobId}
-            onChange={onJobChange}
-            required
-          >
-            <option value="" disabled>
-              Select a job…
-            </option>
-            {jobOptions.map((j) => (
-              <option key={j.id} value={j.id}>
-                {j.title}
-                {j.clientName ? ` — ${j.clientName}` : ""} ({j.displayId})
-              </option>
-            ))}
-          </Select>
-        </Field>
-      )}
-
-      {/* Candidate — fixed in candidate-locked mode, a picker otherwise. */}
-      {mode === "candidate-locked" ? (
-        <Field label="Candidate">
-          <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-            {candidate?.fullName}
-          </p>
-        </Field>
-      ) : (
-        <Field
-          label="Candidate"
-          htmlFor="candidateId"
-          required
-          error={errors.candidateId}
-          hint={
-            mode === "job-locked"
-              ? "Candidates already submitted to this job cannot be picked again."
-              : undefined
-          }
-        >
-          <Select
-            key={`candidateId-${selectSyncKey}`}
-            id="candidateId"
-            value={fields.candidateId}
-            onChange={onCandidateChange}
-            required
-          >
-            <option value="" disabled>
-              Select a candidate…
-            </option>
-            {candidates.map((c) => (
-              <option key={c.id} value={c.id} disabled={c.alreadySubmitted}>
-                {c.alreadySubmitted
-                  ? `${c.fullName} (already submitted)`
-                  : c.fullName}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      )}
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field
-          label="Submitted by"
-          htmlFor="submittedById"
-          required
-          error={errors.submittedById}
-        >
-          <Select
-            key={`submittedBy-${selectSyncKey}`}
-            id="submittedById"
-            value={fields.submittedById}
-            onChange={set("submittedById")}
-            required
-          >
-            <option value="" disabled>
-              Select a recruiter…
-            </option>
-            {recruiters.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.isActive ? r.fullName : `${r.fullName} (inactive)`}
-              </option>
-            ))}
-          </Select>
-        </Field>
-
-        <Field
-          label="Candidate rate"
-          htmlFor="candidateRate"
-          error={errors.candidateRate}
-          hint="Headline rate for this candidate (shown on the submission, used in reports). Pay & Bill rate below drive placement margin."
-        >
-          <Input
-            id="candidateRate"
-            name="candidateRate"
-            type="number"
-            min="0"
-            step="0.01"
-            value={fields.candidateRate}
-            onChange={(e) => {
-              setRateUnconfirmed(false);
-              set("candidateRate")(e);
-            }}
-          />
-          {rateUnconfirmed && fields.candidateRate !== "" && (
-            <p className="mt-1 text-xs text-amber-700">
-              Prefilled from the job&apos;s target rate — confirm or adjust to
-              the candidate&apos;s actual rate.
-            </p>
-          )}
-        </Field>
-      </div>
-
-      <Field
-        label="Resume"
-        htmlFor="resumeSelection"
-        hint="Pick one of the candidate's saved resumes, add a new one, or leave as no resume."
-        error={errors.candidateResumeId}
-      >
-        <Select
-          key={`resumeSelection-${selectSyncKey}`}
-          id="resumeSelection"
-          value={fields.resumeSelection}
-          onChange={(e) => {
-            setResumeCleared(false);
-            set("resumeSelection")(e);
-          }}
-          disabled={!effectiveCandidateId}
-        >
-          <option value="">No resume</option>
-          {resumes.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.label}
-            </option>
-          ))}
-          <option value={NEW_RESUME}>+ Add a new resume</option>
-        </Select>
-        {resumeCleared && (
-          <p className="mt-1 text-xs text-amber-700">
-            Résumé selection was cleared because you changed the candidate. Pick
-            one for the new candidate.
-          </p>
-        )}
-      </Field>
-
-      {resumeChoice === "new" && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field
-            label="New resume label"
-            htmlFor="newResumeLabel"
-            required
-            error={errors.newResumeLabel}
-          >
-            <Input
-              id="newResumeLabel"
-              name="newResumeLabel"
-              value={fields.newResumeLabel}
-              onChange={set("newResumeLabel")}
-              placeholder="e.g. Backend Engineer"
-            />
-          </Field>
-          <Field
-            label="New resume — Google Drive link"
-            htmlFor="newResumeLink"
-            required
-            error={errors.newResumeLink}
-          >
-            <Input
-              id="newResumeLink"
-              name="newResumeLink"
-              type="url"
-              value={fields.newResumeLink}
-              onChange={set("newResumeLink")}
-              placeholder="https://drive.google.com/file/d/…"
-            />
-            {!isLikelyDriveUrl(fields.newResumeLink) && (
-              <p className="mt-1 text-xs text-amber-700">{DRIVE_LINK_WARNING}</p>
-            )}
-          </Field>
-        </div>
-      )}
-
+  // The commercial-terms block (engagement, vendor recruiter, rates, team lead,
+  // job duties). In convert mode these are already prefilled from the VPR, so we
+  // show a read-only summary and tuck the editable fields behind "Edit terms";
+  // in the other modes they render inline. The inputs are always mounted (even
+  // inside a collapsed <details>), so they always post.
+  const money = (v: string) => (v && v.trim() !== "" ? `$${v}` : "—");
+  const engagementLabel = fields.engagement
+    ? BENCH_ENGAGEMENT_LABEL[
+        fields.engagement as keyof typeof BENCH_ENGAGEMENT_LABEL
+      ]
+    : "—";
+  // Team-lead picker options. Keep the currently-saved value even if it isn't a
+  // current lead (e.g. a legacy free-text name) so the selection never drops.
+  const teamLeadNames = teamLeads.map((t) => t.fullName);
+  const teamLeadChoices =
+    fields.teamLead && !teamLeadNames.includes(fields.teamLead)
+      ? [fields.teamLead, ...teamLeadNames]
+      : teamLeadNames;
+  const commercialTermsFields = (
+    <>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Engagement" htmlFor="engagement" error={errors.engagement} hint="Bench/W2 — for bench-sales submissions.">
           <Select
@@ -510,7 +391,12 @@ export function SubmissionForm({
           <Input id="clientRate" name="clientRate" type="number" min="0" step="0.01" inputMode="decimal" value={fields.clientRate} onChange={set("clientRate")} />
         </Field>
         <Field label="Team lead" htmlFor="teamLead" error={errors.teamLead}>
-          <Input id="teamLead" name="teamLead" value={fields.teamLead} onChange={set("teamLead")} />
+          <Select id="teamLead" name="teamLead" value={fields.teamLead} onChange={set("teamLead")}>
+            <option value="">—</option>
+            {teamLeadChoices.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </Select>
         </Field>
       </div>
 
@@ -525,6 +411,262 @@ export function SubmissionForm({
           onChange={set("jobDuties")}
         />
       </Field>
+    </>
+  );
+
+  return (
+    <form action={formAction} onInput={markDirty} className="space-y-5">
+      {/* Job + candidate are carried by their SearchSelect (name=…) when a picker
+          is shown; in the locked modes there's no picker, so a hidden input holds
+          the fixed value. submittedById is always a picker (SearchSelect). */}
+      {mode === "job-locked" && (
+        <input type="hidden" name="jobId" value={effectiveJobId} />
+      )}
+      {mode === "candidate-locked" && (
+        <input type="hidden" name="candidateId" value={effectiveCandidateId} />
+      )}
+      {isConvert && (
+        <input type="hidden" name="requirementId" value={requirementId} />
+      )}
+      {/* Latched once provided so it rides through a follow-up duplicate/iLabor
+          gate (which would otherwise re-fire all the convert-warn gates). */}
+      {isConvert && fields.convertReason.trim() !== "" && (
+        <input
+          type="hidden"
+          name="convertOverrideReason"
+          value={fields.convertReason}
+        />
+      )}
+      {/* Do-not-contact / not-interested override reason, latched persistently so
+          it survives a follow-up gate (e.g. rates-pending) instead of being lost
+          when the candidate_status gate hands off — the bug it fixes. */}
+      {fields.candidateStatusReason.trim() !== "" && (
+        <input
+          type="hidden"
+          name="candidateStatusOverrideReason"
+          value={fields.candidateStatusReason}
+        />
+      )}
+      {/* Persisted across gate transitions once the recruiter has claimed —
+          see claimIntent above. Carries the self-claim through a second gate. */}
+      {claimIntent && <input type="hidden" name="claim" value="1" />}
+      <input type="hidden" name="resumeChoice" value={resumeChoice} />
+      <input
+        type="hidden"
+        name="candidateResumeId"
+        value={resumeChoice === "existing" ? fields.resumeSelection : ""}
+      />
+
+      {/* Job — fixed in job-locked mode, a picker otherwise. */}
+      {mode === "job-locked" ? (
+        <Field label="Job">
+          <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+            {job?.title}
+          </p>
+        </Field>
+      ) : (
+        <Field
+          label="Job"
+          htmlFor="jobId"
+          required
+          error={errors.jobId}
+          hint="Only jobs still open for submissions are listed."
+        >
+          <SearchSelect
+            id="jobId"
+            name="jobId"
+            value={fields.jobId}
+            onChange={onJobChange}
+            placeholder="Search jobs…"
+            options={jobOptions.map((j) => ({
+              value: j.id,
+              label: `${j.title}${j.clientName ? ` — ${j.clientName}` : ""} (${j.displayId})`,
+            }))}
+          />
+        </Field>
+      )}
+
+      {/* Candidate — fixed in candidate-locked mode, a picker otherwise. */}
+      {mode === "candidate-locked" ? (
+        <Field label="Candidate">
+          <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+            {candidate?.fullName}
+          </p>
+        </Field>
+      ) : (
+        <Field
+          label="Candidate"
+          htmlFor="candidateId"
+          required
+          error={errors.candidateId}
+          hint={
+            mode === "job-locked"
+              ? "Candidates already submitted to this job cannot be picked again."
+              : undefined
+          }
+        >
+          <SearchSelect
+            id="candidateId"
+            name="candidateId"
+            value={fields.candidateId}
+            onChange={onCandidateChange}
+            placeholder="Search candidates…"
+            options={candidates.map((c) => ({
+              value: c.id,
+              label: c.fullName,
+              disabled: c.alreadySubmitted,
+              hint: c.alreadySubmitted ? "(already submitted)" : undefined,
+            }))}
+          />
+        </Field>
+      )}
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field
+          label="Submitted by"
+          htmlFor="submittedById"
+          required
+          error={errors.submittedById}
+        >
+          <SearchSelect
+            id="submittedById"
+            name="submittedById"
+            value={fields.submittedById}
+            onChange={(v) => setFields((f) => ({ ...f, submittedById: v }))}
+            placeholder="Search recruiters…"
+            options={recruiters.map((r) => ({
+              value: r.id,
+              label: r.isActive ? r.fullName : `${r.fullName} (inactive)`,
+            }))}
+          />
+        </Field>
+
+      </div>
+
+      <Field
+        label="Resume"
+        htmlFor="resumeSelection"
+        hint="Pick one of the candidate's uploaded resumes, upload a new one, or leave as no resume."
+        error={errors.candidateResumeId}
+      >
+        <Select
+          key={`resumeSelection-${selectSyncKey}`}
+          id="resumeSelection"
+          value={fields.resumeSelection}
+          onChange={(e) => {
+            setResumeCleared(false);
+            set("resumeSelection")(e);
+          }}
+          disabled={!effectiveCandidateId}
+        >
+          <option value="">No resume</option>
+          {resumes.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.label}
+            </option>
+          ))}
+        </Select>
+        {resumeCleared && (
+          <p className="mt-1 text-xs text-amber-700">
+            Résumé selection was cleared because you changed the candidate. Pick
+            one for the new candidate.
+          </p>
+        )}
+
+        {effectiveCandidateId &&
+          (showUpload ? (
+            <div className="mt-2 space-y-2 rounded-md border border-slate-200 bg-slate-50/60 p-3">
+              <Input
+                aria-label="New resume label"
+                value={uploadLabel}
+                onChange={(e) => setUploadLabel(e.target.value)}
+                placeholder="Resume label (e.g. Backend Engineer)"
+              />
+              <input
+                ref={fileRef}
+                type="file"
+                accept={RESUME_ACCEPT}
+                className="block w-full rounded-md border border-slate-300 text-sm text-slate-700 file:mr-3 file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+              />
+              {uploadError && (
+                <p className="text-xs text-red-700">{uploadError}</p>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => handleUpload(effectiveCandidateId)}
+                  disabled={uploadPending}
+                >
+                  {uploadPending ? "Uploading…" : "Upload"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={resetUpload}
+                  disabled={uploadPending}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowUpload(true)}
+              className="mt-2 text-xs font-medium text-indigo-600 hover:underline"
+            >
+              Upload a new resume
+            </button>
+          ))}
+      </Field>
+
+      {isConvert ? (
+        <div className="space-y-2">
+          <div className="rounded-md border border-slate-200 bg-slate-50/60 p-3">
+            <p className="text-xs font-medium text-slate-500">
+              Commercial terms — carried from the requirement
+            </p>
+            <dl className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-3">
+              <div>
+                <dt className="text-xs text-slate-500">Pay rate</dt>
+                <dd className="font-medium text-slate-800">{money(fields.payRate)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-500">Bill rate</dt>
+                <dd className="font-medium text-slate-800">{money(fields.billRate)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-500">Client rate</dt>
+                <dd className="font-medium text-slate-800">{money(fields.clientRate)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-500">Engagement</dt>
+                <dd className="font-medium text-slate-800">{engagementLabel}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-500">Team lead</dt>
+                <dd className="font-medium text-slate-800">{fields.teamLead || "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-500">Vendor recruiter</dt>
+                <dd className="font-medium text-slate-800">
+                  {fields.vendorRecruiterName || "—"}
+                </dd>
+              </div>
+            </dl>
+          </div>
+          <details className="rounded-md border border-slate-200 px-3 py-2">
+            <summary className="cursor-pointer text-sm font-medium text-indigo-600">
+              Edit terms
+            </summary>
+            <div className="mt-3 space-y-4">{commercialTermsFields}</div>
+          </details>
+        </div>
+      ) : (
+        commercialTermsFields
+      )}
 
       <Field
         label="Submission notes"
@@ -550,6 +692,63 @@ export function SubmissionForm({
             so you own it going forward. Admins can reassign later.
           </p>
           <input type="hidden" name="claim" value="1" />
+        </div>
+      )}
+
+      {/* Rate-chain soft block: show the broken rungs + require a free-text
+          reason (owner: "soft block" — a save the recruiter can override). */}
+      {gate === "rate_chain" && (
+        <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3">
+          <p className="text-sm font-medium text-amber-800">{state.error}</p>
+          {state.confirmData?.warnings?.length ? (
+            <ul className="list-disc space-y-0.5 pl-5 text-sm text-amber-800">
+              {state.confirmData.warnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          ) : null}
+          <input
+            type="hidden"
+            name="rateOverrideReason"
+            value={fields.overrideNote}
+          />
+          <Field
+            label="Reason for saving anyway"
+            htmlFor="overrideNote"
+            required
+            hint="Captured on the submission's audit trail."
+          >
+            <Textarea
+              id="overrideNote"
+              rows={2}
+              value={fields.overrideNote}
+              onChange={set("overrideNote")}
+            />
+          </Field>
+        </div>
+      )}
+
+      {/* Candidate-status soft block (Not-interested / Do-not-contact): a
+          free-text reason to submit anyway. Fires on both the direct-submit and
+          the VPR-convert paths. */}
+      {gate === "candidate_status" && (
+        <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3">
+          <p className="text-sm font-medium text-amber-800">{state.error}</p>
+          {/* The reason posts via a persistent latched hidden input above (so it
+              rides through a follow-up gate); this textarea just drives it. */}
+          <Field
+            label="Reason for submitting anyway"
+            htmlFor="candidateStatusReason"
+            required
+            hint="Captured on the submission's audit trail."
+          >
+            <Textarea
+              id="candidateStatusReason"
+              rows={2}
+              value={fields.candidateStatusReason}
+              onChange={set("candidateStatusReason")}
+            />
+          </Field>
         </div>
       )}
 
@@ -643,9 +842,7 @@ export function SubmissionForm({
       )}
 
       <div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
-        <Link href={cancelHref} className={buttonClass("secondary")}>
-          Cancel
-        </Link>
+        <GuardedCancel href={cancelHref} dirty={dirty} />
         <Button
           type="submit"
           disabled={pending}

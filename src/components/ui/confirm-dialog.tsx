@@ -54,7 +54,7 @@ export function ConfirmSubmit({
   fields = {},
   title,
   description,
-  confirmLabel = "Delete",
+  confirmLabel = "Confirm",
   tone = "danger",
   trigger,
   triggerClassName,

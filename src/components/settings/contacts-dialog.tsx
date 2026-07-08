@@ -136,12 +136,12 @@ export function ContactsDialog({
                     <ConfirmSubmit
                       action={deleteContact}
                       fields={{ id: c.id }}
-                      title="Delete contact?"
+                      title="Remove contact?"
                       description={`"${c.name}" will be removed from ${parentName}.`}
-                      confirmLabel="Delete contact"
+                      confirmLabel="Remove contact"
                       trigger={<Trash2 className="h-4 w-4" aria-hidden />}
                       triggerClassName="text-slate-400 hover:text-red-600"
-                      triggerTitle="Delete contact"
+                      triggerTitle="Remove contact"
                     />
                   </div>
                 )}

@@ -22,6 +22,7 @@ export const JOB_PRIORITY_VALUES = [
   "HIGH",
   "CRITICAL",
 ] as const;
+export const DISCIPLINE_VALUES = ["IT", "NON_IT"] as const;
 
 export const jobSchema = z
   .object({
@@ -36,7 +37,6 @@ export const jobSchema = z
     location: optionalText,
     clientRate: optionalNonNegativeNumber,
     vendorRate: optionalNonNegativeNumber,
-    candidateRate: optionalNonNegativeNumber,
     description: optionalText,
     notes: optionalText,
     recruiterIds: z.array(z.string().min(1)).default([]),
@@ -59,6 +59,10 @@ export const jobSchema = z
     priority: z.preprocess(
       (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
       z.enum(JOB_PRIORITY_VALUES).optional(),
+    ),
+    discipline: z.preprocess(
+      (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+      z.enum(DISCIPLINE_VALUES).optional(),
     ),
     targetCloseDate: optionalDateTime,
     postingUrl: optionalText,

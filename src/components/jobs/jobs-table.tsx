@@ -1,16 +1,23 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { Table, Th, Td, cardLink } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { MobileSort } from "@/components/ui/mobile-sort";
 import { Badge } from "@/components/ui/badge";
 import { ColumnsMenu } from "@/components/ui/columns-menu";
-import { JOB_STATUS_LABEL, JOB_STATUS_TONE, jobSourceLabel } from "@/lib/labels";
+import {
+  JOB_STATUS_LABEL,
+  JOB_STATUS_TONE,
+  jobSourceLabel,
+  DISCIPLINE_LABEL,
+  DISCIPLINE_TONE,
+} from "@/lib/labels";
 import { formatDate, formatJobDisplayId } from "@/lib/format";
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
 import type { JobListRow } from "@/server/queries/jobs";
-import { JobRecruitersCell } from "@/components/jobs/job-recruiters-cell";
+import { JobBulkBar } from "@/components/jobs/job-bulk-bar";
 
 /**
  * Column registry. Each column is independent — toggling visibility or
@@ -20,14 +27,6 @@ import { JobRecruitersCell } from "@/components/jobs/job-recruiters-cell";
  * `sortKey` (when present) wires the column header to ?sort= via SortableHeader.
  * Server-side sortable keys are defined in `JOB_SORTS` in queries/jobs.ts.
  */
-/** Cross-row context threaded into every cell render so columns can reach
- *  page-level data (current user, lookup lists) without prop-drilling each
- *  cell component through the table itself. */
-type RenderCtx = {
-  canEditRecruiters: boolean;
-  allRecruiters: { id: string; fullName: string }[];
-};
-
 type Column = {
   key: string;
   label: string;
@@ -36,8 +35,8 @@ type Column = {
   sortDefaultDir?: "asc" | "desc";
   align?: "right";
   defaultVisible: boolean;
-  /** Receives the row, its 1-based page-offset row number, and shared ctx. */
-  render: (job: JobListRow, rowNumber: number, ctx: RenderCtx) => React.ReactNode;
+  /** Receives the row and its 1-based page-offset row number. */
+  render: (job: JobListRow, rowNumber: number) => React.ReactNode;
 };
 
 const COLUMNS: Column[] = [
@@ -58,7 +57,9 @@ const COLUMNS: Column[] = [
     defaultVisible: true,
     render: (job) => (
       <Td label="Job ID" secondary className="whitespace-nowrap font-mono text-xs">
-        {formatJobDisplayId(job)}
+        <Link href={`/jobs/${job.id}`} className="text-indigo-600 hover:underline">
+          {formatJobDisplayId(job)}
+        </Link>
       </Td>
     ),
   },
@@ -119,22 +120,6 @@ const COLUMNS: Column[] = [
     ),
   },
   {
-    key: "recruiters",
-    label: "Recruiters",
-    defaultVisible: true,
-    render: (job, _n, ctx) => (
-      <JobRecruitersCell
-        jobId={job.id}
-        currentRecruiters={job.assignments.map((a) => ({
-          id: a.recruiter.id,
-          fullName: a.recruiter.fullName,
-        }))}
-        allRecruiters={ctx.allRecruiters}
-        canEdit={ctx.canEditRecruiters}
-      />
-    ),
-  },
-  {
     key: "status",
     label: "Status",
     sortKey: "status",
@@ -148,6 +133,23 @@ const COLUMNS: Column[] = [
     ),
   },
   {
+    key: "discipline",
+    label: "Discipline",
+    sortKey: "discipline",
+    defaultVisible: false,
+    render: (job) => (
+      <Td label="Discipline" secondary>
+        {job.discipline ? (
+          <Badge tone={DISCIPLINE_TONE[job.discipline]}>
+            {DISCIPLINE_LABEL[job.discipline]}
+          </Badge>
+        ) : (
+          "—"
+        )}
+      </Td>
+    ),
+  },
+  {
     key: "subs",
     label: "Subs",
     sortKey: "subs",
@@ -157,6 +159,40 @@ const COLUMNS: Column[] = [
     render: (job) => (
       <Td label="Subs" className="text-right tabular-nums">
         {job._count.submissions}
+      </Td>
+    ),
+  },
+  // ─── Outcome tallies (hidden by default) — spec §9.2 ──────────────────────
+  {
+    key: "interviews",
+    label: "Interviews",
+    align: "right",
+    defaultVisible: false,
+    render: (job) => (
+      <Td label="Interviews" secondary className="text-right tabular-nums">
+        {job.interviewCount}
+      </Td>
+    ),
+  },
+  {
+    key: "selected",
+    label: "Selected",
+    align: "right",
+    defaultVisible: false,
+    render: (job) => (
+      <Td label="Selected" secondary className="text-right tabular-nums">
+        {job.selectedCount}
+      </Td>
+    ),
+  },
+  {
+    key: "joined",
+    label: "Joined",
+    align: "right",
+    defaultVisible: false,
+    render: (job) => (
+      <Td label="Joined" secondary className="text-right tabular-nums">
+        {job.joinedCount}
       </Td>
     ),
   },
@@ -196,6 +232,7 @@ const COLUMNS: Column[] = [
   {
     key: "startDate",
     label: "Projected start",
+    sortKey: "startDate",
     defaultVisible: false,
     render: (job) => (
       <Td label="Projected start" secondary className="whitespace-nowrap">
@@ -206,6 +243,7 @@ const COLUMNS: Column[] = [
   {
     key: "lastImported",
     label: "Last imported",
+    sortKey: "lastImported",
     defaultVisible: false,
     render: (job) => (
       <Td label="Last imported" secondary className="whitespace-nowrap">
@@ -218,6 +256,7 @@ const COLUMNS: Column[] = [
   {
     key: "positions",
     label: "Positions",
+    sortKey: "positions",
     align: "right",
     defaultVisible: false,
     render: (job) => (
@@ -229,6 +268,7 @@ const COLUMNS: Column[] = [
   {
     key: "submitLimit",
     label: "Submit limit",
+    sortKey: "submitLimit",
     align: "right",
     defaultVisible: false,
     render: (job) => (
@@ -240,6 +280,7 @@ const COLUMNS: Column[] = [
   {
     key: "activeCount",
     label: "Active (iLabor)",
+    sortKey: "activeCount",
     align: "right",
     defaultVisible: false,
     render: (job) => (
@@ -251,10 +292,23 @@ const COLUMNS: Column[] = [
   {
     key: "released",
     label: "Released",
+    sortKey: "released",
     defaultVisible: false,
     render: (job) => (
       <Td label="Released" secondary className="whitespace-nowrap">
         {job.releasedDate ? formatDate(job.releasedDate) : "—"}
+      </Td>
+    ),
+  },
+  {
+    key: "updated",
+    label: "Updated",
+    sortKey: "updated",
+    sortDefaultDir: "desc",
+    defaultVisible: false,
+    render: (job) => (
+      <Td label="Updated" secondary className="whitespace-nowrap">
+        {formatDate(job.updatedAt)}
       </Td>
     ),
   },
@@ -271,30 +325,42 @@ const DEFAULTS: ColumnPrefs = {
 export function JobsTable({
   rows,
   pageOffset = 0,
-  canEditRecruiters = false,
-  allRecruiters = [],
+  countLabel,
   storageKey = STORAGE_KEY,
   columnDefaults = DEFAULTS,
 }: {
   rows: JobListRow[];
   /** Row count preceding the first row on this page (e.g. (page-1)*pageSize). */
   pageOffset?: number;
-  /** True when the current user can change recruiter assignments inline. */
-  canEditRecruiters?: boolean;
-  /** Full set of active recruiters available for inline assignment. */
-  allRecruiters?: { id: string; fullName: string }[];
+  /** e.g. "53 jobs" — shown before the column count. */
+  countLabel?: string;
   /** Override the localStorage key so a different view (e.g. /vendor-portal)
    *  keeps its own independent column preferences. */
   storageKey?: string;
   /** Override which columns are visible/ordered by default for this view. */
   columnDefaults?: ColumnPrefs;
 }) {
-  const ctx: RenderCtx = { canEditRecruiters, allRecruiters };
   const [prefs, setPrefs] = useColumnPrefs(
     storageKey,
     STORAGE_VERSION,
     columnDefaults,
   );
+
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const pageIds = rows.map((r) => r.id);
+  const allSelected =
+    pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  const toggleAll = () =>
+    setSelected(allSelected ? new Set() : new Set(pageIds));
+  const toggleOne = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const checkboxClass =
+    "h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-200";
 
   const byKey = new Map(COLUMNS.map((c) => [c.key, c]));
   const orderedCols = prefs.order
@@ -308,7 +374,7 @@ export function JobsTable({
         <p className="text-xs text-slate-500" suppressHydrationWarning>
           {rows.length === 0
             ? null
-            : `Showing ${visibleCols.length} of ${COLUMNS.length} columns`}
+            : `${countLabel ? `${countLabel} · ` : ""}Showing ${visibleCols.length} of ${COLUMNS.length} columns`}
         </p>
         <ColumnsMenu
           columns={orderedCols.map((c) => ({ key: c.key, label: c.label }))}
@@ -317,6 +383,16 @@ export function JobsTable({
           defaults={columnDefaults}
         />
       </div>
+
+      {selected.size > 0 && (
+        <JobBulkBar
+          selectedIds={[...selected]}
+          selectedStatuses={rows
+            .filter((r) => selected.has(r.id))
+            .map((r) => r.status)}
+          onDone={() => setSelected(new Set())}
+        />
+      )}
 
       <MobileSort
         options={visibleCols
@@ -331,6 +407,15 @@ export function JobsTable({
       <Table>
         <thead className="border-b border-slate-200 bg-slate-50">
           <tr>
+            <Th className="w-8">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleAll}
+                aria-label="Select all on this page"
+                className={checkboxClass}
+              />
+            </Th>
             {visibleCols.map((c) =>
               c.sortKey ? (
                 <SortableHeader
@@ -350,14 +435,25 @@ export function JobsTable({
         </thead>
         <tbody className="divide-y divide-slate-100">
           {rows.map((job, idx) => (
-            <tr key={job.id} className="hover:bg-slate-50">
+            <tr
+              key={job.id}
+              className={selected.has(job.id) ? "bg-indigo-50/60" : "hover:bg-slate-50"}
+            >
+              <td className="w-8 px-3 align-middle">
+                <input
+                  type="checkbox"
+                  checked={selected.has(job.id)}
+                  onChange={() => toggleOne(job.id)}
+                  aria-label={`Select ${job.title}`}
+                  className={checkboxClass}
+                />
+              </td>
               {visibleCols.map((c) => (
                 <RenderCell
                   key={c.key}
                   column={c}
                   job={job}
                   rowNumber={pageOffset + idx + 1}
-                  ctx={ctx}
                 />
               ))}
             </tr>
@@ -373,13 +469,11 @@ function RenderCell({
   column,
   job,
   rowNumber,
-  ctx,
 }: {
   column: Column;
   job: JobListRow;
   rowNumber: number;
-  ctx: RenderCtx;
 }) {
-  return <>{column.render(job, rowNumber, ctx)}</>;
+  return <>{column.render(job, rowNumber)}</>;
 }
 

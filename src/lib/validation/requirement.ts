@@ -1,7 +1,6 @@
 import { z } from "zod";
 import {
   optionalText,
-  optionalUrl,
   optionalNonNegativeNumber,
   emptyToUndefined,
 } from "./common";
@@ -16,14 +15,12 @@ const requirementBase = {
   location: optionalText,
   payRate: optionalNonNegativeNumber,
   billRate: optionalNonNegativeNumber,
-  candidateRate: optionalNonNegativeNumber,
   clientRate: optionalNonNegativeNumber,
   engagement: z.preprocess(emptyToUndefined, z.enum(["C2C", "W2"]).optional()),
   vendorRecruiterName: optionalText,
   jobDuties: optionalText,
   teamLead: optionalText,
   submissionNotes: optionalText,
-  resumeDriveLink: optionalUrl,
 };
 
 /** A new requirement — the job is required and fixed once chosen. */

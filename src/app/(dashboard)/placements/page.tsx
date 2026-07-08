@@ -13,6 +13,7 @@ import { PlacementsFilters } from "@/components/placements/placements-filters";
 import { parseSort, parsePage, parseDateRange, parseList, PAGE_SIZE } from "@/lib/filters";
 import { PLACEMENT_STATUSES } from "@/lib/labels";
 import { requireUser } from "@/lib/session";
+import { hasFullAccess } from "@/lib/permissions";
 import type { PlacementStatus } from "@/generated/prisma/enums";
 
 function clean(value: string | string[] | undefined): string | undefined {
@@ -82,7 +83,7 @@ export default async function PlacementsPage({
   // Rate-derived aggregates are admin-only — the per-row Bill/Pay/Margin are
   // masked for non-admins (except their own placements), so the org-wide weekly
   // margin must be hidden too or it leaks the sum of numbers they can't see.
-  const isAdmin = user.role === "ADMIN";
+  const isAdmin = hasFullAccess(user);
 
   return (
     <div className="space-y-5">
@@ -116,11 +117,9 @@ export default async function PlacementsPage({
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="text-xs text-slate-500">
-            {total} placement{total === 1 ? "" : "s"}
-          </p>
           <PlacementsTable
             rows={rows}
+            countLabel={`${total} placement${total === 1 ? "" : "s"}`}
             pageOffset={(page - 1) * PAGE_SIZE}
             viewer={{ userId: user.id, userRole: user.role }}
           />

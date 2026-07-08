@@ -29,6 +29,7 @@ export function InterviewsFilters({
       basePath="/interviews"
       search={{ param: "q", placeholder: "Candidate, job, or client…" }}
       filters={filters}
+      viewsKey="lumintrack.interviews.views"
     />
   );
 }

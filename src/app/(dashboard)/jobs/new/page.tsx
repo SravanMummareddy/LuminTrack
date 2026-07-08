@@ -5,17 +5,15 @@ import {
   listClients,
   listVendors,
   listSisterCompanies,
-  listUsers,
 } from "@/server/queries/org";
 import { getCurrentUser } from "@/lib/session";
-import { canManageRequirements } from "@/lib/permissions";
+import { hasFullAccess } from "@/lib/permissions";
 
 export default async function NewJobPage() {
-  const [clients, vendors, sources, recruiters, user] = await Promise.all([
+  const [clients, vendors, sources, user] = await Promise.all([
     listClients(),
     listVendors(),
     listSisterCompanies(),
-    listUsers(),
     getCurrentUser(),
   ]);
 
@@ -28,10 +26,9 @@ export default async function NewJobPage() {
           clients={clients}
           vendors={vendors}
           sources={sources}
-          recruiters={recruiters}
           submitLabel="Create job"
-          canManageRequirements={canManageRequirements(user ?? undefined)}
-          canCreateOrgEntities={user?.role === "ADMIN"}
+          canCreateOrgEntities={hasFullAccess(user)}
+          canManageRatesAndAssignment={hasFullAccess(user)}
         />
       </div>
     </div>

@@ -44,6 +44,10 @@ export const candidateSchema = z
     tags: z.array(z.string().trim().min(1)).max(30).default([]),
     lastContactedAt: optionalDate,
     source: optionalText,
+    discipline: z.preprocess(
+      (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+      z.enum(["IT", "NON_IT"]).optional(),
+    ),
   })
   .refine((d) => Boolean(d.email || d.phone), {
     // Surface as a form-level error (no path) so it shows in the top-of-form

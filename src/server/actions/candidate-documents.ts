@@ -1,10 +1,13 @@
 "use server";
 
+import { del } from "@vercel/blob";
+import { uploadPrivateFile } from "@/server/blob-upload";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/lib/session";
 import { logActivity } from "@/server/activity";
 import { candidateDocumentSchema } from "@/lib/validation/candidate-document";
+import { uploadFileError } from "@/lib/validation/upload-file";
 import { toFieldErrors } from "@/lib/validation/common";
 import {
   canManageSensitiveDocs,
@@ -20,18 +23,25 @@ const CATEGORY_LABEL: Record<string, string> = {
   OTHER: "Other",
 };
 
+function safeFileName(name: string): string {
+  const cleaned = name.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+  return cleaned || "document";
+}
+
 function readDocument(formData: FormData) {
   return candidateDocumentSchema.safeParse({
     candidateId: formData.get("candidateId") ?? "",
     category: formData.get("category") ?? "",
     label: formData.get("label") ?? "",
-    driveLink: formData.get("driveLink") ?? "",
     issuedAt: formData.get("issuedAt") ?? "",
     expiresAt: formData.get("expiresAt") ?? "",
     notes: formData.get("notes") ?? "",
   });
 }
 
+/** Uploads a document file to private Blob (gzip-compressed) and records it.
+ *  Sensitive categories (Identity / Work auth) are admin-only. Upload happens
+ *  before the DB write so a row never points at a failed upload. */
 export async function createCandidateDocument(
   _prev: FormState,
   formData: FormData,
@@ -49,11 +59,25 @@ export async function createCandidateDocument(
     return { error: "Only admins can add Identity or Work Authorization documents." };
   }
 
+  const file = formData.get("file");
+  if (!(file instanceof File))
+    return {
+      error: "Choose a file to upload.",
+      fieldErrors: { file: "Choose a file to upload." },
+    };
+  const fileErr = uploadFileError(file);
+  if (fileErr) return { error: fileErr, fieldErrors: { file: fileErr } };
+
   const candidate = await prisma.candidate.findUnique({
     where: { id: d.candidateId },
     select: { id: true },
   });
   if (!candidate) return { error: "This candidate no longer exists." };
+
+  const blob = await uploadPrivateFile(
+    `documents/${d.candidateId}/${safeFileName(file.name)}`,
+    file,
+  );
 
   await prisma.$transaction(async (tx) => {
     const created = await tx.candidateDocument.create({
@@ -61,7 +85,10 @@ export async function createCandidateDocument(
         candidateId: d.candidateId,
         category: d.category,
         label: d.label,
-        driveLink: d.driveLink,
+        blobPathname: blob.pathname,
+        blobUrl: blob.url,
+        sizeBytes: blob.size,
+        contentType: file.type || null,
         issuedAt: d.issuedAt ?? null,
         expiresAt: d.expiresAt ?? null,
         notes: d.notes ?? null,
@@ -81,6 +108,8 @@ export async function createCandidateDocument(
   return { ok: true };
 }
 
+/** Edits a document's metadata (category, label, dates, notes). The uploaded
+ *  file can't be swapped in place — add a new document for a new file. */
 export async function updateCandidateDocument(
   _prev: FormState,
   formData: FormData,
@@ -99,6 +128,7 @@ export async function updateCandidateDocument(
 
   const existing = await prisma.candidateDocument.findUnique({
     where: { id: docId },
+    select: { id: true, category: true, candidateId: true },
   });
   if (!existing) return { error: "This document no longer exists." };
 
@@ -117,7 +147,6 @@ export async function updateCandidateDocument(
       data: {
         category: d.category,
         label: d.label,
-        driveLink: d.driveLink,
         issuedAt: d.issuedAt ?? null,
         expiresAt: d.expiresAt ?? null,
         notes: d.notes ?? null,
@@ -143,6 +172,13 @@ export async function deleteCandidateDocument(formData: FormData): Promise<void>
 
   const existing = await prisma.candidateDocument.findUnique({
     where: { id: docId },
+    select: {
+      id: true,
+      category: true,
+      label: true,
+      candidateId: true,
+      blobUrl: true,
+    },
   });
   if (!existing) return;
 
@@ -160,6 +196,15 @@ export async function deleteCandidateDocument(formData: FormData): Promise<void>
       candidateId: existing.candidateId,
     });
   });
+
+  // Free the Blob storage once the row is gone (best-effort).
+  if (existing.blobUrl) {
+    try {
+      await del(existing.blobUrl);
+    } catch {
+      // Orphaned blob; safe to ignore.
+    }
+  }
 
   revalidatePath(`/candidates/${existing.candidateId}`);
 }

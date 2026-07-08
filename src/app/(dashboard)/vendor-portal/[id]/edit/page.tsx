@@ -6,7 +6,7 @@ import { RequirementForm } from "@/components/vendor-portal/requirement-form";
 import { updateVendorRequirement } from "@/server/actions/requirements";
 import { getVendorRequirement } from "@/server/queries/requirements";
 import { listCandidateOptions } from "@/server/queries/candidates";
-import { listUsers } from "@/server/queries/org";
+import { listUsers, listTeamLeadOptions } from "@/server/queries/org";
 import { getCurrentUser } from "@/lib/session";
 import { canManageRequirements } from "@/lib/permissions";
 import { formatJobDisplayId } from "@/lib/format";
@@ -29,9 +29,10 @@ export default async function EditRequirementPage({
   // Converted / cancelled requirements are read-only.
   if (requirement.status !== "OPEN") redirect(`/vendor-portal/${id}`);
 
-  const [candidates, recruiters] = await Promise.all([
+  const [candidates, recruiters, teamLeads] = await Promise.all([
     listCandidateOptions(),
     listUsers(),
+    listTeamLeadOptions(),
   ]);
 
   return (
@@ -62,20 +63,19 @@ export default async function EditRequirementPage({
             fullName: r.fullName,
             isActive: r.isActive,
           }))}
+          teamLeads={teamLeads}
           defaults={{
             candidateId: requirement.candidateId ?? "",
             recruiterId: requirement.recruiterId ?? "",
             location: requirement.location ?? "",
             payRate: rateStr(requirement.payRate),
             billRate: rateStr(requirement.billRate),
-            candidateRate: rateStr(requirement.candidateRate),
             clientRate: rateStr(requirement.clientRate),
             engagement: requirement.engagement ?? "",
             vendorRecruiterName: requirement.vendorRecruiterName ?? "",
             jobDuties: requirement.jobDuties ?? "",
             teamLead: requirement.teamLead ?? "",
             submissionNotes: requirement.submissionNotes ?? "",
-            resumeDriveLink: requirement.resumeDriveLink ?? "",
           }}
           cancelHref={`/vendor-portal/${id}`}
         />

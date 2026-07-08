@@ -75,7 +75,6 @@ async function jobsSheet(mode: ExcelMode): Promise<SheetSpec> {
       ...(mode === "full"
         ? [
             { header: "Vendor rate ($/hr)", key: "vendorRate", width: 14 },
-            { header: "Candidate rate ($/hr)", key: "candidateRate", width: 14 },
           ]
         : []),
       { header: "Created by", key: "createdBy", width: 22 },
@@ -95,7 +94,6 @@ async function jobsSheet(mode: ExcelMode): Promise<SheetSpec> {
       startDate: j.startDate ?? "",
       endDate: j.endDate ?? "",
       vendorRate: toNum(j.vendorRate),
-      candidateRate: toNum(j.candidateRate),
       createdBy: j.createdBy.fullName,
       createdAt: j.createdAt,
     })),
@@ -170,11 +168,18 @@ async function submissionsSheet(mode: ExcelMode): Promise<SheetSpec> {
       { header: "Client", key: "client", width: 22 },
       { header: "Status", key: "status", width: 16 },
       { header: "Recruiter", key: "recruiter", width: 22 },
-      ...(mode === "full" ? [{ header: "Candidate rate ($/hr)", key: "rate", width: 14 }] : []),
       { header: "Submitted at", key: "submittedAt", width: 18 },
       { header: "Expected join", key: "expectedJoinDate", width: 16 },
       { header: "Actual join", key: "actualJoinDate", width: 16 },
       { header: "Rejection reason", key: "rejectionReason", width: 24 },
+      // Rates are sensitive — only the admin-only "full" export includes them.
+      ...(mode === "full"
+        ? [
+            { header: "Pay rate ($/hr)", key: "payRate", width: 14 },
+            { header: "Bill rate ($/hr)", key: "billRate", width: 14 },
+            { header: "Client rate ($/hr)", key: "clientRate", width: 14 },
+          ]
+        : []),
     ],
     rows: rows.map((s) => ({
       displayId: `SUB-${String(s.seq).padStart(4, "0")}`,
@@ -183,11 +188,17 @@ async function submissionsSheet(mode: ExcelMode): Promise<SheetSpec> {
       client: s.job.client.name,
       status: s.status,
       recruiter: s.submittedBy.fullName,
-      rate: toNum(s.candidateRate),
       submittedAt: s.submittedAt,
       expectedJoinDate: s.expectedJoinDate ?? "",
       actualJoinDate: s.actualJoinDate ?? "",
       rejectionReason: s.rejectionReason ?? "",
+      ...(mode === "full"
+        ? {
+            payRate: toNum(s.payRate),
+            billRate: toNum(s.billRate),
+            clientRate: toNum(s.clientRate),
+          }
+        : {}),
     })),
   };
 }
@@ -355,13 +366,15 @@ async function resumesSheet(mode: ExcelMode): Promise<SheetSpec> {
     columns: [
       { header: "Candidate", key: "candidate", width: 28 },
       { header: "Label", key: "label", width: 24 },
-      ...(mode === "full" ? [{ header: "Drive link", key: "driveLink", width: 60 }] : []),
+      ...(mode === "full"
+        ? [{ header: "File", key: "file", width: 40 }]
+        : []),
       { header: "Created at", key: "createdAt", width: 18 },
     ],
     rows: rows.map((r) => ({
       candidate: r.candidate.fullName,
       label: r.label,
-      driveLink: r.driveLink,
+      file: r.blobPathname ?? "",
       createdAt: r.createdAt,
     })),
   };
@@ -379,7 +392,7 @@ async function documentsSheet(mode: ExcelMode): Promise<SheetSpec> {
       { header: "Candidate", key: "candidate", width: 28 },
       { header: "Category", key: "category", width: 16 },
       { header: "Label", key: "label", width: 28 },
-      ...(mode === "full" ? [{ header: "Drive link", key: "driveLink", width: 60 }] : []),
+      ...(mode === "full" ? [{ header: "File", key: "file", width: 40 }] : []),
       { header: "Issued", key: "issuedAt", width: 14 },
       { header: "Expires", key: "expiresAt", width: 14 },
       { header: "Notes", key: "notes", width: 32 },
@@ -388,7 +401,7 @@ async function documentsSheet(mode: ExcelMode): Promise<SheetSpec> {
       candidate: d.candidate.fullName,
       category: d.category,
       label: d.label,
-      driveLink: d.driveLink,
+      file: d.blobPathname ?? "",
       issuedAt: d.issuedAt ?? "",
       expiresAt: d.expiresAt ?? "",
       notes: d.notes ?? "",
@@ -501,21 +514,4 @@ async function writeWorkbook(
   }
 
   await wb.commit();
-}
-
-/**
- * In-memory variant — kept for callers that need a Buffer (e.g. the deferred
- * R4.4 cron job that uploads to Drive). The HTTP route handler should use
- * `streamBusinessExcel` instead.
- */
-export async function buildBusinessExcelBuffer(args: {
-  mode: ExcelMode;
-  entities: ExcelEntity[];
-}): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  const stream = streamBusinessExcel(args);
-  for await (const chunk of stream) {
-    chunks.push(chunk as Buffer);
-  }
-  return Buffer.concat(chunks);
 }

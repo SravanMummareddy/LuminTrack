@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { ShieldAlert } from "lucide-react";
 
-// Shown when a signed-in non-admin tries to load an admin-gated route.
-// Replaces the previous `notFound()` redirect, which produced a generic
+// Shown when a signed-in recruiter tries to load a manager/team-lead-gated
+// route. Replaces the previous `notFound()` redirect, which produced a generic
 // 404 with no explanation. Audit finding H4 (2026-05-26).
 export function Forbidden({
-  message = "This page is admin-only. If you need access, ask an admin to update your role.",
+  message = "This page is limited to managers and team leads. If you need access, ask a manager to update your role.",
 }: {
   message?: string;
 }) {

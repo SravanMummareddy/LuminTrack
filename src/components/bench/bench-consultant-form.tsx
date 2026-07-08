@@ -3,7 +3,12 @@
 import { useActionState, useState } from "react";
 import Link from "next/link";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
-import { Button, buttonClass } from "@/components/ui/button";
+import { SearchSelect } from "@/components/ui/search-select";
+import { Button } from "@/components/ui/button";
+import {
+  useUnsavedChanges,
+  GuardedCancel,
+} from "@/components/ui/unsaved-changes";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 import {
   BENCH_PRIORITIES,
@@ -47,6 +52,9 @@ export type BenchConsultantFormValues = {
 
 type BenchAction = (prev: FormState, formData: FormData) => Promise<FormState>;
 type Option = { id: string; fullName: string };
+
+/** Sentinel value for the candidate picker's "➕ Create new candidate" action. */
+const NEW_CAND = "__new__";
 
 type Fields = Omit<
   BenchConsultantFormValues,
@@ -118,15 +126,97 @@ export function BenchConsultantForm({
   const errors = state.fieldErrors ?? {};
   const cancelHref = values ? `/bench/${values.id}` : "/bench";
 
+  // Unsaved-changes guard — any user input arms the leave prompt + Cancel confirm.
+  const [dirty, setDirty] = useState(false);
+  const markDirty = () => setDirty((d) => (d ? d : true));
+  useUnsavedChanges(dirty);
+
+  const isEdit = Boolean(values);
+  const creatingNew = fields.candidateId === NEW_CAND;
+
   return (
-    <form action={formAction} className="space-y-6">
+    <form action={formAction} onInput={markDirty} className="space-y-6">
       {values && <input type="hidden" name="id" value={values.id} />}
 
-      {/* ── Identity + marketing tier ─────────────────────────────── */}
+      {/* ── Identity: every bench consultant IS a candidate ───────────
+          Create mode → pick an existing candidate or create a new one.
+          Edit mode → the linked candidate is fixed (shown read-only). */}
       <section className="space-y-4">
-        <Field label="Consultant name" htmlFor="fullName" required error={errors.fullName}>
-          <Input id="fullName" name="fullName" value={fields.fullName} onChange={set("fullName")} required />
-        </Field>
+        {isEdit ? (
+          <>
+            <Field label="Candidate">
+              <div className="flex items-center gap-2 text-sm text-slate-700">
+                <span className="font-medium">{fields.fullName}</span>
+                {fields.candidateId && (
+                  <Link
+                    href={`/candidates/${fields.candidateId}`}
+                    className="text-indigo-600 hover:underline"
+                  >
+                    View candidate
+                  </Link>
+                )}
+              </div>
+            </Field>
+            <input type="hidden" name="fullName" value={fields.fullName} />
+            <input type="hidden" name="candidateId" value={fields.candidateId} />
+          </>
+        ) : (
+          <>
+            <Field
+              label="Candidate"
+              htmlFor="candidateId"
+              required
+              hint="Pick an existing candidate or create a new one — every bench consultant is also a candidate."
+              error={errors.candidateId}
+            >
+              <SearchSelect
+                id="candidateId"
+                name="candidateId"
+                value={fields.candidateId}
+                onChange={(v) =>
+                  setFields((f) =>
+                    v === NEW_CAND
+                      ? { ...f, candidateId: NEW_CAND, fullName: "" }
+                      : {
+                          ...f,
+                          candidateId: v,
+                          fullName:
+                            candidates.find((c) => c.id === v)?.fullName ?? "",
+                        },
+                  )
+                }
+                placeholder="Search candidates…"
+                options={candidates.map((c) => ({
+                  value: c.id,
+                  label: c.fullName,
+                }))}
+                actionOption={{ value: NEW_CAND, label: "➕ Create new candidate" }}
+              />
+            </Field>
+            {creatingNew ? (
+              <Field
+                label="New candidate name"
+                htmlFor="fullName"
+                required
+                hint="Also add an email or phone below — a new candidate needs a contact."
+                error={errors.fullName}
+              >
+                <Input
+                  id="fullName"
+                  name="fullName"
+                  value={fields.fullName}
+                  onChange={set("fullName")}
+                  required
+                  placeholder="Full name"
+                />
+              </Field>
+            ) : (
+              fields.fullName && (
+                <input type="hidden" name="fullName" value={fields.fullName} />
+              )
+            )}
+          </>
+        )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Priority" htmlFor="priority" error={errors.priority}>
@@ -144,12 +234,17 @@ export function BenchConsultantForm({
             </Select>
           </Field>
           <Field label="Marketing recruiter" htmlFor="recruiterId" error={errors.recruiterId}>
-            <Select id="recruiterId" name="recruiterId" value={fields.recruiterId} onChange={set("recruiterId")}>
-              <option value="">— Unassigned —</option>
-              {recruiters.map((r) => (
-                <option key={r.id} value={r.id}>{r.fullName}</option>
-              ))}
-            </Select>
+            <SearchSelect
+              id="recruiterId"
+              name="recruiterId"
+              value={fields.recruiterId}
+              onChange={(v) => setFields((f) => ({ ...f, recruiterId: v }))}
+              placeholder="Search recruiters…"
+              options={[
+                { value: "", label: "— Unassigned —" },
+                ...recruiters.map((r) => ({ value: r.id, label: r.fullName })),
+              ]}
+            />
           </Field>
           <Field label="Technology" htmlFor="technology" error={errors.technology}>
             <Input id="technology" name="technology" value={fields.technology} onChange={set("technology")} placeholder="e.g. Java / AWS" />
@@ -190,21 +285,6 @@ export function BenchConsultantForm({
 
       <Field label="Skills" htmlFor="skills" hint="Separate skills with commas." error={errors.skills}>
         <Input id="skills" name="skills" value={fields.skills} onChange={set("skills")} placeholder="Java, Spring Boot, AWS" />
-      </Field>
-
-      {/* ── Link to an existing candidate (optional) ──────────────── */}
-      <Field
-        label="Linked candidate"
-        htmlFor="candidateId"
-        hint="Optional — link to the ATS candidate record. Can also be created when you submit them."
-        error={errors.candidateId}
-      >
-        <Select id="candidateId" name="candidateId" value={fields.candidateId} onChange={set("candidateId")}>
-          <option value="">— Not linked —</option>
-          {candidates.map((c) => (
-            <option key={c.id} value={c.id}>{c.fullName}</option>
-          ))}
-        </Select>
       </Field>
 
       {/* ── More details (collapsible) ────────────────────────────── */}
@@ -299,9 +379,7 @@ export function BenchConsultantForm({
       ) : null}
 
       <div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
-        <Link href={cancelHref} className={buttonClass("secondary")}>
-          Cancel
-        </Link>
+        <GuardedCancel href={cancelHref} dirty={dirty} />
         <Button type="submit" disabled={pending}>
           {pending ? "Saving…" : submitLabel}
         </Button>

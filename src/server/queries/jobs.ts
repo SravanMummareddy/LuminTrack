@@ -1,6 +1,6 @@
 import { prisma } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
-import type { JobStatus } from "@/generated/prisma/enums";
+import type { JobStatus, Discipline } from "@/generated/prisma/enums";
 import { OTHER_SOURCE } from "@/lib/labels";
 import { PAGE_SIZE, searchTerms, type DateRange, type SortDir, type SortState } from "@/lib/filters";
 
@@ -19,11 +19,15 @@ export type JobListFilters = {
   sisterCompanySourceId?: string;
   recruiterId?: string[];
   status?: JobStatus;
+  discipline?: Discipline;
   location?: string;
   source?: JobSource;
   createdRange?: DateRange;
   sort?: SortState;
   page?: number;
+  /** Trash view: show only trashed-not-yet-erased jobs (admin). Default false =
+   *  live jobs only (trashed + erased tombstones hidden). */
+  trash?: boolean;
 };
 
 export const RANDSTAD_PORTAL_NAME = "Randstad iLabor";
@@ -39,15 +43,27 @@ const JOB_SORTS: Record<
   source: (d) => ({ sisterCompanySource: { name: d } }),
   location: (d) => ({ location: d }),
   status: (d) => ({ status: d }),
+  discipline: (d) => ({ discipline: d }),
   subs: (d) => ({ submissions: { _count: d } }),
   created: (d) => ({ createdAt: d }),
+  updated: (d) => ({ updatedAt: d }),
+  startDate: (d) => ({ startDate: d }),
+  lastImported: (d) => ({ lastImportedAt: d }),
+  positions: (d) => ({ positions: d }),
+  submitLimit: (d) => ({ submitLimit: d }),
+  activeCount: (d) => ({ externalActiveCount: d }),
+  released: (d) => ({ releasedDate: d }),
 };
 
 export const JOB_SORT_KEYS = Object.keys(JOB_SORTS);
 export const JOB_DEFAULT_SORT: SortState = { key: "created", dir: "desc" };
 
 export async function listJobs(filters: JobListFilters) {
-  const where: Prisma.JobWhereInput = {};
+  // Trash view shows trashed-not-erased jobs; the normal list hides anything
+  // with a deletedAt (trashed jobs AND erased tombstones keep it set).
+  const where: Prisma.JobWhereInput = filters.trash
+    ? { deletedAt: { not: null }, erasedAt: null }
+    : { deletedAt: null };
 
   const terms = searchTerms(filters.q);
   if (terms.length)
@@ -63,6 +79,7 @@ export async function listJobs(filters: JobListFilters) {
         ? null
         : filters.sisterCompanySourceId;
   if (filters.status) where.status = filters.status;
+  if (filters.discipline) where.discipline = filters.discipline;
   if (filters.location)
     where.location = { contains: filters.location, mode: "insensitive" };
   if (filters.recruiterId?.length)
@@ -102,15 +119,50 @@ export async function listJobs(filters: JobListFilters) {
     },
   });
 
+  // Per-job outcome tallies for the (hidden-by-default) Interviews / Selected /
+  // Joined columns — spec §9.2. One extra query over just this page's jobs,
+  // aggregated in memory. Interviews = interview rounds across the job's
+  // submissions; Selected / Joined = submissions currently in that status (same
+  // definition as the dashboard KPIs, so the numbers reconcile).
+  const jobIds = raw.map((j) => j.id);
+  const subStats = jobIds.length
+    ? await prisma.submission.findMany({
+        where: { jobId: { in: jobIds } },
+        select: {
+          jobId: true,
+          status: true,
+          _count: { select: { interviewRounds: true } },
+        },
+      })
+    : [];
+  const tally = new Map<
+    string,
+    { interviews: number; selected: number; joined: number }
+  >();
+  for (const id of jobIds) tally.set(id, { interviews: 0, selected: 0, joined: 0 });
+  for (const s of subStats) {
+    const t = tally.get(s.jobId);
+    if (!t) continue;
+    t.interviews += s._count.interviewRounds;
+    if (s.status === "SELECTED") t.selected += 1;
+    else if (s.status === "JOINED") t.joined += 1;
+  }
+
   // Prisma Decimal is not serializable across the Server → Client Component
   // boundary (RSC requires plain JSON values). Coerce rate fields to plain
   // numbers here, once, so downstream consumers — including <JobsTable> —
   // can treat them as primitives.
-  const rows = raw.map(({ vendorRate, candidateRate, ...rest }) => ({
-    ...rest,
-    vendorRate: vendorRate != null ? Number(vendorRate) : null,
-    candidateRate: candidateRate != null ? Number(candidateRate) : null,
-  }));
+  const rows = raw.map(({ clientRate, vendorRate, ...rest }) => {
+    const t = tally.get(rest.id) ?? { interviews: 0, selected: 0, joined: 0 };
+    return {
+      ...rest,
+      clientRate: clientRate != null ? Number(clientRate) : null,
+      vendorRate: vendorRate != null ? Number(vendorRate) : null,
+      interviewCount: t.interviews,
+      selectedCount: t.selected,
+      joinedCount: t.joined,
+    };
+  });
 
   return { rows, total, page };
 }
@@ -172,6 +224,7 @@ export async function listStaleIlaborJobs(opts: { limit?: number } = {}) {
       portalId: { not: null },
       status: { in: ["OPEN", "ON_HOLD"] },
       lastImportedAt: { lt: cutoff },
+      deletedAt: null,
     },
     orderBy: { lastImportedAt: "asc" },
     take: limit,
@@ -205,40 +258,28 @@ export function getJobDetail(id: string) {
   });
 }
 
-/** Minimal job shape for the new-submission page header and rate default. */
-export function getJobSummary(id: string) {
-  return prisma.job.findUnique({
-    where: { id },
-    select: { id: true, title: true, status: true, candidateRate: true },
-  });
-}
-
 /**
  * Lightweight job list for the submission form's job picker (candidate-locked
  * and open entry points). Mirrors `listCandidateOptions`. Scoped to jobs that
  * still accept submissions (OPEN / ON_HOLD) so the dropdown isn't cluttered
- * with filled/closed/cancelled reqs. `candidateRate` lets the form seed a rate
- * default once a job is picked; `seq`/`portalRefId` build the display id label.
+ * with filled/closed/cancelled reqs. `seq`/`portalRefId` build the display id
+ * label.
  */
 export async function listJobOptions() {
   const rows = await prisma.job.findMany({
-    where: { status: { in: ["OPEN", "ON_HOLD"] } },
+    where: { status: { in: ["OPEN", "ON_HOLD"] }, deletedAt: null },
     orderBy: { title: "asc" },
     select: {
       id: true,
       title: true,
       seq: true,
       portalRefId: true,
-      candidateRate: true,
       client: { select: { name: true } },
     },
   });
-  // Decimal isn't serializable across the RSC → Client boundary; flatten the
-  // rate to a plain string the form can drop straight into the rate input.
-  return rows.map(({ candidateRate, client, ...rest }) => ({
+  return rows.map(({ client, ...rest }) => ({
     ...rest,
     clientName: client?.name ?? null,
-    candidateRate: candidateRate != null ? candidateRate.toString() : "",
   }));
 }
 

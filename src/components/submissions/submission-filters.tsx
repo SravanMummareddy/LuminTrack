@@ -82,6 +82,7 @@ export function SubmissionFilters({
       basePath="/submissions"
       search={{ param: "q", placeholder: "Search candidate or job…" }}
       filters={filters}
+      viewsKey="lumintrack.submissions.views"
     />
   );
 }

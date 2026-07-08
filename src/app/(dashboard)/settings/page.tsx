@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Download, History, ScrollText, FileDown } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
+import { hasFullAccess } from "@/lib/permissions";
 import { cn } from "@/lib/cn";
 import { PageHeader } from "@/components/ui/page-header";
 import { LinkButton } from "@/components/ui/button";
@@ -14,12 +15,20 @@ import { saveSisterCompany, saveVendor } from "@/server/actions/org";
 import { ContactOrgSection } from "@/components/settings/contact-org-section";
 import { ClientSection } from "@/components/settings/client-section";
 import { UserSection } from "@/components/settings/user-section";
+import { AccountSection } from "@/components/settings/account-section";
+import { DeletedCandidatesSection } from "@/components/settings/deleted-candidates-section";
+import { DeletedJobsSection } from "@/components/settings/deleted-jobs-section";
+import { Forbidden } from "@/components/ui/forbidden";
+import { listCandidateArchives } from "@/server/queries/candidate-archives";
+import { listJobArchives } from "@/server/queries/job-archives";
 
 const TABS = [
   { key: "sister-companies", label: "Sources" },
   { key: "clients", label: "Clients" },
   { key: "vendors", label: "Vendors" },
   { key: "users", label: "Users" },
+  { key: "deleted", label: "Erased backups", adminOnly: true },
+  { key: "account", label: "My account" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -36,7 +45,8 @@ export default async function SettingsPage({
     : "sister-companies";
 
   const user = await getCurrentUser();
-  const isAdmin = user?.role === "ADMIN";
+  const isAdmin = hasFullAccess(user);
+  const canGrantManager = user?.role === "MANAGER";
 
   let content: React.ReactNode;
   if (tab === "sister-companies") {
@@ -65,8 +75,36 @@ export default async function SettingsPage({
         isAdmin={isAdmin}
       />
     );
+  } else if (tab === "users") {
+    content = (
+      <UserSection
+        items={await listUsers()}
+        canManage={isAdmin}
+        canGrantManager={canGrantManager}
+      />
+    );
+  } else if (tab === "deleted") {
+    if (isAdmin) {
+      const [candidateArchives, jobArchives] = await Promise.all([
+        listCandidateArchives(),
+        listJobArchives(),
+      ]);
+      content = (
+        <div className="space-y-8">
+          <DeletedCandidatesSection archives={candidateArchives} />
+          <DeletedJobsSection archives={jobArchives} />
+        </div>
+      );
+    } else {
+      content = <Forbidden />;
+    }
   } else {
-    content = <UserSection items={await listUsers()} canManage={isAdmin} />;
+    content = (
+      <AccountSection
+        fullName={user?.fullName ?? ""}
+        email={user?.email ?? ""}
+      />
+    );
   }
 
   return (
@@ -114,7 +152,7 @@ export default async function SettingsPage({
         aria-label="Settings sections"
         className="flex gap-1 border-b border-slate-200"
       >
-        {TABS.map((t) => {
+        {TABS.filter((t) => isAdmin || !("adminOnly" in t && t.adminOnly)).map((t) => {
           const selected = t.key === tab;
           return (
             <Link

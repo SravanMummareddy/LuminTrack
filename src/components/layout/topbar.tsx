@@ -2,10 +2,12 @@ import { GlobalSearch } from "@/components/search/global-search";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { RecentlyViewedMenu } from "@/components/layout/recently-viewed";
 import { UserMenu } from "@/components/layout/user-menu";
+import { roleLabel } from "@/lib/permissions";
+import type { UserRole } from "@/generated/prisma/enums";
 
 type TopbarProps = {
   name: string;
-  role: string;
+  role: UserRole;
 };
 
 export function Topbar({ name, role }: TopbarProps) {
@@ -22,9 +24,7 @@ export function Topbar({ name, role }: TopbarProps) {
         <RecentlyViewedMenu />
         <div className="hidden text-right leading-tight sm:block">
           <div className="text-sm font-medium text-slate-900">{name}</div>
-          <div className="text-xs text-slate-500">
-            {role === "ADMIN" ? "Administrator" : "Recruiter"}
-          </div>
+          <div className="text-xs text-slate-500">{roleLabel(role)}</div>
         </div>
         <UserMenu name={name} role={role} />
       </div>

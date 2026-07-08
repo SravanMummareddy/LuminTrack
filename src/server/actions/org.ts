@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma, isUniqueConstraintError } from "@/server/db";
 import { requireUser } from "@/lib/session";
+import { canManageOrgEntities } from "@/lib/permissions";
 import { contactOrgSchema, clientSchema } from "@/lib/validation/org";
 import { toFieldErrors } from "@/lib/validation/common";
 import type { FormState } from "@/lib/form-state";
@@ -22,10 +23,13 @@ function readContactOrg(formData: FormData) {
 /** Clients, vendors, and sister-company sources are shared org records that
  *  every job references — letting any recruiter rename or deactivate them
  *  would silently invalidate other people's work. Admin-only for writes. */
-async function requireAdmin(): Promise<FormState | { ok: true }> {
+async function requireOrgManager(): Promise<FormState | { ok: true }> {
   const actor = await requireUser();
-  if (actor.role !== "ADMIN")
-    return { error: "Only admins can manage clients, vendors, and sources." };
+  if (!canManageOrgEntities(actor))
+    return {
+      error:
+        "Only managers and team leads can manage clients, vendors, and sources.",
+    };
   return { ok: true };
 }
 
@@ -33,7 +37,7 @@ export async function saveSisterCompany(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const gate = await requireAdmin();
+  const gate = await requireOrgManager();
   if ("error" in gate) return gate;
   const id = String(formData.get("id") ?? "").trim();
   const parsed = readContactOrg(formData);
@@ -66,7 +70,7 @@ export async function saveVendor(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const gate = await requireAdmin();
+  const gate = await requireOrgManager();
   if ("error" in gate) return gate;
   const id = String(formData.get("id") ?? "").trim();
   const parsed = readContactOrg(formData);
@@ -99,7 +103,7 @@ export async function saveClient(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const gate = await requireAdmin();
+  const gate = await requireOrgManager();
   if ("error" in gate) return gate;
   const id = String(formData.get("id") ?? "").trim();
   const parsed = clientSchema.safeParse({

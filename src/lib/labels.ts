@@ -5,6 +5,7 @@ import type {
   InterviewResult,
   WorkMode,
   JobPriority,
+  Discipline,
   CandidateStatus,
   PlacementStatus,
   PlacementEndReason,
@@ -65,6 +66,16 @@ export const JOB_PRIORITY_TONE: Record<JobPriority, BadgeTone> = {
   MEDIUM: "blue",
   HIGH: "amber",
   CRITICAL: "red",
+};
+
+export const DISCIPLINES: Discipline[] = ["IT", "NON_IT"];
+export const DISCIPLINE_LABEL: Record<Discipline, string> = {
+  IT: "IT",
+  NON_IT: "Non-IT",
+};
+export const DISCIPLINE_TONE: Record<Discipline, BadgeTone> = {
+  IT: "indigo",
+  NON_IT: "slate",
 };
 
 // §B4 — candidate engagement state. Independent of `isActive` soft-delete.
@@ -421,7 +432,9 @@ export const REQUIREMENT_STATUSES: RequirementStatus[] = [
 ];
 export const REQUIREMENT_STATUS_LABEL: Record<RequirementStatus, string> = {
   OPEN: "Open",
-  CONVERTED: "Converted",
+  // CONVERTED is repurposed as "Closed" — the VPR is 1:many now, so it isn't
+  // "converted" into a single submission; a team lead closes it when fulfilled.
+  CONVERTED: "Closed",
   CANCELLED: "Cancelled",
 };
 export const REQUIREMENT_STATUS_TONE: Record<RequirementStatus, BadgeTone> = {

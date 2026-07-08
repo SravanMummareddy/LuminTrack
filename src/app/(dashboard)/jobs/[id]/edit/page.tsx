@@ -3,11 +3,12 @@ import { PageHeader } from "@/components/ui/page-header";
 import { JobForm, type JobFormValues } from "@/components/jobs/job-form";
 import { updateJob } from "@/server/actions/jobs";
 import { getJobForEdit } from "@/server/queries/jobs";
+import { getCurrentUser } from "@/lib/session";
+import { canEditJobRatesAndAssignment } from "@/lib/permissions";
 import {
   listClients,
   listVendors,
   listSisterCompanies,
-  listUsers,
 } from "@/server/queries/org";
 
 export default async function EditJobPage({
@@ -16,14 +17,15 @@ export default async function EditJobPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [job, clients, vendors, sources, recruiters] = await Promise.all([
+  const [job, clients, vendors, sources, user] = await Promise.all([
     getJobForEdit(id),
     listClients(),
     listVendors(),
     listSisterCompanies(),
-    listUsers(),
+    getCurrentUser(),
   ]);
   if (!job) notFound();
+  const canRates = canEditJobRatesAndAssignment(user);
 
   const toDateInput = (d: Date | null | undefined) =>
     d ? d.toISOString().slice(0, 10) : "";
@@ -39,10 +41,8 @@ export default async function EditJobPage({
     location: job.location ?? "",
     clientRate: job.clientRate?.toString() ?? "",
     vendorRate: job.vendorRate?.toString() ?? "",
-    candidateRate: job.candidateRate?.toString() ?? "",
     description: job.description ?? "",
     notes: job.notes ?? "",
-    recruiterIds: job.assignments.map((a) => a.recruiterId),
     positions: job.positions?.toString() ?? "",
     reqType: job.reqType ?? "",
     department: job.department ?? "",
@@ -52,6 +52,7 @@ export default async function EditJobPage({
     endDate: toDateInput(job.endDate),
     workMode: job.workMode ?? "",
     priority: job.priority ?? "",
+    discipline: job.discipline ?? "",
     targetCloseDate: toDateInput(job.targetCloseDate),
     postingUrl: job.postingUrl ?? "",
     workAuthRequirement: job.workAuthRequirement ?? "",
@@ -67,9 +68,9 @@ export default async function EditJobPage({
           clients={clients}
           vendors={vendors}
           sources={sources}
-          recruiters={recruiters}
           values={values}
           submitLabel="Save changes"
+          canManageRatesAndAssignment={canRates}
         />
       </div>
     </div>

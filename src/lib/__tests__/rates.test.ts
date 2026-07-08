@@ -8,13 +8,6 @@ describe("rateChainWarnings", () => {
     expect(w[0]).toMatch(/Pay rate.*above.*Bill rate.*negative/);
   });
 
-  it("flags candidate rate above client rate (the owner's question)", () => {
-    const w = rateChainWarnings({ candidateRate: "120", clientRate: "100" });
-    expect(w).toEqual([
-      expect.stringMatching(/Candidate rate.*above.*Client rate/),
-    ]);
-  });
-
   it("flags bill above client", () => {
     const w = rateChainWarnings({ billRate: "110", clientRate: "100" });
     expect(w[0]).toMatch(/Bill rate.*above.*Client rate/);
@@ -34,7 +27,6 @@ describe("rateChainWarnings", () => {
   it("is silent for a healthy chain", () => {
     expect(
       rateChainWarnings({
-        candidateRate: "90",
         payRate: "80",
         billRate: "95",
         clientRate: "110",
@@ -61,12 +53,11 @@ describe("rateChainWarnings", () => {
 
   it("can surface multiple violations at once", () => {
     const w = rateChainWarnings({
-      candidateRate: "130",
       payRate: "120",
       billRate: "110",
       clientRate: "100",
     });
-    // pay>bill, bill>client, candidate>client → 3 warnings.
-    expect(w).toHaveLength(3);
+    // pay>bill and bill>client → 2 warnings.
+    expect(w).toHaveLength(2);
   });
 });

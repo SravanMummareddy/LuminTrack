@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { LogOut } from "lucide-react";
+import Link from "next/link";
+import { LogOut, Lock } from "lucide-react";
 import { logoutAction } from "@/server/actions/auth";
+import { roleLabel } from "@/lib/permissions";
+import type { UserRole } from "@/generated/prisma/enums";
 
-export function UserMenu({ name, role }: { name: string; role: string }) {
+export function UserMenu({ name, role }: { name: string; role: UserRole }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -56,10 +59,21 @@ export function UserMenu({ name, role }: { name: string; role: string }) {
               {name}
             </div>
             <div className="text-xs text-slate-500">
-              {role === "ADMIN" ? "Administrator" : "Recruiter"}
+              {roleLabel(role)}
             </div>
           </div>
-          <form action={logoutAction} className="pt-1">
+          <div className="pt-1">
+            <Link
+              href="/settings?tab=account"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-slate-700 hover:bg-slate-50"
+            >
+              <Lock className="h-4 w-4" aria-hidden />
+              Change password
+            </Link>
+          </div>
+          <form action={logoutAction}>
             <button
               type="submit"
               role="menuitem"

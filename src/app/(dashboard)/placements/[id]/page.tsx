@@ -20,11 +20,13 @@ import {
   MARGIN_AMBER_THRESHOLD_PCT,
 } from "@/lib/labels";
 import {
+  formatCandidateDisplayId,
   formatDate,
   formatPlacementDisplayId,
   formatSubmissionDisplayId,
 } from "@/lib/format";
 import { requireUser } from "@/lib/session";
+import { hasFullAccess } from "@/lib/permissions";
 
 function SummaryItem({
   label,
@@ -76,7 +78,7 @@ export default async function PlacementDetailPage({
 
   // Rates editable for admins or the submitting recruiter.
   const canManageRates =
-    user.role === "ADMIN" ||
+    hasFullAccess(user) ||
     placement.submission.submittedById === user.id;
   // Anyone with placements access can extend / end (rates inside those forms
   // are gated separately).
@@ -133,6 +135,14 @@ export default async function PlacementDetailPage({
           <h1 className="mt-1 text-2xl font-semibold text-slate-900">
             {placement.candidate.fullName}
           </h1>
+          <p className="mt-0.5 text-sm">
+            <Link
+              href={`/candidates/${placement.candidate.id}`}
+              className="font-medium text-indigo-600 hover:underline"
+            >
+              View candidate {formatCandidateDisplayId(placement.candidate)}
+            </Link>
+          </p>
           <p className="mt-1 text-sm text-slate-500">
             on{" "}
             <Link
@@ -205,7 +215,7 @@ export default async function PlacementDetailPage({
               ? "—"
               : placement.clientRate != null
                 ? money(placement.clientRate)
-                : "—"}
+                : "Undisclosed"}
           </SummaryItem>
           <SummaryItem label="Margin">
             {canManageRates ? (

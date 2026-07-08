@@ -8,6 +8,7 @@ import {
   min as dateMin,
 } from "date-fns";
 import { prisma } from "@/server/db";
+import { SUBMISSION_STATUS_LABEL } from "@/lib/labels";
 
 /**
  * Monthly Performance scorecard (spreadsheet "Monthly Performance" tab).
@@ -26,10 +27,16 @@ import { prisma } from "@/server/db";
  *                   ever submitted to a job with that vendor. Counts once, in the
  *                   week of that company-first submit, credited to whoever made
  *                   it (no credit shows if that person isn't a listed recruiter).
- *  - Closures     — placements whose submission belongs to the recruiter,
- *                   bucketed on the placement `startDate` (the join/closure).
- *  - Backouts     — submissions now in BACKED_OUT, bucketed on `submittedAt`
- *                   so the column reconciles against the Submissions column.
+ *  - Closures     — a submission by the recruiter reaching OFFER_ACCEPTED,
+ *                   bucketed on the week that status change happened (read from
+ *                   the audit log), not on when the candidate was submitted.
+ *  - Backouts     — a submission by the recruiter reaching BACKED_OUT, bucketed
+ *                   on the week the back-out happened (from the audit log). A
+ *                   back-out of a prior-month submission still lands in the
+ *                   month it occurred — it is NOT keyed on the submit date.
+ *
+ * Backouts/Closures read the status-change date from the Activity log, dated by
+ * the real-world `eventAt` when the recruiter set one, else `createdAt`.
  */
 
 export const SCORECARD_METRICS = [
@@ -121,20 +128,23 @@ export async function getMonthlyScorecard({
     ...(teamLabel ? { teamLabel } : {}),
   };
 
-  const [recruiters, submissions, rounds, placements, vendorHistory] =
+  // Status-change audit rows carry the human status LABEL in `newValue`.
+  const BACKED_OUT_LABEL = SUBMISSION_STATUS_LABEL.BACKED_OUT;
+  const OFFER_ACCEPTED_LABEL = SUBMISSION_STATUS_LABEL.OFFER_ACCEPTED;
+
+  const [recruiters, submissions, rounds, statusEvents, vendorHistory] =
     await Promise.all([
       prisma.user.findMany({
         where: { ...recruiterWhere, isActive: true },
         select: { id: true, fullName: true, empId: true, teamLabel: true },
         orderBy: [{ teamLabel: "asc" }, { fullName: "asc" }],
       }),
-      // Submissions + Backouts both come from here (one fetch, two metrics).
       prisma.submission.findMany({
         where: {
           submittedAt: { gte: monthStart, lt: nextMonthStart },
           submittedBy: recruiterWhere,
         },
-        select: { submittedById: true, submittedAt: true, status: true },
+        select: { submittedById: true, submittedAt: true },
       }),
       prisma.interviewRound.findMany({
         where: {
@@ -146,13 +156,26 @@ export async function getMonthlyScorecard({
           submission: { select: { submittedById: true } },
         },
       }),
-      prisma.placement.findMany({
+      // Backouts + Closures are keyed on WHEN the status change happened, read
+      // from the audit log (a change to BACKED_OUT / OFFER_ACCEPTED). Effective
+      // date = eventAt when the recruiter set a real-world date, else createdAt;
+      // filter on whichever applies so an event lands in the month it occurred.
+      prisma.activity.findMany({
         where: {
-          startDate: { gte: monthStart, lt: nextMonthStart },
-          submission: { submittedBy: recruiterWhere },
+          newValue: { in: [BACKED_OUT_LABEL, OFFER_ACCEPTED_LABEL] },
+          submission: { is: { submittedBy: recruiterWhere } },
+          OR: [
+            { eventAt: { gte: monthStart, lt: nextMonthStart } },
+            {
+              eventAt: null,
+              createdAt: { gte: monthStart, lt: nextMonthStart },
+            },
+          ],
         },
         select: {
-          startDate: true,
+          newValue: true,
+          eventAt: true,
+          createdAt: true,
           submission: { select: { submittedById: true } },
         },
       }),
@@ -198,13 +221,18 @@ export async function getMonthlyScorecard({
 
   for (const s of submissions) {
     bump(s.submittedById, s.submittedAt, "submissions");
-    if (s.status === "BACKED_OUT") bump(s.submittedById, s.submittedAt, "backouts");
   }
   for (const r of rounds) {
     if (r.scheduledAt) bump(r.submission.submittedById, r.scheduledAt, "interviews");
   }
-  for (const p of placements) {
-    bump(p.submission.submittedById, p.startDate, "closures");
+  // Backouts + Closures, keyed on the status-change date (see the fetch above).
+  // bump() drops anything whose effective date falls outside the month's weeks.
+  for (const a of statusEvents) {
+    const rid = a.submission?.submittedById;
+    if (!rid) continue;
+    const when = a.eventAt ?? a.createdAt;
+    if (a.newValue === BACKED_OUT_LABEL) bump(rid, when, "backouts");
+    else if (a.newValue === OFFER_ACCEPTED_LABEL) bump(rid, when, "closures");
   }
 
   // Company-first use per vendor across all history; if that first-ever submit

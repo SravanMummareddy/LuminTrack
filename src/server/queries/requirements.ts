@@ -19,9 +19,20 @@ const REQUIREMENT_SORTS: Record<
   (d: SortDir) => Prisma.VendorRequirementOrderByWithRelationInput
 > = {
   created: (d) => ({ createdAt: d }),
+  updated: (d) => ({ updatedAt: d }),
   candidate: (d) => ({ candidate: { fullName: d } }),
   job: (d) => ({ job: { title: d } }),
   status: (d) => ({ status: d }),
+  submissions: (d) => ({ submissions: { _count: d } }),
+  vendor: (d) => ({ job: { vendor: { name: d } } }),
+  client: (d) => ({ job: { client: { name: d } } }),
+  pay: (d) => ({ payRate: d }),
+  bill: (d) => ({ billRate: d }),
+  location: (d) => ({ location: d }),
+  engagement: (d) => ({ engagement: d }),
+  recruiter: (d) => ({ recruiter: { fullName: d } }),
+  teamLead: (d) => ({ teamLead: d }),
+  vendorRecruiter: (d) => ({ vendorRecruiterName: d }),
 };
 
 export const REQUIREMENT_SORT_KEYS = Object.keys(REQUIREMENT_SORTS);
@@ -53,6 +64,15 @@ const REQUIREMENT_INCLUDE = {
     },
   },
   recruiter: { select: { id: true, fullName: true } },
+  // How many candidates have been submitted against this requirement (VPR-first:
+  // the point of the list is which requirements have real submissions) + the
+  // first couple of names for the list's "Candidates" chips (+N for the rest).
+  _count: { select: { submissions: true } },
+  submissions: {
+    select: { id: true, candidate: { select: { id: true, fullName: true } } },
+    orderBy: { submittedAt: "desc" },
+    take: 2,
+  },
 } satisfies Prisma.VendorRequirementInclude;
 
 // Decimal → number across the RSC→Client boundary.
@@ -60,7 +80,6 @@ function flatten<
   T extends {
     payRate: Prisma.Decimal | null;
     billRate: Prisma.Decimal | null;
-    candidateRate: Prisma.Decimal | null;
     clientRate?: Prisma.Decimal | null;
   },
 >(r: T) {
@@ -68,7 +87,6 @@ function flatten<
     ...r,
     payRate: r.payRate === null ? null : Number(r.payRate),
     billRate: r.billRate === null ? null : Number(r.billRate),
-    candidateRate: r.candidateRate === null ? null : Number(r.candidateRate),
     clientRate: r.clientRate == null ? null : Number(r.clientRate),
   };
 }
@@ -80,10 +98,12 @@ export async function listVendorRequirements(filters: VendorRequirementFilters) 
     where.recruiterId = { in: filters.recruiterId };
   if (filters.jobId) where.jobId = filters.jobId;
 
-  const jobWhere: Prisma.JobWhereInput = {};
+  // Requirements whose job is in trash / erased are hidden (a trashed job's
+  // OPEN requirements are auto-cancelled anyway).
+  const jobWhere: Prisma.JobWhereInput = { deletedAt: null };
   if (filters.clientId?.length) jobWhere.clientId = { in: filters.clientId };
   if (filters.vendorId?.length) jobWhere.vendorId = { in: filters.vendorId };
-  if (Object.keys(jobWhere).length) where.job = jobWhere;
+  where.job = jobWhere;
 
   const terms = searchTerms(filters.q);
   if (terms.length)
@@ -149,6 +169,42 @@ export type JobRequirementRow = Awaited<
   ReturnType<typeof getRequirementsForJob>
 >[number];
 
+/**
+ * The job's most-recent OPEN requirement, shaped as editable prefill for a
+ * direct "submit a candidate against this job" (so that path carries the same
+ * commercial terms as the convert-from-requirement path instead of starting
+ * blank). Returns null when the job has no OPEN requirement.
+ */
+export async function getOpenRequirementPrefill(jobId: string) {
+  const r = await prisma.vendorRequirement.findFirst({
+    where: { jobId, status: "OPEN" },
+    orderBy: { createdAt: "desc" },
+    select: {
+      seq: true,
+      payRate: true,
+      billRate: true,
+      clientRate: true,
+      engagement: true,
+      vendorRecruiterName: true,
+      teamLead: true,
+      jobDuties: true,
+      submissionNotes: true,
+    },
+  });
+  if (!r) return null;
+  return {
+    seq: r.seq,
+    payRate: r.payRate == null ? "" : String(r.payRate),
+    billRate: r.billRate == null ? "" : String(r.billRate),
+    clientRate: r.clientRate == null ? "" : String(r.clientRate),
+    engagement: r.engagement ?? "",
+    vendorRecruiterName: r.vendorRecruiterName ?? "",
+    teamLead: r.teamLead ?? "",
+    jobDuties: r.jobDuties ?? "",
+    submissionNotes: r.submissionNotes ?? "",
+  };
+}
+
 export async function getVendorRequirement(id: string) {
   const row = await prisma.vendorRequirement.findUnique({
     where: { id },
@@ -156,7 +212,19 @@ export async function getVendorRequirement(id: string) {
       ...REQUIREMENT_INCLUDE,
       createdBy: { select: { fullName: true } },
       convertedBy: { select: { fullName: true } },
-      convertedSubmission: { select: { id: true, seq: true } },
+      // Every submission made against this requirement (newest first) — a VPR
+      // is 1:many now, so the detail page lists them all.
+      submissions: {
+        orderBy: { submittedAt: "desc" },
+        select: {
+          id: true,
+          seq: true,
+          status: true,
+          submittedAt: true,
+          candidate: { select: { id: true, fullName: true } },
+          submittedBy: { select: { fullName: true } },
+        },
+      },
     },
   });
   return row ? flatten(row) : null;

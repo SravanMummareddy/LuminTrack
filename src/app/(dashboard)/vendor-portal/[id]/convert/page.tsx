@@ -7,7 +7,7 @@ import { convertRequirementToSubmission } from "@/server/actions/requirements";
 import { getVendorRequirement } from "@/server/queries/requirements";
 import { getJobSubmittedCandidateIds } from "@/server/queries/submissions";
 import { listCandidateOptions } from "@/server/queries/candidates";
-import { listUsers } from "@/server/queries/org";
+import { listUsers, listTeamLeadOptions } from "@/server/queries/org";
 import { requireUser } from "@/lib/session";
 import { formatVendorRequirementDisplayId } from "@/lib/format";
 
@@ -26,10 +26,11 @@ export default async function ConvertRequirementPage({
   if (!requirement) notFound();
   if (requirement.status !== "OPEN") redirect(`/vendor-portal/${id}`);
 
-  const [candidates, recruiters, submittedIds] = await Promise.all([
+  const [candidates, recruiters, submittedIds, teamLeads] = await Promise.all([
     listCandidateOptions(),
     listUsers(),
     getJobSubmittedCandidateIds(requirement.job.id),
+    listTeamLeadOptions(),
   ]);
 
   const submitted = new Set(submittedIds);
@@ -54,8 +55,8 @@ export default async function ConvertRequirementPage({
       </Link>
 
       <PageHeader
-        title="Move to submission"
-        description={`Convert ${formatVendorRequirementDisplayId(requirement)} into a real submission — prefilled from the requirement and editable.`}
+        title="Submit a candidate"
+        description={`Create a submission against ${formatVendorRequirementDisplayId(requirement)} — prefilled from the requirement and editable. The requirement stays open for more candidates.`}
       />
 
       <div className="rounded-lg border border-slate-200 bg-white p-6">
@@ -65,8 +66,8 @@ export default async function ConvertRequirementPage({
           job={{ id: requirement.job.id, title: requirement.job.title }}
           candidates={candidateOptions}
           recruiters={recruiters}
+          teamLeads={teamLeads}
           defaultRecruiterId={requirement.recruiterId ?? user.id}
-          defaultCandidateRate={rateStr(requirement.candidateRate)}
           requirementId={requirement.id}
           prefill={{
             candidateId: requirement.candidateId ?? "",

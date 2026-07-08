@@ -10,43 +10,8 @@ import {
 } from "@/lib/filters";
 
 /**
- * Interview rounds across all of a candidate's submissions — powers the
- * interview history section on the candidate detail page (spec §9.7).
- */
-export async function getCandidateInterviewRounds(
-  candidateId: string,
-  opts: { page?: number } = {},
-) {
-  const where = { submission: { candidateId } };
-  const total = await prisma.interviewRound.count({ where });
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const page = Math.min(Math.max(1, opts.page ?? 1), totalPages);
-
-  const rows = await prisma.interviewRound.findMany({
-    where,
-    orderBy: [
-      { submission: { submittedAt: "desc" } },
-      { roundOrder: "asc" },
-    ],
-    skip: (page - 1) * PAGE_SIZE,
-    take: PAGE_SIZE,
-    include: {
-      submission: {
-        select: { id: true, job: { select: { title: true } } },
-      },
-    },
-  });
-
-  return { rows, total, page };
-}
-
-export type CandidateInterviewRow = Awaited<
-  ReturnType<typeof getCandidateInterviewRounds>
->["rows"][number];
-
-/**
- * Same data as `getCandidateInterviewRounds`, but reshaped into one row per
- * submission with its rounds nested. Powers the grouped interview history
+ * A candidate's interview rounds, reshaped into one row per submission with its
+ * rounds nested. Powers the grouped interview history
  * view on the candidate detail page — recruiters scan by *job*, then drill
  * into the rounds when they care.
  *
@@ -127,6 +92,12 @@ const INTERVIEW_SORTS: Record<
   date: (d) => ({ scheduledAt: d }),
   candidate: (d) => ({ submission: { candidate: { fullName: d } } }),
   client: (d) => ({ submission: { job: { client: { name: d } } } }),
+  vendor: (d) => ({ submission: { job: { vendor: { name: d } } } }),
+  location: (d) => ({ submission: { job: { location: d } } }),
+  recruiter: (d) => ({ submission: { submittedBy: { fullName: d } } }),
+  result: (d) => ({ result: d }),
+  created: (d) => ({ createdAt: d }),
+  updated: (d) => ({ updatedAt: d }),
 };
 
 export const INTERVIEW_SORT_KEYS = Object.keys(INTERVIEW_SORTS);
@@ -187,6 +158,9 @@ export async function listInterviews(filters: InterviewListFilters) {
       scheduledAt: true,
       result: true,
       supportNeeded: true,
+      feedback: true, // "Remarks" column (spreadsheet Interviews tab)
+      createdAt: true,
+      updatedAt: true,
       submission: {
         select: {
           id: true,
@@ -195,7 +169,13 @@ export async function listInterviews(filters: InterviewListFilters) {
             select: { id: true, fullName: true, skills: true, featuredSkills: true },
           },
           job: {
-            select: { id: true, title: true, client: { select: { name: true } } },
+            select: {
+              id: true,
+              title: true,
+              location: true,
+              client: { select: { name: true } },
+              vendor: { select: { name: true } },
+            },
           },
           submittedBy: { select: { fullName: true } },
         },

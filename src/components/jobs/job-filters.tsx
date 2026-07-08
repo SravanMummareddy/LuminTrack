@@ -1,5 +1,11 @@
 import { FilterBar, type FilterDef } from "@/components/ui/filter-bar";
-import { JOB_STATUSES, JOB_STATUS_LABEL, OTHER_SOURCE } from "@/lib/labels";
+import {
+  JOB_STATUSES,
+  JOB_STATUS_LABEL,
+  OTHER_SOURCE,
+  DISCIPLINES,
+  DISCIPLINE_LABEL,
+} from "@/lib/labels";
 
 type Option = { id: string; name: string };
 
@@ -28,6 +34,15 @@ export function JobFilters({
       options: [
         { value: "", label: "All statuses" },
         ...JOB_STATUSES.map((s) => ({ value: s, label: JOB_STATUS_LABEL[s] })),
+      ],
+    },
+    {
+      kind: "select",
+      param: "discipline",
+      label: "Discipline",
+      options: [
+        { value: "", label: "All disciplines" },
+        ...DISCIPLINES.map((d) => ({ value: d, label: DISCIPLINE_LABEL[d] })),
       ],
     },
     {
@@ -84,6 +99,7 @@ export function JobFilters({
       basePath="/jobs"
       search={{ param: "q", placeholder: "Search job title…" }}
       filters={filters}
+      viewsKey="lumintrack.jobs.views"
     />
   );
 }

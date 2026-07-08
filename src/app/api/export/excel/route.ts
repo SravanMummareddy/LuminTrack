@@ -1,6 +1,7 @@
 import { Readable } from "node:stream";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/session";
+import { hasFullAccess } from "@/lib/permissions";
 import { prisma } from "@/server/db";
 import { logActivity } from "@/server/activity";
 import {
@@ -19,7 +20,7 @@ const schema = z.object({
 export async function POST(req: Request): Promise<Response> {
   const user = await getCurrentUser();
   if (!user) return new Response("Unauthorized", { status: 401 });
-  if (user.role !== "ADMIN") return new Response("Forbidden", { status: 403 });
+  if (!hasFullAccess(user)) return new Response("Forbidden", { status: 403 });
 
   let body: unknown;
   const contentType = req.headers.get("content-type") ?? "";

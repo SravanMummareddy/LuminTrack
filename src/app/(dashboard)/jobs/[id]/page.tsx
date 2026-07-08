@@ -15,6 +15,10 @@ import { getNotesFor } from "@/server/queries/notes";
 import { getCurrentUser } from "@/lib/session";
 import { canManageRequirements } from "@/lib/permissions";
 import { JobStatusForm } from "@/components/jobs/job-status-form";
+import { JobPipelineSteps } from "@/components/jobs/job-pipeline-steps";
+import { JobTrashBanner } from "@/components/jobs/job-trash-banner";
+import { JobDangerZone } from "@/components/jobs/job-danger-zone";
+import { JOB_TRASH_RETENTION_DAYS } from "@/server/job-erase";
 import { Pagination } from "@/components/ui/pagination";
 import { SUB_PAGE_SIZE as PAGE_SIZE, parsePage } from "@/lib/filters";
 import {
@@ -96,6 +100,7 @@ export default async function JobDetailPage({
     // snapshot from the last import. The card shows the higher of the
     // two so a stale iLabor number doesn't mislead recruiters.
     localActiveCount,
+    activePlacementCount,
   ] = await Promise.all([
     getJobDetail(id),
     getJobSubmissions(id, { page: subsPage }),
@@ -120,9 +125,24 @@ export default async function JobDetailPage({
         },
       },
     }),
+    // Seats actually filled right now — active placements against this job.
+    prisma.placement.count({
+      where: { jobId: id, status: { in: ["ACTIVE", "EXTENDED"] } },
+    }),
   ]);
   if (!job) notFound();
   const canManageReq = canManageRequirements(currentUser ?? undefined);
+  const isErased = Boolean(job.erasedAt);
+  const isTrashed = Boolean(job.deletedAt) && !isErased;
+  const isLive = !isTrashed && !isErased;
+  // VPR-first: candidates are submitted against a requirement, never the job
+  // directly. Jump straight to the convert form when there's a single open VPR,
+  // otherwise scroll to the requirements section to pick or create one.
+  const openRequirements = requirements.filter((r) => r.status === "OPEN");
+  const submitHref =
+    openRequirements.length === 1
+      ? `/vendor-portal/${openRequirements[0].id}/convert`
+      : "#requirements";
   const effectiveActiveCount = Math.max(
     job.externalActiveCount ?? 0,
     localActiveCount,
@@ -161,6 +181,8 @@ export default async function JobDetailPage({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-semibold text-slate-900">{job.title}</h1>
+            {isErased && <Badge tone="red">Erased</Badge>}
+            {isTrashed && <Badge tone="amber">In trash</Badge>}
             <Badge tone={JOB_STATUS_TONE[job.status]}>
               {JOB_STATUS_LABEL[job.status]}
             </Badge>
@@ -173,15 +195,46 @@ export default async function JobDetailPage({
             {job.client.name} · {job.vendor.name}
           </p>
         </div>
-        <LinkButton href={`/jobs/${job.id}/edit`} variant="secondary">
-          <Pencil className="h-4 w-4" />
-          Edit job
-        </LinkButton>
+        {isLive && (
+          <LinkButton href={`/jobs/${job.id}/edit`} variant="secondary">
+            <Pencil className="h-4 w-4" />
+            Edit job
+          </LinkButton>
+        )}
       </div>
 
-      <Card title="Status">
-        <JobStatusForm jobId={job.id} status={job.status} />
-      </Card>
+      {isTrashed && job.deletedAt && (
+        <JobTrashBanner
+          jobId={job.id}
+          jobTitle={job.title}
+          deletedAt={job.deletedAt.toISOString()}
+          retentionDays={JOB_TRASH_RETENTION_DAYS}
+          canManage={canManageReq}
+        />
+      )}
+
+      {isLive && (
+        <>
+          <JobPipelineSteps
+            jobId={job.id}
+            vprCount={requirements.length}
+            submissionCount={submissionsTotal}
+            canManageReq={canManageReq}
+            submitHref={submitHref}
+          />
+
+          <Card title="Status">
+            <JobStatusForm
+              jobId={job.id}
+              status={job.status}
+              openVprCount={openRequirements.length}
+              inFlightCount={localActiveCount}
+              positions={job.positions}
+              activePlacementCount={activePlacementCount}
+            />
+          </Card>
+        </>
+      )}
 
       {job.portal ? (
         <Card title={`${job.portal.name} requisition`}>
@@ -278,11 +331,8 @@ export default async function JobDetailPage({
           <SummaryItem label="Vendor">{job.vendor.name}</SummaryItem>
           <SummaryItem label="Source">{jobSourceLabel(job)}</SummaryItem>
           <SummaryItem label="Location">{job.location || "—"}</SummaryItem>
-          <SummaryItem label="Client rate">{formatRate(job.clientRate)}</SummaryItem>
+          <SummaryItem label="Client rate">{formatRate(job.clientRate, "Undisclosed")}</SummaryItem>
           <SummaryItem label="Vendor rate">{formatRate(job.vendorRate)}</SummaryItem>
-          <SummaryItem label="Candidate rate">
-            {formatRate(job.candidateRate)}
-          </SummaryItem>
           <SummaryItem label="Created by">{job.createdBy.fullName}</SummaryItem>
           <SummaryItem label="Created">{formatDate(job.createdAt)}</SummaryItem>
           <SummaryItem label="Last updated">{formatDate(job.updatedAt)}</SummaryItem>
@@ -382,114 +432,9 @@ export default async function JobDetailPage({
           </div>
         </div>
 
-        <div className="mt-5">
-          <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">
-            Assigned recruiters
-          </dt>
-          <dd className="mt-1.5 flex flex-wrap gap-1.5">
-            {job.assignments.length === 0 ? (
-              <span className="text-sm text-slate-500">No recruiters assigned</span>
-            ) : (
-              job.assignments.map((a) => (
-                <Badge key={a.id} tone="indigo">
-                  {a.recruiter.fullName}
-                </Badge>
-              ))
-            )}
-          </dd>
-        </div>
       </Card>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-slate-700">
-            Submitted candidates ({submissionsTotal})
-          </h2>
-          <LinkButton href={`/jobs/${job.id}/submissions/new`} size="sm">
-            <Plus className="h-4 w-4" />
-            Submit candidate
-          </LinkButton>
-        </div>
-        {submissionsTotal === 0 ? (
-          <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
-            No candidates submitted to this job yet.
-          </p>
-        ) : (
-          <Table>
-            <thead className="border-b border-slate-200 bg-slate-50">
-              <tr>
-                <Th>Sub ID</Th>
-                <Th>Candidate</Th>
-                <Th>Submitted by</Th>
-                <Th>Submitted</Th>
-                <Th>Status</Th>
-                <Th>Resume</Th>
-                <Th className="text-right">Rate</Th>
-                <Th className="text-right">Rounds</Th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {submissions.map((s) => (
-                <tr key={s.id} className="hover:bg-slate-50">
-                  <Td label="Sub ID" secondary className="font-mono text-xs">
-                    {formatSubmissionDisplayId(s)}
-                  </Td>
-                  <Td label="Candidate">
-                    <Link
-                      href={`/submissions/${s.id}`}
-                      className="font-medium text-indigo-600 hover:underline"
-                    >
-                      {s.candidate.fullName}
-                    </Link>
-                  </Td>
-                  <Td label="Submitted by">{s.submittedBy.fullName}</Td>
-                  <Td label="Submitted" className="whitespace-nowrap">
-                    {formatDate(s.submittedAt)}
-                  </Td>
-                  <Td label="Status">
-                    <Badge tone={SUBMISSION_STATUS_TONE[s.status]}>
-                      {SUBMISSION_STATUS_LABEL[s.status]}
-                    </Badge>
-                  </Td>
-                  <Td label="Resume">
-                    {s.resumeDriveLink ? (
-                      <a
-                        href={s.resumeDriveLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-indigo-600 hover:underline"
-                      >
-                        {s.candidateResume?.label ?? "Resume"}
-                      </a>
-                    ) : (
-                      "—"
-                    )}
-                  </Td>
-                  <Td label="Rate" className="text-right tabular-nums">
-                    {formatRate(s.candidateRate)}
-                  </Td>
-                  <Td label="Rounds" className="text-right tabular-nums">
-                    {s._count.interviewRounds}
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        )}
-        {submissionsTotal > PAGE_SIZE && (
-          <div className="mt-3">
-            <Pagination
-              page={submissionsPage}
-              totalPages={submissionsTotalPages}
-              total={submissionsTotal}
-              paramKey="subs"
-              pageSize={PAGE_SIZE}
-            />
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-lg border border-slate-200 bg-white p-5">
+      <section id="requirements" className="scroll-mt-4 rounded-lg border border-slate-200 bg-white p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-slate-700">
             Vendor portal requirements ({requirements.length})
@@ -554,9 +499,103 @@ export default async function JobDetailPage({
         )}
       </section>
 
+      <section className="rounded-lg border border-slate-200 bg-white p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-slate-700">
+            Submitted candidates ({submissionsTotal})
+          </h2>
+          <LinkButton href={submitHref} size="sm">
+            <Plus className="h-4 w-4" />
+            Submit via requirement
+          </LinkButton>
+        </div>
+        {submissionsTotal === 0 ? (
+          <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
+            No candidates submitted to this job yet.
+          </p>
+        ) : (
+          <Table>
+            <thead className="border-b border-slate-200 bg-slate-50">
+              <tr>
+                <Th>Sub ID</Th>
+                <Th>Candidate</Th>
+                <Th>Submitted by</Th>
+                <Th>Submitted</Th>
+                <Th>Status</Th>
+                <Th>Resume</Th>
+                <Th className="text-right">Rounds</Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {submissions.map((s) => (
+                <tr key={s.id} className="hover:bg-slate-50">
+                  <Td label="Sub ID" secondary className="font-mono text-xs">
+                    {formatSubmissionDisplayId(s)}
+                  </Td>
+                  <Td label="Candidate">
+                    <Link
+                      href={`/submissions/${s.id}`}
+                      className="font-medium text-indigo-600 hover:underline"
+                    >
+                      {s.candidate.fullName}
+                    </Link>
+                  </Td>
+                  <Td label="Submitted by">{s.submittedBy.fullName}</Td>
+                  <Td label="Submitted" className="whitespace-nowrap">
+                    {formatDate(s.submittedAt)}
+                  </Td>
+                  <Td label="Status">
+                    <Badge tone={SUBMISSION_STATUS_TONE[s.status]}>
+                      {SUBMISSION_STATUS_LABEL[s.status]}
+                    </Badge>
+                  </Td>
+                  <Td label="Resume">
+                    {s.candidateResumeId ? (
+                      <a
+                        href={`/api/resumes/${s.candidateResumeId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-indigo-600 hover:underline"
+                      >
+                        {s.candidateResume?.label ?? "Resume"}
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </Td>
+                  <Td label="Rounds" className="text-right tabular-nums">
+                    {s._count.interviewRounds}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+        {submissionsTotal > PAGE_SIZE && (
+          <div className="mt-3">
+            <Pagination
+              page={submissionsPage}
+              totalPages={submissionsTotalPages}
+              total={submissionsTotal}
+              paramKey="subs"
+              pageSize={PAGE_SIZE}
+            />
+          </div>
+        )}
+      </section>
+
       <NotesSection entityType="JOB" entityId={job.id} notes={notes} />
 
       <ActivityTimeline entries={timeline} />
+
+      {canManageReq && isLive && (
+        <JobDangerZone
+          jobId={job.id}
+          jobTitle={job.title}
+          retentionDays={JOB_TRASH_RETENTION_DAYS}
+          status={job.status}
+        />
+      )}
     </div>
   );
 }

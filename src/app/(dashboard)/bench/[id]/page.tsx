@@ -34,11 +34,11 @@ export default async function BenchConsultantDetailPage({
 }) {
   const { id } = await params;
   const user = await requireUser();
-  const c = await getBenchConsultant(id);
+  const canCreds = canViewBenchCredentials(user);
+  const c = await getBenchConsultant(id, { includeCredentials: canCreds });
   if (!c) notFound();
 
   const timeline = await getTimelineFor("CONSULTANT", id);
-  const canCreds = canViewBenchCredentials(user);
 
   const details: { label: string; value: React.ReactNode }[] = [
     { label: "Technology", value: c.technology ?? "—" },
@@ -121,7 +121,7 @@ export default async function BenchConsultantDetailPage({
       {canCreds && (
         <BenchCredentials
           marketingEmail={c.marketingEmail}
-          marketingPassword={c.marketingPassword}
+          marketingPassword={c.marketingPassword ?? null}
           marketingNumber={c.marketingNumber}
           personalNumber={c.personalNumber}
         />

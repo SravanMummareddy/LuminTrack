@@ -3,6 +3,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import type {
   BenchPriority,
   BenchMarketingStatus,
+  Discipline,
 } from "@/generated/prisma/enums";
 import { PAGE_SIZE, searchTerms, type SortDir, type SortState } from "@/lib/filters";
 
@@ -15,6 +16,7 @@ export type BenchListFilters = {
    *  Ignored when an explicit `marketingStatus` is set. */
   onBench?: boolean;
   recruiterId?: string[];
+  discipline?: Discipline;
   sort?: SortState;
   page?: number;
 };
@@ -30,6 +32,9 @@ const BENCH_SORTS: Record<
   status: (d) => ({ marketingStatus: d }),
   recruiter: (d) => ({ recruiter: { fullName: d } }),
   created: (d) => ({ createdAt: d }),
+  updated: (d) => ({ updatedAt: d }),
+  experience: (d) => ({ marketingExpYears: d }),
+  leastRate: (d) => ({ leastRateC2C: d }),
 };
 
 export const BENCH_SORT_KEYS = Object.keys(BENCH_SORTS);
@@ -60,6 +65,9 @@ export async function listBenchConsultants(filters: BenchListFilters) {
   if (filters.marketingStatus) where.marketingStatus = filters.marketingStatus;
   else if (filters.onBench) where.marketingStatus = { in: ["ACTIVE", "PAUSED"] };
   if (filters.recruiterId?.length) where.recruiterId = { in: filters.recruiterId };
+  // Discipline now lives on the linked candidate (source of truth), so filter
+  // through the relation.
+  if (filters.discipline) where.candidate = { discipline: filters.discipline };
   const terms = searchTerms(filters.q);
   if (terms.length)
     where.AND = terms.map((t) => ({
@@ -105,6 +113,11 @@ export async function listBenchConsultants(filters: BenchListFilters) {
       company: true,
       isActive: true,
       candidateId: true,
+      createdAt: true,
+      updatedAt: true,
+      // The linked candidate is the source of truth for company + discipline;
+      // the bench's own `company` is only a fallback for unlinked identities.
+      candidate: { select: { currentCompany: true, discipline: true } },
       recruiter: { select: { id: true, fullName: true } },
     },
   });
@@ -116,10 +129,19 @@ export type BenchListRow = Awaited<
   ReturnType<typeof listBenchConsultants>
 >["rows"][number];
 
-/** Full detail (incl. gated credentials — caller decides what to render). */
-export async function getBenchConsultant(id: string) {
+/**
+ * Full detail. The marketing password is a gated credential — the caller passes
+ * `includeCredentials` (from `canViewBenchCredentials`) and the field is dropped
+ * from the query entirely for everyone else, so it never leaves the database for
+ * an unauthorized viewer (defense-in-depth, not just hidden at render time).
+ */
+export async function getBenchConsultant(
+  id: string,
+  opts: { includeCredentials?: boolean } = {},
+) {
   return prisma.benchConsultant.findUnique({
     where: { id },
+    omit: opts.includeCredentials ? {} : { marketingPassword: true },
     include: {
       recruiter: { select: { id: true, fullName: true } },
       candidate: { select: { id: true, seq: true, fullName: true } },

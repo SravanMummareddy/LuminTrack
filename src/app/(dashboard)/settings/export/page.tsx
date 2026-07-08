@@ -1,4 +1,5 @@
 import { getCurrentUser } from "@/lib/session";
+import { hasFullAccess } from "@/lib/permissions";
 import { Forbidden } from "@/components/ui/forbidden";
 import { PageHeader } from "@/components/ui/page-header";
 import { prisma } from "@/server/db";
@@ -9,7 +10,7 @@ import { formatDateTime } from "@/lib/format";
 export default async function ExportPage() {
   const user = await getCurrentUser();
   if (!user) return <Forbidden message="Sign in required." />;
-  if (user.role !== "ADMIN") return <Forbidden />;
+  if (!hasFullAccess(user)) return <Forbidden />;
 
   const [{ totals }, history] = await Promise.all([
     getBackupPreflight(),

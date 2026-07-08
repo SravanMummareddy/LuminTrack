@@ -18,11 +18,16 @@ Money flows downhill, each rung keeping a margin:
 **Client rate** (what the end client releases) ≥ **Bill / Vendor rate** (what the vendor
 releases to us — what we actually receive) ≥ **Pay rate** (what we pay the consultant).
 Margin = bill − pay; the binding profit constraint is **Pay ≤ Bill** (we only ever receive
-the bill rate). `candidateRate` is a **legacy single "headline" rate**, kept unchanged for
-analytics continuity (revenue projections key off it) — possibly retired later pending owner
-confirmation. `clientRate` is nullable and often undisclosed by the vendor.
-**Source of truth:** the header comment + `rateChainWarnings()` in `src/lib/rates.ts`; the
-live (non-blocking) chain warning is `src/components/ui/rate-chain-warning.tsx`.
+the bill rate). All revenue/margin math keys off **Bill − Pay**. The client's Excel tracks
+only Pay rate + Bill rate; `clientRate` is nullable and often undisclosed by the vendor
+(kept as optional context). The Job carries requisition-level `clientRate` + `vendorRate`
+(the latter = the job-level bill rate, e.g. from an iLabor import); per-candidate `payRate`/
+`billRate` live on the requirement + submission.
+**Legacy `candidateRate` was RETIRED 2026-07-06** (owner-confirmed) — dropped from Job,
+Submission, VendorRequirement (migration `20260706220000_retire_candidate_rate`) and removed
+from all code. Do not reintroduce it.
+**Source of truth:** the header comment + `rateChainWarnings()` in `src/lib/rates.ts` (chain
+= Client ≥ Bill ≥ Pay); the live chain warning is `src/components/ui/rate-chain-warning.tsx`.
 
 ## 🚧 Current work — Rate model, clientRate, company-wide scorecard, rate guardrail (2026-06-22, PRs #32–#35, on `main`)
 
@@ -626,6 +631,19 @@ npm run test:integration  # integration suite vs Dockerized Postgres (see below)
   `DATABASE_URL_TEST` (defaults to the local Docker URL). Lives in
   `tests/integration/*.test.ts`. Skipped automatically if the test DB is
   unreachable, so it never blocks the unit suite or CI's no-DB job.
+- **E2E suite** (`npm run test:e2e`) — **Playwright** driving real Chromium
+  against the running app + seeded DB (the top of the pyramid). **Contract:**
+  app on `:3000` (`npm run dev`; the config reuses a running server) + demo seed
+  (`npx tsx prisma/seed-demo.ts`) — specs log in as the seeded admin
+  (`sriman@`) + recruiter (`hrishikesh@`), password `LuminTrack2026!`.
+  `global-setup` mints both sessions once (`e2e/.auth/*.json`); runs serially
+  (`workers: 1`, one shared DB). Covers auth gate, every route's render, RBAC
+  (recruiter vs admin), bulk status, candidate create, the Job→VPR→submission
+  navigation, saved views, keyboard shortcuts, password policy, and list
+  sort/filter/pagination. `e2e/db.ts` uses raw `pg` only to *pick fixtures*,
+  never to assert. Full details + the coverage table in
+  [`e2e/README.md`](./e2e/README.md). Runs against the Neon dev/test DB (app is
+  Neon-bound); reseed to restore a pristine state after a run.
 
 ## Environment (.env — gitignored; see .env.example)
 

@@ -1,10 +1,14 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import Link from "next/link";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
+import { SearchSelect } from "@/components/ui/search-select";
 import { LocationInput } from "@/components/ui/location-input";
-import { Button, buttonClass } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import {
+  useUnsavedChanges,
+  GuardedCancel,
+} from "@/components/ui/unsaved-changes";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 import { BENCH_ENGAGEMENTS, BENCH_ENGAGEMENT_LABEL } from "@/lib/labels";
 
@@ -22,14 +26,12 @@ type Fields = {
   location: string;
   payRate: string;
   billRate: string;
-  candidateRate: string;
   clientRate: string;
   engagement: string;
   vendorRecruiterName: string;
   jobDuties: string;
   teamLead: string;
   submissionNotes: string;
-  resumeDriveLink: string;
 };
 
 const EMPTY_FIELDS: Fields = {
@@ -38,14 +40,12 @@ const EMPTY_FIELDS: Fields = {
   location: "",
   payRate: "",
   billRate: "",
-  candidateRate: "",
   clientRate: "",
   engagement: "",
   vendorRecruiterName: "",
   jobDuties: "",
   teamLead: "",
   submissionNotes: "",
-  resumeDriveLink: "",
 };
 
 /**
@@ -62,6 +62,7 @@ export function RequirementForm({
   job,
   candidates,
   recruiters,
+  teamLeads = [],
   defaults,
   cancelHref,
 }: {
@@ -78,6 +79,8 @@ export function RequirementForm({
   };
   candidates: CandidateOption[];
   recruiters: Recruiter[];
+  /** Team-lead / manager users for the "Team lead" picker (stores the name). */
+  teamLeads?: { id: string; fullName: string }[];
   defaults?: Partial<Fields>;
   cancelHref: string;
 }) {
@@ -106,16 +109,25 @@ export function RequirementForm({
 
   const errors = state.fieldErrors ?? {};
 
+  // Unsaved-changes guard — any user input arms the leave prompt + Cancel confirm.
+  const [dirty, setDirty] = useState(false);
+  const markDirty = () => setDirty((d) => (d ? d : true));
+  useUnsavedChanges(dirty);
+
+  // Team-lead picker — keep the saved value even if it's not a current lead.
+  const teamLeadNames = teamLeads.map((t) => t.fullName);
+  const teamLeadChoices =
+    fields.teamLead && !teamLeadNames.includes(fields.teamLead)
+      ? [fields.teamLead, ...teamLeadNames]
+      : teamLeadNames;
+
   return (
-    <form action={formAction} className="space-y-5">
+    <form action={formAction} onInput={markDirty} className="space-y-5">
       {mode === "create" ? (
         <input type="hidden" name="jobId" value={job.id} />
       ) : (
         <input type="hidden" name="id" value={requirementId ?? ""} />
       )}
-      <input type="hidden" name="candidateId" value={fields.candidateId} />
-      <input type="hidden" name="recruiterId" value={fields.recruiterId} />
-
       <Field label="Job">
         <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
           {job.title}
@@ -131,19 +143,17 @@ export function RequirementForm({
           error={errors.candidateId}
           hint="Optional — leave blank to plan the requirement before a candidate is chosen."
         >
-          <Select
-            key={`candidateId-${selectSyncKey}`}
+          <SearchSelect
             id="candidateId"
+            name="candidateId"
             value={fields.candidateId}
-            onChange={set("candidateId")}
-          >
-            <option value="">— No candidate yet</option>
-            {candidates.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.fullName}
-              </option>
-            ))}
-          </Select>
+            onChange={(v) => setFields((f) => ({ ...f, candidateId: v }))}
+            placeholder="Search candidates…"
+            options={[
+              { value: "", label: "— No candidate yet" },
+              ...candidates.map((c) => ({ value: c.id, label: c.fullName })),
+            ]}
+          />
         </Field>
 
         <Field
@@ -152,19 +162,20 @@ export function RequirementForm({
           error={errors.recruiterId}
           hint="Who will market / submit this requirement."
         >
-          <Select
-            key={`recruiterId-${selectSyncKey}`}
+          <SearchSelect
             id="recruiterId"
+            name="recruiterId"
             value={fields.recruiterId}
-            onChange={set("recruiterId")}
-          >
-            <option value="">— Unassigned</option>
-            {recruiters.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.isActive ? r.fullName : `${r.fullName} (inactive)`}
-              </option>
-            ))}
-          </Select>
+            onChange={(v) => setFields((f) => ({ ...f, recruiterId: v }))}
+            placeholder="Search recruiters…"
+            options={[
+              { value: "", label: "— Unassigned" },
+              ...recruiters.map((r) => ({
+                value: r.id,
+                label: r.isActive ? r.fullName : `${r.fullName} (inactive)`,
+              })),
+            ]}
+          />
         </Field>
       </div>
 
@@ -242,23 +253,6 @@ export function RequirementForm({
             onChange={set("payRate")}
           />
         </Field>
-        <Field
-          label="Candidate rate"
-          htmlFor="candidateRate"
-          error={errors.candidateRate}
-          hint="Target candidate rate."
-        >
-          <Input
-            id="candidateRate"
-            name="candidateRate"
-            type="number"
-            min="0"
-            step="0.01"
-            inputMode="decimal"
-            value={fields.candidateRate}
-            onChange={set("candidateRate")}
-          />
-        </Field>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -280,30 +274,19 @@ export function RequirementForm({
           error={errors.teamLead}
           hint="Leave blank to auto-fill from the recruiter's team lead."
         >
-          <Input
+          <Select
             id="teamLead"
             name="teamLead"
             value={fields.teamLead}
             onChange={set("teamLead")}
-          />
+          >
+            <option value="">—</option>
+            {teamLeadChoices.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </Select>
         </Field>
       </div>
-
-      <Field
-        label="Résumé — Google Drive link"
-        htmlFor="resumeDriveLink"
-        error={errors.resumeDriveLink}
-        hint="Optional. The recruiter picks/confirms the actual résumé when moving to a submission."
-      >
-        <Input
-          id="resumeDriveLink"
-          name="resumeDriveLink"
-          type="url"
-          value={fields.resumeDriveLink}
-          onChange={set("resumeDriveLink")}
-          placeholder="https://drive.google.com/file/d/…"
-        />
-      </Field>
 
       <Field label="Job duties" htmlFor="jobDuties" error={errors.jobDuties}>
         <Textarea
@@ -337,9 +320,7 @@ export function RequirementForm({
       )}
 
       <div className="flex justify-end gap-2 border-t border-slate-200 pt-4">
-        <Link href={cancelHref} className={buttonClass("secondary")}>
-          Cancel
-        </Link>
+        <GuardedCancel href={cancelHref} dirty={dirty} />
         <Button type="submit" disabled={pending}>
           {pending
             ? "Saving…"

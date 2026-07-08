@@ -13,7 +13,8 @@ datasource db {
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
 enum UserRole {
-  ADMIN
+  MANAGER
+  TEAM_LEAD
   RECRUITER
 }
 
@@ -78,6 +79,13 @@ enum JobStatus {
   CANCELLED
 }
 
+// Broad discipline of a requisition / bench consultant — IT vs everything else.
+// Nullable on both models (existing rows are unclassified until set).
+enum Discipline {
+  IT
+  NON_IT
+}
+
 // Submission pipeline stage — also the final outcome (no separate outcome field).
 enum SubmissionStatus {
   SUBMITTED
@@ -122,11 +130,15 @@ enum EntityType {
   CONSULTANT
   // Vendor Portal Requirement — the pre-submission planning record.
   REQUIREMENT
+  // Account/user management + self-service (password change). No entity FK on
+  // Activity for these — the target is named in the description.
+  USER
 }
 
 enum ActivityAction {
   JOB_CREATED
   JOB_UPDATED
+  JOB_ERASED
   RECRUITER_ASSIGNED
   RECRUITER_UNASSIGNED
   CANDIDATE_CREATED
@@ -177,6 +189,12 @@ enum ActivityAction {
   REQUIREMENT_UPDATED
   REQUIREMENT_CONVERTED
   REQUIREMENT_CANCELLED
+  // Account/user management + self-service.
+  USER_CREATED
+  USER_UPDATED
+  USER_PASSWORD_CHANGED
+  // Right-to-be-forgotten: candidate personal data erased + files shredded.
+  CANDIDATE_ERASED
 }
 
 // Bench-Sales roster — marketing priority tier (sheet's "High Priority" /
@@ -216,11 +234,6 @@ model User {
   // Free-text team label (e.g. "USEI-Sales IT") used to group the scorecard.
   // v1 placeholder — normalize to a Team model later.
   teamLabel    String?
-  // Team-lead capability flag. A lead is a RECRUITER in every existing role
-  // check (assignment gate, scorecard, listings) EXCEPT it can manage Vendor
-  // Portal Requirements (canManageRequirements). Cheaper than a 3rd role, which
-  // would ripple through every `role ===` branch.
-  isTeamLead   Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -334,15 +347,21 @@ model Job {
   title         String
   location      String?
   // Rate chain (top → bottom): clientRate = what the end client releases,
-  // vendorRate = what the vendor releases to us, candidateRate = target $/hr to
-  // the consultant. clientRate is optional ("if available" — often the client's
-  // budget isn't disclosed down the vendor chain).
+  // vendorRate = the bill rate the vendor releases to us. clientRate is optional
+  // ("if available" — often the client's budget isn't disclosed down the vendor
+  // chain). Pay/Bill rates for a specific candidate live on the requirement and
+  // submission; the Job only carries these requisition-level rates.
   clientRate    Decimal?  @db.Decimal(12, 2)
   vendorRate    Decimal?  @db.Decimal(12, 2)
-  candidateRate Decimal?  @db.Decimal(12, 2)
   status        JobStatus @default(OPEN)
   description   String?
   notes         String?
+  // Lifecycle trash/erase (mirrors Candidate): deletedAt = in trash (hidden,
+  // restorable, auto-erases after the retention window); erasedAt = permanently
+  // erased tombstone (kept so submissions/analytics survive — an empty job is
+  // hard-removed instead of tombstoned). A backup zip is written to Blob first.
+  deletedAt     DateTime?
+  erasedAt      DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -378,6 +397,7 @@ model Job {
   // §A2: LuminTrack-native job planning fields (not in iLabor either).
   workMode              WorkMode?
   priority              JobPriority?
+  discipline            Discipline?
   targetCloseDate       DateTime?
   postingUrl            String?
   workAuthRequirement   String?
@@ -400,6 +420,7 @@ model Job {
 
   @@unique([portalId, portalRefId])
   @@index([status])
+  @@index([deletedAt])
   @@index([clientId])
   @@index([vendorId])
   @@index([sisterCompanySourceId])
@@ -455,6 +476,16 @@ model Candidate {
   // (LinkedIn InMail / referral / job-board / inbound / etc.); a fixed enum
   // here would calcify ahead of real usage data.
   source              String?
+  // Broad IT vs Non-IT classification of the person (source of truth; the bench
+  // overlay reads this rather than carrying its own copy).
+  discipline          Discipline?
+  // Soft-delete "trash" marker. Non-null = moved to trash (hidden everywhere,
+  // restorable); a scheduled job hard-erases rows past the retention window.
+  deletedAt           DateTime?
+  // Right-to-be-forgotten marker. Non-null = personal data erased + files
+  // shredded; the row is retained (anonymized) so linked submissions/placements
+  // keep their history. See hardEraseCandidate.
+  erasedAt            DateTime?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -475,6 +506,7 @@ model Candidate {
   @@index([phone])
   @@index([fullName])
   @@index([status])
+  @@index([deletedAt])
 }
 
 // A candidate's saved résumés — one candidate keeps many labelled Drive links,
@@ -484,7 +516,13 @@ model CandidateResume {
   candidateId String
   candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   label       String
-  driveLink   String
+  // Private Vercel Blob upload. `blobPathname` is the key we pass to
+  // get(pathname, { access: 'private' }) to stream the file through our own
+  // authenticated route (private blobs are never fetched directly by the browser).
+  blobPathname String?
+  blobUrl      String?
+  sizeBytes    Int?
+  contentType  String?
   // Soft-delete: archiving sets this false instead of deleting the row, so
   // submissions keep their live FK link (and their snapshot). Active résumés
   // are the only ones offered in the submit picker; the library can reveal
@@ -512,7 +550,14 @@ model CandidateDocument {
   candidate    Candidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   category     DocumentCategory
   label        String
-  driveLink    String
+  // Private Vercel Blob upload (PDF/DOCX), gzip-compressed. `blobPathname` is
+  // the key we pass to get(pathname, { access: 'private' }); served via the
+  // authenticated /api/documents/[id] route (which also enforces the sensitive-
+  // category gate). Nullable only so the migration can add them.
+  blobPathname String?
+  blobUrl      String?
+  sizeBytes    Int?
+  contentType  String?
   issuedAt     DateTime?
   expiresAt    DateTime?
   notes        String?
@@ -594,9 +639,9 @@ model Submission {
   id              String           @id @default(cuid())
   seq             Int              @unique @default(autoincrement())
   status          SubmissionStatus @default(SUBMITTED)
-  candidateRate   Decimal?         @db.Decimal(12, 2)
+  // Snapshot of the private-Blob résumé URL used at submit time, so the record
+  // survives the library résumé being renamed/archived.
   resumeBlobUrl   String?
-  resumeDriveLink String?
   submissionNotes String?
   rejectionReason String?
   // Bench-Sales fields (the "Bench Submissions" sheet). Nullable — regular
@@ -634,8 +679,8 @@ model Submission {
   job           Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
   submittedById String
   submittedBy   User      @relation(fields: [submittedById], references: [id])
-  // The library résumé chosen for this submission; resumeDriveLink above keeps a
-  // snapshot of its link so history survives edits/deletes of the library entry.
+  // The library résumé chosen for this submission; resumeBlobUrl above keeps a
+  // snapshot of its URL so history survives edits/deletes of the library entry.
   candidateResumeId String?
   candidateResume   CandidateResume? @relation(fields: [candidateResumeId], references: [id], onDelete: SetNull)
 
@@ -647,8 +692,11 @@ model Submission {
   replacementFor  Placement?       @relation("PlacementReplacement")
   noteEntries     Note[]
   activities      Activity[]
-  // Set when this submission was created by converting a VendorRequirement.
-  convertedFromRequirement VendorRequirement? @relation("VendorRequirementSubmission")
+  // The vendor requirement (VPR) this submission was made against, if any. A
+  // single VPR can spawn many submissions (recruiters submit several candidates
+  // against one requirement) — hence a plain many→one FK, not a 1:1 link.
+  vendorRequirementId String?
+  vendorRequirement   VendorRequirement? @relation("RequirementSubmissions", fields: [vendorRequirementId], references: [id], onDelete: SetNull)
 
   @@index([candidateId, jobId])
   @@index([status])
@@ -657,6 +705,7 @@ model Submission {
   @@index([submittedById])
   @@index([candidateResumeId])
   @@index([submittedAt])
+  @@index([vendorRequirementId])
 }
 
 // R4.2 — a candidate working an assignment. Auto-created when a submission's
@@ -868,7 +917,6 @@ model VendorRequirement {
   location            String?
   payRate             Decimal? @db.Decimal(12, 2)
   billRate            Decimal? @db.Decimal(12, 2)
-  candidateRate       Decimal? @db.Decimal(12, 2)
   // What the end client releases (optional — "if available").
   clientRate          Decimal? @db.Decimal(12, 2)
   engagement          BenchEngagement?
@@ -876,13 +924,15 @@ model VendorRequirement {
   jobDuties           String?
   teamLead            String?
   submissionNotes     String?
-  // Soft pointer (no FK) to the résumé to upload — re-validated at convert.
+  // Soft pointer (no FK) to the library résumé to reuse — re-validated at convert.
   candidateResumeId String?
-  resumeDriveLink   String?
 
   // Conversion link — set when moved to a real submission.
-  convertedSubmissionId String?     @unique
-  convertedSubmission   Submission? @relation("VendorRequirementSubmission", fields: [convertedSubmissionId], references: [id], onDelete: SetNull)
+  // Submissions made against this requirement (1:many — the VPR stays OPEN and
+  // accumulates candidate submissions until a team lead closes it).
+  submissions           Submission[] @relation("RequirementSubmissions")
+  // Set when a team lead marks the requirement closed (repurposed from the old
+  // 1:1 "converted" fields — CONVERTED now means "Closed").
   convertedAt           DateTime?
   convertedById         String?
   convertedBy           User?       @relation("VendorRequirementConvertedBy", fields: [convertedById], references: [id])

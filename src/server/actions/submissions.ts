@@ -8,6 +8,7 @@ import type {
 } from "@/generated/prisma/enums";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/lib/session";
+import { hasFullAccess, canReattributeSubmission } from "@/lib/permissions";
 import { logActivity } from "@/server/activity";
 import {
   submissionSchema,
@@ -15,25 +16,24 @@ import {
   statusChangeSchema,
 } from "@/lib/validation/submission";
 import { toFieldErrors } from "@/lib/validation/common";
-import { SUBMISSION_STATUS_LABEL } from "@/lib/labels";
+import { SUBMISSION_STATUS_LABEL, CANDIDATE_STATUS_LABEL } from "@/lib/labels";
+import { rateChainWarnings } from "@/lib/rates";
 import type { FormState } from "@/lib/form-state";
 import {
   ensurePlacementOnJoined,
   terminatePlacementOnRevert,
 } from "@/server/placement-lifecycle";
 import { createSubmissionRecord } from "@/server/submission-create";
+import { branchActions } from "@/lib/submission-flow";
 
 function readSubmission(formData: FormData) {
   return submissionSchema.safeParse({
     candidateId: formData.get("candidateId") ?? "",
     jobId: formData.get("jobId") ?? "",
     submittedById: formData.get("submittedById") ?? "",
-    candidateRate: formData.get("candidateRate") ?? "",
     submissionNotes: formData.get("submissionNotes") ?? "",
     resumeChoice: formData.get("resumeChoice") ?? "none",
     candidateResumeId: formData.get("candidateResumeId") ?? "",
-    newResumeLabel: formData.get("newResumeLabel") ?? "",
-    newResumeLink: formData.get("newResumeLink") ?? "",
     engagement: formData.get("engagement") ?? "",
     vendorRecruiterName: formData.get("vendorRecruiterName") ?? "",
     jobDuties: formData.get("jobDuties") ?? "",
@@ -71,7 +71,7 @@ export async function createSubmission(
     }),
     prisma.candidate.findUnique({
       where: { id: d.candidateId },
-      select: { id: true, fullName: true },
+      select: { id: true, fullName: true, status: true },
     }),
   ]);
   if (!job) return { error: "This job no longer exists." };
@@ -87,7 +87,7 @@ export async function createSubmission(
   // claim=1, which assigns the job to them (logged) in the same tx as the
   // submission. Without the claim flag we pause and prompt.
   const claim = String(formData.get("claim") ?? "") === "1";
-  const isAdmin = user.role === "ADMIN";
+  const isAdmin = hasFullAccess(user);
   if (!isAdmin) {
     const assignment = await prisma.jobAssignment.findFirst({
       where: { jobId: d.jobId, recruiterId: user.id },
@@ -99,6 +99,41 @@ export async function createSubmission(
         error: `You're not assigned to "${job.title}". Claim it to submit a candidate.`,
       };
     }
+  }
+
+  // Rate-chain soft block (owner: "soft block"). If the entered rates break the
+  // chain (pay>bill, bill/pay>client), pause and require an explicit reason — the
+  // recruiter can still save, it's just not silent. Blank rates never trip it.
+  const rateOverrideReason = String(
+    formData.get("rateOverrideReason") ?? "",
+  ).trim();
+  const rateWarnings = rateChainWarnings({
+    payRate: d.payRate,
+    billRate: d.billRate,
+    clientRate: d.clientRate,
+  });
+  if (rateWarnings.length > 0 && !rateOverrideReason) {
+    return {
+      needsConfirm: "rate_chain",
+      confirmData: { warnings: rateWarnings },
+      error: "These rates break the rate chain. Add a reason to save anyway.",
+    };
+  }
+
+  // Candidate-status soft block (warn + override). Marking a candidate
+  // Not-interested / Do-not-contact shouldn't silently allow a submission, but
+  // the recruiter can proceed with a reason (matches the VPR-convert path).
+  const candidateStatusOverrideReason = String(
+    formData.get("candidateStatusOverrideReason") ?? "",
+  ).trim();
+  const candidateBlocked =
+    candidate.status === "NOT_INTERESTED" ||
+    candidate.status === "DO_NOT_CONTACT";
+  if (candidateBlocked && !candidateStatusOverrideReason) {
+    return {
+      needsConfirm: "candidate_status",
+      error: `${candidate.fullName} is marked "${CANDIDATE_STATUS_LABEL[candidate.status]}". Add a reason to submit anyway.`,
+    };
   }
 
   // §C4 — duplicate-submission check moved out of the DB to the action so
@@ -115,11 +150,11 @@ export async function createSubmission(
   ).trim();
 
   // Resolve a previously-saved résumé up front so a bad pick returns cleanly.
-  let pickedResume: { id: string; driveLink: string } | null = null;
+  let pickedResume: { id: string; blobUrl: string | null } | null = null;
   if (d.resumeChoice === "existing" && d.candidateResumeId) {
     const resume = await prisma.candidateResume.findUnique({
       where: { id: d.candidateResumeId },
-      select: { id: true, driveLink: true, candidateId: true },
+      select: { id: true, blobUrl: true, candidateId: true },
     });
     if (!resume || resume.candidateId !== d.candidateId)
       return {
@@ -128,23 +163,18 @@ export async function createSubmission(
           candidateResumeId: "Pick a resume that belongs to this candidate.",
         },
       };
-    pickedResume = { id: resume.id, driveLink: resume.driveLink };
+    pickedResume = { id: resume.id, blobUrl: resume.blobUrl };
   }
 
   // One transaction, advisory-locked on the (candidate, job) pair. The actual
   // create + gates live in the shared createSubmissionRecord helper, which the
   // requirement→submission convert flow reuses. Overridable gates come back as
   // a tagged union so we can surface the right `needsConfirm` prompt.
-  const newResume =
-    !pickedResume && d.resumeChoice === "new" && d.newResumeLabel && d.newResumeLink
-      ? { label: d.newResumeLabel, link: d.newResumeLink }
-      : null;
   const result = await prisma.$transaction((tx) =>
     createSubmissionRecord(tx, {
       candidateId: d.candidateId,
       jobId: d.jobId,
       submittedById: d.submittedById,
-      candidateRate: d.candidateRate ?? null,
       submissionNotes: d.submissionNotes ?? null,
       engagement: d.engagement ?? null,
       vendorRecruiterName: d.vendorRecruiterName ?? null,
@@ -154,9 +184,10 @@ export async function createSubmission(
       clientRate: d.clientRate ?? null,
       teamLead: d.teamLead ?? null,
       pickedResume,
-      newResume,
       duplicateReason,
       ilaborOverrideReason,
+      rateOverrideReason,
+      candidateStatusOverrideReason,
       job,
       candidateFullName: candidate.fullName,
       actor: { id: user.id, fullName: user.fullName, isAdmin },
@@ -193,14 +224,11 @@ export async function createSubmission(
 
 function readSubmissionEdit(formData: FormData) {
   return submissionEditSchema.safeParse({
-    candidateRate: formData.get("candidateRate") ?? "",
     submissionNotes: formData.get("submissionNotes") ?? "",
     submittedAt: formData.get("submittedAt") ?? "",
     submittedById: formData.get("submittedById") ?? "",
     resumeChoice: formData.get("resumeChoice") ?? "none",
     candidateResumeId: formData.get("candidateResumeId") ?? "",
-    newResumeLabel: formData.get("newResumeLabel") ?? "",
-    newResumeLink: formData.get("newResumeLink") ?? "",
     engagement: formData.get("engagement") ?? "",
     vendorRecruiterName: formData.get("vendorRecruiterName") ?? "",
     jobDuties: formData.get("jobDuties") ?? "",
@@ -232,6 +260,23 @@ export async function updateSubmission(
     };
   const d = parsed.data;
 
+  // Rate-chain soft block on edit — same as create: a broken chain needs a reason.
+  const rateOverrideReason = String(
+    formData.get("rateOverrideReason") ?? "",
+  ).trim();
+  const rateWarnings = rateChainWarnings({
+    payRate: d.payRate,
+    billRate: d.billRate,
+    clientRate: d.clientRate,
+  });
+  if (rateWarnings.length > 0 && !rateOverrideReason) {
+    return {
+      needsConfirm: "rate_chain",
+      confirmData: { warnings: rateWarnings },
+      error: "These rates break the rate chain. Add a reason to save anyway.",
+    };
+  }
+
   const existing = await prisma.submission.findUnique({
     where: { id: submissionId },
     include: {
@@ -242,13 +287,18 @@ export async function updateSubmission(
   });
   if (!existing) return { error: "This submission no longer exists." };
 
-  // Admin-only re-attribution of "Submitted by". Recruiter scorecards key off
-  // submittedById, so a mis-set submitter previously had no correction path.
-  // Non-admins never reach this — the field is locked in their form.
-  const isAdmin = user.role === "ADMIN";
+  // Re-attribution of "Submitted by" is limited to full-access users
+  // (managers / team leads). Recruiter scorecards key off submittedById, so a
+  // mis-set submitter previously had no correction path. Recruiters never reach
+  // this — the field is locked in their form.
+  const canReattribute = canReattributeSubmission(user);
   let newSubmittedById: string | null = null;
   let newSubmitterName = "";
-  if (isAdmin && d.submittedById && d.submittedById !== existing.submittedById) {
+  if (
+    canReattribute &&
+    d.submittedById &&
+    d.submittedById !== existing.submittedById
+  ) {
     const target = await prisma.user.findUnique({
       where: { id: d.submittedById },
       select: { id: true, fullName: true },
@@ -263,11 +313,11 @@ export async function updateSubmission(
   }
 
   // Resolve a previously-saved résumé up front so a bad pick returns cleanly.
-  let pickedResume: { id: string; driveLink: string } | null = null;
+  let pickedResume: { id: string; blobUrl: string | null } | null = null;
   if (d.resumeChoice === "existing" && d.candidateResumeId) {
     const resume = await prisma.candidateResume.findUnique({
       where: { id: d.candidateResumeId },
-      select: { id: true, driveLink: true, candidateId: true },
+      select: { id: true, blobUrl: true, candidateId: true },
     });
     if (!resume || resume.candidateId !== existing.candidateId)
       return {
@@ -276,42 +326,19 @@ export async function updateSubmission(
           candidateResumeId: "Pick a resume that belongs to this candidate.",
         },
       };
-    pickedResume = { id: resume.id, driveLink: resume.driveLink };
+    pickedResume = { id: resume.id, blobUrl: resume.blobUrl };
   }
 
   await prisma.$transaction(async (tx) => {
-    // Settle the résumé: an existing library entry, a new one, or none.
-    let candidateResumeId: string | null = null;
-    let resumeSnapshot: string | null = null;
-
-    if (pickedResume) {
-      candidateResumeId = pickedResume.id;
-      resumeSnapshot = pickedResume.driveLink;
-    } else if (d.resumeChoice === "new" && d.newResumeLabel && d.newResumeLink) {
-      const newResume = await tx.candidateResume.create({
-        data: {
-          candidateId: existing.candidateId,
-          label: d.newResumeLabel,
-          driveLink: d.newResumeLink,
-        },
-      });
-      candidateResumeId = newResume.id;
-      resumeSnapshot = newResume.driveLink;
-      await logActivity(tx, {
-        entityType: "CANDIDATE",
-        action: "RESUME_UPDATED",
-        description: `Resume "${newResume.label}" added`,
-        performedById: user.id,
-        candidateId: existing.candidateId,
-      });
-    }
+    // Settle the résumé: an existing library entry or none.
+    const candidateResumeId = pickedResume?.id ?? null;
+    const blobSnapshot = pickedResume?.blobUrl ?? null;
 
     // Record which fields actually changed, for a meaningful audit entry.
     const changed: string[] = [];
     const compare = (label: string, before: unknown, after: unknown) => {
       if (String(before ?? "") !== String(after ?? "")) changed.push(label);
     };
-    compare("candidate rate", existing.candidateRate?.toString(), d.candidateRate);
     compare("notes", existing.submissionNotes, d.submissionNotes);
     // Compare the submitted date at minute precision — the datetime-local input
     // only carries minutes, so a stored seconds component must not count as a change.
@@ -322,7 +349,7 @@ export async function updateSubmission(
       changed.push("submitted date");
     if (
       String(existing.candidateResumeId ?? "") !== String(candidateResumeId ?? "") ||
-      String(existing.resumeDriveLink ?? "") !== String(resumeSnapshot ?? "")
+      String(existing.resumeBlobUrl ?? "") !== String(blobSnapshot ?? "")
     )
       changed.push("resume");
     if (newSubmittedById) changed.push("submitted by");
@@ -330,12 +357,11 @@ export async function updateSubmission(
     await tx.submission.update({
       where: { id: submissionId },
       data: {
-        candidateRate: d.candidateRate ?? null,
         submissionNotes: d.submissionNotes ?? null,
         submittedAt: d.submittedAt,
         candidateResumeId,
-        // Snapshot the link used so it survives résumé edits/deletes.
-        resumeDriveLink: resumeSnapshot,
+        // Snapshot the résumé's blob URL so it survives library edits/deletes.
+        resumeBlobUrl: blobSnapshot,
         engagement: d.engagement ?? null,
         vendorRecruiterName: d.vendorRecruiterName ?? null,
         jobDuties: d.jobDuties ?? null,
@@ -358,6 +384,7 @@ export async function updateSubmission(
         action: "SUBMISSION_UPDATED",
         description: `${existing.candidate.fullName} on "${existing.job.title}": submission updated (${changed.join(", ")})${reattrNote}`,
         newValue: changed.join(", "),
+        note: rateOverrideReason ? `rate-override:${rateOverrideReason}` : null,
         performedById: user.id,
         submissionId,
       });
@@ -473,7 +500,6 @@ export async function changeSubmissionStatus(
         submissionId: d.id,
         candidateId: submission.candidateId,
         jobId: submission.jobId,
-        candidateRate: submission.candidateRate,
         payRate: submission.payRate,
         billRate: submission.billRate,
         clientRate: submission.clientRate,
@@ -508,6 +534,7 @@ export async function changeSubmissionStatus(
   revalidatePath(`/candidates/${submission.candidateId}`);
   return {
     ok: true,
+    celebrate: next === "JOINED",
     toast: {
       title: `Status updated to ${SUBMISSION_STATUS_LABEL[next]}`,
       description:
@@ -516,4 +543,120 @@ export async function changeSubmissionStatus(
           : undefined,
     },
   };
+}
+
+/** Dedupe + cap the `ids` list a bulk action operates on. */
+function bulkIds(formData: FormData): string[] {
+  const raw = formData
+    .getAll("ids")
+    .map((v) => String(v).trim())
+    .filter(Boolean);
+  return [...new Set(raw)].slice(0, 200);
+}
+
+// The only statuses a bulk change may target. These are the "branch" outcomes
+// (see branchActions in submission-flow.ts) — none of them is JOINED, so bulk
+// can never trigger the placement-creation cascade; and JOINED is terminal, so
+// none of the *source* rows can be JOINED either (branchActions returns [] for
+// terminals), so bulk can never trigger a placement teardown. That keeps the
+// pipeline invariants intact without re-implementing the gates.
+const BULK_STATUS_TARGETS = ["ON_HOLD", "REJECTED", "BACKED_OUT"] as const;
+type BulkStatusTarget = (typeof BULK_STATUS_TARGETS)[number];
+
+function isBulkStatusTarget(value: string): value is BulkStatusTarget {
+  return (BULK_STATUS_TARGETS as readonly string[]).includes(value);
+}
+
+export type BulkStatusResult = { changed: number; skipped: number };
+
+/**
+ * Bulk status change from the submissions list. Deliberately limited to the safe
+ * branch outcomes (On hold / Rejected / Backed out): a submission is only touched
+ * when `branchActions(current)` allows the target — so terminal rows, JOINED rows,
+ * and rows already at the target are silently skipped, and no placement cascade
+ * ever fires. Advance / Mark-joined stay per-submission (they run the iLabor,
+ * duplicate, and rate-chain gates + the placement cascade, which shouldn't be
+ * bypassed in bulk). Each changed row gets its own audit entry.
+ *
+ * Returns the real changed/skipped counts so the caller's toast reflects what
+ * actually happened rather than how many rows were selected.
+ */
+export async function bulkChangeSubmissionStatus(
+  formData: FormData,
+): Promise<BulkStatusResult> {
+  const user = await requireUser();
+  const ids = bulkIds(formData);
+  // Bulk status is restricted to admins / team leads — the blast radius (many
+  // rows across the whole team's pipeline in one click) is larger than a
+  // recruiter should wield. Single-submission status changes stay open to all.
+  if (!hasFullAccess(user)) return { changed: 0, skipped: ids.length };
+  const target = String(formData.get("status") ?? "").trim();
+  if (ids.length === 0 || !isBulkStatusTarget(target))
+    return { changed: 0, skipped: ids.length };
+  const next = target as SubmissionStatus;
+
+  const submissions = await prisma.submission.findMany({
+    where: { id: { in: ids } },
+    select: {
+      id: true,
+      status: true,
+      jobId: true,
+      candidateId: true,
+      candidate: { select: { fullName: true } },
+      job: { select: { title: true } },
+    },
+  });
+
+  const action: ActivityAction =
+    next === "REJECTED" ? "CANDIDATE_REJECTED" : "SUBMISSION_STATUS_CHANGED";
+  // REJECTED / ON_HOLD carry an optional preset reason category, mirroring the
+  // single-status form.
+  const reason =
+    next === "REJECTED" || next === "ON_HOLD"
+      ? String(formData.get("reason") ?? "").trim() || null
+      : null;
+
+  let changed = 0;
+  const touched: { jobId: string; candidateId: string }[] = [];
+  for (const s of submissions) {
+    // Only apply when the target is a valid branch outcome from this row's
+    // current status — this is the invariant guard.
+    if (!branchActions(s.status).includes(next)) continue;
+
+    const applied = await prisma.$transaction(async (tx) => {
+      // Optimistic-concurrency guard: the update only lands if the row is still
+      // at the status we validated against. If it raced (e.g. into JOINED, which
+      // owns a placement) since the read above, `count` is 0 and we skip it —
+      // so bulk can never flip a row past its lifecycle hooks on a stale snapshot.
+      const res = await tx.submission.updateMany({
+        where: { id: s.id, status: s.status },
+        data: { status: next },
+      });
+      if (res.count === 0) return false;
+      await logActivity(tx, {
+        entityType: "SUBMISSION",
+        action,
+        description: `${s.candidate.fullName} on "${s.job.title}": status changed from ${SUBMISSION_STATUS_LABEL[s.status]} to ${SUBMISSION_STATUS_LABEL[next]} (bulk)`,
+        oldValue: SUBMISSION_STATUS_LABEL[s.status],
+        newValue: SUBMISSION_STATUS_LABEL[next],
+        reason,
+        performedById: user.id,
+        submissionId: s.id,
+      });
+      return true;
+    });
+
+    if (applied) {
+      changed++;
+      touched.push({ jobId: s.jobId, candidateId: s.candidateId });
+    }
+  }
+
+  revalidatePath("/submissions");
+  for (const t of new Set(touched.map((x) => x.jobId)))
+    revalidatePath(`/jobs/${t}`);
+  for (const c of new Set(touched.map((x) => x.candidateId)))
+    revalidatePath(`/candidates/${c}`);
+
+  return { changed, skipped: ids.length - changed };
 }

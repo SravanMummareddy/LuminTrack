@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { Table, Th, Td, cardLink, cardLinkRaise } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
@@ -11,6 +12,7 @@ import { formatDate, formatSubmissionDisplayId } from "@/lib/format";
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
 import { STALE_STAGE_DAYS } from "@/lib/analytics";
 import type { SubmissionListRow } from "@/server/queries/submissions";
+import { SubmissionBulkBar } from "@/components/submissions/submission-bulk-bar";
 
 type Column = {
   key: string;
@@ -40,7 +42,12 @@ const COLUMNS: Column[] = [
     defaultVisible: true,
     render: (s) => (
       <Td label="ID" secondary className="whitespace-nowrap font-mono text-xs">
-        {formatSubmissionDisplayId(s)}
+        <Link
+          href={`/submissions/${s.id}`}
+          className="text-indigo-600 hover:underline"
+        >
+          {formatSubmissionDisplayId(s)}
+        </Link>
       </Td>
     ),
   },
@@ -175,6 +182,7 @@ const COLUMNS: Column[] = [
   {
     key: "engagement",
     label: "Engagement",
+    sortKey: "engagement",
     defaultVisible: false,
     render: (s) => (
       <Td label="Engagement" secondary>
@@ -185,6 +193,7 @@ const COLUMNS: Column[] = [
   {
     key: "vendorRecruiter",
     label: "Vendor recruiter",
+    sortKey: "vendorRecruiter",
     defaultVisible: false,
     render: (s) => (
       <Td label="Vendor recruiter" secondary>
@@ -195,6 +204,8 @@ const COLUMNS: Column[] = [
   {
     key: "payRate",
     label: "Pay rate",
+    sortKey: "payRate",
+    align: "right",
     defaultVisible: false,
     render: (s) => (
       <Td label="Pay rate" secondary className="tabular-nums">
@@ -205,6 +216,8 @@ const COLUMNS: Column[] = [
   {
     key: "billRate",
     label: "Bill rate",
+    sortKey: "billRate",
+    align: "right",
     defaultVisible: false,
     render: (s) => (
       <Td label="Bill rate" secondary className="tabular-nums">
@@ -215,6 +228,7 @@ const COLUMNS: Column[] = [
   {
     key: "teamLead",
     label: "Team lead",
+    sortKey: "teamLead",
     defaultVisible: false,
     render: (s) => (
       <Td label="Team lead" secondary>
@@ -227,7 +241,7 @@ const COLUMNS: Column[] = [
     label: "Submitted resume",
     defaultVisible: false,
     render: (s) => {
-      const link = s.candidateResume?.driveLink ?? s.resumeDriveLink;
+      const link = s.candidateResumeId ? `/api/resumes/${s.candidateResumeId}` : null;
       const label = s.candidateResume?.label ?? (link ? "Resume" : null);
       return (
         <Td label="Submitted resume" secondary>
@@ -247,6 +261,30 @@ const COLUMNS: Column[] = [
       );
     },
   },
+  {
+    key: "created",
+    label: "Created",
+    sortKey: "created",
+    sortDefaultDir: "desc",
+    defaultVisible: false,
+    render: (s) => (
+      <Td label="Created" secondary className="whitespace-nowrap">
+        {formatDate(s.createdAt)}
+      </Td>
+    ),
+  },
+  {
+    key: "updated",
+    label: "Updated",
+    sortKey: "updated",
+    sortDefaultDir: "desc",
+    defaultVisible: false,
+    render: (s) => (
+      <Td label="Updated" secondary className="whitespace-nowrap">
+        {formatDate(s.updatedAt)}
+      </Td>
+    ),
+  },
 ];
 
 const STORAGE_KEY = "lumintrack.submissions.columns";
@@ -263,26 +301,42 @@ const DEFAULTS: ColumnPrefs = {
 export function SubmissionsTable({
   rows,
   pageOffset = 0,
+  countLabel,
   storageKey = STORAGE_KEY,
-  defaultVisibleKeys,
+  canBulk = false,
 }: {
   rows: SubmissionListRow[];
   pageOffset?: number;
-  /** Override the localStorage key so a scoped view (e.g. Vendor Portal) keeps
-   *  its own column prefs separate from the main Submissions list. */
+  /** e.g. "160 submissions" — shown before the column count. */
+  countLabel?: string;
+  /** Override the localStorage key so a scoped view keeps its own column prefs
+   *  separate from the main Submissions list. */
   storageKey?: string;
-  /** Override which columns are visible by default (the Vendor Portal view
-   *  surfaces the sheet's Pay/Bill/C2C-W2/resume columns up front). */
-  defaultVisibleKeys?: string[];
+  /** Whether the viewer can bulk-change status (admin / team lead). When false,
+   *  the selection checkboxes + bulk bar are hidden entirely. */
+  canBulk?: boolean;
 }) {
-  const defaults: ColumnPrefs = defaultVisibleKeys
-    ? { visible: defaultVisibleKeys, order: COLUMNS.map((c) => c.key) }
-    : DEFAULTS;
   const [prefs, setPrefs] = useColumnPrefs(
     storageKey,
     STORAGE_VERSION,
-    defaults,
+    DEFAULTS,
   );
+
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const pageIds = rows.map((r) => r.id);
+  const allSelected =
+    pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  const toggleAll = () =>
+    setSelected(allSelected ? new Set() : new Set(pageIds));
+  const toggleOne = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const checkboxClass =
+    "h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-200";
 
   const byKey = new Map(COLUMNS.map((c) => [c.key, c]));
   const orderedCols = prefs.order
@@ -296,15 +350,22 @@ export function SubmissionsTable({
         <p className="text-xs text-slate-500" suppressHydrationWarning>
           {rows.length === 0
             ? null
-            : `Showing ${visibleCols.length} of ${COLUMNS.length} columns`}
+            : `${countLabel ? `${countLabel} · ` : ""}Showing ${visibleCols.length} of ${COLUMNS.length} columns`}
         </p>
         <ColumnsMenu
           columns={orderedCols.map((c) => ({ key: c.key, label: c.label }))}
           prefs={prefs}
           onChange={setPrefs}
-          defaults={defaults}
+          defaults={DEFAULTS}
         />
       </div>
+
+      {canBulk && selected.size > 0 && (
+        <SubmissionBulkBar
+          selectedIds={[...selected]}
+          onDone={() => setSelected(new Set())}
+        />
+      )}
 
       <MobileSort
         options={visibleCols
@@ -319,6 +380,17 @@ export function SubmissionsTable({
       <Table>
         <thead className="border-b border-slate-200 bg-slate-50">
           <tr>
+            {canBulk && (
+              <Th className="w-8">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  aria-label="Select all on this page"
+                  className={checkboxClass}
+                />
+              </Th>
+            )}
             {visibleCols.map((c) =>
               c.sortKey ? (
                 <SortableHeader
@@ -341,7 +413,25 @@ export function SubmissionsTable({
         </thead>
         <tbody className="divide-y divide-slate-100">
           {rows.map((row, idx) => (
-            <tr key={row.id} className="hover:bg-slate-50">
+            <tr
+              key={row.id}
+              className={
+                canBulk && selected.has(row.id)
+                  ? "bg-indigo-50/60"
+                  : "hover:bg-slate-50"
+              }
+            >
+              {canBulk && (
+                <td className="w-8 px-3 align-middle">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(row.id)}
+                    onChange={() => toggleOne(row.id)}
+                    aria-label={`Select ${row.candidate.fullName}`}
+                    className={checkboxClass}
+                  />
+                </td>
+              )}
               {visibleCols.map((c) => (
                 <RenderCell
                   key={c.key}

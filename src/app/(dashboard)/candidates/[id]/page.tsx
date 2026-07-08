@@ -1,7 +1,14 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ExternalLink, Pencil, Send } from "lucide-react";
-import { LinkButton } from "@/components/ui/button";
+import {
+  ArrowLeft,
+  ExternalLink,
+  Pencil,
+  Send,
+  Archive,
+  ArchiveRestore,
+} from "lucide-react";
+import { LinkButton, buttonClass } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, Th, Td } from "@/components/ui/table";
 import { ActivityTimeline } from "@/components/timeline/activity-timeline";
@@ -13,7 +20,11 @@ import {
   getCandidateDocuments,
 } from "@/server/queries/candidates";
 import { requireUser } from "@/lib/session";
-import { canManageSensitiveDocs } from "@/lib/permissions";
+import { canManageSensitiveDocs, hasFullAccess } from "@/lib/permissions";
+import { CandidateDangerZone } from "@/components/candidates/candidate-danger-zone";
+import { CandidateTrashBanner } from "@/components/candidates/candidate-trash-banner";
+import { setCandidateArchived } from "@/server/actions/candidates";
+import { CANDIDATE_TRASH_RETENTION_DAYS } from "@/server/candidate-erase";
 import { getCandidateSubmissions } from "@/server/queries/submissions";
 import {
   getActivePlacementForCandidate,
@@ -32,6 +43,7 @@ import {
   CANDIDATE_STATUS_TONE,
   PLACEMENT_STATUS_LABEL,
   PLACEMENT_STATUS_TONE,
+  DISCIPLINE_LABEL,
   jobSourceLabel,
 } from "@/lib/labels";
 import { MarkContactedButton } from "@/components/candidates/mark-contacted-button";
@@ -127,6 +139,9 @@ export default async function CandidateDetailPage({
     getCandidatePlacements(id, { page: placementsPage }),
   ]);
   if (!candidate) notFound();
+  const isAdmin = hasFullAccess(user);
+  const isErased = Boolean(candidate.erasedAt);
+  const isTrashed = Boolean(candidate.deletedAt) && !isErased;
   const submissionsTotalPages = Math.max(
     1,
     Math.ceil(submissionsTotal / PAGE_SIZE),
@@ -162,12 +177,20 @@ export default async function CandidateDetailPage({
             <h1 className="text-xl font-semibold text-slate-900">
               {candidate.fullName}
             </h1>
-            <Badge tone={candidate.isActive ? "green" : "slate"}>
-              {candidate.isActive ? "Active" : "Inactive"}
-            </Badge>
-            <Badge tone={CANDIDATE_STATUS_TONE[candidate.status]}>
-              {CANDIDATE_STATUS_LABEL[candidate.status]}
-            </Badge>
+            {/* One clear lifecycle badge: the trash/inactive state wins when the
+                candidate isn't Live; only a Live candidate shows the engagement
+                status pill (Active + Available would otherwise read as redundant). */}
+            {isErased ? (
+              <Badge tone="red">Erased</Badge>
+            ) : isTrashed ? (
+              <Badge tone="amber">In trash</Badge>
+            ) : !candidate.isActive ? (
+              <Badge tone="slate">Inactive</Badge>
+            ) : (
+              <Badge tone={CANDIDATE_STATUS_TONE[candidate.status]}>
+                {CANDIDATE_STATUS_LABEL[candidate.status]}
+              </Badge>
+            )}
           </div>
           <p className="mt-1 text-sm text-slate-500">
             <span className="font-mono text-xs text-slate-400">
@@ -177,20 +200,53 @@ export default async function CandidateDetailPage({
             {candidate.currentCompany || "Company not set"}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <LinkButton href={`/candidates/${candidate.id}/submissions/new`}>
-            <Send className="h-4 w-4" />
-            Submit to a job
-          </LinkButton>
-          <LinkButton
-            href={`/candidates/${candidate.id}/edit`}
-            variant="secondary"
-          >
-            <Pencil className="h-4 w-4" />
-            Edit candidate
-          </LinkButton>
-        </div>
+        {!isErased && !isTrashed && (
+          <div className="flex shrink-0 items-center gap-2">
+            <LinkButton href="/vendor-portal">
+              <Send className="h-4 w-4" />
+              Submit to a requirement
+            </LinkButton>
+            <LinkButton
+              href={`/candidates/${candidate.id}/edit`}
+              variant="secondary"
+            >
+              <Pencil className="h-4 w-4" />
+              Edit candidate
+            </LinkButton>
+            <form action={setCandidateArchived}>
+              <input type="hidden" name="id" value={candidate.id} />
+              <input
+                type="hidden"
+                name="archived"
+                value={candidate.isActive ? "1" : "0"}
+              />
+              <button type="submit" className={buttonClass("secondary")}>
+                {candidate.isActive ? (
+                  <>
+                    <Archive className="h-4 w-4" />
+                    Deactivate
+                  </>
+                ) : (
+                  <>
+                    <ArchiveRestore className="h-4 w-4" />
+                    Reactivate
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+        )}
       </div>
+
+      {isTrashed && candidate.deletedAt && (
+        <CandidateTrashBanner
+          candidateId={candidate.id}
+          candidateName={candidate.fullName}
+          deletedAt={candidate.deletedAt.toISOString()}
+          retentionDays={CANDIDATE_TRASH_RETENTION_DAYS}
+          canManage={isAdmin}
+        />
+      )}
 
       {activePlacement && (
         <section className="rounded-lg border border-indigo-200 bg-indigo-50 p-4">
@@ -248,6 +304,9 @@ export default async function CandidateDetailPage({
           </DescItem>
           <DescItem label="Current company">
             {candidate.currentCompany || "—"}
+          </DescItem>
+          <DescItem label="Discipline">
+            {candidate.discipline ? DISCIPLINE_LABEL[candidate.discipline] : "—"}
           </DescItem>
           <DescItem label="LinkedIn">
             {candidate.linkedinUrl ? (
@@ -339,7 +398,8 @@ export default async function CandidateDetailPage({
         resumes={candidate.resumes.map((r) => ({
           id: r.id,
           label: r.label,
-          driveLink: r.driveLink,
+          hasFile: r.blobPathname != null,
+          contentType: r.contentType,
           isActive: r.isActive,
           submissionCount: r._count.submissions,
         }))}
@@ -352,7 +412,6 @@ export default async function CandidateDetailPage({
           id: d.id,
           category: d.category,
           label: d.label,
-          driveLink: d.driveLink,
           issuedAt: d.issuedAt,
           expiresAt: d.expiresAt,
           notes: d.notes,
@@ -506,6 +565,15 @@ export default async function CandidateDetailPage({
       />
 
       <ActivityTimeline entries={timeline} />
+
+      {isAdmin && !isErased && !isTrashed && (
+        <CandidateDangerZone
+          candidateId={candidate.id}
+          candidateName={candidate.fullName}
+          retentionDays={CANDIDATE_TRASH_RETENTION_DAYS}
+          isActive={candidate.isActive}
+        />
+      )}
     </div>
   );
 }

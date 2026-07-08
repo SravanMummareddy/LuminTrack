@@ -12,20 +12,22 @@ import {
   restoreCandidateResume,
   deleteCandidateResume,
 } from "@/server/actions/resumes";
-import { toDrivePreviewUrl } from "@/lib/resume";
 
 export type ResumeItem = ResumeData & {
+  /** True when the résumé has an uploaded file (served via /api/resumes/[id]). */
+  hasFile: boolean;
+  contentType: string | null;
   submissionCount: number;
   isActive: boolean;
 };
 
 /**
- * The candidate's résumé library — add / edit / archive saved résumés, each a
- * labelled Google Drive link. Archiving (soft delete) keeps the row so any
- * submission that used it stays linked; archived résumés are hidden behind a
- * toggle and are never offered in the submit picker. A résumé with no
- * submissions can be permanently deleted. Previews expand one at a time to
- * avoid loading several Drive iframes at once.
+ * The candidate's résumé library — upload / rename / archive saved résumés.
+ * Résumés are uploaded files streamed from private Blob via /api/resumes/[id].
+ * Archiving (soft delete) keeps the row so any submission that used it stays
+ * linked; archived résumés are hidden behind a toggle and are never offered in
+ * the submit picker. A résumé with no submissions can be permanently deleted.
+ * Previews expand one at a time.
  */
 export function ResumeSection({
   candidateId,
@@ -42,7 +44,11 @@ export function ResumeSection({
   const archived = resumes.filter((r) => !r.isActive);
 
   const renderResume = (r: ResumeItem) => {
-    const previewUrl = toDrivePreviewUrl(r.driveLink);
+    // Uploaded files stream from our own private route; a PDF previews inline,
+    // Word offers a download.
+    const fileUrl = r.hasFile ? `/api/resumes/${r.id}` : null;
+    const openHref = fileUrl;
+    const isPdf = (r.contentType ?? "").includes("pdf");
     const expanded = expandedId === r.id;
     const unused = r.submissionCount === 0;
     const usedLabel = `${r.submissionCount} submission${r.submissionCount === 1 ? "" : "s"}`;
@@ -59,15 +65,17 @@ export function ResumeSection({
             <p className="mt-0.5 text-xs text-slate-500">Used by {usedLabel}</p>
           </div>
           <div className="flex shrink-0 items-center gap-3 text-sm font-medium">
-            <a
-              href={r.driveLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-indigo-600 hover:underline"
-            >
-              Open
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
+            {openHref && (
+              <a
+                href={openHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-indigo-600 hover:underline"
+              >
+                Open
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            )}
             <button
               type="button"
               onClick={() => setExpandedId(expanded ? null : r.id)}
@@ -110,10 +118,10 @@ export function ResumeSection({
               <ConfirmSubmit
                 action={deleteCandidateResume}
                 fields={{ id: r.id }}
-                title="Delete resume permanently?"
+                title="Remove résumé permanently?"
                 description={`"${r.label}" isn't used by any submission and will be permanently removed. This can't be undone.`}
-                confirmLabel="Delete permanently"
-                trigger="Delete"
+                confirmLabel="Remove permanently"
+                trigger="Remove"
                 triggerClassName="text-red-600 hover:text-red-800"
               />
             )}
@@ -121,19 +129,27 @@ export function ResumeSection({
         </div>
 
         {expanded &&
-          (previewUrl ? (
+          (fileUrl && isPdf ? (
             <iframe
-              src={previewUrl}
+              src={fileUrl}
               title={`${r.label} preview`}
-              sandbox="allow-scripts allow-same-origin"
-              referrerPolicy="no-referrer"
               loading="lazy"
               className="mt-3 h-[70vh] w-full rounded-md border border-slate-200 md:h-[600px]"
             />
           ) : (
             <p className="mt-3 text-xs text-slate-500">
-              Inline preview is available for Google Drive links only — use the
-              Open link above.
+              Inline preview isn&apos;t available for Word files — use{" "}
+              {fileUrl ? (
+                <a
+                  href={`${fileUrl}?download=1`}
+                  className="text-indigo-600 hover:underline"
+                >
+                  Download
+                </a>
+              ) : (
+                "the Open link above"
+              )}
+              .
             </p>
           ))}
       </li>

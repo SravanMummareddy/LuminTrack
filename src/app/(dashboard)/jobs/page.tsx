@@ -1,8 +1,10 @@
 import Link from "next/link";
-import { Plus, Download, History } from "lucide-react";
+import { Plus, Download, History, Trash2, ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { LinkButton } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/session";
+import { hasFullAccess } from "@/lib/permissions";
+import { JOB_TRASH_RETENTION_DAYS } from "@/server/job-erase";
 import { Pagination } from "@/components/ui/pagination";
 import { JobFilters } from "@/components/jobs/job-filters";
 import { JobsTable } from "@/components/jobs/jobs-table";
@@ -21,11 +23,10 @@ import {
   listVendors,
   listSisterCompanies,
   listUsers,
-  listActiveRecruiterOptions,
 } from "@/server/queries/org";
 import { parseDateRange, parseSort, parsePage, parseList, PAGE_SIZE } from "@/lib/filters";
 import { JOB_STATUSES } from "@/lib/labels";
-import type { JobStatus } from "@/generated/prisma/enums";
+import type { JobStatus, Discipline } from "@/generated/prisma/enums";
 
 function clean(value: string | string[] | undefined): string | undefined {
   const single = Array.isArray(value) ? value[0] : value;
@@ -43,6 +44,10 @@ function asJobSource(value: string | undefined): JobSource | undefined {
   return value === "manual" || value === "randstad" ? value : undefined;
 }
 
+function asDiscipline(value: string | undefined): Discipline | undefined {
+  return value === "IT" || value === "NON_IT" ? value : undefined;
+}
+
 export default async function JobsPage({
   searchParams,
 }: {
@@ -57,6 +62,7 @@ export default async function JobsPage({
     sisterCompanySourceId: clean(sp.sisterCompanySourceId),
     recruiterId: parseList(sp.recruiterId),
     status: clean(sp.status),
+    discipline: clean(sp.discipline),
     location: clean(sp.location),
     source: clean(sp.source),
     preset: clean(sp.preset),
@@ -72,6 +78,10 @@ export default async function JobsPage({
     JOB_DEFAULT_SORT,
   );
 
+  const currentUser = await getCurrentUser();
+  const isAdmin = hasFullAccess(currentUser);
+  const isTrashView = isAdmin && clean(sp.trash) === "1";
+
   const filters: JobListFilters = {
     q: current.q,
     clientId: current.clientId,
@@ -79,6 +89,7 @@ export default async function JobsPage({
     sisterCompanySourceId: current.sisterCompanySourceId,
     recruiterId: current.recruiterId,
     status: asJobStatus(current.status),
+    discipline: asDiscipline(current.discipline),
     location: current.location,
     source: activeSource,
     createdRange: parseDateRange({
@@ -88,6 +99,7 @@ export default async function JobsPage({
     }),
     sort,
     page: parsePage(clean(sp.page)),
+    trash: isTrashView,
   };
 
   const [
@@ -96,8 +108,6 @@ export default async function JobsPage({
     vendors,
     sources,
     recruiters,
-    activeRecruiters,
-    currentUser,
     lastImport,
   ] = await Promise.all([
     listJobs(filters),
@@ -105,10 +115,6 @@ export default async function JobsPage({
     listVendors(),
     listSisterCompanies(),
     listUsers(),
-    // Picker source for inline assignment — active recruiters only (excludes
-    // admins + inactive users, matches what the job form uses).
-    listActiveRecruiterOptions(),
-    getCurrentUser(),
     // Only fetched (used) on the Randstad tab as admin, but cheap enough to
     // always run in parallel — it's a single indexed findFirst.
     getLastIlaborImport(),
@@ -116,7 +122,7 @@ export default async function JobsPage({
 
   const showLastImportBanner =
     activeSource === "randstad" &&
-    currentUser?.role === "ADMIN" &&
+    hasFullAccess(currentUser) &&
     lastImport !== null;
 
   let bannerCounts: { createdCount: number; updatedCount: number } | null = null;
@@ -151,8 +157,24 @@ export default async function JobsPage({
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Jobs" description="All job requirements and their pipelines.">
-        {currentUser?.role === "ADMIN" ? (
+      {isTrashView && (
+        <Link
+          href="/jobs"
+          className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to jobs
+        </Link>
+      )}
+      <PageHeader
+        title={isTrashView ? "Trash" : "Jobs"}
+        description={
+          isTrashView
+            ? `Trashed jobs, restorable for ${JOB_TRASH_RETENTION_DAYS} days before they're permanently erased.`
+            : "All job requirements and their pipelines."
+        }
+      >
+        {!isTrashView && isAdmin ? (
           <>
             <LinkButton href="/jobs/imports" variant="secondary">
               <History className="h-4 w-4" />
@@ -162,17 +184,25 @@ export default async function JobsPage({
               <Download className="h-4 w-4" />
               Import from iLabor
             </LinkButton>
+            <LinkButton href="/jobs?trash=1" variant="secondary">
+              <Trash2 className="h-4 w-4" />
+              Trash
+            </LinkButton>
           </>
         ) : null}
-        <LinkButton href="/jobs/new">
-          <Plus className="h-4 w-4" />
-          Add job
-        </LinkButton>
+        {!isTrashView && (
+          <LinkButton href="/jobs/new">
+            <Plus className="h-4 w-4" />
+            Add job
+          </LinkButton>
+        )}
       </PageHeader>
 
-      <JobSourceTabs active={activeSource} searchParams={sp} />
+      {!isTrashView && (
+        <JobSourceTabs active={activeSource} searchParams={sp} />
+      )}
 
-      {showLastImportBanner && lastImport ? (
+      {!isTrashView && showLastImportBanner && lastImport ? (
         <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
           Last imported{" "}
           {bannerCounts ? (
@@ -201,31 +231,31 @@ export default async function JobsPage({
         </div>
       ) : null}
 
-      <JobFilters
-        clients={clients}
-        vendors={vendors}
-        sources={sources}
-        recruiters={recruiters}
-      />
+      {!isTrashView && (
+        <JobFilters
+          clients={clients}
+          vendors={vendors}
+          sources={sources}
+          recruiters={recruiters}
+        />
+      )}
 
       {total === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">
           <p className="text-sm text-slate-500">
-            {hasFilters
-              ? "No jobs match these filters."
-              : "No jobs yet. Add your first job to get started."}
+            {isTrashView
+              ? "Trash is empty."
+              : hasFilters
+                ? "No jobs match these filters."
+                : "No jobs yet. Add your first job to get started."}
           </p>
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="text-xs text-slate-500">
-            {total} job{total === 1 ? "" : "s"}
-          </p>
           <JobsTable
             rows={jobs}
+            countLabel={`${total} job${total === 1 ? "" : "s"}`}
             pageOffset={(page - 1) * PAGE_SIZE}
-            canEditRecruiters={currentUser?.role === "ADMIN"}
-            allRecruiters={activeRecruiters}
           />
           <Pagination page={page} totalPages={totalPages} total={total} />
         </div>

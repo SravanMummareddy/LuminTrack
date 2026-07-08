@@ -41,7 +41,7 @@ const JUNE = { year: 2026, monthIndex: 5 }; // June 2026 â€” Jun 1 is a Monday â
  */
 async function seedScorecard() {
   const admin = await testPrisma.user.create({
-    data: { fullName: "Admin", email: "admin@s.local", passwordHash: "x", role: "ADMIN" },
+    data: { fullName: "Admin", email: "admin@s.local", passwordHash: "x", role: "MANAGER" },
   });
   const recA = await testPrisma.user.create({
     data: { fullName: "Rec A", email: "a@s.local", passwordHash: "x", role: "RECRUITER", empId: "EMP-101", teamLabel: "Alpha" },
@@ -64,7 +64,6 @@ async function seedScorecard() {
     testPrisma.job.create({
       data: {
         title: "Role",
-        candidateRate: 80,
         client: { connect: { id: client.id } },
         vendor: { connect: { id: vendorId } },
         createdBy: { connect: { id: admin.id } },
@@ -77,7 +76,6 @@ async function seedScorecard() {
     testPrisma.submission.create({
       data: {
         status: status as never,
-        candidateRate: 80,
         submittedAt: when,
         candidate: { connect: { id: cand.id } },
         job: { connect: { id: jobId } },

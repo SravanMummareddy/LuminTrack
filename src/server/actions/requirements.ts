@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/lib/session";
-import { canManageRequirements } from "@/lib/permissions";
+import { canManageRequirements, hasFullAccess } from "@/lib/permissions";
 import { logActivity } from "@/server/activity";
 import { deriveTeamLead } from "@/server/team-lead";
 import {
@@ -27,14 +27,12 @@ function readRequirement(formData: FormData) {
     location: formData.get("location") ?? "",
     payRate: formData.get("payRate") ?? "",
     billRate: formData.get("billRate") ?? "",
-    candidateRate: formData.get("candidateRate") ?? "",
     clientRate: formData.get("clientRate") ?? "",
     engagement: formData.get("engagement") ?? "",
     vendorRecruiterName: formData.get("vendorRecruiterName") ?? "",
     jobDuties: formData.get("jobDuties") ?? "",
     teamLead: formData.get("teamLead") ?? "",
     submissionNotes: formData.get("submissionNotes") ?? "",
-    resumeDriveLink: formData.get("resumeDriveLink") ?? "",
   };
 }
 
@@ -79,14 +77,12 @@ export async function createVendorRequirement(
         location: d.location ?? job.location ?? null,
         payRate: d.payRate ?? null,
         billRate: d.billRate ?? null,
-        candidateRate: d.candidateRate ?? null,
         clientRate: d.clientRate ?? null,
         engagement: d.engagement ?? null,
         vendorRecruiterName: d.vendorRecruiterName ?? null,
         jobDuties: d.jobDuties ?? null,
         teamLead: teamLead ?? null,
         submissionNotes: d.submissionNotes ?? null,
-        resumeDriveLink: d.resumeDriveLink ?? null,
         createdById: user.id,
       },
     });
@@ -146,14 +142,12 @@ export async function updateVendorRequirement(
         location: d.location ?? null,
         payRate: d.payRate ?? null,
         billRate: d.billRate ?? null,
-        candidateRate: d.candidateRate ?? null,
         clientRate: d.clientRate ?? null,
         engagement: d.engagement ?? null,
         vendorRecruiterName: d.vendorRecruiterName ?? null,
         jobDuties: d.jobDuties ?? null,
         teamLead: teamLead ?? null,
         submissionNotes: d.submissionNotes ?? null,
-        resumeDriveLink: d.resumeDriveLink ?? null,
       },
     });
     await logActivity(tx, {
@@ -204,12 +198,46 @@ export async function cancelVendorRequirement(formData: FormData): Promise<void>
   redirect("/vendor-portal");
 }
 
-/** Rolls back the requirement claim when a shared submission gate fires inside
- *  the convert transaction (so we never leave a CONVERTED requirement without a
- *  submission). Caught by the action and surfaced as a `needsConfirm` prompt. */
-class ConvertGate extends Error {
+/** Closes an OPEN requirement once it's been fulfilled — the submissions made
+ *  against it live on. Uses the (repurposed) CONVERTED status = "Closed". */
+export async function closeVendorRequirement(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  if (!canManageRequirements(user)) return;
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) return;
+
+  const existing = await prisma.vendorRequirement.findUnique({
+    where: { id },
+    select: { id: true, status: true },
+  });
+  if (!existing || existing.status !== "OPEN") {
+    redirect(`/vendor-portal/${id}`);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.vendorRequirement.update({
+      where: { id },
+      data: { status: "CONVERTED", convertedAt: new Date(), convertedById: user.id },
+    });
+    await logActivity(tx, {
+      entityType: "REQUIREMENT",
+      action: "REQUIREMENT_CONVERTED",
+      description: "Vendor requirement closed",
+      performedById: user.id,
+      requirementId: id,
+    });
+  });
+
+  revalidatePath("/vendor-portal");
+  redirect(`/vendor-portal/${id}`);
+}
+
+/** Aborts the submit transaction when a shared submission gate fires (duplicate
+ *  / iLabor closed / cap) so nothing partial is written. Caught by the action
+ *  and surfaced as a `needsConfirm` prompt. */
+class SubmitGate extends Error {
   constructor(public result: CreateSubmissionResult) {
-    super("convert-gate");
+    super("submit-gate");
   }
 }
 
@@ -227,12 +255,9 @@ export async function convertRequirementToSubmission(
     candidateId: formData.get("candidateId") ?? "",
     jobId: formData.get("jobId") ?? "",
     submittedById: formData.get("submittedById") ?? "",
-    candidateRate: formData.get("candidateRate") ?? "",
     submissionNotes: formData.get("submissionNotes") ?? "",
     resumeChoice: formData.get("resumeChoice") ?? "none",
     candidateResumeId: formData.get("candidateResumeId") ?? "",
-    newResumeLabel: formData.get("newResumeLabel") ?? "",
-    newResumeLink: formData.get("newResumeLink") ?? "",
     engagement: formData.get("engagement") ?? "",
     vendorRecruiterName: formData.get("vendorRecruiterName") ?? "",
     jobDuties: formData.get("jobDuties") ?? "",
@@ -255,6 +280,9 @@ export async function convertRequirementToSubmission(
   const ilaborOverrideReason = String(
     formData.get("ilaborOverrideReason") ?? "",
   ).trim();
+  const candidateStatusOverrideReason = String(
+    formData.get("candidateStatusOverrideReason") ?? "",
+  ).trim();
 
   const requirement = await prisma.vendorRequirement.findUnique({
     where: { id: requirementId },
@@ -262,7 +290,7 @@ export async function convertRequirementToSubmission(
   });
   if (!requirement) return { error: "This requirement no longer exists." };
   if (requirement.status !== "OPEN")
-    return { error: "This requirement has already been converted or cancelled." };
+    return { error: "This requirement is closed or cancelled and no longer accepts submissions." };
 
   const [job, candidate] = await Promise.all([
     prisma.job.findUnique({
@@ -311,18 +339,34 @@ export async function convertRequirementToSubmission(
     return {
       error: `${candidate.fullName} has been archived — restore the candidate before converting.`,
     };
-  if (candidate.status === "NOT_INTERESTED" || candidate.status === "DO_NOT_CONTACT")
+
+  // Candidate-status soft block (warn + override) — parallels the direct-submit
+  // path. A Not-interested / Do-not-contact candidate can still be submitted
+  // with an explicit reason (captured on the audit trail).
+  const candidateBlocked =
+    candidate.status === "NOT_INTERESTED" ||
+    candidate.status === "DO_NOT_CONTACT";
+  if (candidateBlocked && !candidateStatusOverrideReason)
     return {
-      error: `${candidate.fullName} is marked "${CANDIDATE_STATUS_LABEL[candidate.status]}" — cannot convert.`,
+      needsConfirm: "candidate_status",
+      error: `${candidate.fullName} is marked "${CANDIDATE_STATUS_LABEL[candidate.status]}". Add a reason to submit anyway.`,
     };
 
   // Resolve a picked résumé up front (also drives the archived-résumé warn).
-  let pickedResume: { id: string; driveLink: string } | null = null;
+  let pickedResume: {
+    id: string;
+    blobUrl: string | null;
+  } | null = null;
   let pickedResumeArchived = false;
   if (d.resumeChoice === "existing" && d.candidateResumeId) {
     const resume = await prisma.candidateResume.findUnique({
       where: { id: d.candidateResumeId },
-      select: { id: true, driveLink: true, candidateId: true, isActive: true },
+      select: {
+        id: true,
+        blobUrl: true,
+        candidateId: true,
+        isActive: true,
+      },
     });
     if (!resume || resume.candidateId !== d.candidateId)
       return {
@@ -331,7 +375,7 @@ export async function convertRequirementToSubmission(
           candidateResumeId: "Pick a resume that belongs to this candidate.",
         },
       };
-    pickedResume = { id: resume.id, driveLink: resume.driveLink };
+    pickedResume = { id: resume.id, blobUrl: resume.blobUrl };
     pickedResumeArchived = !resume.isActive;
   }
 
@@ -361,34 +405,13 @@ export async function convertRequirementToSubmission(
       };
   }
 
-  const newResume =
-    !pickedResume && d.resumeChoice === "new" && d.newResumeLabel && d.newResumeLink
-      ? { label: d.newResumeLabel, link: d.newResumeLink }
-      : null;
-
   let createdId: string | null = null;
-  let alreadyConverted = false;
   try {
     await prisma.$transaction(async (tx) => {
-      // Idempotent claim — only the converter that flips OPEN→CONVERTED proceeds,
-      // so a double-submit / race can't create two submissions.
-      const claim = await tx.vendorRequirement.updateMany({
-        where: { id: requirementId, status: "OPEN" },
-        data: {
-          status: "CONVERTED",
-          convertedAt: new Date(),
-          convertedById: user.id,
-        },
-      });
-      if (claim.count === 0) {
-        alreadyConverted = true;
-        return;
-      }
       const res = await createSubmissionRecord(tx, {
         candidateId: d.candidateId,
         jobId: d.jobId,
         submittedById: d.submittedById,
-        candidateRate: d.candidateRate ?? null,
         submissionNotes: d.submissionNotes ?? null,
         engagement: d.engagement ?? null,
         vendorRecruiterName: d.vendorRecruiterName ?? null,
@@ -398,30 +421,32 @@ export async function convertRequirementToSubmission(
         clientRate: d.clientRate ?? null,
         teamLead: d.teamLead ?? null,
         pickedResume,
-        newResume,
         duplicateReason,
         ilaborOverrideReason,
+        candidateStatusOverrideReason,
         job,
         candidateFullName: candidate.fullName,
-        actor: { id: user.id, fullName: user.fullName, isAdmin: user.role === "ADMIN" },
+        actor: { id: user.id, fullName: user.fullName, isAdmin: hasFullAccess(user) },
       });
-      // A shared gate fired — roll back the claim so the requirement stays OPEN.
-      if (res.kind !== "created") throw new ConvertGate(res);
-      await tx.vendorRequirement.update({
-        where: { id: requirementId },
-        data: { convertedSubmissionId: res.submissionId },
+      // A shared gate fired — abort so nothing partial is written.
+      if (res.kind !== "created") throw new SubmitGate(res);
+      // Link the new submission back to the requirement. The VPR stays OPEN so
+      // more candidates can be submitted against it (1:many).
+      await tx.submission.update({
+        where: { id: res.submissionId },
+        data: { vendorRequirementId: requirementId },
       });
       await logActivity(tx, {
         entityType: "REQUIREMENT",
         action: "REQUIREMENT_CONVERTED",
-        description: `${candidate.fullName} → submission for "${job.title}"`,
+        description: `${candidate.fullName} submitted against requirement for "${job.title}"`,
         performedById: user.id,
         requirementId,
       });
       createdId = res.submissionId;
     });
   } catch (e) {
-    if (e instanceof ConvertGate) {
+    if (e instanceof SubmitGate) {
       const r = e.result;
       if (r.kind === "duplicate")
         return {
@@ -444,8 +469,6 @@ export async function convertRequirementToSubmission(
     }
     throw e;
   }
-  if (alreadyConverted)
-    return { error: "This requirement was just converted by someone else." };
 
   revalidatePath("/vendor-portal");
   revalidatePath(`/vendor-portal/${requirementId}`);

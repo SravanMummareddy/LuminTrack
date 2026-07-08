@@ -54,7 +54,6 @@ const baseJoinArgs = {
   submissionId: "sub1",
   candidateId: "cand1",
   jobId: "job1",
-  candidateRate: null,
   candidateFullName: "Noah Davis",
   jobTitle: ".NET Developer",
   candidateStatus: "AVAILABLE",

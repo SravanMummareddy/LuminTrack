@@ -1,13 +1,10 @@
 import { prisma } from "@/server/db";
 import {
-  AGING_BUCKETS,
-  agingBucket,
   buildJobWhere,
   buildSubmissionWhere,
   daysSince,
   type AnalyticsFilters,
 } from "@/lib/analytics";
-import { JOB_STATUSES, SUBMISSION_STATUSES, jobSourceLabel } from "@/lib/labels";
 import type { JobStatus, SubmissionStatus } from "@/generated/prisma/enums";
 
 /**
@@ -21,9 +18,6 @@ export async function getDashboardData(filters: AnalyticsFilters) {
       where: buildJobWhere(filters),
       select: {
         status: true,
-        createdAt: true,
-        sisterCompanySource: { select: { name: true } },
-        sourceOther: true,
         _count: { select: { assignments: true } },
       },
     }),
@@ -43,22 +37,6 @@ export async function getDashboardData(filters: AnalyticsFilters) {
   ]);
 
   // ── Jobs ──
-  const jobsByStatus = JOB_STATUSES.map((status) => ({
-    status,
-    count: jobs.filter((j) => j.status === status).length,
-  }));
-
-  const sourceMap = new Map<string, { name: string; count: number }>();
-  for (const job of jobs) {
-    const name = jobSourceLabel(job);
-    const entry = sourceMap.get(name) ?? { name, count: 0 };
-    entry.count += 1;
-    sourceMap.set(name, entry);
-  }
-  const jobsBySource = [...sourceMap.values()].sort(
-    (a, b) => b.count - a.count,
-  );
-
   // "Active" = OPEN/ON_HOLD jobs that have at least one recruiter assigned.
   // Excludes bulk-imported iLabor reqs no one has picked up yet.
   // `openJobs`/`onHoldJobs` mirror the same assigned-only scope so the
@@ -69,24 +47,7 @@ export async function getDashboardData(filters: AnalyticsFilters) {
   const openJobs = jobs.filter((j) => isActive(j) && j.status === "OPEN").length;
   const onHoldJobs = jobs.filter((j) => isActive(j) && j.status === "ON_HOLD").length;
 
-  // Open-job aging — OPEN and ON_HOLD jobs only.
-  const agingCounts: Record<string, number> = {};
-  for (const bucket of AGING_BUCKETS) agingCounts[bucket] = 0;
-  for (const job of jobs) {
-    if (job.status === "OPEN" || job.status === "ON_HOLD") {
-      agingCounts[agingBucket(daysSince(job.createdAt))] += 1;
-    }
-  }
-  const aging = AGING_BUCKETS.map((bucket) => ({
-    bucket,
-    count: agingCounts[bucket],
-  }));
-
   // ── Submissions ──
-  const submissionsByStatus = SUBMISSION_STATUSES.map((status) => ({
-    status,
-    count: submissions.filter((s) => s.status === status).length,
-  }));
   const subStatusCount = (s: SubmissionStatus) =>
     submissions.filter((x) => x.status === s).length;
 
@@ -116,15 +77,10 @@ export async function getDashboardData(filters: AnalyticsFilters) {
     });
 
   return {
-    totalJobs: jobs.length,
     activeJobs,
     openJobs,
     onHoldJobs,
-    jobsByStatus,
-    jobsBySource,
-    aging,
     totalSubmissions: submissions.length,
-    submissionsByStatus,
     interviewCount,
     selected: subStatusCount("SELECTED"),
     offerReleased: subStatusCount("OFFER_RELEASED"),
@@ -192,9 +148,14 @@ export async function getMyWork(userId: string) {
       },
     }),
     // OPEN vendor requirements assigned to this recruiter — planning records
-    // waiting to be moved to a submission.
+    // waiting to be moved to a submission. Only surface ones whose job is still
+    // accepting, so the card never points the recruiter at a convert dead-end.
     prisma.vendorRequirement.findMany({
-      where: { recruiterId: userId, status: "OPEN" },
+      where: {
+        recruiterId: userId,
+        status: "OPEN",
+        job: { status: { notIn: ["CLOSED", "FILLED", "CANCELLED"] } },
+      },
       orderBy: { createdAt: "asc" },
       take: 10,
       select: {
@@ -210,6 +171,72 @@ export async function getMyWork(userId: string) {
 }
 
 export type MyWork = Awaited<ReturnType<typeof getMyWork>>;
+
+/**
+ * The acting user's most recent actions, for the Dashboard's scope=me "Recent
+ * activity" card. Each row links straight to the entity it touched (the audit
+ * `description` is already human-readable, e.g. `Jane submitted to "…"`).
+ */
+export async function getMyRecentActivity(userId: string, limit = 8) {
+  const rows = await prisma.activity.findMany({
+    where: { performedById: userId },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      action: true,
+      description: true,
+      createdAt: true,
+      submissionId: true,
+      requirementId: true,
+      candidateId: true,
+      jobId: true,
+      benchConsultantId: true,
+      // The entity's name, so a terse description ("Status changed…") still says
+      // which job/candidate it was about.
+      submission: {
+        select: {
+          candidate: { select: { fullName: true } },
+          job: { select: { title: true } },
+        },
+      },
+      requirement: { select: { job: { select: { title: true } } } },
+      candidate: { select: { fullName: true } },
+      job: { select: { title: true } },
+      benchConsultant: { select: { fullName: true } },
+    },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    action: r.action,
+    description: r.description,
+    createdAt: r.createdAt,
+    entity: r.submission
+      ? (r.submission.candidate?.fullName ?? r.submission.job?.title ?? null)
+      : r.requirement
+        ? (r.requirement.job?.title ?? null)
+        : r.candidate
+          ? r.candidate.fullName
+          : r.job
+            ? r.job.title
+            : r.benchConsultant
+              ? r.benchConsultant.fullName
+              : null,
+    href: r.submissionId
+      ? `/submissions/${r.submissionId}`
+      : r.requirementId
+        ? `/vendor-portal/${r.requirementId}`
+        : r.candidateId
+          ? `/candidates/${r.candidateId}`
+          : r.jobId
+            ? `/jobs/${r.jobId}`
+            : r.benchConsultantId
+              ? `/bench/${r.benchConsultantId}`
+              : null,
+  }));
+}
+
+export type MyRecentActivity = Awaited<ReturnType<typeof getMyRecentActivity>>;
 
 /**
  * "My jobs" mini-list for the Dashboard's scope=me view. Returns the OPEN /

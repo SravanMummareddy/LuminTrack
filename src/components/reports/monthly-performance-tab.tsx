@@ -63,10 +63,11 @@ export async function MonthlyPerformanceTab({
       <ScorecardGrid scorecard={scorecard} />
 
       <p className="text-xs text-slate-400">
-        Submissions &amp; Backouts are counted on the submission date; Interviews
-        on the scheduled date; Closures on the placement start date; New vendors
-        when the company first ever submits to a vendor (credited to whoever made
-        that first submission).
+        Submissions are counted on the submission date; Interviews on the
+        scheduled date; Backouts on the date the candidate backed out; Closures
+        on the date the offer was accepted; New vendors when the company first
+        ever submits to a vendor (credited to whoever made that first
+        submission).
       </p>
     </div>
   );

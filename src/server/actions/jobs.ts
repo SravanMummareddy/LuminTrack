@@ -2,11 +2,21 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { del } from "@vercel/blob";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/lib/session";
+import {
+  canManageOrgEntities,
+  canEditJobRatesAndAssignment,
+  hasFullAccess,
+} from "@/lib/permissions";
 import { logActivity } from "@/server/activity";
-import { deriveTeamLead } from "@/server/team-lead";
-import { canManageRequirements } from "@/lib/permissions";
+import { isTerminalJobStatus } from "@/lib/job-flow";
+import {
+  hardEraseJob,
+  JOB_TRASH_RETENTION_DAYS,
+  JOB_ARCHIVE_PREFIX,
+} from "@/server/job-erase";
 import { jobSchema, JOB_STATUS_VALUES } from "@/lib/validation/job";
 import { toFieldErrors } from "@/lib/validation/common";
 import { JOB_STATUS_LABEL, OTHER_SOURCE, NEW_ORG_ENTITY } from "@/lib/labels";
@@ -29,39 +39,6 @@ async function findOrCreateVendor(tx: Prisma.TransactionClient, name: string) {
     select: { id: true },
   });
   return existing ?? (await tx.vendor.create({ data: { name }, select: { id: true } }));
-}
-
-/**
- * Reads the optional "also plan a vendor requirement" section of the job-create
- * form. Returns null unless the section's checkbox is ticked. Fields are
- * `req_`-prefixed so they never collide with the job's own location/rate fields.
- */
-function readRequirementSection(formData: FormData) {
-  if (formData.get("createRequirement") == null) return null;
-  const str = (k: string): string | null => {
-    const v = String(formData.get(k) ?? "").trim();
-    return v ? v : null;
-  };
-  const num = (k: string): number | null => {
-    const raw = String(formData.get(k) ?? "").trim();
-    if (!raw) return null;
-    const n = Number(raw);
-    return Number.isFinite(n) && n >= 0 ? n : null;
-  };
-  const engagementRaw = str("req_engagement");
-  const engagement: "C2C" | "W2" | null =
-    engagementRaw === "C2C" ? "C2C" : engagementRaw === "W2" ? "W2" : null;
-  return {
-    recruiterId: str("req_recruiterId"),
-    location: str("req_location"),
-    payRate: num("req_payRate"),
-    billRate: num("req_billRate"),
-    candidateRate: num("req_candidateRate"),
-    clientRate: num("req_clientRate"),
-    engagement,
-    vendorRecruiterName: str("req_vendorRecruiterName"),
-    teamLead: str("req_teamLead"),
-  };
 }
 
 function parseSkillsCsv(raw: unknown): string[] {
@@ -87,7 +64,6 @@ function readJob(formData: FormData) {
     location: formData.get("location") ?? "",
     clientRate: formData.get("clientRate") ?? "",
     vendorRate: formData.get("vendorRate") ?? "",
-    candidateRate: formData.get("candidateRate") ?? "",
     description: formData.get("description") ?? "",
     notes: formData.get("notes") ?? "",
     recruiterIds: formData.getAll("recruiterIds").map(String),
@@ -100,6 +76,7 @@ function readJob(formData: FormData) {
     endDate: formData.get("endDate") ?? "",
     workMode: formData.get("workMode") ?? "",
     priority: formData.get("priority") ?? "",
+    discipline: formData.get("discipline") ?? "",
     targetCloseDate: formData.get("targetCloseDate") ?? "",
     postingUrl: formData.get("postingUrl") ?? "",
     workAuthRequirement: formData.get("workAuthRequirement") ?? "",
@@ -121,14 +98,17 @@ export async function createJob(
   const d = parsed.data;
   const isOtherSource = d.sisterCompanySourceId === OTHER_SOURCE;
 
-  // Inline "+ Add new client/vendor" — admin-only (matches Settings org writes).
-  const canCreateOrg = user.role === "ADMIN";
+  // Inline "+ Add new client/vendor" — full-access only (matches Settings org
+  // writes). Recruiters may create jobs, but not new org entities.
+  const canCreateOrg = canManageOrgEntities(user);
   const newClientName = String(formData.get("newClientName") ?? "").trim();
   const newVendorName = String(formData.get("newVendorName") ?? "").trim();
   const wantNewClient = d.clientId === NEW_ORG_ENTITY;
   const wantNewVendor = d.vendorId === NEW_ORG_ENTITY;
   if ((wantNewClient || wantNewVendor) && !canCreateOrg)
-    return { error: "Only admins can add a new client or vendor." };
+    return {
+      error: "Only managers and team leads can add a new client or vendor.",
+    };
   const orgErrors: Record<string, string> = {};
   if (wantNewClient && !newClientName)
     orgErrors.clientId = "Enter the new client name.";
@@ -136,16 +116,6 @@ export async function createJob(
     orgErrors.vendorId = "Enter the new vendor name.";
   if (Object.keys(orgErrors).length)
     return { error: "Please fix the highlighted fields.", fieldErrors: orgErrors };
-
-  // Optional "plan a vendor requirement" section — only admins / team leads can
-  // create requirements, so a non-privileged POST of req_ fields is ignored.
-  // Resolve the team lead before the tx (it reads the recruiter's team).
-  const reqSection = canManageRequirements(user)
-    ? readRequirementSection(formData)
-    : null;
-  const reqTeamLead = reqSection
-    ? (reqSection.teamLead ?? (await deriveTeamLead(reqSection.recruiterId)))
-    : null;
 
   const job = await prisma.$transaction(async (tx) => {
     // Resolve inline-added client/vendor first (create-or-reuse by name).
@@ -167,7 +137,6 @@ export async function createJob(
         location: d.location ?? null,
         clientRate: d.clientRate ?? null,
         vendorRate: d.vendorRate ?? null,
-        candidateRate: d.candidateRate ?? null,
         description: d.description ?? null,
         notes: d.notes ?? null,
         positions: d.positions ?? null,
@@ -179,17 +148,12 @@ export async function createJob(
         endDate: d.endDate ?? null,
         workMode: d.workMode ?? null,
         priority: d.priority ?? null,
+        discipline: d.discipline ?? null,
         targetCloseDate: d.targetCloseDate ?? null,
         postingUrl: d.postingUrl ?? null,
         workAuthRequirement: d.workAuthRequirement ?? null,
         skills: parseSkillsCsv(d.skills),
         createdById: user.id,
-        assignments: {
-          create: d.recruiterIds.map((recruiterId) => ({
-            recruiterId,
-            assignedById: user.id,
-          })),
-        },
       },
     });
     await logActivity(tx, {
@@ -200,36 +164,10 @@ export async function createJob(
       jobId: created.id,
     });
 
-    if (reqSection) {
-      const requirement = await tx.vendorRequirement.create({
-        data: {
-          jobId: created.id,
-          recruiterId: reqSection.recruiterId,
-          location: reqSection.location ?? d.location ?? null,
-          payRate: reqSection.payRate,
-          billRate: reqSection.billRate,
-          candidateRate: reqSection.candidateRate,
-          clientRate: reqSection.clientRate,
-          engagement: reqSection.engagement,
-          vendorRecruiterName: reqSection.vendorRecruiterName,
-          teamLead: reqTeamLead,
-          createdById: user.id,
-        },
-      });
-      await logActivity(tx, {
-        entityType: "REQUIREMENT",
-        action: "REQUIREMENT_CREATED",
-        description: `Vendor requirement created for "${created.title}"`,
-        performedById: user.id,
-        requirementId: requirement.id,
-      });
-    }
-
     return created;
   });
 
   revalidatePath("/jobs");
-  revalidatePath("/vendor-portal");
   redirect(`/jobs/${job.id}`);
 }
 
@@ -252,11 +190,24 @@ export async function updateJob(
   const nextSourceId = isOtherSource ? null : d.sisterCompanySourceId;
   const nextSourceOther = isOtherSource ? (d.sourceOther ?? null) : null;
 
-  const existing = await prisma.job.findUnique({
-    where: { id: jobId },
-    include: { assignments: true },
-  });
+  const existing = await prisma.job.findUnique({ where: { id: jobId } });
   if (!existing) return { error: "This job no longer exists." };
+
+  // Recruiters may edit basic job details + status, but NOT the commercial
+  // rates — those are manager/team-lead only. For a recruiter, force the rate
+  // inputs back to their stored values so a hand-crafted POST can't change them
+  // (the form also hides these controls). Recruiter ownership is a VPR concern.
+  const canRates = canEditJobRatesAndAssignment(user);
+  const effClientRate = canRates
+    ? (d.clientRate ?? null)
+    : existing.clientRate != null
+      ? Number(existing.clientRate)
+      : null;
+  const effVendorRate = canRates
+    ? (d.vendorRate ?? null)
+    : existing.vendorRate != null
+      ? Number(existing.vendorRate)
+      : null;
 
   // Record which scalar fields actually changed, for a meaningful audit entry.
   const changed: string[] = [];
@@ -273,9 +224,8 @@ export async function updateJob(
   );
   compare("status", existing.status, d.status);
   compare("location", existing.location, d.location);
-  compare("client rate", existing.clientRate?.toString(), d.clientRate);
-  compare("vendor rate", existing.vendorRate?.toString(), d.vendorRate);
-  compare("candidate rate", existing.candidateRate?.toString(), d.candidateRate);
+  compare("client rate", existing.clientRate?.toString(), effClientRate);
+  compare("vendor rate", existing.vendorRate?.toString(), effVendorRate);
   compare("description", existing.description, d.description);
   compare("notes", existing.notes, d.notes);
   compare("positions", existing.positions, d.positions);
@@ -305,22 +255,6 @@ export async function updateJob(
   const nextSkills = parseSkillsCsv(d.skills);
   compare("skills", existing.skills.join(", "), nextSkills.join(", "));
 
-  const currentRecruiters = new Set(existing.assignments.map((a) => a.recruiterId));
-  const desiredRecruiters = new Set(d.recruiterIds);
-  const toAdd = d.recruiterIds.filter((id) => !currentRecruiters.has(id));
-  const toRemove = [...currentRecruiters].filter((id) => !desiredRecruiters.has(id));
-
-  const affected = [...new Set([...toAdd, ...toRemove])];
-  const affectedUsers = affected.length
-    ? await prisma.user.findMany({
-        where: { id: { in: affected } },
-        select: { id: true, fullName: true },
-      })
-    : [];
-  const recruiterNames = new Map(
-    affectedUsers.map((u) => [u.id, u.fullName] as const),
-  );
-
   await prisma.$transaction(async (tx) => {
     await tx.job.update({
       where: { id: jobId },
@@ -332,9 +266,8 @@ export async function updateJob(
         sourceOther: nextSourceOther,
         status: d.status,
         location: d.location ?? null,
-        clientRate: d.clientRate ?? null,
-        vendorRate: d.vendorRate ?? null,
-        candidateRate: d.candidateRate ?? null,
+        clientRate: effClientRate,
+        vendorRate: effVendorRate,
         description: d.description ?? null,
         notes: d.notes ?? null,
         positions: d.positions ?? null,
@@ -346,21 +279,13 @@ export async function updateJob(
         endDate: d.endDate ?? null,
         workMode: d.workMode ?? null,
         priority: d.priority ?? null,
+        discipline: d.discipline ?? null,
         targetCloseDate: d.targetCloseDate ?? null,
         postingUrl: d.postingUrl ?? null,
         workAuthRequirement: d.workAuthRequirement ?? null,
         skills: nextSkills,
       },
     });
-
-    if (toRemove.length)
-      await tx.jobAssignment.deleteMany({
-        where: { jobId, recruiterId: { in: toRemove } },
-      });
-    for (const recruiterId of toAdd)
-      await tx.jobAssignment.create({
-        data: { jobId, recruiterId, assignedById: user.id },
-      });
 
     if (changed.length)
       await logActivity(tx, {
@@ -371,107 +296,11 @@ export async function updateJob(
         performedById: user.id,
         jobId,
       });
-    for (const recruiterId of toAdd)
-      await logActivity(tx, {
-        entityType: "JOB",
-        action: "RECRUITER_ASSIGNED",
-        description: `${recruiterNames.get(recruiterId) ?? "A recruiter"} assigned to the job`,
-        performedById: user.id,
-        jobId,
-      });
-    for (const recruiterId of toRemove)
-      await logActivity(tx, {
-        entityType: "JOB",
-        action: "RECRUITER_UNASSIGNED",
-        description: `${recruiterNames.get(recruiterId) ?? "A recruiter"} removed from the job`,
-        performedById: user.id,
-        jobId,
-      });
   });
 
   revalidatePath("/jobs");
   revalidatePath(`/jobs/${jobId}`);
   redirect(`/jobs/${jobId}`);
-}
-
-/**
- * Inline recruiter assignment from the Jobs list. Admin-only — matches the
- * Tier 1 pattern for org-entity writes. Mirrors `updateJob`'s assignment-diff
- * block: computes toAdd / toRemove against the current set, then writes one
- * RECRUITER_ASSIGNED per added user and one RECRUITER_UNASSIGNED per removed
- * user, all inside a single transaction so the JobAssignment rows and the
- * audit entries commit atomically.
- */
-export async function assignJobRecruiters(
-  jobId: string,
-  recruiterIds: string[],
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  const user = await requireUser();
-  if (user.role !== "ADMIN")
-    return { ok: false, error: "Only admins can change job assignments." };
-  if (!jobId.trim()) return { ok: false, error: "Missing job reference." };
-
-  // Defensive de-dup: client may send a stale checkbox state where the same
-  // id appears twice. Empty strings are dropped.
-  const desiredIds = Array.from(
-    new Set(recruiterIds.map((id) => String(id ?? "").trim()).filter(Boolean)),
-  );
-
-  const job = await prisma.job.findUnique({
-    where: { id: jobId },
-    include: { assignments: { select: { recruiterId: true } } },
-  });
-  if (!job) return { ok: false, error: "This job no longer exists." };
-
-  const currentSet = new Set(job.assignments.map((a) => a.recruiterId));
-  const desiredSet = new Set(desiredIds);
-  const toAdd = desiredIds.filter((id) => !currentSet.has(id));
-  const toRemove = [...currentSet].filter((id) => !desiredSet.has(id));
-
-  if (toAdd.length === 0 && toRemove.length === 0) {
-    // No-op — don't write a noise audit row.
-    return { ok: true };
-  }
-
-  const affected = [...new Set([...toAdd, ...toRemove])];
-  const affectedUsers = await prisma.user.findMany({
-    where: { id: { in: affected } },
-    select: { id: true, fullName: true },
-  });
-  const recruiterNames = new Map(
-    affectedUsers.map((u) => [u.id, u.fullName] as const),
-  );
-
-  await prisma.$transaction(async (tx) => {
-    if (toRemove.length)
-      await tx.jobAssignment.deleteMany({
-        where: { jobId, recruiterId: { in: toRemove } },
-      });
-    for (const recruiterId of toAdd)
-      await tx.jobAssignment.create({
-        data: { jobId, recruiterId, assignedById: user.id },
-      });
-    for (const recruiterId of toAdd)
-      await logActivity(tx, {
-        entityType: "JOB",
-        action: "RECRUITER_ASSIGNED",
-        description: `${recruiterNames.get(recruiterId) ?? "A recruiter"} assigned to the job`,
-        performedById: user.id,
-        jobId,
-      });
-    for (const recruiterId of toRemove)
-      await logActivity(tx, {
-        entityType: "JOB",
-        action: "RECRUITER_UNASSIGNED",
-        description: `${recruiterNames.get(recruiterId) ?? "A recruiter"} removed from the job`,
-        performedById: user.id,
-        jobId,
-      });
-  });
-
-  revalidatePath("/jobs");
-  revalidatePath(`/jobs/${jobId}`);
-  return { ok: true };
 }
 
 /**
@@ -495,13 +324,32 @@ export async function changeJobStatus(
   if (job.status === status)
     return { error: "Status is already set to that value." };
   const next = status as (typeof JOB_STATUS_VALUES)[number];
+  // Closing/filling/cancelling a job retires its open requirements too — they
+  // can't be worked once the job is done (same cascade as trashing a job). A
+  // job that FILLED succeeded, so its reqs read "fulfilled" (CONVERTED); a job
+  // that closed/cancelled was abandoned, so they read "cancelled".
+  const closing = isTerminalJobStatus(next);
+  const fulfilled = next === "FILLED";
+  const vprVerb = fulfilled ? "fulfilled" : "cancelled";
 
+  let closedVprs = 0;
   await prisma.$transaction(async (tx) => {
     await tx.job.update({ where: { id: jobId }, data: { status: next } });
+    if (closing) {
+      const res = await tx.vendorRequirement.updateMany({
+        where: { jobId, status: "OPEN" },
+        data: { status: fulfilled ? "CONVERTED" : "CANCELLED" },
+      });
+      closedVprs = res.count;
+    }
     await logActivity(tx, {
       entityType: "JOB",
       action: "JOB_UPDATED",
-      description: `Status changed from ${JOB_STATUS_LABEL[job.status]} to ${JOB_STATUS_LABEL[next]}`,
+      description:
+        `Status changed from ${JOB_STATUS_LABEL[job.status]} to ${JOB_STATUS_LABEL[next]}` +
+        (closedVprs > 0
+          ? ` — ${vprVerb} ${closedVprs} open requirement${closedVprs === 1 ? "" : "s"}`
+          : ""),
       oldValue: JOB_STATUS_LABEL[job.status],
       newValue: JOB_STATUS_LABEL[next],
       performedById: user.id,
@@ -511,8 +359,217 @@ export async function changeJobStatus(
 
   revalidatePath("/jobs");
   revalidatePath(`/jobs/${jobId}`);
+  revalidatePath("/vendor-portal");
   return {
     ok: true,
-    toast: { title: `Job status updated to ${JOB_STATUS_LABEL[next]}` },
+    toast: {
+      title: `Job status updated to ${JOB_STATUS_LABEL[next]}`,
+      ...(closedVprs > 0
+        ? {
+            description: `${closedVprs} open requirement${closedVprs === 1 ? "" : "s"} ${vprVerb}.`,
+          }
+        : {}),
+    },
   };
+}
+
+/**
+ * Bulk status change for the selected jobs. Same permissions + per-job audit as
+ * changeJobStatus. Skips jobs already at the target status; caps the id set so a
+ * request can't touch the whole table.
+ */
+export async function bulkChangeJobStatus(
+  formData: FormData,
+): Promise<{ changed: number; skipped: number }> {
+  const user = await requireUser();
+  const status = String(formData.get("status") ?? "");
+  if (!(JOB_STATUS_VALUES as readonly string[]).includes(status))
+    return { changed: 0, skipped: 0 };
+  const next = status as (typeof JOB_STATUS_VALUES)[number];
+  const closing = isTerminalJobStatus(next);
+  const fulfilled = next === "FILLED";
+  const vprVerb = fulfilled ? "fulfilled" : "cancelled";
+
+  const ids = [
+    ...new Set(formData.getAll("ids").map(String).filter(Boolean)),
+  ].slice(0, 200);
+  if (!ids.length) return { changed: 0, skipped: 0 };
+
+  const jobs = await prisma.job.findMany({
+    where: { id: { in: ids }, status: { not: next } },
+    select: { id: true, status: true },
+  });
+  await prisma.$transaction(async (tx) => {
+    for (const j of jobs) {
+      await tx.job.update({ where: { id: j.id }, data: { status: next } });
+      // Same cascade as the single close/trash: retire the job's open reqs.
+      let closedVprs = 0;
+      if (closing) {
+        const res = await tx.vendorRequirement.updateMany({
+          where: { jobId: j.id, status: "OPEN" },
+          data: { status: fulfilled ? "CONVERTED" : "CANCELLED" },
+        });
+        closedVprs = res.count;
+      }
+      await logActivity(tx, {
+        entityType: "JOB",
+        action: "JOB_UPDATED",
+        description:
+          `Status changed from ${JOB_STATUS_LABEL[j.status]} to ${JOB_STATUS_LABEL[next]} (bulk)` +
+          (closedVprs > 0
+            ? ` — ${vprVerb} ${closedVprs} open requirement${closedVprs === 1 ? "" : "s"}`
+            : ""),
+        oldValue: JOB_STATUS_LABEL[j.status],
+        newValue: JOB_STATUS_LABEL[next],
+        performedById: user.id,
+        jobId: j.id,
+      });
+    }
+  });
+  revalidatePath("/jobs");
+  if (closing) revalidatePath("/vendor-portal");
+  return { changed: jobs.length, skipped: ids.length - jobs.length };
+}
+
+// ── Job lifecycle: trash → restore → erase (admin/manager only) ─────────────
+
+/**
+ * Move a job to trash: hidden everywhere, restorable, and scheduled to auto-erase
+ * after the retention window. The ladder is Open → Close → Trash; if the job is
+ * still Open/On-hold, trashing Closes it first (the UI confirms this). Its OPEN
+ * vendor requirements are auto-cancelled. Blocked only while an ACTIVE placement
+ * exists — end that first. Submissions are kept (they stay in the submissions
+ * list as history).
+ */
+export async function trashJob(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requireUser();
+  if (!hasFullAccess(user))
+    return { error: "Only managers and team leads can trash a job." };
+
+  const jobId = String(formData.get("id") ?? "").trim();
+  const job = await prisma.job.findUnique({
+    where: { id: jobId },
+    select: { status: true, deletedAt: true, erasedAt: true },
+  });
+  if (!job) return { error: "Job not found." };
+  if (job.erasedAt) return { error: "This job has already been erased." };
+  if (job.deletedAt) return { error: "This job is already in trash." };
+
+  const activePlacements = await prisma.placement.count({
+    where: { jobId, status: { in: ["ACTIVE", "EXTENDED"] } },
+  });
+  if (activePlacements > 0)
+    return {
+      error: "This job has an active placement — end the placement first.",
+    };
+
+  const willClose = !isTerminalJobStatus(job.status);
+  const purgeOn = new Date(
+    Date.now() + JOB_TRASH_RETENTION_DAYS * 86_400_000,
+  );
+  await prisma.$transaction(async (tx) => {
+    await tx.job.update({
+      where: { id: jobId },
+      data: {
+        deletedAt: new Date(),
+        // Auto-close an Open/On-hold job on the way to trash.
+        ...(willClose ? { status: "CLOSED" as const } : {}),
+      },
+    });
+    // Auto-cancel any OPEN requirements — they can't be worked once the job's gone.
+    await tx.vendorRequirement.updateMany({
+      where: { jobId, status: "OPEN" },
+      data: { status: "CANCELLED" },
+    });
+    await logActivity(tx, {
+      entityType: "JOB",
+      action: "JOB_UPDATED",
+      description: `${willClose ? "Closed + moved" : "Moved"} to trash — auto-erases ${purgeOn.toISOString().slice(0, 10)}`,
+      performedById: user.id,
+      jobId,
+    });
+  });
+
+  revalidatePath("/jobs");
+  redirect(`/jobs/${jobId}`);
+}
+
+/** Restore a trashed job before the retention window lapses (keeps its status). */
+export async function restoreJobFromTrash(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  if (!hasFullAccess(user)) return;
+  const jobId = String(formData.get("id") ?? "").trim();
+  if (!jobId) return;
+  await prisma.$transaction(async (tx) => {
+    await tx.job.update({
+      where: { id: jobId },
+      data: { deletedAt: null },
+    });
+    await logActivity(tx, {
+      entityType: "JOB",
+      action: "JOB_UPDATED",
+      description: "Restored from trash",
+      performedById: user.id,
+      jobId,
+    });
+  });
+  revalidatePath("/jobs");
+  revalidatePath(`/jobs/${jobId}`);
+}
+
+/**
+ * Permanently erase a trashed job now (admin + type-the-title confirm). Backs up
+ * to Blob then, per the history-protecting policy, either hard-removes an empty
+ * job or tombstones one with submissions. Only reachable from trash.
+ */
+export async function eraseJobNow(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requireUser();
+  if (!hasFullAccess(user))
+    return { error: "Only managers and team leads can erase a job." };
+
+  const jobId = String(formData.get("id") ?? "").trim();
+  const confirmTitle = String(formData.get("confirmTitle") ?? "").trim();
+  const job = await prisma.job.findUnique({
+    where: { id: jobId },
+    select: { title: true, deletedAt: true, erasedAt: true },
+  });
+  if (!job) return { error: "Job not found." };
+  if (job.erasedAt) return { error: "This job has already been erased." };
+  if (!job.deletedAt)
+    return { error: "Move the job to trash before erasing it." };
+  if (confirmTitle !== job.title)
+    return {
+      fieldErrors: { confirmTitle: "Type the job's title exactly to confirm." },
+    };
+
+  await hardEraseJob(jobId, user.id);
+  revalidatePath("/jobs");
+  // The row may be gone (empty job) — send them to the list, not a 404 detail.
+  redirect("/jobs?trash=1");
+}
+
+/**
+ * "Remove for good" — permanently delete a stored job backup zip from Blob.
+ * Admin only; confined to the job-archive prefix.
+ */
+export async function removeJobArchive(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  if (!hasFullAccess(user)) return;
+  const pathname = String(formData.get("pathname") ?? "").trim();
+  const url = String(formData.get("url") ?? "").trim();
+  if (!pathname.startsWith(JOB_ARCHIVE_PREFIX)) return;
+  await del(url || pathname);
+  await logActivity(prisma, {
+    entityType: "JOB",
+    action: "JOB_ERASED",
+    description: `Removed job backup ${pathname.split("/").pop()} — no longer recoverable`,
+    performedById: user.id,
+  });
+  revalidatePath("/settings");
 }

@@ -12,6 +12,7 @@ import {
   CirclePause,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { roleLabel } from "@/lib/permissions";
 import { Table, Th, Td } from "@/components/ui/table";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
 import { StatCard } from "@/components/dashboard/stat-card";
@@ -125,8 +126,8 @@ export default async function RecruiterDetailPage({
             <h1 className="text-xl font-semibold text-slate-900">
               {user.fullName}
             </h1>
-            <Badge tone={user.role === "ADMIN" ? "indigo" : "slate"}>
-              {user.role === "ADMIN" ? "Administrator" : "Recruiter"}
+            <Badge tone={user.role === "RECRUITER" ? "slate" : "indigo"}>
+              {roleLabel(user.role)}
             </Badge>
             {!user.isActive && <Badge tone="red">Inactive</Badge>}
           </div>

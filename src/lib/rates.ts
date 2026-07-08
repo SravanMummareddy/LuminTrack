@@ -1,16 +1,14 @@
 /**
- * Soft rate-chain checks (advisory — these never block a save).
- *
- * In staffing the money flows downhill, each rung keeping a margin:
+ * Rate-chain checks. In staffing the money flows downhill, each rung keeping a
+ * margin:
  *
  *   Client rate (end client releases)
  *     ≥ Bill rate (vendor releases to us — what we actually receive)
  *       ≥ Pay rate (we pay the consultant)
  *
- * `candidateRate` is the legacy single "headline" rate and likewise should not
- * exceed the client rate. The constraint that actually protects our margin is
- * Pay ≤ Bill: we only ever receive the bill rate, so paying above it loses money
- * even if pay is still below the (often-undisclosed) client rate.
+ * The constraint that actually protects our margin is Pay ≤ Bill: we only ever
+ * receive the bill rate, so paying above it loses money even if pay is still
+ * below the (often-undisclosed) client rate.
  *
  * `rateChainWarnings` returns one human-readable warning per *violated* rung that
  * has both ends filled in. An empty array means "nothing to flag" — including the
@@ -18,7 +16,6 @@
  */
 
 export type RateChainInput = {
-  candidateRate?: string | number | null;
   payRate?: string | number | null;
   billRate?: string | number | null;
   clientRate?: string | number | null;
@@ -39,7 +36,6 @@ export function rateChainWarnings(input: RateChainInput): string[] {
   const pay = toPositive(input.payRate);
   const bill = toPositive(input.billRate);
   const client = toPositive(input.clientRate);
-  const candidate = toPositive(input.candidateRate);
   const warnings: string[] = [];
 
   // We receive the bill rate and pay out the pay rate — pay above bill is a loss.
@@ -58,12 +54,6 @@ export function rateChainWarnings(input: RateChainInput): string[] {
   if (pay !== null && bill === null && client !== null && pay > client)
     warnings.push(
       `Pay rate (${money(pay)}) is above the Client rate (${money(client)}).`,
-    );
-
-  // The headline candidate rate shouldn't exceed what the client pays for them.
-  if (candidate !== null && client !== null && candidate > client)
-    warnings.push(
-      `Candidate rate (${money(candidate)}) is above the Client rate (${money(client)}).`,
     );
 
   return warnings;

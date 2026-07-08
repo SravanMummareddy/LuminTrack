@@ -28,9 +28,15 @@ const PLACEMENT_SORTS: Record<
   candidate: (d) => ({ candidate: { fullName: d } }),
   job: (d) => ({ job: { title: d } }),
   client: (d) => ({ job: { client: { name: d } } }),
+  vendor: (d) => ({ job: { vendor: { name: d } } }),
   start: (d) => ({ startDate: d }),
   end: (d) => ({ endDate: d }),
+  bill: (d) => ({ billRate: d }),
+  pay: (d) => ({ payRate: d }),
+  recruiter: (d) => ({ submission: { submittedBy: { fullName: d } } }),
   status: (d) => ({ status: d }),
+  created: (d) => ({ createdAt: d }),
+  updated: (d) => ({ updatedAt: d }),
 };
 
 export const PLACEMENT_SORT_KEYS = Object.keys(PLACEMENT_SORTS);
@@ -135,7 +141,7 @@ export async function getPlacement(id: string) {
     where: { id },
     include: {
       candidate: {
-        select: { id: true, fullName: true, status: true },
+        select: { id: true, seq: true, fullName: true, status: true },
       },
       job: {
         select: {

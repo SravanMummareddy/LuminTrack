@@ -10,11 +10,14 @@ import {
   CirclePause,
 } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
+import { hasFullAccess } from "@/lib/permissions";
 import {
   getDashboardData,
   getMyWork,
   getMyAssignedJobs,
+  getMyRecentActivity,
   getOnboardingStatus,
+  type MyRecentActivity,
 } from "@/server/queries/dashboard";
 import { getExpiringDocuments } from "@/server/queries/candidates";
 import { getRatesPendingPlacements } from "@/server/queries/placements";
@@ -31,18 +34,12 @@ import {
   listSisterCompanies,
   listActiveRecruiterOptions,
 } from "@/server/queries/org";
-import { parseAnalyticsParams, TONE_HEX, AGING_BUCKET_LABEL, AGING_BUCKET_TONE } from "@/lib/analytics";
-import {
-  JOB_STATUS_LABEL,
-  JOB_STATUS_TONE,
-  SUBMISSION_STATUS_LABEL,
-  SUBMISSION_STATUS_TONE,
-} from "@/lib/labels";
+import { parseAnalyticsParams } from "@/lib/analytics";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist";
-import { BarChartCard, DonutChartCard } from "@/components/dashboard/charts";
-import { Badge } from "@/components/ui/badge";
+import { MyWorkList } from "@/components/dashboard/needs-attention-list";
+import { RecentActivityCard } from "@/components/dashboard/recent-activity-card";
 import { Table, Th, Td, cardLink } from "@/components/ui/table";
 
 function Card({
@@ -114,62 +111,6 @@ function ScopeToggle({
   );
 }
 
-function MyWorkList({
-  heading,
-  empty,
-  items,
-  footer,
-}: {
-  heading: string;
-  empty: string;
-  items: { href: string; primary: string; secondary: string }[];
-  /** Optional "View all" link rendered below the list when items are present. */
-  footer?: { href: string; label: string };
-}) {
-  return (
-    <div>
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-        {heading}
-      </h3>
-      {items.length === 0 ? (
-        <p className="rounded-md border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-400">
-          {empty}
-        </p>
-      ) : (
-        <>
-          <ul className="divide-y divide-slate-100 rounded-md border border-slate-200">
-            {items.map((it, i) => (
-              <li key={i}>
-                <Link
-                  href={it.href}
-                  className="block px-3 py-2 hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 focus-visible:[outline-offset:-2px]"
-                >
-                  <span className="block truncate text-sm text-slate-800">
-                    {it.primary}
-                  </span>
-                  <span className="block truncate text-xs text-slate-400">
-                    {it.secondary}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-          {footer && (
-            <div className="mt-2 text-right text-xs">
-              <Link
-                href={footer.href}
-                className="text-indigo-600 hover:underline"
-              >
-                {footer.label}
-              </Link>
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -184,7 +125,7 @@ export default async function DashboardPage({
   // either user flip. When scope === "me" we force `recruiterId` to the
   // acting user (overrides any explicit recruiter filter from the bar).
   const scope: "me" | "org" =
-    current.scope ?? (user?.role === "ADMIN" ? "org" : "me");
+    current.scope ?? (hasFullAccess(user) ? "org" : "me");
   const effectiveFilters =
     scope === "me" && user ? { ...filters, recruiterId: [user.id] } : filters;
 
@@ -192,6 +133,7 @@ export default async function DashboardPage({
     data,
     myWork,
     myAssignedJobs,
+    recentActivity,
     expiringDocs,
     ratesPendingPlacements,
     clients,
@@ -208,17 +150,20 @@ export default async function DashboardPage({
           pendingRounds: [],
           pendingRequirements: [],
         }),
-    // "My jobs" mini-list — only relevant when the recruiter is viewing
-    // their own scope. Admins on scope=org don't see this card.
+    // "My jobs" mini-list — see below.
     scope === "me" && user
       ? getMyAssignedJobs(user.id)
       : Promise.resolve([] as Awaited<ReturnType<typeof getMyAssignedJobs>>),
+    // Recent activity feed replaces the org-wide recruiter table in "My work".
+    scope === "me" && user
+      ? getMyRecentActivity(user.id)
+      : Promise.resolve([] as MyRecentActivity),
     user
       ? getExpiringDocuments(user, { scope, withinDays: 30 })
       : Promise.resolve([]),
     // Rates-pending only matters to admins (they own the close-out). On the
     // "me" scope or for recruiters this list is hidden — keeps the card tight.
-    user && user.role === "ADMIN" && scope === "org"
+    user && hasFullAccess(user) && scope === "org"
       ? getRatesPendingPlacements({ limit: 5 })
       : Promise.resolve([]),
     listClients(),
@@ -228,30 +173,19 @@ export default async function DashboardPage({
     getOnboardingStatus(),
   ]);
 
-  const jobsByStatusChart = data.jobsByStatus.map((d) => ({
-    label: JOB_STATUS_LABEL[d.status],
-    value: d.count,
-    color: TONE_HEX[JOB_STATUS_TONE[d.status]],
-  }));
-
-  const submissionsByStageChart = data.submissionsByStatus.map((d) => ({
-    label: SUBMISSION_STATUS_LABEL[d.status],
-    value: d.count,
-    color: TONE_HEX[SUBMISSION_STATUS_TONE[d.status]],
-  }));
-
-  // Long tail of sources crushes the bar chart — keep the top 5 distinct and
-  // roll the remainder into a single "Other" bar. `data.jobsBySource` is
-  // already sorted desc by count.
-  const TOP_SOURCES = 5;
-  const topSources = data.jobsBySource.slice(0, TOP_SOURCES);
-  const restCount = data.jobsBySource
-    .slice(TOP_SOURCES)
-    .reduce((sum, d) => sum + d.count, 0);
-  const jobsBySourceChart = [
-    ...topSources.map((d) => ({ label: d.name, value: d.count })),
-    ...(restCount > 0 ? [{ label: "Other", value: restCount }] : []),
-  ];
+  // KPI tiles link to their filtered list. In "My work" the link also scopes to
+  // the acting user (status + scope only — the bar's other filters aren't carried).
+  const meId = scope === "me" && user ? user.id : undefined;
+  const listHref = (
+    base: string,
+    params: Record<string, string | undefined>,
+  ) => {
+    const sp = new URLSearchParams();
+    for (const [k, v] of Object.entries({ ...params, recruiterId: meId }))
+      if (v) sp.set(k, v);
+    const qs = sp.toString();
+    return qs ? `${base}?${qs}` : base;
+  };
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
@@ -271,7 +205,7 @@ export default async function DashboardPage({
       {!onboarding.hasSubmissions && (
         <OnboardingChecklist
           status={onboarding}
-          isAdmin={user?.role === "ADMIN"}
+          isAdmin={hasFullAccess(user)}
         />
       )}
 
@@ -337,7 +271,7 @@ export default async function DashboardPage({
             <MyWorkList
               heading={`Documents expiring (30 days) (${expiringDocs.length})`}
               empty="No documents expiring in the next 30 days."
-              items={expiringDocs.slice(0, 5).map((d) => {
+              items={expiringDocs.map((d) => {
                 const days = d.daysUntilExpiry ?? 0;
                 const status =
                   days < 0 ? "Expired" : days < 1 ? "Expires today" : `${days}d left`;
@@ -374,6 +308,7 @@ export default async function DashboardPage({
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
           label="Active jobs"
+          href={listHref("/jobs", { status: "OPEN" })}
           value={data.activeJobs}
           icon={Briefcase}
           tone="green"
@@ -382,20 +317,23 @@ export default async function DashboardPage({
         />
         <StatCard
           label="Total submissions"
+          href={listHref("/submissions", {})}
           value={data.totalSubmissions}
           icon={Send}
           tone="indigo"
           tooltip="All submissions in the filter window, regardless of status."
         />
         <StatCard
-          label="Interviews"
+          label="Interview rounds"
+          href="/interviews"
           value={data.interviewCount}
           icon={CalendarCheck}
           tone="blue"
-          tooltip="Total interview rounds across all in-window submissions."
+          tooltip="Total interview rounds across all in-window submissions. (Reports counts distinct candidates who reached an interview, so that figure is lower.)"
         />
         <StatCard
           label="Selected"
+          href={listHref("/submissions", { status: "SELECTED" })}
           value={data.selected}
           icon={CircleCheck}
           tone="green"
@@ -403,6 +341,7 @@ export default async function DashboardPage({
         />
         <StatCard
           label="Offers released"
+          href={listHref("/submissions", { status: "OFFER_RELEASED" })}
           value={data.offerReleased}
           icon={FileText}
           tone="indigo"
@@ -410,6 +349,7 @@ export default async function DashboardPage({
         />
         <StatCard
           label="Joined"
+          href={listHref("/submissions", { status: "JOINED" })}
           value={data.joined}
           icon={UserCheck}
           tone="green"
@@ -417,6 +357,7 @@ export default async function DashboardPage({
         />
         <StatCard
           label="Rejected"
+          href={listHref("/submissions", { status: "REJECTED" })}
           value={data.rejected}
           icon={CircleX}
           tone="red"
@@ -424,6 +365,7 @@ export default async function DashboardPage({
         />
         <StatCard
           label="On hold"
+          href={listHref("/submissions", { status: "ON_HOLD" })}
           value={data.onHold}
           icon={CirclePause}
           tone="amber"
@@ -431,81 +373,8 @@ export default async function DashboardPage({
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <Card title="Jobs by status">
-          {data.totalJobs === 0 ? (
-            <p className="py-12 text-center text-sm text-slate-400">
-              No jobs for the selected filters.
-            </p>
-          ) : (
-            <div className="flex flex-col items-center gap-4 sm:flex-row">
-              <div className="w-full sm:w-1/2">
-                <DonutChartCard data={jobsByStatusChart} />
-              </div>
-              <ul className="w-full space-y-1.5 sm:w-1/2">
-                {data.jobsByStatus.map((d) => (
-                  <li
-                    key={d.status}
-                    className="flex items-center justify-between text-sm"
-                  >
-                    <span className="flex items-center gap-2 text-slate-600">
-                      <span
-                        className="h-2.5 w-2.5 rounded-full"
-                        style={{
-                          backgroundColor: TONE_HEX[JOB_STATUS_TONE[d.status]],
-                        }}
-                      />
-                      {JOB_STATUS_LABEL[d.status]}
-                    </span>
-                    <span className="font-medium tabular-nums text-slate-900">
-                      {d.count}
-                    </span>
-                  </li>
-                ))}
-                <li className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2 text-sm">
-                  <span className="text-slate-500">Total jobs</span>
-                  <span className="font-semibold tabular-nums text-slate-900">
-                    {data.totalJobs}
-                  </span>
-                </li>
-              </ul>
-            </div>
-          )}
-        </Card>
-
-        <Card title="Jobs by source">
-          <BarChartCard data={jobsBySourceChart} />
-        </Card>
-      </div>
-
-      <Card title="Submissions by pipeline stage">
-        <BarChartCard data={submissionsByStageChart} height={320} />
-      </Card>
-
-      <Card title="Open-job aging">
-        <p className="-mt-2 mb-3 text-xs text-slate-400">
-          Days since creation for Open and On Hold jobs.
-        </p>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {data.aging.map((a) => (
-            <div
-              key={a.bucket}
-              className="rounded-md border border-slate-200 p-3 text-center"
-            >
-              <div className="text-2xl font-semibold tabular-nums text-slate-900">
-                {a.count}
-              </div>
-              <div className="mt-1">
-                <Badge tone={AGING_BUCKET_TONE[a.bucket]}>
-                  {AGING_BUCKET_LABEL[a.bucket]}
-                </Badge>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      <Card title="Recruiter performance">
+      {scope === "org" ? (
+        <Card title="Recruiter performance">
         {data.recruiterPerf.length === 0 ? (
           <p className="py-8 text-center text-sm text-slate-400">
             No recruiter submissions for the selected filters.
@@ -561,7 +430,10 @@ export default async function DashboardPage({
             </tbody>
           </Table>
         )}
-      </Card>
+        </Card>
+      ) : (
+        <RecentActivityCard items={recentActivity} />
+      )}
     </div>
   );
 }

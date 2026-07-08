@@ -107,6 +107,7 @@ export function GlobalSearch() {
         }}
         placeholder="Search candidates, jobs, clients…"
         className={cn(controlClass, "py-1.5 pl-9")}
+        id="global-search"
         aria-label="Global search"
         role="combobox"
         aria-expanded={showDropdown}

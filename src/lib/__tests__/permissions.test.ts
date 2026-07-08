@@ -4,10 +4,14 @@ import {
   canViewSensitiveDocs,
   canManageSensitiveDocs,
   canViewBenchCredentials,
+  canManageRequirements,
+  canEditJobRatesAndAssignment,
+  hasFullAccess,
 } from "@/lib/permissions";
 import { DocumentCategory, UserRole } from "@/generated/prisma/enums";
 
-const ADMIN = { role: UserRole.ADMIN };
+const MANAGER = { role: UserRole.MANAGER };
+const TEAM_LEAD = { role: UserRole.TEAM_LEAD };
 const RECRUITER = { role: UserRole.RECRUITER };
 
 describe("permissions — sensitive document categories", () => {
@@ -38,12 +42,18 @@ describe("permissions — gates default to deny", () => {
     canViewSensitiveDocs,
     canManageSensitiveDocs,
     canViewBenchCredentials,
+    canManageRequirements,
+    canEditJobRatesAndAssignment,
+    hasFullAccess,
   };
 
   for (const [name, gate] of Object.entries(gates)) {
     describe(name, () => {
-      it("allows admins", () => {
-        expect(gate(ADMIN)).toBe(true);
+      it("allows managers", () => {
+        expect(gate(MANAGER)).toBe(true);
+      });
+      it("allows team leads", () => {
+        expect(gate(TEAM_LEAD)).toBe(true);
       });
       it("denies recruiters", () => {
         expect(gate(RECRUITER)).toBe(false);

@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Search, ChevronDown, X, Check } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { DATE_PRESETS } from "@/lib/filters";
+import { RangeCalendar, formatRangeLabel } from "@/components/ui/range-calendar";
+import { SavedViews } from "@/components/ui/saved-views";
 
 export type FilterOption = { value: string; label: string };
 
@@ -79,10 +81,14 @@ export function FilterBar({
   basePath,
   search,
   filters,
+  viewsKey,
 }: {
   basePath: string;
   search?: SearchConfig;
   filters: FilterDef[];
+  /** When set, renders a "Views" control that saves the current filter+sort
+   *  combo under this localStorage key. Omit to hide saved views. */
+  viewsKey?: string;
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -133,7 +139,14 @@ export function FilterBar({
   function valueLabel(def: FilterDef): string {
     if (def.kind === "date") {
       const p = params.get("preset");
-      if (p === "custom") return "Custom";
+      if (p === "custom") {
+        const label = formatRangeLabel(
+          params.get("from") ?? undefined,
+          params.get("to") ?? undefined,
+        );
+        // Fall back to "Custom" only if neither endpoint is set yet.
+        return label === "Pick a start and end date" ? "Custom" : label;
+      }
       return DATE_PRESETS.find((d) => d.value === p)?.label ?? "";
     }
     if (def.kind === "select") {
@@ -273,6 +286,12 @@ export function FilterBar({
         >
           Clear all
         </button>
+      )}
+
+      {viewsKey && (
+        <div className="ml-auto">
+          <SavedViews storageKey={viewsKey} basePath={basePath} />
+        </div>
       )}
     </div>
   );
@@ -420,10 +439,12 @@ function DatePopover({
   const [from, setFrom] = useState(params.get("from") ?? "");
   const [to, setTo] = useState(params.get("to") ?? "");
 
-  return (
-    <div className={popoverCls}>
+  // While the custom calendar is open, highlight "Custom range" rather than the
+  // still-applied preset (which only changes once the user hits Apply).
+  const presets = (
+    <div className={cn("flex flex-col gap-0.5", custom && "w-36 shrink-0")}>
       {DATE_PRESETS.map((p) => {
-        const sel = current === p.value;
+        const sel = custom ? p.value === "custom" : current === p.value;
         return (
           <button
             key={p.value}
@@ -442,36 +463,42 @@ function DatePopover({
           </button>
         );
       })}
-      {custom && (
-        <div className="mt-1 space-y-2 border-t border-slate-100 px-1 pt-2">
-          <label className="block text-xs text-slate-500">
-            From
-            <input
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="mt-0.5 w-full rounded-md border border-slate-200 px-2 py-1 text-sm outline-none focus:border-indigo-400"
-            />
-          </label>
-          <label className="block text-xs text-slate-500">
-            To
-            <input
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="mt-0.5 w-full rounded-md border border-slate-200 px-2 py-1 text-sm outline-none focus:border-indigo-400"
-            />
-          </label>
+    </div>
+  );
+
+  if (!custom) {
+    return <div className={popoverCls}>{presets}</div>;
+  }
+
+  // Custom: presets become a left rail, the calendar sits to their right.
+  return (
+    <div className={cn(popoverCls, "flex gap-2 p-2")}>
+      {presets}
+      <div className="space-y-2 border-l border-slate-100 pl-2">
+        <RangeCalendar
+          from={from || undefined}
+          to={to || undefined}
+          onChange={(f, t) => {
+            setFrom(f ?? "");
+            setTo(t ?? "");
+          }}
+        />
+        <div className="flex items-center justify-between gap-2 px-0.5">
+          <span className="text-xs text-slate-500">
+            {formatRangeLabel(from || undefined, to || undefined)}
+          </span>
           <button
             type="button"
             disabled={!from && !to}
-            onClick={() => navigate({ preset: "custom", from: from || null, to: to || null })}
-            className="w-full rounded-md bg-indigo-600 px-2 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+            onClick={() =>
+              navigate({ preset: "custom", from: from || null, to: to || null })
+            }
+            className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
           >
-            Apply dates
+            Apply
           </button>
         </div>
-      )}
+      </div>
     </div>
   );
 }

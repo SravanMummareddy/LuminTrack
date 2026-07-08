@@ -19,7 +19,7 @@ export async function seedBasics(prisma: PrismaClient) {
       fullName: "Test Admin",
       email: "admin@test.local",
       passwordHash: "x",
-      role: "ADMIN",
+      role: "MANAGER",
     },
   });
   const [client, vendor] = await Promise.all([
@@ -36,7 +36,6 @@ export async function seedBasics(prisma: PrismaClient) {
   const job = await prisma.job.create({
     data: {
       title: "Senior Engineer",
-      candidateRate: 80,
       client: { connect: { id: client.id } },
       vendor: { connect: { id: vendor.id } },
       createdBy: { connect: { id: user.id } },
@@ -45,7 +44,6 @@ export async function seedBasics(prisma: PrismaClient) {
   const submission = await prisma.submission.create({
     data: {
       status: "SELECTED",
-      candidateRate: 80,
       candidate: { connect: { id: candidate.id } },
       job: { connect: { id: job.id } },
       submittedBy: { connect: { id: user.id } },
@@ -60,7 +58,7 @@ export async function seedBasics(prisma: PrismaClient) {
 export async function seedSubmissionScenario(prisma: PrismaClient) {
   const [admin, recruiter] = await Promise.all([
     prisma.user.create({
-      data: { fullName: "Admin", email: "admin@test.local", passwordHash: "x", role: "ADMIN" },
+      data: { fullName: "Admin", email: "admin@test.local", passwordHash: "x", role: "MANAGER" },
     }),
     prisma.user.create({
       data: { fullName: "Rec One", email: "rec1@test.local", passwordHash: "x", role: "RECRUITER" },
@@ -83,7 +81,7 @@ export async function seedSubmissionScenario(prisma: PrismaClient) {
 export async function seedSubmissionEditScenario(prisma: PrismaClient) {
   const [admin, recruiterA, recruiterB] = await Promise.all([
     prisma.user.create({
-      data: { fullName: "Admin", email: "admin@test.local", passwordHash: "x", role: "ADMIN" },
+      data: { fullName: "Admin", email: "admin@test.local", passwordHash: "x", role: "MANAGER" },
     }),
     prisma.user.create({
       data: { fullName: "Rec A", email: "reca@test.local", passwordHash: "x", role: "RECRUITER" },
@@ -102,19 +100,23 @@ export async function seedSubmissionEditScenario(prisma: PrismaClient) {
   const job = await prisma.job.create({
     data: {
       title: "Senior Engineer",
-      candidateRate: 80,
       client: { connect: { id: client.id } },
       vendor: { connect: { id: vendor.id } },
       createdBy: { connect: { id: admin.id } },
     },
   });
   const resume = await prisma.candidateResume.create({
-    data: { candidateId: candidate.id, label: "Primary", driveLink: "https://drive.google.com/file/abc" },
+    data: {
+      candidateId: candidate.id,
+      label: "Primary",
+      blobPathname: "resumes/test/primary.pdf",
+      blobUrl: "https://blob.test/primary.pdf",
+      contentType: "application/pdf",
+    },
   });
   const submission = await prisma.submission.create({
     data: {
       status: "SUBMITTED",
-      candidateRate: 80,
       submissionNotes: "Original note",
       submittedAt: new Date("2026-06-01T10:00"), // local; matches the edit form's string
       candidate: { connect: { id: candidate.id } },
@@ -130,7 +132,7 @@ export async function seedSubmissionEditScenario(prisma: PrismaClient) {
 export async function seedPlacementScenario(prisma: PrismaClient) {
   const [admin, recruiterA, recruiterB] = await Promise.all([
     prisma.user.create({
-      data: { fullName: "Admin", email: "admin@test.local", passwordHash: "x", role: "ADMIN" },
+      data: { fullName: "Admin", email: "admin@test.local", passwordHash: "x", role: "MANAGER" },
     }),
     prisma.user.create({
       data: { fullName: "Rec A", email: "reca@test.local", passwordHash: "x", role: "RECRUITER" },
@@ -149,7 +151,6 @@ export async function seedPlacementScenario(prisma: PrismaClient) {
   const job = await prisma.job.create({
     data: {
       title: "Senior Engineer",
-      candidateRate: 80,
       client: { connect: { id: client.id } },
       vendor: { connect: { id: vendor.id } },
       createdBy: { connect: { id: admin.id } },

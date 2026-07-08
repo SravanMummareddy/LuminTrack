@@ -7,7 +7,9 @@
  */
 import "dotenv/config";
 import bcrypt from "bcryptjs";
-import { PrismaNeon } from "@prisma/adapter-neon";
+import { put } from "@vercel/blob";
+import { gzipForBlob } from "../src/server/blob-upload";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, Prisma } from "../src/generated/prisma/client";
 import type {
   JobStatus,
@@ -16,13 +18,77 @@ import type {
   InterviewResult,
 } from "../src/generated/prisma/enums";
 
-const connectionString = process.env.DATABASE_URL;
+// A bulk one-shot script: use a direct TCP connection (DIRECT_URL, the pg
+// adapter) rather than the app's Neon serverless WebSocket driver, which is
+// flaky for long batch runs from a fresh process. Same adapter the migrations
+// and integration tests use.
+const connectionString = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
 if (!connectionString) {
-  throw new Error("DATABASE_URL is not set. Fill in .env before seeding.");
+  throw new Error("DIRECT_URL / DATABASE_URL is not set. Fill in .env before seeding.");
 }
 const prisma = new PrismaClient({
-  adapter: new PrismaNeon({ connectionString }),
+  adapter: new PrismaPg({ connectionString }),
 });
+
+/**
+ * Builds a tiny but valid one-page PDF (correct xref offsets computed from byte
+ * length, so any title length works). Used to seed real uploaded résumés into
+ * private Blob so the demo shows the upload flow, not just Drive links.
+ */
+function makeSamplePdf(title: string): Buffer {
+  const esc = title.replace(/([()\\])/g, "\\$1");
+  const stream = `BT /F1 24 Tf 72 700 Td (${esc}) Tj ET`;
+  const objs = [
+    "<</Type/Catalog/Pages 2 0 R>>",
+    "<</Type/Pages/Kids[3 0 R]/Count 1>>",
+    "<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Resources<</Font<</F1 5 0 R>>>>/Contents 4 0 R>>",
+    `<</Length ${stream.length}>>stream\n${stream}\nendstream`,
+    "<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>",
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  objs.forEach((body, i) => {
+    offsets.push(Buffer.byteLength(pdf, "latin1"));
+    pdf += `${i + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xrefStart = Buffer.byteLength(pdf, "latin1");
+  pdf += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n`;
+  for (const off of offsets) pdf += `${String(off).padStart(10, "0")} 00000 n \n`;
+  pdf += `trailer\n<</Size ${objs.length + 1}/Root 1 0 R>>\nstartxref\n${xrefStart}\n%%EOF`;
+  return Buffer.from(pdf, "latin1");
+}
+
+type SampleBlob = { pathname: string; url: string; size: number };
+
+/** Uploads a few sample résumé PDFs to private Blob once (reused across seeded
+ *  résumés). Empty when no Blob token is configured — the seed then falls back
+ *  to legacy Drive links so it still runs. */
+async function uploadSampleResumeBlobs(): Promise<SampleBlob[]> {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    console.log("  (no BLOB_READ_WRITE_TOKEN — seeding legacy Drive-link résumés)");
+    return [];
+  }
+  const out: SampleBlob[] = [];
+  for (const name of ["Sample Resume A", "Sample Resume B", "Sample Resume C"]) {
+    const pdf = makeSamplePdf(name);
+    // Stored gzip-compressed to match what the serve routes expect (they set
+    // Content-Encoding: gzip). Fixed pathname (no random suffix) so re-seeding
+    // overwrites the same few sample blobs instead of piling up orphans.
+    const blob = await put(
+      `resumes/samples/${name.replace(/\s+/g, "-").toLowerCase()}.pdf`,
+      gzipForBlob(pdf),
+      {
+        access: "private",
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        contentType: "application/pdf",
+      },
+    );
+    out.push({ pathname: blob.pathname, url: blob.url, size: pdf.length });
+  }
+  console.log(`  Uploaded ${out.length} sample résumé PDFs to private Blob`);
+  return out;
+}
 
 // ─── Deterministic RNG (mulberry32) ──────────────────────────────────────────
 
@@ -117,24 +183,24 @@ const SHARED_PASSWORD = "LuminTrack2026!";
 const TEAM_A = "USEI-Sales IT";
 const TEAM_B = "USEI-Sales IT-2";
 
-// Real people from the June-19 spreadsheet + generated teammates. 3 admins
-// (Sriman is the team lead + 2 team managers), 8 recruiters. Everyone shares
-// SHARED_PASSWORD. Sriman is the primary admin login.
+// Real people from the June-19 spreadsheet + generated teammates. Three tiers:
+// 1 Manager (Sriman, primary login) + 2 Team Leads (one per team) + 8
+// recruiters. Managers and team leads both have full access. Everyone shares
+// SHARED_PASSWORD.
 const ADMIN_LOGIN = "sriman@lumintrack.com";
 type RosterUser = {
   fullName: string;
   email: string;
-  role: "ADMIN" | "RECRUITER";
+  role: "MANAGER" | "TEAM_LEAD" | "RECRUITER";
   empId: string;
   teamLabel: string;
-  /** Team leads can manage Vendor Portal Requirements — one per team. */
-  isTeamLead?: boolean;
 };
 const USER_ROSTER: RosterUser[] = [
-  // ── Admins / managers ── (one team-lead per team: Sriman → A, Deepa → B)
-  { fullName: "Sriman Udugula", email: ADMIN_LOGIN, role: "ADMIN", empId: "INC105", teamLabel: TEAM_A, isTeamLead: true },
-  { fullName: "Vikram Reddy", email: "vikram@lumintrack.com", role: "ADMIN", empId: "INC112", teamLabel: TEAM_A },
-  { fullName: "Deepa Nair", email: "deepa@lumintrack.com", role: "ADMIN", empId: "TK2204", teamLabel: TEAM_B, isTeamLead: true },
+  // ── Manager (full access; primary login) ──
+  { fullName: "Sriman Udugula", email: ADMIN_LOGIN, role: "MANAGER", empId: "INC105", teamLabel: TEAM_A },
+  // ── Team leads (full access; one per team, drive VPR planning) ──
+  { fullName: "Vikram Reddy", email: "vikram@lumintrack.com", role: "TEAM_LEAD", empId: "INC112", teamLabel: TEAM_A },
+  { fullName: "Deepa Nair", email: "deepa@lumintrack.com", role: "TEAM_LEAD", empId: "TK2204", teamLabel: TEAM_B },
   // ── Recruiters — real (from the sheet's Monthly Performance tab) ──
   { fullName: "Hrishikesh Batta", email: "hrishikesh@lumintrack.com", role: "RECRUITER", empId: "TK2090", teamLabel: TEAM_A },
   { fullName: "Sameer Shaik", email: "sameer@lumintrack.com", role: "RECRUITER", empId: "TK2161", teamLabel: TEAM_A },
@@ -527,7 +593,6 @@ async function main() {
         role: u.role,
         empId: u.empId,
         teamLabel: u.teamLabel,
-        isTeamLead: u.isTeamLead ?? false,
         createdAt: adminCreatedAt,
         updatedAt: adminCreatedAt,
       },
@@ -535,13 +600,13 @@ async function main() {
     });
     allUsers.push(created);
   }
-  // Sriman is the primary admin (used as createdBy / assignedBy across the seed).
+  // Sriman is the primary manager (used as createdBy / assignedBy across the seed).
   const admin = allUsers.find((u) => u.fullName === "Sriman Udugula")!;
   // Submissions/assignments are attributed to RECRUITER-role users only, so the
-  // Monthly Performance scorecard (recruiters only) reconciles. Managers (admins)
-  // show zero activity — matching Sriman's row on the sheet.
+  // Monthly Performance scorecard (recruiters only) reconciles. Managers and team
+  // leads show zero activity — matching Sriman's row on the sheet.
   const recruiters = allUsers.filter((u) => u.role === "RECRUITER");
-  const adminCount = allUsers.filter((u) => u.role === "ADMIN").length;
+  const leadCount = allUsers.filter((u) => u.role !== "RECRUITER").length;
 
   // ── Org entities ──
   console.log("Creating organisation entities…");
@@ -610,7 +675,8 @@ async function main() {
     id: string;
     title: string;
     createdAt: Date;
-    candidateRate: number;
+    payBase: number;
+    clientRate: number | null;
     assigneeIds: string[];
   }[] = [];
 
@@ -630,7 +696,14 @@ async function main() {
     );
     const status = weighted(JOB_STATUS_W);
     const vendorRate = randInt(75, 150);
-    const candidateRate = vendorRate - randInt(8, 22);
+    // Pay-rate anchor used to derive each candidate's pay/bill below. NOT a DB
+    // field — the legacy single "candidate rate" was retired; the DB stores only
+    // pay/bill (per submission/requirement) plus vendor/client rate (per job).
+    const payBase = vendorRate - randInt(8, 22);
+    // Client rate sits at the top of the chain (Client >= Bill >= Pay). Set on
+    // ~80% of jobs; the vendor leaves it undisclosed on the rest (nullable).
+    // +30..55 over the pay anchor keeps it above any generated bill rate.
+    const clientRate = chance(0.8) ? payBase + randInt(30, 55) : null;
     const creator = chance(0.7) ? admin : pick(recruiters);
     const client = pick(clients);
     // ~35% come from the Randstad iLabor vendor portal; those carry a portal
@@ -642,7 +715,7 @@ async function main() {
         title,
         location: pick(LOCATIONS),
         vendorRate,
-        candidateRate,
+        clientRate,
         status,
         description: `${title} opening at ${client.name}. ${randInt(
           4,
@@ -727,7 +800,8 @@ async function main() {
       id: job.id,
       title,
       createdAt,
-      candidateRate,
+      payBase,
+      clientRate,
       assigneeIds: assignees.map((r) => r.id),
     });
   }
@@ -739,10 +813,11 @@ async function main() {
     fullName: string;
     createdAt: Date;
     status: string;
-    resumes: { id: string; driveLink: string }[];
+    resumes: { id: string; blobUrl: string | null }[];
   }[] = [];
   const CANDIDATE_TAGS = ["java", "react", "remote", "senior", "urgent", "passive", "h1b", "local"];
   const CANDIDATE_SOURCES = ["LinkedIn", "Referral", "Job board", "Vendor pool", "Repeat consultant"];
+  const sampleBlobs = await uploadSampleResumeBlobs();
   let resumeCount = 0;
   for (let i = 0; i < 30; i++) {
     const first = pick(FIRST_NAMES);
@@ -787,27 +862,29 @@ async function main() {
       select: { id: true },
     });
 
-    // Résumé library — most candidates keep 1-3 labelled résumés.
-    const resumes: { id: string; driveLink: string }[] = [];
-    if (chance(0.8)) {
+    // Résumé library — most candidates keep 1-3 uploaded PDF résumés (rotating
+    // through the sample blobs). Skipped entirely if no Blob store is configured.
+    const resumes: { id: string; blobUrl: string | null }[] = [];
+    if (chance(0.8) && sampleBlobs.length) {
       const labels = pickN(RESUME_LABELS, randInt(1, 3));
       for (let j = 0; j < labels.length; j++) {
         // A few résumés are archived (soft-deleted) so the "Show archived" chip
         // on the candidate page has data. Archived ones aren't offered for
         // submission, so only active ones go into the pick pool below.
         const isActive = chance(0.85);
+        const sample = sampleBlobs[(i + j) % sampleBlobs.length];
         const created = await prisma.candidateResume.create({
           data: {
             candidateId: candidate.id,
             label: labels[j],
-            driveLink:
-              "https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz" +
-              `${i}-${j}` +
-              "/view",
+            blobPathname: sample.pathname,
+            blobUrl: sample.url,
+            contentType: "application/pdf",
+            sizeBytes: sample.size,
             isActive,
             createdAt,
           },
-          select: { id: true, driveLink: true },
+          select: { id: true, blobUrl: true },
         });
         if (isActive) {
           resumes.push(created);
@@ -943,6 +1020,80 @@ async function main() {
   let roundCount = 0;
   let placementCount = 0;
 
+  // VPR-first: every submission is created *against* a Vendor Portal Requirement.
+  // Scope one requirement per job on first use (occasionally a second one) and
+  // reuse it for that job's other submissions — one requirement, many candidate
+  // submissions. The requirement's commercial terms are carried onto each sub.
+  const teamLeadByLabel = new Map<string, string>();
+  for (const u of USER_ROSTER) {
+    if (u.role === "TEAM_LEAD") teamLeadByLabel.set(u.teamLabel, u.fullName);
+  }
+  type VprRec = {
+    id: string;
+    payRate: number;
+    billRate: number;
+    engagement: "C2C" | "W2";
+    teamLead: string | null;
+    vendorRecruiterName: string | null;
+  };
+  const vprByJob = new Map<string, VprRec[]>();
+  let requirementCount = 0;
+
+  async function getVprForJob(job: (typeof jobs)[number]): Promise<VprRec> {
+    const existing = vprByJob.get(job.id) ?? [];
+    // Reuse an existing requirement most of the time; ~20% of the time scope a
+    // second one for the same job so "many requirements per job" is represented.
+    if (existing.length > 0 && !(existing.length === 1 && chance(0.2))) {
+      return pick(existing);
+    }
+    const recruiter = pick(recruiters);
+    const payRate = job.payBase - randInt(0, 6);
+    const billRate = job.payBase + randInt(10, 30);
+    const engagement: "C2C" | "W2" = chance(0.6) ? "C2C" : "W2";
+    const teamLead = teamLeadByLabel.get(recruiter.teamLabel ?? "") ?? null;
+    const vendorRecruiterName = chance(0.5) ? pick(VENDOR_RECRUITER_NAMES) : null;
+    // Scoped right after the job is created, so it always predates its submissions.
+    const createdAt = new Date(job.createdAt.getTime() + 6 * HOUR);
+    const req = await prisma.vendorRequirement.create({
+      data: {
+        jobId: job.id,
+        recruiterId: recruiter.id,
+        location: pick(LOCATIONS),
+        payRate,
+        billRate,
+        clientRate: job.clientRate,
+        engagement,
+        vendorRecruiterName,
+        teamLead,
+        submissionNotes: chance(0.4) ? pick(CANDIDATE_NOTES) : null,
+        status: "OPEN",
+        createdById: admin.id,
+        createdAt,
+        updatedAt: createdAt,
+      },
+      select: { id: true },
+    });
+    requirementCount++;
+    activityRows.push({
+      entityType: "REQUIREMENT",
+      action: "REQUIREMENT_CREATED",
+      description: `Vendor requirement created for "${job.title}"`,
+      performedById: admin.id,
+      requirementId: req.id,
+      createdAt,
+    });
+    const rec: VprRec = {
+      id: req.id,
+      payRate,
+      billRate,
+      engagement,
+      teamLead,
+      vendorRecruiterName,
+    };
+    vprByJob.set(job.id, [...existing, rec]);
+    return rec;
+  }
+
   for (let i = 0; i < 160; i++) {
     // Pick a unique candidate+job pair (candidate capped at 9 submissions).
     let candidate = candidates[0];
@@ -997,27 +1148,31 @@ async function main() {
         ? pick(candidate.resumes)
         : null;
 
+    // The requirement this candidate is submitted against (VPR-first).
+    const vpr = await getVprForJob(job);
+
     const submission = await prisma.submission.create({
       data: {
         candidateId: candidate.id,
         jobId: job.id,
         submittedById,
         status: finalStatus,
-        candidateRate: job.candidateRate + randInt(-5, 6),
+        clientRate: job.clientRate, // carried down the chain: job → requirement → sub
+        vendorRequirementId: vpr.id, // submitted against this requirement
+
         rejectionReason:
           finalStatus === "REJECTED" ? pick(REJECTION_REASONS) : null,
         submissionNotes: chance(0.4) ? pick(SUBMISSION_NOTES) : null,
-        // Bench-Sales fields — populated on a subset so the new columns/detail
-        // rows have realistic data; left null on the rest (regular submissions).
-        engagement: chance(0.6) ? (chance(0.5) ? "C2C" : "W2") : null,
-        vendorRecruiterName: chance(0.5) ? pick(VENDOR_RECRUITER_NAMES) : null,
+        // Commercial terms carried from the requirement (slight per-candidate
+        // variance on pay), so the submission mirrors what it was scoped against.
+        engagement: vpr.engagement,
+        vendorRecruiterName: vpr.vendorRecruiterName,
         jobDuties: chance(0.3) ? pick(JOB_DUTIES_SAMPLES) : null,
-        // Pay/Bill rate pair (bill > pay) + team lead on a subset.
-        payRate: chance(0.6) ? job.candidateRate + randInt(-3, 4) : null,
-        billRate: chance(0.6) ? job.candidateRate + randInt(12, 30) : null,
-        teamLead: chance(0.5) ? pick(TEAM_LEADS) : null,
+        payRate: vpr.payRate + randInt(-2, 2),
+        billRate: vpr.billRate,
+        teamLead: vpr.teamLead,
         candidateResumeId: pickedResume?.id ?? null,
-        resumeDriveLink: pickedResume?.driveLink ?? null,
+        resumeBlobUrl: pickedResume?.blobUrl ?? null,
         submittedAt,
         createdAt: submittedAt,
         updatedAt: times[times.length - 1],
@@ -1192,8 +1347,8 @@ async function main() {
       // ~20% of placements have rates still pending (0/0) — exercises the
       // "Rates pending" UI flag + the dashboard "rates pending" card.
       const ratesPending = chance(0.2);
-      const bill = ratesPending ? 0 : job.candidateRate + randInt(12, 30);
-      const pay = ratesPending ? 0 : job.candidateRate + randInt(-3, 4);
+      const bill = ratesPending ? 0 : job.payBase + randInt(12, 30);
+      const pay = ratesPending ? 0 : job.payBase + randInt(-3, 4);
       // ~25% have already ended; the rest stay ACTIVE (open-ended or a future
       // end date for a fixed-length contract).
       const ended = chance(0.25);
@@ -1354,18 +1509,13 @@ async function main() {
     });
   }
 
-  // ── Vendor portal requirements (the planning queue) ──
-  // Mostly OPEN (the requisitions a team lead has scoped, waiting for a
-  // recruiter to move them to a submission) plus a couple CANCELLED so the
-  // status filter has something to do. Team lead is derived from the assigned
-  // recruiter's team (Sriman → TEAM_A, Deepa → TEAM_B).
-  console.log("Creating vendor portal requirements…");
-  const teamLeadByLabel = new Map<string, string>();
-  for (const u of USER_ROSTER) {
-    if (u.isTeamLead) teamLeadByLabel.set(u.teamLabel, u.fullName);
-  }
-  let requirementCount = 0;
-  for (let i = 0; i < 14; i++) {
+  // ── Extra vendor portal requirements (still awaiting candidates) ──
+  // The submission loop above already scoped a requirement per job it touched
+  // (each with 1+ submissions). These extras are OPEN requirements no candidate
+  // has been submitted against yet — plus a couple CANCELLED so the status
+  // filter has something to do. Team lead is derived from the recruiter's team.
+  console.log("Creating extra (awaiting) vendor portal requirements…");
+  for (let i = 0; i < 8; i++) {
     const job = pick(jobs);
     const recruiter = pick(recruiters);
     // ~70% already have a candidate picked; the rest are candidate-less plans.
@@ -1374,8 +1524,8 @@ async function main() {
       ["OPEN", 11],
       ["CANCELLED", 3],
     ]);
-    const payRate = job.candidateRate - randInt(0, 6);
-    const billRate = job.candidateRate + randInt(10, 30);
+    const payRate = job.payBase - randInt(0, 6);
+    const billRate = job.payBase + randInt(10, 30);
     const createdAt = randDate(
       new Date(NOW.getTime() - 30 * DAY),
       new Date(NOW.getTime() - 1 * DAY),
@@ -1388,7 +1538,7 @@ async function main() {
         location: pick(LOCATIONS),
         payRate,
         billRate,
-        candidateRate: job.candidateRate,
+        clientRate: job.clientRate, // carried from the job (Client >= Bill >= Pay)
         engagement: chance(0.6) ? "C2C" : "W2",
         vendorRecruiterName: chance(0.5) ? pick(VENDOR_RECRUITER_NAMES) : null,
         teamLead: teamLeadByLabel.get(recruiter.teamLabel ?? "") ?? null,
@@ -1452,13 +1602,23 @@ async function main() {
             : bucket === "future"
               ? new Date(NOW.getTime() + randInt(120, 700) * DAY)
               : null;
+      // Reuse the sample résumé blobs as document files (no extra uploads).
+      const docSample = sampleBlobs.length
+        ? sampleBlobs[(i + docCount) % sampleBlobs.length]
+        : null;
       await prisma.candidateDocument.create({
         data: {
           candidateId: c.id,
           category: t.category as never,
           label: t.label,
-          driveLink:
-            "https://drive.google.com/file/d/1Doc" + `${i}-${docCount}` + "/view",
+          ...(docSample
+            ? {
+                blobPathname: docSample.pathname,
+                blobUrl: docSample.url,
+                contentType: "application/pdf",
+                sizeBytes: docSample.size,
+              }
+            : {}),
           issuedAt: new Date(NOW.getTime() - randInt(200, 1000) * DAY),
           expiresAt,
           uploadedById: admin.id,
@@ -1557,7 +1717,7 @@ async function main() {
   }
 
   console.log("\nSeed complete.");
-  console.log(`  Users:        ${allUsers.length} (${adminCount} admins/managers, ${recruiters.length} recruiters)`);
+  console.log(`  Users:        ${allUsers.length} (${leadCount} managers/team leads, ${recruiters.length} recruiters)`);
   console.log(`  Jobs:         ${jobs.length}`);
   console.log(`  Candidates:   ${candidates.length}`);
   console.log(`  Bench consultants: ${benchCount} (linked 1:1 to candidates)`);
