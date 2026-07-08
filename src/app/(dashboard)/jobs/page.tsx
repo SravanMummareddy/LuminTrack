@@ -24,9 +24,15 @@ import {
   listSisterCompanies,
   listUsers,
 } from "@/server/queries/org";
-import { parseDateRange, parseSort, parsePage, parseList, PAGE_SIZE } from "@/lib/filters";
-import { JOB_STATUSES } from "@/lib/labels";
-import type { JobStatus, Discipline } from "@/generated/prisma/enums";
+import {
+  parseDateRange,
+  parseSort,
+  parsePage,
+  parseList,
+  parseEnumList,
+  PAGE_SIZE,
+} from "@/lib/filters";
+import { JOB_STATUSES, DISCIPLINES } from "@/lib/labels";
 
 function clean(value: string | string[] | undefined): string | undefined {
   const single = Array.isArray(value) ? value[0] : value;
@@ -34,20 +40,8 @@ function clean(value: string | string[] | undefined): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
-function asJobStatusList(values: string[] | undefined): JobStatus[] {
-  return (values ?? []).filter((v) =>
-    (JOB_STATUSES as string[]).includes(v),
-  ) as JobStatus[];
-}
-
 function asJobSource(value: string | undefined): JobSource | undefined {
   return value === "manual" || value === "randstad" ? value : undefined;
-}
-
-function asDisciplineList(values: string[] | undefined): Discipline[] {
-  return (values ?? []).filter(
-    (v) => v === "IT" || v === "NON_IT",
-  ) as Discipline[];
 }
 
 export default async function JobsPage({
@@ -90,8 +84,8 @@ export default async function JobsPage({
     vendorId: current.vendorId,
     sisterCompanySourceId: current.sisterCompanySourceId,
     recruiterId: current.recruiterId,
-    status: asJobStatusList(current.status),
-    discipline: asDisciplineList(current.discipline),
+    status: parseEnumList(current.status, JOB_STATUSES),
+    discipline: parseEnumList(current.discipline, DISCIPLINES),
     location: current.location,
     source: activeSource,
     createdRange: parseDateRange({
