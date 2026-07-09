@@ -35,7 +35,7 @@ export function BenchFilters({
       primary: true,
       defaultValue: "onbench",
       options: [
-        { value: "onbench", label: "On bench (Active + Paused)" },
+        { value: "onbench", label: "Being marketed (On bench + Paused)" },
         { value: "all", label: "All" },
         ...BENCH_MARKETING_STATUSES.map((s) => ({
           value: s,

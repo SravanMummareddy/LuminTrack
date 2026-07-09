@@ -167,6 +167,17 @@ export async function createBenchConsultant(
             where: { id: already.id },
             data: { marketingStatus: "ACTIVE" },
           });
+          // Reactivation reuses the row's stored bench details (no retype), but
+          // still honour anything the user typed on this re-add: a new candidate
+          // technology (candidate-owned) and any freshly-typed lookup values.
+          if (d.technology)
+            await tx.candidate.update({
+              where: { id: d.candidateId as string },
+              data: { technology: d.technology },
+            });
+          await rememberLookup(tx, "WORK_AUTH", d.workAuthorization);
+          await rememberLookup(tx, "CALL_TYPE", d.callType);
+          await rememberLookup(tx, "PAYROLL_TYPE", d.payrollType);
           await logActivity(tx, {
             entityType: "CONSULTANT",
             action: "BENCH_CONSULTANT_UPDATED",
@@ -289,7 +300,6 @@ export async function updateBenchConsultant(
   compare("email", existing.email, d.email);
   compare("phone", existing.phone, d.phone);
   compare("location", existing.currentLocation, d.currentLocation);
-  compare("technology", existing.candidate?.technology, d.technology);
   compare("skills", existing.skills.join(", "), d.skills.join(", "));
   compare("priority", existing.priority, d.priority);
   compare("marketing status", existing.marketingStatus, d.marketingStatus);
@@ -308,12 +318,29 @@ export async function updateBenchConsultant(
 
   await prisma.$transaction(async (tx) => {
     await tx.benchConsultant.update({ where: { id }, data });
-    // Technology is candidate-owned — write it through to the linked candidate.
-    if (existing.candidateId)
+    // Technology is candidate-owned. Only write a NON-BLANK change through to the
+    // candidate — the bench form must never blank-wipe the candidate's technology
+    // (clearing it is done on the Candidate form, its source of truth). This also
+    // avoids a stale/concurrent bench-edit tab nulling a value set elsewhere.
+    if (
+      existing.candidateId &&
+      d.technology &&
+      d.technology !== (existing.candidate?.technology ?? "")
+    ) {
       await tx.candidate.update({
         where: { id: existing.candidateId },
-        data: { technology: d.technology ?? null },
+        data: { technology: d.technology },
       });
+      await logActivity(tx, {
+        entityType: "CANDIDATE",
+        action: "CANDIDATE_UPDATED",
+        description: `Technology set to "${d.technology}" (from bench)`,
+        oldValue: existing.candidate?.technology ?? null,
+        newValue: d.technology,
+        performedById: user.id,
+        candidateId: existing.candidateId,
+      });
+    }
     await rememberLookup(tx, "WORK_AUTH", d.workAuthorization);
     await rememberLookup(tx, "CALL_TYPE", d.callType);
     await rememberLookup(tx, "PAYROLL_TYPE", d.payrollType);
@@ -379,49 +406,59 @@ export async function addCandidateToBench(formData: FormData): Promise<void> {
     where: { candidateId },
     select: { id: true, marketingStatus: true },
   });
-  await prisma.$transaction(async (tx) => {
-    if (existing) {
-      if (existing.marketingStatus !== "ACTIVE") {
-        await tx.benchConsultant.update({
-          where: { id: existing.id },
-          data: { marketingStatus: "ACTIVE" },
-        });
-        await logActivity(tx, {
-          entityType: "CONSULTANT",
-          action: "BENCH_CONSULTANT_UPDATED",
-          description: `Added to bench from candidate (${existing.marketingStatus} → ACTIVE)`,
-          oldValue: existing.marketingStatus,
-          newValue: "ACTIVE",
-          performedById: user.id,
-          benchConsultantId: existing.id,
-        });
+  try {
+    await prisma.$transaction(async (tx) => {
+      if (existing) {
+        if (existing.marketingStatus !== "ACTIVE") {
+          await tx.benchConsultant.update({
+            where: { id: existing.id },
+            data: { marketingStatus: "ACTIVE" },
+          });
+          await logActivity(tx, {
+            entityType: "CONSULTANT",
+            action: "BENCH_CONSULTANT_UPDATED",
+            description: `Added to bench from candidate (${existing.marketingStatus} → ACTIVE)`,
+            oldValue: existing.marketingStatus,
+            newValue: "ACTIVE",
+            performedById: user.id,
+            benchConsultantId: existing.id,
+          });
+        }
+        return;
       }
-      return;
-    }
-    const cand = await tx.candidate.findUnique({
-      where: { id: candidateId },
-      select: {
-        fullName: true,
-        email: true,
-        phone: true,
-        currentLocation: true,
-        workAuthorization: true,
-        skills: true,
-      },
+      const cand = await tx.candidate.findUnique({
+        where: { id: candidateId },
+        select: {
+          fullName: true,
+          email: true,
+          phone: true,
+          currentLocation: true,
+          workAuthorization: true,
+          skills: true,
+        },
+      });
+      if (!cand) return;
+      await ensureBenchForCandidate(tx, {
+        candidateId,
+        fullName: cand.fullName,
+        email: cand.email,
+        phone: cand.phone,
+        currentLocation: cand.currentLocation,
+        workAuthorization: cand.workAuthorization,
+        skills: cand.skills,
+        recruiterId: user.role === "RECRUITER" ? user.id : null,
+        performedById: user.id,
+      });
     });
-    if (!cand) return;
-    await ensureBenchForCandidate(tx, {
-      candidateId,
-      fullName: cand.fullName,
-      email: cand.email,
-      phone: cand.phone,
-      currentLocation: cand.currentLocation,
-      workAuthorization: cand.workAuthorization,
-      skills: cand.skills,
-      recruiterId: user.role === "RECRUITER" ? user.id : null,
-      performedById: user.id,
-    });
-  });
+  } catch (e) {
+    // Two near-simultaneous "Add to bench" clicks race on the candidateId
+    // unique — the loser's create hits P2002. The intent is idempotent, so a
+    // no-op is the right outcome.
+    if (
+      !(e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")
+    )
+      throw e;
+  }
   revalidatePath("/bench");
   revalidatePath(`/candidates/${candidateId}`);
 }

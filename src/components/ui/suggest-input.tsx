@@ -46,6 +46,7 @@ export function SuggestInput({
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const listId = useId();
 
   const matches = useMemo(() => {
@@ -61,21 +62,32 @@ export function SuggestInput({
     return [...starts, ...contains].slice(0, maxResults);
   }, [text, suggestions, maxResults]);
 
-  function emit(next: string, real?: React.ChangeEvent<HTMLInputElement>) {
-    if (!isControlled) setInternal(next);
-    if (!onChange) return;
-    if (real) {
-      real.target.value = next;
-      onChange(real);
-    } else {
-      onChange({
+  // Programmatically set the value the way a real keystroke would: drive it
+  // through the native input setter and dispatch a bubbling `input` event. That
+  // makes React's own onChange fire AND lets any ancestor `<form onInput>` (the
+  // unsaved-changes guard) see the change. A plain synthetic onChange call would
+  // skip the native event, so a mouse-picked suggestion never marked the form
+  // dirty and its edit could be lost on soft navigation.
+  function commit(next: string) {
+    const el = inputRef.current;
+    if (!el) {
+      // No DOM node yet (SSR / tests) — fall back to a direct notify.
+      if (!isControlled) setInternal(next);
+      onChange?.({
         target: { value: next, name: name ?? "" },
       } as unknown as React.ChangeEvent<HTMLInputElement>);
+      return;
     }
+    const setter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      "value",
+    )?.set;
+    setter?.call(el, next);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
   function select(s: string) {
-    emit(s);
+    commit(s);
     onCommit?.(s);
     setOpen(false);
     setActive(-1);
@@ -84,6 +96,14 @@ export function SuggestInput({
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (!open || matches.length === 0) {
       if (e.key === "ArrowDown") setOpen(true);
+      // Enter on a free-typed value with no open list: commit (remember) it,
+      // but suppress the form submit so the commit's state update (e.g. append
+      // the new value to Skills) lands before any submit — otherwise the just-
+      // typed value wouldn't be in the submitted FormData.
+      else if (e.key === "Enter" && text.trim()) {
+        e.preventDefault();
+        onCommit?.(text);
+      }
       return;
     }
     if (e.key === "ArrowDown") {
@@ -96,7 +116,9 @@ export function SuggestInput({
       e.preventDefault();
       select(matches[active]);
     } else if (e.key === "Enter") {
+      e.preventDefault();
       onCommit?.(text);
+      setOpen(false);
     } else if (e.key === "Escape") {
       setOpen(false);
       setActive(-1);
@@ -109,6 +131,7 @@ export function SuggestInput({
     <div className="relative">
       <Input
         {...props}
+        ref={inputRef}
         name={name}
         value={text}
         autoComplete="off"
@@ -118,7 +141,8 @@ export function SuggestInput({
         aria-autocomplete="list"
         className={className}
         onChange={(e) => {
-          emit(e.target.value, e);
+          if (!isControlled) setInternal(e.target.value);
+          onChange?.(e);
           setOpen(true);
           setActive(-1);
         }}

@@ -61,7 +61,7 @@ const NEW_CAND = "__new__";
 
 type Fields = Omit<
   BenchConsultantFormValues,
-  "id" | "skills" | "relocation" | "isActive"
+  "id" | "skills" | "relocation" | "isActive" | "personalNumber"
 > & { skills: string };
 
 function initialFields(v?: BenchConsultantFormValues): Fields {
@@ -88,7 +88,6 @@ function initialFields(v?: BenchConsultantFormValues): Fields {
     marketingEmail: v?.marketingEmail ?? "",
     marketingPassword: v?.marketingPassword ?? "",
     marketingNumber: v?.marketingNumber ?? "",
-    personalNumber: v?.personalNumber ?? "",
     priority: v?.priority ?? "SECOND",
     marketingStatus: v?.marketingStatus ?? "ACTIVE",
     notes: v?.notes ?? "",
@@ -375,9 +374,9 @@ export function BenchConsultantForm({
       {canEditCredentials && (
         <section className="space-y-4 rounded-lg border border-amber-200 bg-amber-50/40 p-4">
           <div>
-            <p className="text-sm font-medium text-slate-700">Marketing credentials</p>
+            <p className="text-sm font-medium text-slate-700">Marketing details</p>
             <p className="mt-0.5 text-xs text-slate-500">
-              Admin-only. Stored for portal access — shown on the detail page only, never on lists or exports.
+              Portal login — stored for marketing access; shown on the detail page only, never on lists or exports.
             </p>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
