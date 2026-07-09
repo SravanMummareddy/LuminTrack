@@ -28,6 +28,34 @@ export type ConfirmKind =
   | "not_marketing"
   | true;
 
+/**
+ * One soft gate awaiting a reason, so the submission form can render every
+ * applicable warning stacked at once (see `collectSubmissionGates`). Each kind
+ * maps to a render block + its own reason field in the form.
+ */
+export type PendingGateKind =
+  | "not_assigned"
+  | "rate_chain"
+  | "candidate_status"
+  | "not_marketing"
+  | "convert_warn"
+  | "duplicate"
+  | "ilabor_closed"
+  | "ilabor_cap";
+
+export type PendingGate = {
+  kind: PendingGateKind;
+  /** A ready-made human line for this gate (candidate_status). */
+  message?: string;
+  /** Broken rate-chain rungs (rate_chain) or convert warnings (convert_warn). */
+  warnings?: string[];
+  /** Existing submission to link, for the duplicate gate. */
+  existingSubmissionId?: string;
+  /** iLabor cap + effective active count, for the cap gate. */
+  cap?: number;
+  active?: number;
+};
+
 /** Extra context for a paused gate, surfaced in the confirm prompt. */
 export type ConfirmData = {
   /** iLabor cap value, for the cap gate. */
@@ -51,6 +79,9 @@ export type FormState = {
   needsConfirm?: ConfirmKind;
   /** Extra context for the paused gate (numbers, ids) shown in the prompt. */
   confirmData?: ConfirmData;
+  /** Every soft gate that fired for a submission, shown stacked so the recruiter
+   *  resolves them all in one pass instead of one round-trip per gate. */
+  pendingGates?: PendingGate[];
   /**
    * Optional success message for a toast. Actions that don't redirect (status
    * change, note add, job status) set this so the client can confirm the save

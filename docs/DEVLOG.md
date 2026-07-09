@@ -37,6 +37,33 @@ a narrow `select`. Check the query before adding new columns or writes. And keep
 audit split clean: description = what changed (snapshot), a resolved subject column =
 who/which (always current) — don't bake names into the description string.
 
+## 2026-07-09 · Submission warnings fired one-by-one — stack them into one review
+
+**Situation.** Submitting a candidate that tripped several soft gates (Do-not-contact
++ off-bench + duplicate) forced the recruiter through them one at a time: submit →
+warning → reason → submit → next warning → reason → submit. One submission's audit
+note captured three override reasons — proof the recruiter had made three round-trips.
+
+**Diagnosis.** Each action evaluated gates in sequence and `return`ed at the FIRST
+failure, so the form could only ever show one warning at a time. The gates were also
+scattered — some in the action, some inside `createSubmissionRecord` under the advisory
+lock — so nothing knew the full set at once.
+
+**Fix.** A pure `collectSubmissionGates()` helper the caller feeds all the loaded data
+(candidate/bench status, rate chain, convert warnings, a pre-checked duplicate + iLabor
+counts) and every supplied reason; it returns the FULL list of gates still missing a
+reason. The action returns them under `pendingGates`, and the form renders one "Review
+before submitting (N)" panel — a block + reason field per gate — cleared by a single
+"Submit anyway". The create still re-checks dup/iLabor under the lock as the race-safe
+net; a gate that slips in there comes back stacked the same way. Each reason posts via
+its own latched hidden input, so the whole batch submits in one POST.
+
+**Lesson.** "One prompt per problem" is a first-failure-return smell. When several
+independent confirmations can all apply, collect them in one pass and present them
+together — the user resolves the set once instead of discovering them serially. Keep
+the collector pure so the ordering/aux-data is unit-testable, and keep the
+in-transaction check as the race-safe backstop rather than the primary gate.
+
 ## 2026-07-08 · "Only bench candidates get submitted" — a soft gate, not a hard rule
 
 **Situation.** The owner asked: since we submit bench consultants to requirements,

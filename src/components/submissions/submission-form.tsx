@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { AlertTriangle } from "lucide-react";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { SearchSelect } from "@/components/ui/search-select";
 import { Button } from "@/components/ui/button";
@@ -64,31 +65,18 @@ type Fields = {
   billRate: string;
   clientRate: string;
   teamLead: string;
-  // Set only when a gate (duplicate / iLabor) paused the submit.
-  overridePreset: string;
-  overrideNote: string;
-  // Set only in convert mode when a convert-warn gate (candidate placed,
-  // archived résumé, zero rates, bill < pay) paused the move. Any non-empty
-  // value clears all four; latched so it rides through a follow-up gate.
+  // Every gate reason is its own field, so the whole stack of warnings can be
+  // filled at once and posts together via latched hidden inputs below. Preset +
+  // note pairs (duplicate / iLabor) compose into one reason string per field.
+  rateReason: string;
   convertReason: string;
-  // Reason for submitting a Not-interested / Do-not-contact candidate. Its own
-  // field (not overrideNote) so it can be latched persistently and survive a
-  // follow-up gate (e.g. rates-pending) on either the direct or convert path.
   candidateStatusReason: string;
-  // Reason for submitting an Off-bench candidate. Latched like the above so it
-  // rides through any follow-up gate.
   benchReason: string;
+  duplicatePreset: string;
+  duplicateNote: string;
+  ilaborPreset: string;
+  ilaborNote: string;
 };
-
-
-// Convert-only warn gates — cleared by a single free-text `convertOverrideReason`
-// (vs. the duplicate/iLabor gates which take a preset reason).
-const CONVERT_OVERRIDE_GATES = [
-  "candidate_placed",
-  "archived_resume",
-  "zero_rates",
-  "bill_below_pay",
-];
 
 export function SubmissionForm({
   action,
@@ -145,11 +133,14 @@ export function SubmissionForm({
     billRate: "",
     clientRate: "",
     teamLead: "",
-    overridePreset: "",
-    overrideNote: "",
+    rateReason: "",
     convertReason: "",
     candidateStatusReason: "",
     benchReason: "",
+    duplicatePreset: "",
+    duplicateNote: "",
+    ilaborPreset: "",
+    ilaborNote: "",
     ...prefill,
   });
   // Surfaced after a candidate switch clears a résumé pick, so the wipe isn't
@@ -260,11 +251,14 @@ export function SubmissionForm({
     setGateDismissed(true);
     setFields((f) => ({
       ...f,
-      overridePreset: "",
-      overrideNote: "",
+      rateReason: "",
       convertReason: "",
       candidateStatusReason: "",
       benchReason: "",
+      duplicatePreset: "",
+      duplicateNote: "",
+      ilaborPreset: "",
+      ilaborNote: "",
     }));
   };
 
@@ -352,22 +346,17 @@ export function SubmissionForm({
   const effectiveCandidateId =
     mode === "candidate-locked" ? (candidate?.id ?? "") : fields.candidateId;
 
-  // Suppress a gate whose candidate/job context the user has since changed — its
-  // baked message + the button state would be stale (see dismissStaleGate).
-  const gate = gateDismissed ? undefined : state.needsConfirm;
-  const isGate = gate !== undefined && gate !== true;
-  // Convert-only warn gates (candidate placed / archived résumé / zero rates /
-  // bill < pay) take a single free-text reason, not a preset.
-  const isConvertGate =
-    typeof gate === "string" && CONVERT_OVERRIDE_GATES.includes(gate);
-  // The preset-reason gates (duplicate / iLabor closed / iLabor cap).
-  const isReasonGate =
-    isGate &&
-    !isConvertGate &&
-    gate !== "not_assigned" &&
-    gate !== "rate_chain" &&
-    gate !== "candidate_status" &&
-    gate !== "not_marketing";
+  // Every soft gate that fired, shown stacked. Suppressed when the user has since
+  // changed the candidate/job (the baked messages would be stale — dismissStaleGate).
+  const pendingGates = gateDismissed ? [] : (state.pendingGates ?? []);
+  const gate = (k: string) => pendingGates.find((g) => g.kind === k);
+  const hasGates = pendingGates.length > 0;
+  const dupGate = gate("duplicate");
+  const ilaborGate = gate("ilabor_closed") ?? gate("ilabor_cap");
+  const ilaborCapGate = gate("ilabor_cap");
+  // Composed override strings posted via the latched hidden inputs below.
+  const composeReason = (preset: string, note: string) =>
+    preset === "" ? "" : preset + (note.trim() ? ` (${note.trim()})` : "");
 
   // The commercial-terms block (engagement, vendor recruiter, rates, team lead,
   // job duties). In convert mode these are already prefilled from the VPR, so we
@@ -486,6 +475,25 @@ export function SubmissionForm({
           type="hidden"
           name="benchOverrideReason"
           value={fields.benchReason}
+        />
+      )}
+      {/* Each stacked gate's reason posts via its own latched hidden input, so the
+          whole batch submits together (the visible fields drive these values). */}
+      {fields.rateReason.trim() !== "" && (
+        <input type="hidden" name="rateOverrideReason" value={fields.rateReason} />
+      )}
+      {composeReason(fields.duplicatePreset, fields.duplicateNote) !== "" && (
+        <input
+          type="hidden"
+          name="duplicateReason"
+          value={composeReason(fields.duplicatePreset, fields.duplicateNote)}
+        />
+      )}
+      {composeReason(fields.ilaborPreset, fields.ilaborNote) !== "" && (
+        <input
+          type="hidden"
+          name="ilaborOverrideReason"
+          value={composeReason(fields.ilaborPreset, fields.ilaborNote)}
         />
       )}
       {/* Persisted across gate transitions once the recruiter has claimed —
@@ -727,181 +735,231 @@ export function SubmissionForm({
         />
       </Field>
 
-      {/* Not-assigned gate: a self-claim prompt, not a reason picker. The
-          hidden claim flag rides along so the next submit assigns + submits. */}
-      {gate === "not_assigned" && (
-        <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3">
-          <p className="text-sm text-amber-800">{state.error}</p>
-          <p className="text-xs text-amber-700">
-            Claiming assigns this job to you (recorded on the job&apos;s timeline)
-            so you own it going forward. Admins can reassign later.
-          </p>
-          <input type="hidden" name="claim" value="1" />
-        </div>
-      )}
+      {/* Every applicable warning, stacked into ONE review panel so the recruiter
+          resolves them together and submits once. Each reason drives a latched
+          hidden input above, so the whole batch posts on a single submit. */}
+      {hasGates && (
+        <div className="space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-700" />
+            <p className="text-sm font-medium text-amber-800">
+              Review before submitting
+            </p>
+            <span className="ml-auto rounded-md bg-white px-2 py-0.5 text-xs font-medium text-amber-800">
+              {pendingGates.length} to confirm
+            </span>
+          </div>
 
-      {/* Rate-chain soft block: show the broken rungs + require a free-text
-          reason (owner: "soft block" — a save the recruiter can override). */}
-      {gate === "rate_chain" && (
-        <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3">
-          <p className="text-sm font-medium text-amber-800">{state.error}</p>
-          {state.confirmData?.warnings?.length ? (
-            <ul className="list-disc space-y-0.5 pl-5 text-sm text-amber-800">
-              {state.confirmData.warnings.map((w, i) => (
-                <li key={i}>{w}</li>
-              ))}
-            </ul>
-          ) : null}
-          <input
-            type="hidden"
-            name="rateOverrideReason"
-            value={fields.overrideNote}
-          />
-          <Field
-            label="Reason for saving anyway"
-            htmlFor="overrideNote"
-            required
-            hint="Captured on the submission's audit trail."
-          >
-            <Textarea
-              id="overrideNote"
-              rows={2}
-              value={fields.overrideNote}
-              onChange={set("overrideNote")}
-            />
-          </Field>
-        </div>
-      )}
+          {gate("not_assigned") && (
+            <div className="border-t border-amber-200 pt-3">
+              <p className="text-sm font-medium text-amber-800">
+                You&apos;re not assigned to this job.
+              </p>
+              <p className="mt-0.5 text-xs text-amber-700">
+                Submitting will claim it for you (recorded on the job&apos;s
+                timeline). Admins can reassign later.
+              </p>
+            </div>
+          )}
 
-      {/* Candidate-status soft block (Not-interested / Do-not-contact): a
-          free-text reason to submit anyway. Fires on both the direct-submit and
-          the VPR-convert paths. */}
-      {gate === "candidate_status" && (
-        <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3">
-          <p className="text-sm font-medium text-amber-800">{state.error}</p>
-          {/* The reason posts via a persistent latched hidden input above (so it
-              rides through a follow-up gate); this textarea just drives it. */}
-          <Field
-            label="Reason for submitting anyway"
-            htmlFor="candidateStatusReason"
-            required
-            hint="Captured on the submission's audit trail."
-          >
-            <Textarea
-              id="candidateStatusReason"
-              rows={2}
-              value={fields.candidateStatusReason}
-              onChange={set("candidateStatusReason")}
-            />
-          </Field>
-        </div>
-      )}
+          {gate("rate_chain") && (
+            <div className="border-t border-amber-200 pt-3">
+              <p className="text-sm font-medium text-amber-800">
+                These rates break the rate chain.
+              </p>
+              {gate("rate_chain")!.warnings?.length ? (
+                <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-amber-800">
+                  {gate("rate_chain")!.warnings!.map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                </ul>
+              ) : null}
+              <Field
+                label="Reason for saving anyway"
+                htmlFor="rateReason"
+                required
+                hint="Captured on the audit trail."
+              >
+                <Textarea
+                  id="rateReason"
+                  rows={2}
+                  required
+                  value={fields.rateReason}
+                  onChange={set("rateReason")}
+                />
+              </Field>
+            </div>
+          )}
 
-      {/* Not-on-active-bench soft warn: submitting re-adds them to marketing. A
-          free-text reason, latched via the hidden input above. */}
-      {gate === "not_marketing" && (
-        <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3">
-          <p className="text-sm font-medium text-amber-800">{state.error}</p>
-          <Field
-            label="Reason for submitting anyway"
-            htmlFor="benchReason"
-            required
-            hint="Captured on the submission's audit trail. They'll be re-added to the active bench."
-          >
-            <Textarea
-              id="benchReason"
-              rows={2}
-              value={fields.benchReason}
-              onChange={set("benchReason")}
-            />
-          </Field>
-        </div>
-      )}
+          {gate("candidate_status") && (
+            <div className="border-t border-amber-200 pt-3">
+              <p className="text-sm font-medium text-amber-800">
+                {gate("candidate_status")!.message ??
+                  "Candidate has a blocking status."}
+              </p>
+              <Field
+                label="Reason for submitting anyway"
+                htmlFor="candidateStatusReason"
+                required
+                hint="Captured on the audit trail."
+              >
+                <Textarea
+                  id="candidateStatusReason"
+                  rows={2}
+                  required
+                  value={fields.candidateStatusReason}
+                  onChange={set("candidateStatusReason")}
+                />
+              </Field>
+            </div>
+          )}
 
-      {/* Convert-only warn gates: a single free-text "why convert anyway". */}
-      {isConvertGate && (
-        <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3">
-          <p className="text-sm text-amber-800">{state.error}</p>
-          <Field
-            label="Reason for moving anyway"
-            htmlFor="convertReason"
-            required
-            hint="Captured on the requirement's timeline."
-          >
-            <Textarea
-              id="convertReason"
-              rows={2}
-              value={fields.convertReason}
-              onChange={set("convertReason")}
-            />
-          </Field>
-        </div>
-      )}
+          {gate("not_marketing") && (
+            <div className="border-t border-amber-200 pt-3">
+              <p className="text-sm font-medium text-amber-800">
+                Candidate isn&apos;t on the active bench.
+              </p>
+              <p className="mt-0.5 text-xs text-amber-700">
+                Submitting will re-add them to the active bench.
+              </p>
+              <Field
+                label="Reason for submitting anyway"
+                htmlFor="benchReason"
+                required
+                hint="Captured on the audit trail."
+              >
+                <Textarea
+                  id="benchReason"
+                  rows={2}
+                  required
+                  value={fields.benchReason}
+                  onChange={set("benchReason")}
+                />
+              </Field>
+            </div>
+          )}
 
-      {/* Duplicate / iLabor gates: a preset reason + optional note. */}
-      {isReasonGate && (() => {
-        // The gate kind comes typed from the server (no error-string sniffing).
-        // Duplicate overrides and iLabor overrides are recorded under different
-        // audit fields, so the composed reason goes to the matching field name.
-        const fieldName =
-          gate === "duplicate" ? "duplicateReason" : "ilaborOverrideReason";
-        // Persist the preset code (analyzable) plus an optional note in parens.
-        const composed =
-          fields.overridePreset === ""
-            ? ""
-            : fields.overridePreset +
-              (fields.overrideNote.trim()
-                ? ` (${fields.overrideNote.trim()})`
-                : "");
-        return (
-          <div className="space-y-3 rounded-md border border-amber-300 bg-amber-50 p-3">
-            <p className="text-sm text-amber-800">{state.error}</p>
-            {gate === "duplicate" &&
-              state.confirmData?.existingSubmissionId && (
+          {gate("convert_warn") && (
+            <div className="border-t border-amber-200 pt-3">
+              <p className="text-sm font-medium text-amber-800">
+                {(gate("convert_warn")!.warnings?.length ?? 0) > 1
+                  ? "A few things to confirm:"
+                  : "One thing to confirm:"}
+              </p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-amber-800">
+                {gate("convert_warn")!.warnings?.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+              <Field
+                label="Reason for moving anyway"
+                htmlFor="convertReason"
+                required
+                hint="Captured on the requirement's timeline."
+              >
+                <Textarea
+                  id="convertReason"
+                  rows={2}
+                  required
+                  value={fields.convertReason}
+                  onChange={set("convertReason")}
+                />
+              </Field>
+            </div>
+          )}
+
+          {dupGate && (
+            <div className="border-t border-amber-200 pt-3">
+              <p className="text-sm font-medium text-amber-800">
+                This candidate was already submitted to this job.
+              </p>
+              {dupGate.existingSubmissionId && (
                 <Link
-                  href={`/submissions/${state.confirmData.existingSubmissionId}`}
+                  href={`/submissions/${dupGate.existingSubmissionId}`}
                   target="_blank"
-                  className="inline-block text-sm font-medium text-amber-900 underline"
+                  className="mt-0.5 inline-block text-sm font-medium text-amber-900 underline"
                 >
                   View the existing submission →
                 </Link>
               )}
-            <input type="hidden" name={fieldName} value={composed} />
-            <Field label="Reason" htmlFor="overridePreset" required>
-              <Select
-                key={`overridePreset-${selectSyncKey}`}
-                id="overridePreset"
-                value={fields.overridePreset}
-                onChange={set("overridePreset")}
-                required
-              >
-                <option value="" disabled>
-                  Pick a reason…
-                </option>
-                {OVERRIDE_REASONS.map((r) => (
-                  <option key={r} value={r}>
-                    {OVERRIDE_REASON_LABEL[r]}
+              <Field label="Reason to submit again" htmlFor="duplicatePreset" required>
+                <Select
+                  key={`duplicatePreset-${selectSyncKey}`}
+                  id="duplicatePreset"
+                  value={fields.duplicatePreset}
+                  onChange={set("duplicatePreset")}
+                  required
+                >
+                  <option value="" disabled>
+                    Pick a reason…
                   </option>
-                ))}
-              </Select>
-            </Field>
-            <Field
-              label="Note"
-              htmlFor="overrideNote"
-              hint="Optional — captured on the audit trail."
-            >
-              <Textarea
-                id="overrideNote"
-                rows={2}
-                value={fields.overrideNote}
-                onChange={set("overrideNote")}
-              />
-            </Field>
-          </div>
-        );
-      })()}
+                  {OVERRIDE_REASONS.map((r) => (
+                    <option key={r} value={r}>
+                      {OVERRIDE_REASON_LABEL[r]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field
+                label="Note"
+                htmlFor="duplicateNote"
+                hint="Optional — captured on the audit trail."
+              >
+                <Textarea
+                  id="duplicateNote"
+                  rows={2}
+                  value={fields.duplicateNote}
+                  onChange={set("duplicateNote")}
+                />
+              </Field>
+            </div>
+          )}
 
-      {state.error && !isGate && !gateDismissed && (
+          {ilaborGate && (
+            <div className="border-t border-amber-200 pt-3">
+              <p className="text-sm font-medium text-amber-800">
+                {gate("ilabor_closed") && ilaborCapGate
+                  ? `iLabor has closed submissions and the cap of ${ilaborCapGate.cap} is reached (${ilaborCapGate.active} active).`
+                  : ilaborCapGate
+                    ? `iLabor's cap of ${ilaborCapGate.cap} is reached (${ilaborCapGate.active} active).`
+                    : "iLabor has closed submissions on this requisition."}
+              </p>
+              <Field label="Reason to submit anyway" htmlFor="ilaborPreset" required>
+                <Select
+                  key={`ilaborPreset-${selectSyncKey}`}
+                  id="ilaborPreset"
+                  value={fields.ilaborPreset}
+                  onChange={set("ilaborPreset")}
+                  required
+                >
+                  <option value="" disabled>
+                    Pick a reason…
+                  </option>
+                  {OVERRIDE_REASONS.map((r) => (
+                    <option key={r} value={r}>
+                      {OVERRIDE_REASON_LABEL[r]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field
+                label="Note"
+                htmlFor="ilaborNote"
+                hint="Optional — captured on the audit trail."
+              >
+                <Textarea
+                  id="ilaborNote"
+                  rows={2}
+                  value={fields.ilaborNote}
+                  onChange={set("ilaborNote")}
+                />
+              </Field>
+            </div>
+          )}
+        </div>
+      )}
+
+      {state.error && !hasGates && !gateDismissed && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
           {state.error}
         </p>
@@ -914,21 +972,19 @@ export function SubmissionForm({
           disabled={pending}
           onClick={() => {
             // Latch the claim the moment the recruiter acts on the not-assigned
-            // prompt, so claim=1 also rides along to any follow-up gate.
-            if (gate === "not_assigned") setClaimIntent(true);
+            // prompt, so claim=1 also rides along on the stacked submit.
+            if (gate("not_assigned")) setClaimIntent(true);
           }}
         >
           {pending
             ? "Submitting…"
-            : gate === "not_assigned"
-              ? "Claim this job & submit"
-              : isGate
-                ? isConvert
-                  ? "Move anyway"
-                  : "Submit anyway"
-                : isConvert
-                  ? "Move to submission"
-                  : "Submit candidate"}
+            : hasGates
+              ? isConvert
+                ? "Move anyway"
+                : "Submit anyway"
+              : isConvert
+                ? "Move to submission"
+                : "Submit candidate"}
         </Button>
       </div>
     </form>
