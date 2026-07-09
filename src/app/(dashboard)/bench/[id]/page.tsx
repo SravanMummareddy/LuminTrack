@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Send } from "lucide-react";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -80,6 +80,15 @@ export default async function BenchConsultantDetailPage({
         Back to bench
       </Link>
       <PageHeader title={c.fullName} description={formatBenchConsultantDisplayId(c)}>
+        {c.candidate && (
+          <Link
+            href={`/vendor-portal?submitCandidateId=${c.candidate.id}`}
+            className={buttonClass("primary")}
+          >
+            <Send className="h-4 w-4" />
+            Submit to a requirement
+          </Link>
+        )}
         <Link href={`/bench/${c.id}/edit`} className={buttonClass("secondary")}>
           Edit
         </Link>

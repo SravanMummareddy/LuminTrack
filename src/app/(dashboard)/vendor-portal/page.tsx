@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Send } from "lucide-react";
+import { prisma } from "@/server/db";
 import { PageHeader } from "@/components/ui/page-header";
 import { Pagination } from "@/components/ui/pagination";
 import { buttonClass } from "@/components/ui/button";
@@ -82,6 +83,17 @@ export default async function VendorPortalPage({
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const canManage = canManageRequirements(user ?? undefined);
 
+  // Submit-mode: arrived from a bench/candidate "Submit to a requirement" button.
+  // Surface a banner + turn each row's ID cell into a "Submit here →" link that
+  // carries the candidate into the convert flow.
+  const submitCandidateId = clean(sp.submitCandidateId);
+  const submitCandidate = submitCandidateId
+    ? await prisma.candidate.findFirst({
+        where: { id: submitCandidateId, deletedAt: null },
+        select: { fullName: true },
+      })
+    : null;
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -96,6 +108,17 @@ export default async function VendorPortalPage({
           </Link>
         )}
       </div>
+
+      {submitCandidate && (
+        <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          <Send className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>
+            Submitting <span className="font-semibold">{submitCandidate.fullName}</span> — pick an
+            open requirement below and click <span className="font-medium">Submit here</span> to
+            create the submission (prefilled and editable).
+          </p>
+        </div>
+      )}
 
       <RequirementFilters
         clients={clients}
@@ -127,6 +150,7 @@ export default async function VendorPortalPage({
             rows={rows}
             countLabel={`${total} requirement${total === 1 ? "" : "s"}`}
             pageOffset={(page - 1) * PAGE_SIZE}
+            submitCandidateId={submitCandidate ? submitCandidateId : undefined}
           />
           <Pagination page={page} totalPages={totalPages} total={total} />
         </div>

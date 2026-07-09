@@ -70,6 +70,74 @@ export async function ensureBenchForCandidate(
 }
 
 /**
+ * Submitting a candidate to a requirement IS an act of marketing them, so it
+ * keeps the bench honest: an OFF-bench (INACTIVE) row is reactivated, and a
+ * candidate with no bench row at all gets one (seeded from their fields). A
+ * PAUSED, PLACED, or already-ACTIVE row is left untouched — PLACED in particular
+ * is only re-marketed via the explicit "Market — project ending" action (owner
+ * decision), so a submission must not silently un-place-market them.
+ *
+ * Caller must wrap in `prisma.$transaction`.
+ */
+export async function activateBenchOnSubmission(
+  tx: Tx,
+  args: {
+    candidateId: string;
+    recruiterId?: string | null;
+    performedById: string;
+  },
+): Promise<void> {
+  const bench = await tx.benchConsultant.findUnique({
+    where: { candidateId: args.candidateId },
+    select: { id: true, marketingStatus: true },
+  });
+
+  if (bench) {
+    if (bench.marketingStatus !== "INACTIVE") return; // ACTIVE/PAUSED/PLACED: leave as-is
+    await tx.benchConsultant.update({
+      where: { id: bench.id },
+      data: { marketingStatus: "ACTIVE" },
+    });
+    await logActivity(tx, {
+      entityType: "CONSULTANT",
+      action: "BENCH_CONSULTANT_UPDATED",
+      description: "Back on the bench (submitted to a requirement)",
+      oldValue: "INACTIVE",
+      newValue: "ACTIVE",
+      performedById: args.performedById,
+      benchConsultantId: bench.id,
+    });
+    return;
+  }
+
+  // No bench row yet (e.g. candidate created non-AVAILABLE) — create one from the
+  // candidate's own fields, mirroring ensureBenchForCandidate.
+  const cand = await tx.candidate.findUnique({
+    where: { id: args.candidateId },
+    select: {
+      fullName: true,
+      email: true,
+      phone: true,
+      currentLocation: true,
+      workAuthorization: true,
+      skills: true,
+    },
+  });
+  if (!cand) return;
+  await ensureBenchForCandidate(tx, {
+    candidateId: args.candidateId,
+    fullName: cand.fullName,
+    email: cand.email,
+    phone: cand.phone,
+    currentLocation: cand.currentLocation,
+    workAuthorization: cand.workAuthorization,
+    skills: cand.skills,
+    recruiterId: args.recruiterId ?? null,
+    performedById: args.performedById,
+  });
+}
+
+/**
  * Flips the marketing status of a candidate's linked bench record — PLACED when
  * the candidate joins (rolls off the active bench), ACTIVE when a placement ends
  * and they're back to being marketed. No-ops if the candidate has no linked bench

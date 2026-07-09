@@ -324,6 +324,9 @@ export async function convertRequirementToSubmission(
   const candidateStatusOverrideReason = String(
     formData.get("candidateStatusOverrideReason") ?? "",
   ).trim();
+  const benchOverrideReason = String(
+    formData.get("benchOverrideReason") ?? "",
+  ).trim();
 
   const requirement = await prisma.vendorRequirement.findUnique({
     where: { id: requirementId },
@@ -352,6 +355,7 @@ export async function convertRequirementToSubmission(
         fullName: true,
         status: true,
         isActive: true,
+        benchConsultant: { select: { marketingStatus: true } },
         placements: {
           where: { status: { in: ["ACTIVE", "EXTENDED"] } },
           select: { id: true },
@@ -391,6 +395,18 @@ export async function convertRequirementToSubmission(
     return {
       needsConfirm: "candidate_status",
       error: `${candidate.fullName} is marked "${CANDIDATE_STATUS_LABEL[candidate.status]}". Add a reason to submit anyway.`,
+    };
+
+  // Not-actively-marketed soft warn (parallels the direct-submit path). An
+  // Off-bench candidate submitted against a requirement is surprising; overriding
+  // re-adds them to the active bench in createSubmissionRecord. (A PLACED bench
+  // status is handled by the candidate_placed gate below, so it's excluded here.)
+  const bench = candidate.benchConsultant;
+  const notMarketed = !bench || bench.marketingStatus === "INACTIVE";
+  if (notMarketed && !benchOverrideReason)
+    return {
+      needsConfirm: "not_marketing",
+      error: `${candidate.fullName} isn't on the active bench. Submitting will re-add them to marketing — add a reason to continue.`,
     };
 
   // Resolve a picked résumé up front (also drives the archived-résumé warn).
@@ -465,6 +481,7 @@ export async function convertRequirementToSubmission(
         duplicateReason,
         ilaborOverrideReason,
         candidateStatusOverrideReason,
+        benchOverrideReason,
         job,
         candidateFullName: candidate.fullName,
         actor: { id: user.id, fullName: user.fullName, isAdmin: hasFullAccess(user) },

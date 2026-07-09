@@ -22,6 +22,10 @@ export type ConfirmKind =
   // Overridable with a free-text `candidateStatusOverrideReason` (both the
   // direct-submit and VPR-convert paths).
   | "candidate_status"
+  // Soft warn when the candidate isn't on the active bench (Off bench / no bench
+  // row) — submitting will re-add them to marketing. Overridable with a free-text
+  // `benchOverrideReason` (both the direct-submit and VPR-convert paths).
+  | "not_marketing"
   | true;
 
 /** Extra context for a paused gate, surfaced in the confirm prompt. */

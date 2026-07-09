@@ -71,7 +71,12 @@ export async function createSubmission(
     }),
     prisma.candidate.findUnique({
       where: { id: d.candidateId },
-      select: { id: true, fullName: true, status: true },
+      select: {
+        id: true,
+        fullName: true,
+        status: true,
+        benchConsultant: { select: { marketingStatus: true } },
+      },
     }),
   ]);
   if (!job) return { error: "This job no longer exists." };
@@ -136,6 +141,21 @@ export async function createSubmission(
     };
   }
 
+  // Not-actively-marketed soft warn. Submissions come from the bench; a candidate
+  // who is Off bench (or has no bench row) is a surprising submit. Overridable —
+  // and on save, createSubmissionRecord re-adds them to the active bench.
+  const benchOverrideReason = String(
+    formData.get("benchOverrideReason") ?? "",
+  ).trim();
+  const bench = candidate.benchConsultant;
+  const notMarketed = !bench || bench.marketingStatus === "INACTIVE";
+  if (notMarketed && !benchOverrideReason) {
+    return {
+      needsConfirm: "not_marketing",
+      error: `${candidate.fullName} isn't on the active bench. Submitting will re-add them to marketing — add a reason to continue.`,
+    };
+  }
+
   // §C4 — duplicate-submission check moved out of the DB to the action so
   // recruiters can override with a reason (e.g. role was rebooted, prior
   // submission was cancelled). The DB unique constraint was dropped in
@@ -188,6 +208,7 @@ export async function createSubmission(
       ilaborOverrideReason,
       rateOverrideReason,
       candidateStatusOverrideReason,
+      benchOverrideReason,
       job,
       candidateFullName: candidate.fullName,
       actor: { id: user.id, fullName: user.fullName, isAdmin },
