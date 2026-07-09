@@ -114,7 +114,7 @@ export default async function VendorPortalPage({
           <Send className="mt-0.5 h-4 w-4 shrink-0" />
           <p>
             Submitting <span className="font-semibold">{submitCandidate.fullName}</span> — pick an
-            open requirement below and click <span className="font-medium">Submit here</span> to
+            open requirement below and click <span className="font-medium">Submit</span> to
             create the submission (prefilled and editable).
           </p>
         </div>

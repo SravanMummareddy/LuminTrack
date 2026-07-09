@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Send } from "lucide-react";
 import { Table, Th, Td, cardLinkRaise } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { MobileSort } from "@/components/ui/mobile-sort";
@@ -56,13 +57,24 @@ const COLUMNS: Column[] = [
     defaultVisible: true,
     render: (r, _n, ctx) =>
       ctx.submitCandidateId ? (
+        // Submit mode: keep the requirement id (links to the detail) and add an
+        // inline Submit action (links to the convert flow, candidate preselected).
         <Td label="ID" className="whitespace-nowrap">
-          <Link
-            href={`/vendor-portal/${r.id}/convert?candidateId=${ctx.submitCandidateId}`}
-            className="font-medium text-emerald-700 hover:underline"
-          >
-            Submit here →
-          </Link>
+          <span className="inline-flex items-center gap-2.5">
+            <Link
+              href={`/vendor-portal/${r.id}`}
+              className="font-mono text-xs text-indigo-600 hover:underline"
+            >
+              {formatVendorRequirementDisplayId(r)}
+            </Link>
+            <Link
+              href={`/vendor-portal/${r.id}/convert?candidateId=${ctx.submitCandidateId}`}
+              className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:underline"
+            >
+              <Send className="h-3.5 w-3.5" />
+              Submit
+            </Link>
+          </span>
         </Td>
       ) : (
         <Td label="ID" secondary className="whitespace-nowrap font-mono text-xs">
