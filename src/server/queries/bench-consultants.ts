@@ -112,7 +112,6 @@ export async function listBenchConsultants(filters: BenchListFilters) {
       marketingStatus: true,
       leastRateC2C: true,
       company: true,
-      isActive: true,
       candidateId: true,
       createdAt: true,
       updatedAt: true,

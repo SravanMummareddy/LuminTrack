@@ -10,6 +10,37 @@ short instead of long.
 
 ---
 
+## 2026-07-08 · A mouse-picked autocomplete option never marked the form "dirty"
+
+**Situation.** The bench/candidate forms have an unsaved-changes guard: a
+`<form onInput={markDirty}>` arms a `beforeunload` prompt and a "Discard changes?"
+dialog on the in-form "View candidate" link. But if you set Technology or Work
+authorization *only* by clicking a dropdown suggestion (no typing), navigating away
+dropped the edit silently — the guard never fired.
+
+**Diagnosis.** `SuggestInput` committed a picked option by calling the parent
+`onChange` with a **synthesized** event object (`{ target: { value } }`). React state
+updated, so the value showed — but no **native** `input` event was ever dispatched,
+so the ancestor `<form onInput>` (which listens for real DOM events, not React's
+synthetic ones) never saw it. Typing worked only because each keystroke is a genuine
+DOM input event. So the guard was blind to exactly the interaction it most needed to
+catch.
+
+**Fix.** Make a programmatic commit behave like a real keystroke: drive the value
+through the native `HTMLInputElement.prototype.value` setter, then
+`dispatchEvent(new Event("input", { bubbles: true }))`. That single event makes both
+React's own `onChange` fire *and* the ancestor `onInput={markDirty}` see the change.
+Also `preventDefault()` on the "commit a brand-new typed value" Enter path so the
+form doesn't submit in the same tick before the value's follow-up state update
+(append-to-Skills) lands. Verified in-browser: the dispatched event bubbles to the
+`<form>` listener.
+
+**Lesson.** React's synthetic `onChange` and the DOM's native `input` event are not
+interchangeable. Anything that listens at the DOM level (`onInput` on a container,
+a third-party observer, testing-library) only sees native events. When a component
+sets a value programmatically, dispatch a real bubbling event via the native setter —
+don't hand-roll a fake event object.
+
 ## 2026-07-08 · Bench had TWO status axes that could contradict each other
 
 **Situation.** The owner saw a bench row labelled "Active on bench" (a checkbox)
