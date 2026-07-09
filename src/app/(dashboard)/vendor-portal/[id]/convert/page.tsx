@@ -17,10 +17,16 @@ function rateStr(value: number | null): string {
 
 export default async function ConvertRequirementPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
+  const candidateParam = Array.isArray(sp.candidateId)
+    ? sp.candidateId[0]
+    : sp.candidateId;
   const user = await requireUser();
   const requirement = await getVendorRequirement(id);
   if (!requirement) notFound();
@@ -32,6 +38,14 @@ export default async function ConvertRequirementPage({
     getJobSubmittedCandidateIds(requirement.job.id),
     listTeamLeadOptions(),
   ]);
+
+  // When arriving via a bench/candidate "Submit to a requirement" button, the
+  // candidate is passed in the URL — preselect them (if they're a valid option),
+  // overriding the requirement's own optional target.
+  const prefillCandidateId =
+    candidateParam && candidates.some((c) => c.id === candidateParam)
+      ? candidateParam
+      : (requirement.candidateId ?? "");
 
   const submitted = new Set(submittedIds);
   const candidateOptions = candidates.map((c) => ({
@@ -70,7 +84,7 @@ export default async function ConvertRequirementPage({
           defaultRecruiterId={requirement.recruiterId ?? user.id}
           requirementId={requirement.id}
           prefill={{
-            candidateId: requirement.candidateId ?? "",
+            candidateId: prefillCandidateId,
             engagement: requirement.engagement ?? "",
             vendorRecruiterName: requirement.vendorRecruiterName ?? "",
             jobDuties: requirement.jobDuties ?? "",

@@ -4,6 +4,7 @@ import type {
   SubmissionStatus,
 } from "@/generated/prisma/enums";
 import { logActivity } from "@/server/activity";
+import { activateBenchOnSubmission } from "@/server/bench-lifecycle";
 
 type Tx = Prisma.TransactionClient;
 
@@ -68,6 +69,9 @@ export type SubmissionRecordInput = {
   /** Free-text reason logged when submitting a Not-interested / Do-not-contact
    *  candidate. The gate lives in the calling action; this only records it. */
   candidateStatusOverrideReason?: string;
+  /** Free-text reason logged when submitting an Off-bench candidate. The gate
+   *  lives in the calling action; this only records it. */
+  benchOverrideReason?: string;
   /** Pre-loaded job signal fields driving the iLabor gates + audit text. */
   job: {
     id: string;
@@ -199,6 +203,8 @@ export async function createSubmissionRecord(
     notes.push(`rate-override:${input.rateOverrideReason}`);
   if (input.candidateStatusOverrideReason)
     notes.push(`candidate-override:${input.candidateStatusOverrideReason}`);
+  if (input.benchOverrideReason)
+    notes.push(`bench-override:${input.benchOverrideReason}`);
   const description = existing
     ? `${input.candidateFullName} re-submitted to "${input.job.title}" (duplicate override: ${input.duplicateReason})`
     : input.ilaborOverrideReason
@@ -211,6 +217,13 @@ export async function createSubmissionRecord(
     note: notes.length ? notes.join("; ") : null,
     performedById: input.actor.id,
     submissionId: created.id,
+  });
+  // A submission is an act of marketing — keep the bench honest: reactivate an
+  // Off-bench row (or create one if missing). Leaves PAUSED/PLACED/ACTIVE alone.
+  await activateBenchOnSubmission(tx, {
+    candidateId: input.candidateId,
+    recruiterId: input.submittedById,
+    performedById: input.actor.id,
   });
   return { kind: "created", submissionId: created.id };
 }

@@ -10,6 +10,36 @@ short instead of long.
 
 ---
 
+## 2026-07-08 · "Only bench candidates get submitted" — a soft gate, not a hard rule
+
+**Situation.** The owner asked: since we submit bench consultants to requirements,
+should we enforce that only bench candidates can be submitted — a condition before
+the submit? And add a "Submit to a requirement" button on the bench page.
+
+**Diagnosis.** Submissions link to the **Candidate**, not the bench row, and
+`createCandidate` already auto-adds every AVAILABLE candidate to the bench — so
+"only bench candidates get submitted" is *already ~true by default*. A hard gate
+would re-couple the axes we'd just spent three rounds decoupling (candidate status
+≠ placement ≠ bench ≠ working) and create busywork for the legitimate exceptions
+(re-engaging an off-bench consultant, a placed backfill). The genuinely useful
+signal isn't "on the bench" (almost always yes) but "not being *actively* marketed"
+(Off bench / no row).
+
+**Fix.** Three complementary moves, no hard block: (1) a "Submit to a requirement"
+button on the bench + candidate pages that carries the candidate through the VPR
+list (banner + per-row "Submit here →") into the convert form, preselected; (2) a
+soft, dismissible `not_marketing` gate — fires only for an Off-bench/no-row
+candidate, overridable with a reason, exactly like the existing candidate_status
+gate; (3) since **a submission IS an act of marketing**, `createSubmissionRecord`
+now reactivates an Off-bench row (or creates a missing one) on submit — keeping the
+bench honest by construction. PLACED/PAUSED are left alone so the manual
+"Market — project ending" decision still owns the placed-and-marketed case.
+
+**Lesson.** When a rule is "almost always already true," a hard gate mostly
+generates friction for the exceptions. Prefer a soft warn on the *surprising* case
+plus a side-effect that keeps the invariant true (reactivate-on-submit) over a
+block that forbids the legitimate ones.
+
 ## 2026-07-08 · A mouse-picked autocomplete option never marked the form "dirty"
 
 **Situation.** The bench/candidate forms have an unsaved-changes guard: a

@@ -75,6 +75,9 @@ type Fields = {
   // field (not overrideNote) so it can be latched persistently and survive a
   // follow-up gate (e.g. rates-pending) on either the direct or convert path.
   candidateStatusReason: string;
+  // Reason for submitting an Off-bench candidate. Latched like the above so it
+  // rides through any follow-up gate.
+  benchReason: string;
 };
 
 
@@ -146,6 +149,7 @@ export function SubmissionForm({
     overrideNote: "",
     convertReason: "",
     candidateStatusReason: "",
+    benchReason: "",
     ...prefill,
   });
   // Surfaced after a candidate switch clears a résumé pick, so the wipe isn't
@@ -260,6 +264,7 @@ export function SubmissionForm({
       overrideNote: "",
       convertReason: "",
       candidateStatusReason: "",
+      benchReason: "",
     }));
   };
 
@@ -361,7 +366,8 @@ export function SubmissionForm({
     !isConvertGate &&
     gate !== "not_assigned" &&
     gate !== "rate_chain" &&
-    gate !== "candidate_status";
+    gate !== "candidate_status" &&
+    gate !== "not_marketing";
 
   // The commercial-terms block (engagement, vendor recruiter, rates, team lead,
   // job duties). In convert mode these are already prefilled from the VPR, so we
@@ -472,6 +478,14 @@ export function SubmissionForm({
           type="hidden"
           name="candidateStatusOverrideReason"
           value={fields.candidateStatusReason}
+        />
+      )}
+      {/* Off-bench override reason, latched so it survives a follow-up gate. */}
+      {fields.benchReason.trim() !== "" && (
+        <input
+          type="hidden"
+          name="benchOverrideReason"
+          value={fields.benchReason}
         />
       )}
       {/* Persisted across gate transitions once the recruiter has claimed —
@@ -778,6 +792,27 @@ export function SubmissionForm({
               rows={2}
               value={fields.candidateStatusReason}
               onChange={set("candidateStatusReason")}
+            />
+          </Field>
+        </div>
+      )}
+
+      {/* Not-on-active-bench soft warn: submitting re-adds them to marketing. A
+          free-text reason, latched via the hidden input above. */}
+      {gate === "not_marketing" && (
+        <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3">
+          <p className="text-sm font-medium text-amber-800">{state.error}</p>
+          <Field
+            label="Reason for submitting anyway"
+            htmlFor="benchReason"
+            required
+            hint="Captured on the submission's audit trail. They'll be re-added to the active bench."
+          >
+            <Textarea
+              id="benchReason"
+              rows={2}
+              value={fields.benchReason}
+              onChange={set("benchReason")}
             />
           </Field>
         </div>

@@ -19,6 +19,11 @@ import {
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
 import type { VendorRequirementRow } from "@/server/queries/requirements";
 
+/** Extra per-render context. In "submit mode" (a candidate is being submitted
+ *  from the bench/candidate page) the ID cell links straight to the convert
+ *  page with the candidate preselected, instead of the requirement detail. */
+type RenderCtx = { submitCandidateId?: string };
+
 type Column = {
   key: string;
   label: string;
@@ -26,7 +31,11 @@ type Column = {
   sortDefaultDir?: "asc" | "desc";
   align?: "right";
   defaultVisible: boolean;
-  render: (row: VendorRequirementRow, rowNumber: number) => React.ReactNode;
+  render: (
+    row: VendorRequirementRow,
+    rowNumber: number,
+    ctx: RenderCtx,
+  ) => React.ReactNode;
 };
 
 const COLUMNS: Column[] = [
@@ -45,16 +54,26 @@ const COLUMNS: Column[] = [
     key: "id",
     label: "ID",
     defaultVisible: true,
-    render: (r) => (
-      <Td label="ID" secondary className="whitespace-nowrap font-mono text-xs">
-        <Link
-          href={`/vendor-portal/${r.id}`}
-          className="text-indigo-600 hover:underline"
-        >
-          {formatVendorRequirementDisplayId(r)}
-        </Link>
-      </Td>
-    ),
+    render: (r, _n, ctx) =>
+      ctx.submitCandidateId ? (
+        <Td label="ID" className="whitespace-nowrap">
+          <Link
+            href={`/vendor-portal/${r.id}/convert?candidateId=${ctx.submitCandidateId}`}
+            className="font-medium text-emerald-700 hover:underline"
+          >
+            Submit here →
+          </Link>
+        </Td>
+      ) : (
+        <Td label="ID" secondary className="whitespace-nowrap font-mono text-xs">
+          <Link
+            href={`/vendor-portal/${r.id}`}
+            className="text-indigo-600 hover:underline"
+          >
+            {formatVendorRequirementDisplayId(r)}
+          </Link>
+        </Td>
+      ),
   },
   {
     key: "submissions",
@@ -309,11 +328,15 @@ export function VendorRequirementsTable({
   rows,
   pageOffset = 0,
   countLabel,
+  submitCandidateId,
 }: {
   rows: VendorRequirementRow[];
   pageOffset?: number;
   /** e.g. "22 requirements" — shown before the column count. */
   countLabel?: string;
+  /** Submit-mode: when set, each row's ID cell becomes a "Submit here →" link to
+   *  the convert page with this candidate preselected. */
+  submitCandidateId?: string;
 }) {
   const [prefs, setPrefs] = useColumnPrefs(
     STORAGE_KEY,
@@ -385,6 +408,7 @@ export function VendorRequirementsTable({
                   column={c}
                   row={row}
                   rowNumber={pageOffset + idx + 1}
+                  ctx={{ submitCandidateId }}
                 />
               ))}
             </tr>
@@ -399,10 +423,12 @@ function RenderCell({
   column,
   row,
   rowNumber,
+  ctx,
 }: {
   column: Column;
   row: VendorRequirementRow;
   rowNumber: number;
+  ctx: RenderCtx;
 }) {
-  return <>{column.render(row, rowNumber)}</>;
+  return <>{column.render(row, rowNumber, ctx)}</>;
 }

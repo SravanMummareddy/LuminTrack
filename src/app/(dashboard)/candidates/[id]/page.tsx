@@ -215,7 +215,7 @@ export default async function CandidateDetailPage({
         </div>
         {!isErased && !isTrashed && (
           <div className="flex shrink-0 items-center gap-2">
-            <LinkButton href="/vendor-portal">
+            <LinkButton href={`/vendor-portal?submitCandidateId=${candidate.id}`}>
               <Send className="h-4 w-4" />
               Submit to a requirement
             </LinkButton>
