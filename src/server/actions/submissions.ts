@@ -23,7 +23,14 @@ import {
   ensurePlacementOnJoined,
   terminatePlacementOnRevert,
 } from "@/server/placement-lifecycle";
-import { createSubmissionRecord } from "@/server/submission-create";
+import {
+  createSubmissionRecord,
+  ACTIVE_STATUSES,
+} from "@/server/submission-create";
+import {
+  collectSubmissionGates,
+  gatesFromCreateResult,
+} from "@/server/submission-gates";
 import { branchActions } from "@/lib/submission-flow";
 
 function readSubmission(formData: FormData) {
@@ -86,88 +93,61 @@ export async function createSubmission(
       fieldErrors: { candidateId: "Select a candidate." },
     };
 
-  // Assignment gate (Round 5 — assignment workflow). Admins submit to any job
-  // and may attribute the submission to anyone. A recruiter must be assigned to
-  // the job first, but can self-claim it inline: the form re-submits with
-  // claim=1, which assigns the job to them (logged) in the same tx as the
-  // submission. Without the claim flag we pause and prompt.
+  // ── Collect EVERY soft gate up front, so the form shows them all at once ──
+  // Assignment self-claim (recruiters), rate chain, candidate status, off-bench,
+  // duplicate, iLabor closed/cap. Each drops off the stack once its reason is
+  // supplied; only when the stack is empty do we create.
   const claim = String(formData.get("claim") ?? "") === "1";
   const isAdmin = hasFullAccess(user);
+  let hasAssignment = false;
   if (!isAdmin) {
     const assignment = await prisma.jobAssignment.findFirst({
       where: { jobId: d.jobId, recruiterId: user.id },
       select: { id: true },
     });
-    if (!assignment && !claim) {
-      return {
-        needsConfirm: "not_assigned",
-        error: `You're not assigned to "${job.title}". Claim it to submit a candidate.`,
-      };
-    }
+    hasAssignment = Boolean(assignment);
   }
 
-  // Rate-chain soft block (owner: "soft block"). If the entered rates break the
-  // chain (pay>bill, bill/pay>client), pause and require an explicit reason — the
-  // recruiter can still save, it's just not silent. Blank rates never trip it.
   const rateOverrideReason = String(
     formData.get("rateOverrideReason") ?? "",
   ).trim();
+  const candidateStatusOverrideReason = String(
+    formData.get("candidateStatusOverrideReason") ?? "",
+  ).trim();
+  const benchOverrideReason = String(
+    formData.get("benchOverrideReason") ?? "",
+  ).trim();
+  const duplicateReason = String(formData.get("duplicateReason") ?? "").trim();
+  const ilaborOverrideReason = String(
+    formData.get("ilaborOverrideReason") ?? "",
+  ).trim();
+
   const rateWarnings = rateChainWarnings({
     payRate: d.payRate,
     billRate: d.billRate,
     clientRate: d.clientRate,
   });
-  if (rateWarnings.length > 0 && !rateOverrideReason) {
-    return {
-      needsConfirm: "rate_chain",
-      confirmData: { warnings: rateWarnings },
-      error: "These rates break the rate chain. Add a reason to save anyway.",
-    };
-  }
-
-  // Candidate-status soft block (warn + override). Marking a candidate
-  // Not-interested / Do-not-contact shouldn't silently allow a submission, but
-  // the recruiter can proceed with a reason (matches the VPR-convert path).
-  const candidateStatusOverrideReason = String(
-    formData.get("candidateStatusOverrideReason") ?? "",
-  ).trim();
   const candidateBlocked =
     candidate.status === "NOT_INTERESTED" ||
     candidate.status === "DO_NOT_CONTACT";
-  if (candidateBlocked && !candidateStatusOverrideReason) {
-    return {
-      needsConfirm: "candidate_status",
-      error: `${candidate.fullName} is marked "${CANDIDATE_STATUS_LABEL[candidate.status]}". Add a reason to submit anyway.`,
-    };
-  }
-
-  // Not-actively-marketed soft warn. Submissions come from the bench; a candidate
-  // who is Off bench (or has no bench row) is a surprising submit. Overridable —
-  // and on save, createSubmissionRecord re-adds them to the active bench.
-  const benchOverrideReason = String(
-    formData.get("benchOverrideReason") ?? "",
-  ).trim();
   const bench = candidate.benchConsultant;
   const notMarketed = !bench || bench.marketingStatus === "INACTIVE";
-  if (notMarketed && !benchOverrideReason) {
-    return {
-      needsConfirm: "not_marketing",
-      error: `${candidate.fullName} isn't on the active bench. Submitting will re-add them to marketing — add a reason to continue.`,
-    };
-  }
 
-  // §C4 — duplicate-submission check moved out of the DB to the action so
-  // recruiters can override with a reason (e.g. role was rebooted, prior
-  // submission was cancelled). The DB unique constraint was dropped in
-  // migration `20260526150000_…`. Without `duplicateReason`, the action still
-  // blocks the duplicate just like before.
-  const duplicateReason = String(formData.get("duplicateReason") ?? "").trim();
-  // iLabor override — same UX shape as the duplicate prompt, separate field
-  // so the audit note can distinguish a cap/closed override from a duplicate
-  // override.
-  const ilaborOverrideReason = String(
-    formData.get("ilaborOverrideReason") ?? "",
-  ).trim();
+  // Pre-check duplicate + iLabor here (createSubmissionRecord re-checks under the
+  // advisory lock as the race-safe net) so they join the same stacked prompt.
+  const existingDup = await prisma.submission.findFirst({
+    where: { candidateId: d.candidateId, jobId: d.jobId },
+    select: { id: true },
+  });
+  const ilaborClosed = job.ilaborSubmitOpen === 0;
+  let ilaborCap: { cap: number; active: number } | null = null;
+  if (job.submitLimit != null) {
+    const localActive = await prisma.submission.count({
+      where: { jobId: d.jobId, status: { in: ACTIVE_STATUSES } },
+    });
+    const eff = Math.max(job.externalActiveCount ?? 0, localActive);
+    if (eff >= job.submitLimit) ilaborCap = { cap: job.submitLimit, active: eff };
+  }
 
   // Resolve a previously-saved résumé up front so a bad pick returns cleanly.
   let pickedResume: { id: string; blobUrl: string | null } | null = null;
@@ -186,10 +166,35 @@ export async function createSubmission(
     pickedResume = { id: resume.id, blobUrl: resume.blobUrl };
   }
 
-  // One transaction, advisory-locked on the (candidate, job) pair. The actual
-  // create + gates live in the shared createSubmissionRecord helper, which the
-  // requirement→submission convert flow reuses. Overridable gates come back as
-  // a tagged union so we can surface the right `needsConfirm` prompt.
+  const gates = collectSubmissionGates({
+    isConvert: false,
+    assignmentOk: isAdmin || hasAssignment || claim,
+    rateWarnings,
+    candidateStatusLabel: candidateBlocked
+      ? CANDIDATE_STATUS_LABEL[candidate.status]
+      : null,
+    notMarketed,
+    convertWarnings: [],
+    duplicateExistingId: existingDup?.id ?? null,
+    ilaborClosed,
+    ilaborCap,
+    reasons: {
+      rate: rateOverrideReason,
+      candidateStatus: candidateStatusOverrideReason,
+      bench: benchOverrideReason,
+      convert: "",
+      duplicate: duplicateReason,
+      ilabor: ilaborOverrideReason,
+    },
+  });
+  if (gates.length > 0)
+    return {
+      pendingGates: gates,
+      error: `Review ${gates.length} item${gates.length === 1 ? "" : "s"} below, then submit.`,
+    };
+
+  // All gates satisfied — create. The helper re-checks dup/iLabor under the
+  // advisory lock; a race that slips one in comes back as a stacked gate.
   const result = await prisma.$transaction((tx) =>
     createSubmissionRecord(tx, {
       candidateId: d.candidateId,
@@ -214,27 +219,11 @@ export async function createSubmission(
       actor: { id: user.id, fullName: user.fullName, isAdmin },
     }),
   );
-
-  if (result.kind === "duplicate") {
+  if (result.kind !== "created")
     return {
-      needsConfirm: "duplicate",
-      confirmData: { existingSubmissionId: result.existingId },
-      error: `${candidate.fullName} was already submitted to this job. Pick a reason to submit again.`,
+      pendingGates: gatesFromCreateResult(result),
+      error: "Resolve the item below, then submit.",
     };
-  }
-  if (result.kind === "ilabor_closed") {
-    return {
-      needsConfirm: "ilabor_closed",
-      error: `iLabor has closed submissions on this requisition. Pick a reason to submit anyway.`,
-    };
-  }
-  if (result.kind === "ilabor_cap") {
-    return {
-      needsConfirm: "ilabor_cap",
-      confirmData: { cap: result.cap, active: result.active },
-      error: `iLabor's cap of ${result.cap} is reached (${result.active} active). Pick a reason to submit past the cap.`,
-    };
-  }
   const submissionId = result.submissionId;
 
   revalidatePath("/submissions");

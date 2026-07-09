@@ -9,8 +9,13 @@ import { logActivity } from "@/server/activity";
 import { deriveTeamLead } from "@/server/team-lead";
 import {
   createSubmissionRecord,
+  ACTIVE_STATUSES,
   type CreateSubmissionResult,
 } from "@/server/submission-create";
+import {
+  collectSubmissionGates,
+  gatesFromCreateResult,
+} from "@/server/submission-gates";
 import {
   requirementSchema,
   requirementEditSchema,
@@ -385,30 +390,6 @@ export async function convertRequirementToSubmission(
       error: `${candidate.fullName} has been archived — restore the candidate before converting.`,
     };
 
-  // Candidate-status soft block (warn + override) — parallels the direct-submit
-  // path. A Not-interested / Do-not-contact candidate can still be submitted
-  // with an explicit reason (captured on the audit trail).
-  const candidateBlocked =
-    candidate.status === "NOT_INTERESTED" ||
-    candidate.status === "DO_NOT_CONTACT";
-  if (candidateBlocked && !candidateStatusOverrideReason)
-    return {
-      needsConfirm: "candidate_status",
-      error: `${candidate.fullName} is marked "${CANDIDATE_STATUS_LABEL[candidate.status]}". Add a reason to submit anyway.`,
-    };
-
-  // Not-actively-marketed soft warn (parallels the direct-submit path). An
-  // Off-bench candidate submitted against a requirement is surprising; overriding
-  // re-adds them to the active bench in createSubmissionRecord. (A PLACED bench
-  // status is handled by the candidate_placed gate below, so it's excluded here.)
-  const bench = candidate.benchConsultant;
-  const notMarketed = !bench || bench.marketingStatus === "INACTIVE";
-  if (notMarketed && !benchOverrideReason)
-    return {
-      needsConfirm: "not_marketing",
-      error: `${candidate.fullName} isn't on the active bench. Submitting will re-add them to marketing — add a reason to continue.`,
-    };
-
   // Resolve a picked résumé up front (also drives the archived-résumé warn).
   let pickedResume: {
     id: string;
@@ -436,31 +417,67 @@ export async function convertRequirementToSubmission(
     pickedResumeArchived = !resume.isActive;
   }
 
-  // ── Warn gates (a single convertOverrideReason clears all of them) ──
-  if (!convertOverrideReason) {
-    if (candidate.status === "PLACED" && candidate.placements.length > 0)
-      return {
-        needsConfirm: "candidate_placed",
-        error: `${candidate.fullName} is currently on an active placement. Convert anyway?`,
-      };
-    if (pickedResumeArchived)
-      return {
-        needsConfirm: "archived_resume",
-        error: "The selected résumé has been archived. Convert anyway?",
-      };
-    const pay = d.payRate ?? 0;
-    const bill = d.billRate ?? 0;
-    if (pay === 0 && bill === 0)
-      return {
-        needsConfirm: "zero_rates",
-        error: "Pay and bill rates are both blank/0 — convert with rates pending?",
-      };
-    if (d.payRate != null && d.billRate != null && d.billRate < d.payRate)
-      return {
-        needsConfirm: "bill_below_pay",
-        error: "Bill rate is below pay rate (negative margin). Convert anyway?",
-      };
+  // ── Collect EVERY soft gate up front so the form shows them stacked ──
+  const candidateBlocked =
+    candidate.status === "NOT_INTERESTED" ||
+    candidate.status === "DO_NOT_CONTACT";
+  const bench = candidate.benchConsultant;
+  const notMarketed = !bench || bench.marketingStatus === "INACTIVE";
+
+  // Convert-only warnings share a single `convertOverrideReason`.
+  const pay = d.payRate ?? 0;
+  const bill = d.billRate ?? 0;
+  const convertWarnings: string[] = [];
+  if (candidate.status === "PLACED" && candidate.placements.length > 0)
+    convertWarnings.push(`${candidate.fullName} is on an active placement.`);
+  if (pickedResumeArchived)
+    convertWarnings.push("The selected résumé has been archived.");
+  if (pay === 0 && bill === 0)
+    convertWarnings.push("Pay and bill rates are both blank/0 (rates pending).");
+  if (d.payRate != null && d.billRate != null && d.billRate < d.payRate)
+    convertWarnings.push("Bill rate is below pay rate (negative margin).");
+
+  // Pre-check duplicate + iLabor (createSubmissionRecord re-checks under the lock).
+  const existingDup = await prisma.submission.findFirst({
+    where: { candidateId: d.candidateId, jobId: d.jobId },
+    select: { id: true },
+  });
+  const ilaborClosed = job.ilaborSubmitOpen === 0;
+  let ilaborCap: { cap: number; active: number } | null = null;
+  if (job.submitLimit != null) {
+    const localActive = await prisma.submission.count({
+      where: { jobId: d.jobId, status: { in: ACTIVE_STATUSES } },
+    });
+    const eff = Math.max(job.externalActiveCount ?? 0, localActive);
+    if (eff >= job.submitLimit) ilaborCap = { cap: job.submitLimit, active: eff };
   }
+
+  const gates = collectSubmissionGates({
+    isConvert: true,
+    assignmentOk: true,
+    rateWarnings: [],
+    candidateStatusLabel: candidateBlocked
+      ? CANDIDATE_STATUS_LABEL[candidate.status]
+      : null,
+    notMarketed,
+    convertWarnings,
+    duplicateExistingId: existingDup?.id ?? null,
+    ilaborClosed,
+    ilaborCap,
+    reasons: {
+      rate: "",
+      candidateStatus: candidateStatusOverrideReason,
+      bench: benchOverrideReason,
+      convert: convertOverrideReason,
+      duplicate: duplicateReason,
+      ilabor: ilaborOverrideReason,
+    },
+  });
+  if (gates.length > 0)
+    return {
+      pendingGates: gates,
+      error: `Review ${gates.length} item${gates.length === 1 ? "" : "s"} below, then submit.`,
+    };
 
   let createdId: string | null = null;
   try {
@@ -505,25 +522,11 @@ export async function convertRequirementToSubmission(
     });
   } catch (e) {
     if (e instanceof SubmitGate) {
-      const r = e.result;
-      if (r.kind === "duplicate")
-        return {
-          needsConfirm: "duplicate",
-          confirmData: { existingSubmissionId: r.existingId },
-          error: `${candidate.fullName} was already submitted to this job. Pick a reason to submit again.`,
-        };
-      if (r.kind === "ilabor_closed")
-        return {
-          needsConfirm: "ilabor_closed",
-          error:
-            "iLabor has closed submissions on this requisition. Pick a reason to submit anyway.",
-        };
-      if (r.kind === "ilabor_cap")
-        return {
-          needsConfirm: "ilabor_cap",
-          confirmData: { cap: r.cap, active: r.active },
-          error: `iLabor's cap of ${r.cap} is reached (${r.active} active). Pick a reason to submit past the cap.`,
-        };
+      // A dup/iLabor gate slipped in under the advisory lock — surface it stacked.
+      return {
+        pendingGates: gatesFromCreateResult(e.result),
+        error: "Resolve the item below, then submit.",
+      };
     }
     throw e;
   }
