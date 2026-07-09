@@ -8,7 +8,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { requireUser } from "@/lib/session";
 import { hasFullAccess } from "@/lib/permissions";
 import { prisma } from "@/server/db";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, deletedSuffix } from "@/lib/format";
 import { ActivityAction } from "@/generated/prisma/enums";
 
 const PAGE_SIZE = 25;
@@ -75,10 +75,39 @@ export default async function AuditPage({
         note: true,
         createdAt: true,
         performedBy: { select: { id: true, fullName: true } },
+        // Scalar FKs drive the link target; the relations below resolve a human
+        // subject name (candidate / job / consultant) so each row is self-explanatory.
         jobId: true,
         candidateId: true,
         submissionId: true,
         requirementId: true,
+        interviewRoundId: true,
+        benchConsultantId: true,
+        job: { select: { title: true, deletedAt: true, erasedAt: true } },
+        candidate: {
+          select: { fullName: true, deletedAt: true, erasedAt: true },
+        },
+        submission: {
+          select: {
+            candidate: {
+              select: { fullName: true, deletedAt: true, erasedAt: true },
+            },
+            job: { select: { title: true } },
+          },
+        },
+        interviewRound: {
+          select: {
+            submissionId: true,
+            submission: {
+              select: {
+                candidate: { select: { fullName: true } },
+                job: { select: { title: true } },
+              },
+            },
+          },
+        },
+        benchConsultant: { select: { fullName: true } },
+        requirement: { select: { job: { select: { title: true } } } },
       },
     }),
     prisma.activity.count({ where }),
@@ -91,23 +120,61 @@ export default async function AuditPage({
 
   const actions = Object.values(ActivityAction).sort();
 
-  function linkFor(r: (typeof rows)[number]): string | null {
-    if (r.submissionId) return `/submissions/${r.submissionId}`;
-    if (r.candidateId) return `/candidates/${r.candidateId}`;
-    if (r.jobId) return `/jobs/${r.jobId}`;
-    if (r.requirementId) return `/vendor-portal/${r.requirementId}`;
+  // Resolve the row's *subject* — the actual record it's about, named — so the
+  // column answers "who / which", not just a generic type word. Checks the most
+  // specific FK first (a row sets exactly one entity per logActivity). Removed
+  // candidates/jobs keep their name with a " (deleted)" suffix.
+  function subjectFor(
+    r: (typeof rows)[number],
+  ): { href: string | null; label: string } | null {
+    if (r.submissionId && r.submission) {
+      const c = r.submission.candidate;
+      const name = c ? `${c.fullName}${deletedSuffix(c)}` : "Candidate";
+      const jobTitle = r.submission.job?.title;
+      return {
+        href: `/submissions/${r.submissionId}`,
+        label: jobTitle ? `${name} — ${jobTitle}` : name,
+      };
+    }
+    if (r.interviewRoundId && r.interviewRound) {
+      const sub = r.interviewRound.submission;
+      const name = sub?.candidate?.fullName ?? "Interview";
+      const jobTitle = sub?.job?.title;
+      return {
+        href: r.interviewRound.submissionId
+          ? `/submissions/${r.interviewRound.submissionId}`
+          : null,
+        label: jobTitle ? `${name} — ${jobTitle}` : name,
+      };
+    }
+    if (r.requirementId) {
+      const jobTitle = r.requirement?.job?.title;
+      return {
+        href: `/vendor-portal/${r.requirementId}`,
+        label: jobTitle ? `Requirement — ${jobTitle}` : "Requirement",
+      };
+    }
+    if (r.candidateId) {
+      return {
+        href: `/candidates/${r.candidateId}`,
+        label: r.candidate
+          ? `${r.candidate.fullName}${deletedSuffix(r.candidate)}`
+          : "Candidate",
+      };
+    }
+    if (r.jobId) {
+      return {
+        href: `/jobs/${r.jobId}`,
+        label: r.job ? `${r.job.title}${deletedSuffix(r.job)}` : "Job",
+      };
+    }
+    if (r.benchConsultantId) {
+      return {
+        href: `/bench/${r.benchConsultantId}`,
+        label: r.benchConsultant?.fullName ?? "Consultant",
+      };
+    }
     return null;
-  }
-
-  // The linked record's kind, used as the Entity link label so it reads
-  // "Job" / "Candidate" / … instead of a generic "Open" that collides with
-  // status words in the description column.
-  function entityLabelFor(r: (typeof rows)[number]): string {
-    if (r.submissionId) return "Submission";
-    if (r.candidateId) return "Candidate";
-    if (r.jobId) return "Job";
-    if (r.requirementId) return "Requirement";
-    return "Record";
   }
 
   return (
@@ -226,12 +293,12 @@ export default async function AuditPage({
               <Th>Action</Th>
               <Th>Description</Th>
               <Th>By</Th>
-              <Th>Entity</Th>
+              <Th>Subject</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {rows.map((r) => {
-              const href = linkFor(r);
+              const subject = subjectFor(r);
               return (
                 <tr key={r.id} className="hover:bg-slate-50">
                   <Td label="When" className="whitespace-nowrap text-xs text-slate-500">
@@ -255,14 +322,18 @@ export default async function AuditPage({
                     ) : null}
                   </Td>
                   <Td label="By">{r.performedBy.fullName}</Td>
-                  <Td label="Entity">
-                    {href ? (
-                      <Link
-                        href={href}
-                        className="text-indigo-600 hover:underline"
-                      >
-                        {entityLabelFor(r)} ↗
-                      </Link>
+                  <Td label="Subject">
+                    {subject ? (
+                      subject.href ? (
+                        <Link
+                          href={subject.href}
+                          className="text-indigo-600 hover:underline"
+                        >
+                          {subject.label} ↗
+                        </Link>
+                      ) : (
+                        <span className="text-slate-700">{subject.label}</span>
+                      )
                     ) : (
                       "—"
                     )}

@@ -10,6 +10,33 @@ short instead of long.
 
 ---
 
+## 2026-07-08 · Audit log "semi information" — a dropped SELECT, not missing data
+
+**Situation.** The owner looked at the org-wide Audit log and noticed rows were
+"semi information": interview and bench rows had a blank "—" Entity, and even the
+linked ones only said a generic "Job ↗" / "Candidate ↗" — you couldn't tell *whose*
+"Final Round" or *which* job without clicking through.
+
+**Diagnosis.** Two things. (1) A real bug: the audit query selected only four of the
+six entity FKs — it dropped `interviewRoundId` and `benchConsultantId`. Those rows
+*had* the link data; the query just never read it, so `linkFor` returned null → "—".
+(2) A design gap: the Entity column showed the record's *type* word, not its *name*,
+because the description (composed at write time) carries the "what changed" (round
+name, from→to) but never the "who/which" (candidate, job title).
+
+**Fix.** Resolve the *subject* at read time instead of rewriting ~100 logActivity
+call sites. Select the two missing FKs plus lightweight name relations
+(submission→candidate+job, interviewRound→submission→candidate, bench→consultant,
+job/candidate/requirement), and render a single "Subject" column that names the
+record and links it — "Andre Brown — .NET Developer ↗", "Requirement — .NET Developer
+↗", the bench consultant's name for a bench row. Removed records keep their name via
+`deletedSuffix()`. Description stays the "what"; Subject carries the "who/which".
+
+**Lesson.** "Missing information" in a UI is often present in the row but dropped by
+a narrow `select`. Check the query before adding new columns or writes. And keep the
+audit split clean: description = what changed (snapshot), a resolved subject column =
+who/which (always current) — don't bake names into the description string.
+
 ## 2026-07-08 · "Only bench candidates get submitted" — a soft gate, not a hard rule
 
 **Situation.** The owner asked: since we submit bench consultants to requirements,
