@@ -399,6 +399,7 @@ export function SubmissionForm({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Engagement" htmlFor="engagement" error={errors.engagement} hint="Bench/W2 — for bench-sales submissions.">
           <Select
+            key={`engagement-${selectSyncKey}`}
             id="engagement"
             name="engagement"
             value={fields.engagement}
@@ -431,7 +432,7 @@ export function SubmissionForm({
           <Input id="clientRate" name="clientRate" type="number" min="0" step="0.01" inputMode="decimal" value={fields.clientRate} onChange={set("clientRate")} />
         </Field>
         <Field label="Team lead" htmlFor="teamLead" error={errors.teamLead}>
-          <Select id="teamLead" name="teamLead" value={fields.teamLead} onChange={set("teamLead")}>
+          <Select key={`teamLead-${selectSyncKey}`} id="teamLead" name="teamLead" value={fields.teamLead} onChange={set("teamLead")}>
             <option value="">—</option>
             {teamLeadChoices.map((name) => (
               <option key={name} value={name}>{name}</option>

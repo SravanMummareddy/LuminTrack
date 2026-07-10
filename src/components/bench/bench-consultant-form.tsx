@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { LocationInput } from "@/components/ui/location-input";
 import { SuggestInput } from "@/components/ui/suggest-input";
@@ -118,6 +118,16 @@ export function BenchConsultantForm({
 }) {
   const [state, formAction, pending] = useActionState(action, EMPTY_FORM_STATE);
   const [fields, setFields] = useState<Fields>(() => initialFields(values));
+  // React 19's post-action form.reset() snaps controlled <select>s to their
+  // first option and skips the DOM re-write, so a non-redirect return (validation
+  // error) would leave priority / marketingStatus showing — and posting — the
+  // wrong value. Bump a remount key each response so the selects re-sync. (Effect,
+  // not render: reset() fires after commit.)
+  const [selectSyncKey, setSelectSyncKey] = useState(0);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectSyncKey((k) => k + 1);
+  }, [state]);
   const [relocation, setRelocation] = useState(values?.relocation ?? false);
   const [showMore, setShowMore] = useState(false);
 
@@ -248,14 +258,14 @@ export function BenchConsultantForm({
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Priority" htmlFor="priority" error={errors.priority}>
-            <Select id="priority" name="priority" value={fields.priority} onChange={set("priority")}>
+            <Select key={`priority-${selectSyncKey}`} id="priority" name="priority" value={fields.priority} onChange={set("priority")}>
               {BENCH_PRIORITIES.map((p) => (
                 <option key={p} value={p}>{BENCH_PRIORITY_LABEL[p]}</option>
               ))}
             </Select>
           </Field>
           <Field label="Marketing status" htmlFor="marketingStatus" error={errors.marketingStatus}>
-            <Select id="marketingStatus" name="marketingStatus" value={fields.marketingStatus} onChange={set("marketingStatus")}>
+            <Select key={`marketingStatus-${selectSyncKey}`} id="marketingStatus" name="marketingStatus" value={fields.marketingStatus} onChange={set("marketingStatus")}>
               {BENCH_MARKETING_STATUSES.map((s) => (
                 <option key={s} value={s}>{BENCH_MARKETING_STATUS_LABEL[s]}</option>
               ))}

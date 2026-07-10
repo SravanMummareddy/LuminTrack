@@ -275,6 +275,7 @@ export function RequirementForm({
           hint="Leave blank to auto-fill from the recruiter's team lead."
         >
           <Select
+            key={`teamLead-${selectSyncKey}`}
             id="teamLead"
             name="teamLead"
             value={fields.teamLead}
