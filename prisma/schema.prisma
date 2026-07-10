@@ -253,6 +253,7 @@ model User {
   vendorRequirementsCreated   VendorRequirement[] @relation("VendorRequirementCreatedBy")
   vendorRequirementsConverted VendorRequirement[] @relation("VendorRequirementConvertedBy")
   glossaryNotes      GlossaryNote[]
+  customGlossaryTerms CustomGlossaryTerm[]
 }
 
 model SisterCompanySource {
@@ -994,4 +995,23 @@ model GlossaryNote {
 
   @@unique([userId, term])
   @@index([userId])
+}
+
+/// An org-wide glossary term added manually by an admin/team-lead, on top of
+/// the curated code list (src/lib/glossary.ts). Everyone sees it. Soft-deleted
+/// (deletedAt) so a term with private notes hanging off its slug can be
+/// recovered. `term` is the stable slug the per-user note anchors to.
+model CustomGlossaryTerm {
+  id          String    @id @default(cuid())
+  term        String    @unique
+  label       String
+  category    String
+  definition  String
+  createdById String
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([createdById])
 }

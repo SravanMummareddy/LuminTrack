@@ -573,6 +573,10 @@ async function main() {
   await prisma.client.deleteMany();
   await prisma.sisterCompanySource.deleteMany();
   await prisma.lookupOption.deleteMany();
+  // Glossary: notes cascade on user delete, but custom terms Restrict — remove
+  // them first so the user wipe doesn't fail.
+  await prisma.customGlossaryTerm.deleteMany();
+  await prisma.glossaryNote.deleteMany();
   await prisma.user.deleteMany();
 
   // ── Learned dropdown values (a few non-default extras, to show the

@@ -88,7 +88,9 @@ export default async function SettingsPage({
       />
     );
   } else if (tab === "glossary") {
-    content = <GlossarySection rows={await getGlossaryWithNotes()} />;
+    content = (
+      <GlossarySection rows={await getGlossaryWithNotes()} isAdmin={isAdmin} />
+    );
   } else if (tab === "deleted") {
     if (isAdmin) {
       const [candidateArchives, jobArchives] = await Promise.all([
