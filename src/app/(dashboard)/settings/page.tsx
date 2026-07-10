@@ -13,7 +13,9 @@ import {
   listActiveUserOptions,
 } from "@/server/queries/org";
 import { saveSisterCompany, saveVendor } from "@/server/actions/org";
+import { listSupportProviders } from "@/server/queries/support";
 import { ContactOrgSection } from "@/components/settings/contact-org-section";
+import { SupportSection } from "@/components/settings/support-section";
 import { ClientSection } from "@/components/settings/client-section";
 import { UserSection } from "@/components/settings/user-section";
 import { AccountSection } from "@/components/settings/account-section";
@@ -30,6 +32,7 @@ const TABS = [
   { key: "sister-companies", label: "Sources" },
   { key: "clients", label: "Clients" },
   { key: "vendors", label: "Vendors" },
+  { key: "support", label: "Support" },
   { key: "users", label: "Users" },
   { key: "glossary", label: "Glossary" },
   { key: "deleted", label: "Erased backups", adminOnly: true },
@@ -85,6 +88,10 @@ export default async function SettingsPage({
         showRecruitedBy
         userNames={userOptions.map((u) => u.fullName)}
       />
+    );
+  } else if (tab === "support") {
+    content = (
+      <SupportSection items={await listSupportProviders()} isAdmin={isAdmin} />
     );
   } else if (tab === "users") {
     content = (

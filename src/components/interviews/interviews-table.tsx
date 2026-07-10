@@ -172,7 +172,12 @@ const COLUMNS: Column[] = [
     render: (r) => (
       <Td label="Support" secondary>
         {r.supportNeeded ? (
-          <span className="font-medium text-indigo-700">Yes</span>
+          <span
+            className="font-medium text-amber-700"
+            title={r.supportMethod ?? undefined}
+          >
+            {r.supportProvider?.name ?? "Yes"}
+          </span>
         ) : (
           "—"
         )}

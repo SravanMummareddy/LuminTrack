@@ -43,9 +43,11 @@ function RoundItem({
 export function InterviewRoundsManager({
   submissionId,
   rounds,
+  supportProviders,
 }: {
   submissionId: string;
   rounds: InterviewRoundData[];
+  supportProviders: { id: string; name: string; skills: string[] }[];
 }) {
   const [editing, setEditing] = useState<InterviewRoundData | "new" | null>(
     null,
@@ -82,7 +84,11 @@ export function InterviewRoundsManager({
                       {INTERVIEW_RESULT_LABEL[r.result]}
                     </Badge>
                     {r.supportNeeded && (
-                      <Badge tone="indigo">Support needed</Badge>
+                      <Badge tone="amber">
+                        {r.supportProvider
+                          ? `Supported by ${r.supportProvider.name}`
+                          : "Done with support"}
+                      </Badge>
                     )}
                   </div>
                   <p className="mt-0.5 text-xs text-slate-500">
@@ -149,6 +155,29 @@ export function InterviewRoundsManager({
                 </RoundItem>
               </dl>
 
+              {r.supportNeeded && (r.supportProvider || r.supportMethod) && (
+                <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+                  <dt className="text-xs font-medium uppercase tracking-wide text-amber-700">
+                    Support
+                  </dt>
+                  <dd className="mt-0.5 text-sm text-amber-800">
+                    {r.supportProvider?.name ?? "Provider not set"}
+                    {r.supportMethod ? ` · ${r.supportMethod}` : ""}
+                    {r.supportProvider && (
+                      <>
+                        {" — "}
+                        <a
+                          href="/settings?tab=support"
+                          className="font-medium text-amber-900 underline"
+                        >
+                          contact details
+                        </a>
+                      </>
+                    )}
+                  </dd>
+                </div>
+              )}
+
               {r.feedback && (
                 <div className="mt-3">
                   <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">
@@ -183,6 +212,7 @@ export function InterviewRoundsManager({
           <InterviewRoundForm
             submissionId={submissionId}
             round={editing === "new" ? undefined : editing}
+            supportProviders={supportProviders}
             onDone={() => setEditing(null)}
           />
         )}

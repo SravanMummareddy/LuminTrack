@@ -94,7 +94,11 @@ export function CandidateInterviewsGrouped({
                       </p>
                       <div className="flex items-center gap-2">
                         {r.supportNeeded && (
-                          <Badge tone="indigo">Support needed</Badge>
+                          <Badge tone="amber">
+                            {r.supportProvider
+                              ? `Supported by ${r.supportProvider.name}`
+                              : "Done with support"}
+                          </Badge>
                         )}
                         <Badge tone={INTERVIEW_RESULT_TONE[r.result]}>
                           {INTERVIEW_RESULT_LABEL[r.result]}

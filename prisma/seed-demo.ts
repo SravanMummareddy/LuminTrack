@@ -560,6 +560,7 @@ async function main() {
   await prisma.placementExtension.deleteMany();
   await prisma.placement.deleteMany();
   await prisma.interviewRound.deleteMany();
+  await prisma.supportProvider.deleteMany();
   await prisma.benchConsultant.deleteMany();
   await prisma.submission.deleteMany();
   await prisma.candidateDocument.deleteMany();
@@ -682,6 +683,38 @@ async function main() {
       }),
     );
   }
+
+  // ── Support providers (external interview-support individuals) ──
+  const SUPPORT_PROVIDERS: { name: string; skills: string[] }[] = [
+    { name: "Arjun Mehta", skills: ["Java", "Spring Boot", "Microservices"] },
+    { name: "Wei Chen", skills: [".NET", "C#", "Azure"] },
+    { name: "Sofia Álvarez", skills: ["React", "Node.js", "TypeScript"] },
+    { name: "Daniel Owusu", skills: ["Python", "Django", "AWS"] },
+    { name: "Priyanka Rao", skills: ["Data Engineering", "Spark", "Snowflake"] },
+  ];
+  const supportProviders = [];
+  for (const sp of SUPPORT_PROVIDERS) {
+    supportProviders.push(
+      await prisma.supportProvider.create({
+        data: {
+          name: sp.name,
+          email: sp.name.toLowerCase().replace(/[^a-z]/g, "") + "@support.dev",
+          phone: `+1 (312) 555-0${randInt(100, 199)}`,
+          skills: sp.skills,
+          reference: chance(0.6) ? pick(FIRST_NAMES) + " " + pick(LAST_NAMES) : null,
+          createdAt: adminCreatedAt,
+          updatedAt: adminCreatedAt,
+        },
+        select: { id: true },
+      }),
+    );
+  }
+  const SUPPORT_METHODS = [
+    "Live audio support during the technical round.",
+    "On-call assistance for system-design questions.",
+    "Screen-share guidance through the coding task.",
+    "Prepped answers and stayed on the line as backup.",
+  ];
 
   // ── Jobs + assignments ──
   // Vendor-portal (Randstad iLabor) — some jobs are sourced from it so the
@@ -1348,7 +1381,18 @@ async function main() {
             interviewerName: pick(INTERVIEWERS),
             scheduledAt,
             result,
-            supportNeeded: chance(0.3),
+            ...(chance(0.3)
+              ? {
+                  supportNeeded: true,
+                  // ~70% of supported rounds name the external provider + method.
+                  ...(chance(0.7)
+                    ? {
+                        supportProviderId: pick(supportProviders).id,
+                        supportMethod: pick(SUPPORT_METHODS),
+                      }
+                    : {}),
+                }
+              : { supportNeeded: false }),
             feedback: feedback || null,
             notes: chance(0.4) ? pick(ROUND_NOTES) : null,
             updatedById: submittedById,

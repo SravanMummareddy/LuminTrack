@@ -67,6 +67,8 @@ export async function getCandidateInterviewsGroupedByJob(
           scheduledAt: true,
           result: true,
           supportNeeded: true,
+          supportMethod: true,
+          supportProvider: { select: { name: true } },
           feedback: true,
         },
       },
@@ -175,6 +177,8 @@ export async function listInterviews(filters: InterviewListFilters) {
       scheduledAt: true,
       result: true,
       supportNeeded: true,
+      supportMethod: true,
+      supportProvider: { select: { name: true } },
       feedback: true, // "Remarks" column (spreadsheet Interviews tab)
       createdAt: true,
       updatedAt: true,

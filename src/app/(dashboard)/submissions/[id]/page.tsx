@@ -9,6 +9,7 @@ import { InterviewRoundsManager } from "@/components/interviews/interview-rounds
 import { ActivityTimeline } from "@/components/timeline/activity-timeline";
 import { NotesSection } from "@/components/notes/notes-section";
 import { getSubmissionDetail } from "@/server/queries/submissions";
+import { listSupportProviderOptions } from "@/server/queries/support";
 import { getTimelineFor } from "@/server/queries/timeline";
 import { getNotesFor } from "@/server/queries/notes";
 import { getCurrentUser } from "@/lib/session";
@@ -59,11 +60,12 @@ export default async function SubmissionDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [submission, timeline, notes, user] = await Promise.all([
+  const [submission, timeline, notes, user, supportProviders] = await Promise.all([
     getSubmissionDetail(id),
     getTimelineFor("SUBMISSION", id),
     getNotesFor("SUBMISSION", id),
     getCurrentUser(),
+    listSupportProviderOptions(),
   ]);
   if (!submission) notFound();
 
@@ -304,6 +306,7 @@ export default async function SubmissionDetailPage({
       <InterviewRoundsManager
         submissionId={submission.id}
         rounds={submission.interviewRounds}
+        supportProviders={supportProviders}
       />
 
       <NotesSection

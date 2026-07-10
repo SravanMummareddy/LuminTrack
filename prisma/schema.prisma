@@ -832,9 +832,15 @@ model InterviewRound {
   result         InterviewResult @default(WAITING)
   feedback       String?
   notes          String?
-  // The sheet's "Support (Y/N)" — whether a team member shadows/supports this
-  // interview (e.g. a tech buddy on the call). Defaults to false.
+  // Whether this interview was done with external support (the sheet's
+  // "Support (Y/N)"). When true, `supportProvider` + `supportMethod` capture
+  // who assisted and how.
   supportNeeded  Boolean         @default(false)
+  // The external individual who provided support (SetNull so removing a provider
+  // never deletes interview history) + a free-text note on how it was given.
+  supportProviderId String?
+  supportProvider   SupportProvider? @relation(fields: [supportProviderId], references: [id], onDelete: SetNull)
+  supportMethod     String?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
@@ -847,6 +853,25 @@ model InterviewRound {
   activities  Activity[]
 
   @@index([submissionId])
+  @@index([supportProviderId])
+}
+
+// External people who assist a candidate during an interview (live / proxy
+// support). Individuals, not companies — tracked so a recruiter can find one
+// by skill and reach out. Linked from InterviewRound.supportProviderId.
+model SupportProvider {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  email     String?
+  skills    String[] @default([])
+  reference String?
+  notes     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  interviewRounds InterviewRound[]
 }
 
 // Polymorphic note — exactly one entity FK is set (matches entityType).
