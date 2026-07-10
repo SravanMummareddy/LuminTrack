@@ -372,6 +372,8 @@ export async function updateSubmission(
         candidateResumeId,
         // Snapshot the résumé's blob URL so it survives library edits/deletes.
         resumeBlobUrl: blobSnapshot,
+        // Attaching a résumé clears any "not required" waiver (tidy state).
+        ...(candidateResumeId ? { resumeWaivedAt: null, resumeWaivedById: null } : {}),
         engagement: d.engagement ?? null,
         vendorRecruiterName: d.vendorRecruiterName ?? null,
         jobDuties: d.jobDuties ?? null,
@@ -669,4 +671,109 @@ export async function bulkChangeSubmissionStatus(
     revalidatePath(`/candidates/${c}`);
 
   return { changed, skipped: ids.length - changed };
+}
+
+// ─── Résumé waiver ("no résumé needed") ──────────────────────────────────────
+
+/** Load a submission for a résumé-waiver change + gate the actor. Waiving is
+ *  allowed for the submission's recruiter-of-record OR any full-access user
+ *  (manager / team lead). Returns the loaded row, or a FormState error. */
+async function loadForResumeWaiver(submissionId: string) {
+  const user = await requireUser();
+  const submission = await prisma.submission.findUnique({
+    where: { id: submissionId },
+    select: {
+      id: true,
+      submittedById: true,
+      candidateResumeId: true,
+      resumeBlobUrl: true,
+      resumeWaivedAt: true,
+      candidateId: true,
+      jobId: true,
+      candidate: { select: { fullName: true } },
+      job: { select: { title: true } },
+    },
+  });
+  if (!submission) return { error: "Submission not found." as const };
+  if (!hasFullAccess(user) && user.id !== submission.submittedById)
+    return {
+      error:
+        "Only the submitting recruiter or an admin can change the résumé requirement." as const,
+    };
+  return { user, submission };
+}
+
+function revalidateSubmission(submissionId: string, jobId: string, candidateId: string) {
+  revalidatePath("/submissions");
+  revalidatePath(`/submissions/${submissionId}`);
+  revalidatePath(`/jobs/${jobId}`);
+  revalidatePath(`/candidates/${candidateId}`);
+  revalidatePath("/"); // dashboard "needs attention"
+}
+
+/** Mark a résumé-less submission as "résumé not required" — drops it off the
+ *  missing-résumé worklist. No-op (friendly) if a résumé is already attached. */
+export async function waiveSubmissionResume(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const id = String(formData.get("id") ?? "").trim();
+  const loaded = await loadForResumeWaiver(id);
+  if ("error" in loaded) return { error: loaded.error };
+  const { user, submission } = loaded;
+
+  if (submission.candidateResumeId || submission.resumeBlobUrl)
+    return { error: "This submission already has a résumé." };
+  if (submission.resumeWaivedAt)
+    return { ok: true, toast: { title: "Already marked not required" } };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.submission.update({
+      where: { id },
+      data: { resumeWaivedAt: new Date(), resumeWaivedById: user.id },
+    });
+    await logActivity(tx, {
+      entityType: "SUBMISSION",
+      action: "SUBMISSION_UPDATED",
+      description: `${submission.candidate.fullName} on "${submission.job.title}": résumé marked not required`,
+      newValue: "resume waived",
+      performedById: user.id,
+      submissionId: id,
+    });
+  });
+
+  revalidateSubmission(id, submission.jobId, submission.candidateId);
+  return { ok: true, toast: { title: "Marked — résumé not required" } };
+}
+
+/** Undo a résumé waiver — the submission returns to the missing-résumé worklist. */
+export async function unwaiveSubmissionResume(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const id = String(formData.get("id") ?? "").trim();
+  const loaded = await loadForResumeWaiver(id);
+  if ("error" in loaded) return { error: loaded.error };
+  const { user, submission } = loaded;
+
+  if (!submission.resumeWaivedAt)
+    return { ok: true, toast: { title: "Not waived" } };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.submission.update({
+      where: { id },
+      data: { resumeWaivedAt: null, resumeWaivedById: null },
+    });
+    await logActivity(tx, {
+      entityType: "SUBMISSION",
+      action: "SUBMISSION_UPDATED",
+      description: `${submission.candidate.fullName} on "${submission.job.title}": résumé waiver removed`,
+      newValue: "resume waiver removed",
+      performedById: user.id,
+      submissionId: id,
+    });
+  });
+
+  revalidateSubmission(id, submission.jobId, submission.candidateId);
+  return { ok: true, toast: { title: "Waiver removed" } };
 }

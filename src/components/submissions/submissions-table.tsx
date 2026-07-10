@@ -11,6 +11,7 @@ import { SubmissionStatusCell } from "@/components/submissions/submission-status
 import { formatDate, formatSubmissionDisplayId, deletedSuffix } from "@/lib/format";
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
 import { STALE_STAGE_DAYS } from "@/lib/analytics";
+import { resumeFlag } from "@/lib/submission-flow";
 import type { SubmissionListRow } from "@/server/queries/submissions";
 import { SubmissionBulkBar } from "@/components/submissions/submission-bulk-bar";
 
@@ -56,17 +57,38 @@ const COLUMNS: Column[] = [
     label: "Candidate",
     sortKey: "candidate",
     defaultVisible: true,
-    render: (s) => (
-      <Td heading>
-        <Link
-          href={`/submissions/${s.id}`}
-          className={`${cardLink} font-medium text-indigo-600 hover:underline`}
-        >
-          {s.candidate.fullName}
-          {deletedSuffix(s.candidate)}
-        </Link>
-      </Td>
-    ),
+    render: (s) => {
+      const flag = resumeFlag(s);
+      return (
+        <Td heading>
+          <div className="flex flex-col gap-1">
+            <Link
+              href={`/submissions/${s.id}`}
+              className={`${cardLink} font-medium text-indigo-600 hover:underline`}
+            >
+              {s.candidate.fullName}
+              {deletedSuffix(s.candidate)}
+            </Link>
+            {flag === "missing" && (
+              <span
+                className="inline-flex w-fit items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700"
+                title="Submitted without a résumé"
+              >
+                ⚠ No résumé
+              </span>
+            )}
+            {flag === "waived" && (
+              <span
+                className="inline-flex w-fit items-center gap-1 text-[11px] text-slate-400"
+                title="Résumé marked not required"
+              >
+                ✓ résumé waived
+              </span>
+            )}
+          </div>
+        </Td>
+      );
+    },
   },
   {
     key: "job",

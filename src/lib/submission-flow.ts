@@ -98,3 +98,18 @@ export function branchActions(status: SubmissionStatus): SubmissionStatus[] {
 
   return out;
 }
+
+/** Whether a submission's résumé is attached, missing, or intentionally waived.
+ *  "missing" is the actionable to-do state (flagged + on the worklist); "waived"
+ *  is missing-but-intentional and drops it off the worklist. Pure/derived — no
+ *  schema state of its own beyond the three fields it reads. */
+export type ResumeFlag = "attached" | "missing" | "waived";
+
+export function resumeFlag(s: {
+  candidateResumeId: string | null;
+  resumeBlobUrl: string | null;
+  resumeWaivedAt: Date | string | null;
+}): ResumeFlag {
+  if (s.candidateResumeId || s.resumeBlobUrl) return "attached";
+  return s.resumeWaivedAt ? "waived" : "missing";
+}

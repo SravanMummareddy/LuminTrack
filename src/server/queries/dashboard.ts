@@ -170,6 +170,41 @@ export async function getMyWork(userId: string) {
   return { staleSubmissions, pendingRounds, pendingRequirements };
 }
 
+/**
+ * In-flight submissions made without a résumé and not waived ("not required") —
+ * the "submitted without résumé" worklist. `me` scope = the acting user's;
+ * `org` scope = everyone's (for admins). Terminal submissions are excluded so a
+ * closed one never nags.
+ */
+export async function getMissingResumeSubmissions(
+  opts: { scope: "me" | "org"; userId: string; limit?: number },
+) {
+  return prisma.submission.findMany({
+    where: {
+      ...(opts.scope === "me" ? { submittedById: opts.userId } : {}),
+      status: { notIn: ["REJECTED", "JOINED", "BACKED_OUT"] },
+      candidateResumeId: null,
+      resumeBlobUrl: null,
+      resumeWaivedAt: null,
+    },
+    orderBy: { submittedAt: "asc" },
+    take: opts.limit ?? 8,
+    select: {
+      id: true,
+      seq: true,
+      status: true,
+      submittedAt: true,
+      candidate: { select: { fullName: true } },
+      job: { select: { title: true } },
+      submittedBy: { select: { fullName: true } },
+    },
+  });
+}
+
+export type MissingResumeSubmissions = Awaited<
+  ReturnType<typeof getMissingResumeSubmissions>
+>;
+
 export type MyWork = Awaited<ReturnType<typeof getMyWork>>;
 
 /**

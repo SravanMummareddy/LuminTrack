@@ -4,12 +4,15 @@ import { ArrowLeft, ExternalLink, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { LinkButton } from "@/components/ui/button";
 import { SubmissionStatusForm } from "@/components/submissions/submission-status-form";
+import { SubmissionResumeWaiver } from "@/components/submissions/submission-resume-waiver";
 import { InterviewRoundsManager } from "@/components/interviews/interview-rounds-manager";
 import { ActivityTimeline } from "@/components/timeline/activity-timeline";
 import { NotesSection } from "@/components/notes/notes-section";
 import { getSubmissionDetail } from "@/server/queries/submissions";
 import { getTimelineFor } from "@/server/queries/timeline";
 import { getNotesFor } from "@/server/queries/notes";
+import { getCurrentUser } from "@/lib/session";
+import { hasFullAccess } from "@/lib/permissions";
 import {
   SUBMISSION_STATUS_LABEL,
   SUBMISSION_STATUS_TONE,
@@ -56,14 +59,19 @@ export default async function SubmissionDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [submission, timeline, notes] = await Promise.all([
+  const [submission, timeline, notes, user] = await Promise.all([
     getSubmissionDetail(id),
     getTimelineFor("SUBMISSION", id),
     getNotesFor("SUBMISSION", id),
+    getCurrentUser(),
   ]);
   if (!submission) notFound();
 
   const { candidate, job } = submission;
+  // Waiving the résumé requirement is allowed for the submitter or any admin.
+  const canWaiveResume = Boolean(
+    user && (hasFullAccess(user) || user.id === submission.submittedById),
+  );
   // Résumé display: the uploaded file streams from /api/resumes/[id] — a PDF
   // previews inline, Word offers a download.
   const resumeFileUrl =
@@ -240,9 +248,18 @@ export default async function SubmissionDetailPage({
 
       <Card title="Resume used">
         {!hasResume ? (
-          <p className="text-sm text-slate-400">
-            No resume recorded for this submission.
-          </p>
+          <SubmissionResumeWaiver
+            submissionId={submission.id}
+            waived={submission.resumeWaivedAt != null}
+            waivedByName={submission.resumeWaivedBy?.fullName ?? null}
+            waivedAt={
+              submission.resumeWaivedAt
+                ? formatDate(submission.resumeWaivedAt)
+                : null
+            }
+            editHref={`/submissions/${submission.id}/edit`}
+            canWaive={canWaiveResume}
+          />
         ) : (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-3">
