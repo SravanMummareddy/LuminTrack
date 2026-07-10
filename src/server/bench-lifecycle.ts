@@ -9,6 +9,7 @@
 
 import type { Prisma } from "@/generated/prisma/client";
 import type { BenchMarketingStatus } from "@/generated/prisma/enums";
+import { isUniqueConstraintError } from "@/server/db";
 import { logActivity } from "@/server/activity";
 
 type Tx = Prisma.TransactionClient;
@@ -42,31 +43,40 @@ export async function ensureBenchForCandidate(
   });
   if (existing) return; // already on the bench
 
-  const created = await tx.benchConsultant.create({
-    data: {
-      fullName: args.fullName,
-      email: args.email ?? null,
-      phone: args.phone ?? null,
-      currentLocation: args.currentLocation ?? null,
-      workAuthorization: args.workAuthorization ?? null,
-      // A Visa = the actual visa = the candidate's work authorization.
-      aVisa: args.workAuthorization ?? null,
-      skills: args.skills ?? [],
-      // On the bench, actively being marketed, until placed or removed.
-      marketingStatus: "ACTIVE",
-      candidateId: args.candidateId,
-      recruiterId: args.recruiterId ?? null,
-      createdById: args.performedById,
-    },
-    select: { id: true },
-  });
-  await logActivity(tx, {
-    entityType: "CONSULTANT",
-    action: "BENCH_CONSULTANT_CREATED",
-    description: `Bench consultant "${args.fullName}" added (auto from candidate)`,
-    performedById: args.performedById,
-    benchConsultantId: created.id,
-  });
+  try {
+    const created = await tx.benchConsultant.create({
+      data: {
+        fullName: args.fullName,
+        email: args.email ?? null,
+        phone: args.phone ?? null,
+        currentLocation: args.currentLocation ?? null,
+        workAuthorization: args.workAuthorization ?? null,
+        // A Visa = the actual visa = the candidate's work authorization.
+        aVisa: args.workAuthorization ?? null,
+        skills: args.skills ?? [],
+        // On the bench, actively being marketed, until placed or removed.
+        marketingStatus: "ACTIVE",
+        candidateId: args.candidateId,
+        recruiterId: args.recruiterId ?? null,
+        createdById: args.performedById,
+      },
+      select: { id: true },
+    });
+    await logActivity(tx, {
+      entityType: "CONSULTANT",
+      action: "BENCH_CONSULTANT_CREATED",
+      description: `Bench consultant "${args.fullName}" added (auto from candidate)`,
+      performedById: args.performedById,
+      benchConsultantId: created.id,
+    });
+  } catch (e) {
+    // Race: two concurrent submissions for the same bench-less candidate can
+    // both pass the findUnique above. `candidateId` is @unique, so the loser
+    // hits P2002 — no-op instead of throwing and rolling back the whole
+    // submission (the bench row now exists). Mirrors ensurePlacementOnJoined.
+    if (isUniqueConstraintError(e)) return;
+    throw e;
+  }
 }
 
 /**

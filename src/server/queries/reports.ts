@@ -1,4 +1,5 @@
 import { prisma } from "@/server/db";
+import type { Prisma } from "@/generated/prisma/client";
 import {
   buildSubmissionWhere,
   daysSince,
@@ -96,9 +97,17 @@ export async function getReportsData(
   // RESUME_PICKED / VENDOR_SCREENING_CALL / CLIENT_INTERVIEW.
   const STALE_DAYS = 14;
   const staleSubs = await prisma.submission.findMany({
+    // AND the filter-bar scoping with the stale conditions so this table
+    // responds to the page filters (it previously queried org-wide). AND (not a
+    // spread) because both sides constrain `status`/`submittedAt`.
     where: {
-      status: { in: STALE_SUBMISSION_STATUSES },
-      submittedAt: { lt: new Date(Date.now() - STALE_DAYS * 86400_000) },
+      AND: [
+        buildSubmissionWhere(filters),
+        {
+          status: { in: STALE_SUBMISSION_STATUSES },
+          submittedAt: { lt: new Date(Date.now() - STALE_DAYS * 86400_000) },
+        },
+      ],
     },
     select: {
       id: true,
@@ -130,8 +139,25 @@ export async function getReportsData(
   // margins are flagged but counted.
   const DEFAULT_DURATION_DAYS = 90;
   const HOURS_PER_DAY = 8;
+  // Scope by the filter bar's client / vendor / recruiter so this table responds
+  // to the page filters (it previously queried org-wide). Date range is
+  // intentionally not applied — this is a live "currently active" snapshot, not
+  // a period metric.
+  const placementWhere: Prisma.PlacementWhereInput = {
+    status: { in: ["ACTIVE", "EXTENDED"] },
+  };
+  const placementJob: Prisma.JobWhereInput = {};
+  if (filters.clientId?.length)
+    placementJob.clientId = { in: filters.clientId };
+  if (filters.vendorId?.length)
+    placementJob.vendorId = { in: filters.vendorId };
+  if (Object.keys(placementJob).length) placementWhere.job = placementJob;
+  if (filters.recruiterId?.length)
+    placementWhere.submission = {
+      submittedById: { in: filters.recruiterId },
+    };
   const placementsForMargin = await prisma.placement.findMany({
-    where: { status: { in: ["ACTIVE", "EXTENDED"] } },
+    where: placementWhere,
     select: {
       billRate: true,
       payRate: true,

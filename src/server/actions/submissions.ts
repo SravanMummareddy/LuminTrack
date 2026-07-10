@@ -16,7 +16,11 @@ import {
   statusChangeSchema,
 } from "@/lib/validation/submission";
 import { toFieldErrors } from "@/lib/validation/common";
-import { SUBMISSION_STATUS_LABEL, CANDIDATE_STATUS_LABEL } from "@/lib/labels";
+import {
+  SUBMISSION_STATUS_LABEL,
+  CANDIDATE_STATUS_LABEL,
+  JOB_STATUS_LABEL,
+} from "@/lib/labels";
 import { rateChainWarnings } from "@/lib/rates";
 import type { FormState } from "@/lib/form-state";
 import {
@@ -70,6 +74,7 @@ export async function createSubmission(
       select: {
         id: true,
         title: true,
+        status: true,
         // iLabor signal fields — drive the cap + "closed for subs" warnings.
         submitLimit: true,
         ilaborSubmitOpen: true,
@@ -82,6 +87,8 @@ export async function createSubmission(
         id: true,
         fullName: true,
         status: true,
+        isActive: true,
+        deletedAt: true,
         benchConsultant: { select: { marketingStatus: true } },
       },
     }),
@@ -91,6 +98,23 @@ export async function createSubmission(
     return {
       error: "That candidate no longer exists.",
       fieldErrors: { candidateId: "Select a candidate." },
+    };
+
+  // Hard blocks the convert path already enforced but the direct form lacked
+  // (WR-01): a job that's no longer accepting submissions, and an archived or
+  // trashed candidate reached via a stale/crafted id.
+  if (
+    job.status === "CLOSED" ||
+    job.status === "FILLED" ||
+    job.status === "CANCELLED"
+  )
+    return {
+      error: `"${job.title}" is ${JOB_STATUS_LABEL[job.status]} and no longer accepting submissions.`,
+    };
+  if (!candidate.isActive || candidate.deletedAt)
+    return {
+      error: `${candidate.fullName} has been ${candidate.deletedAt ? "deleted" : "archived"} — restore the candidate before submitting.`,
+      fieldErrors: { candidateId: "Select an active candidate." },
     };
 
   // ── Collect EVERY soft gate up front, so the form shows them all at once ──
