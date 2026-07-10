@@ -1818,6 +1818,56 @@ async function main() {
     });
   }
 
+  // ── Integrity guard: drop any activity row whose FK target didn't commit ──
+  // `activityRows` is collected across the whole seed; a draw-dependent path can
+  // push a row referencing an entity that's later removed or never created. A
+  // single orphan would fail the entire `createMany` with an opaque Postgres FK
+  // error (and leave a half-seeded DB). Verify every referenced id against what
+  // actually landed in the DB, then drop + report the stragglers so the seed
+  // always completes and any real gap is named instead of cryptic.
+  {
+    const idSet = async (
+      rows: Promise<{ id: string }[]>,
+    ): Promise<Set<string>> => new Set((await rows).map((r) => r.id));
+    const [uSet, jSet, cSet, sSet, rSet, bSet, vSet] = await Promise.all([
+      idSet(prisma.user.findMany({ select: { id: true } })),
+      idSet(prisma.job.findMany({ select: { id: true } })),
+      idSet(prisma.candidate.findMany({ select: { id: true } })),
+      idSet(prisma.submission.findMany({ select: { id: true } })),
+      idSet(prisma.interviewRound.findMany({ select: { id: true } })),
+      idSet(prisma.benchConsultant.findMany({ select: { id: true } })),
+      idSet(prisma.vendorRequirement.findMany({ select: { id: true } })),
+    ]);
+    const ok = (r: Prisma.ActivityCreateManyInput): boolean =>
+      uSet.has(r.performedById) &&
+      (r.jobId == null || jSet.has(r.jobId)) &&
+      (r.candidateId == null || cSet.has(r.candidateId)) &&
+      (r.submissionId == null || sSet.has(r.submissionId)) &&
+      (r.interviewRoundId == null || rSet.has(r.interviewRoundId)) &&
+      (r.benchConsultantId == null || bSet.has(r.benchConsultantId)) &&
+      (r.requirementId == null || vSet.has(r.requirementId));
+    const kept = activityRows.filter(ok);
+    const dropped = activityRows.length - kept.length;
+    if (dropped > 0) {
+      const bad = activityRows.find((r) => !ok(r));
+      console.warn(
+        `  ⚠ Dropped ${dropped} activity row(s) referencing missing entities ` +
+          `(e.g. ${JSON.stringify({
+            action: bad?.action,
+            performedById: bad?.performedById,
+            jobId: bad?.jobId ?? null,
+            candidateId: bad?.candidateId ?? null,
+            submissionId: bad?.submissionId ?? null,
+            interviewRoundId: bad?.interviewRoundId ?? null,
+            benchConsultantId: bad?.benchConsultantId ?? null,
+            requirementId: bad?.requirementId ?? null,
+          })}).`,
+      );
+      activityRows.length = 0;
+      activityRows.push(...kept);
+    }
+  }
+
   // ── Bulk insert assignments, notes, activities ──
   console.log(
     `Inserting ${assignmentRows.length} assignments, ${noteRows.length} notes, ${activityRows.length} activity rows…`,
