@@ -1,6 +1,7 @@
 import { Download, ShieldX, Archive } from "lucide-react";
 import { buttonClass } from "@/components/ui/button";
 import { ConfirmSubmit } from "@/components/ui/confirm-dialog";
+import { ArchivePreviewModal } from "@/components/settings/archive-preview-modal";
 import { removeCandidateArchive } from "@/server/actions/candidates";
 import type { CandidateArchiveEntry } from "@/server/queries/candidate-archives";
 
@@ -72,6 +73,14 @@ export function DeletedCandidatesSection({
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="flex items-center justify-end gap-2">
+                      <ArchivePreviewModal
+                        kind="candidate"
+                        displayId={a.displayId}
+                        pathname={a.pathname}
+                        url={a.url}
+                        downloadHref={`/api/candidates/archives/download?path=${encodeURIComponent(a.pathname)}`}
+                        removeAction={removeCandidateArchive}
+                      />
                       <a
                         href={`/api/candidates/archives/download?path=${encodeURIComponent(a.pathname)}`}
                         className={buttonClass("secondary")}
