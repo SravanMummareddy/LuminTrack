@@ -29,6 +29,10 @@ export type FilterDef =
       searchable?: boolean;
       /** Multiple values, encoded as a comma-separated param. */
       multi?: boolean;
+      /** Other params to reset whenever this filter changes (pick or clear).
+       *  E.g. the "User type" filter clears the dependent "User" selection so a
+       *  stale person-filter doesn't survive a type change. */
+      clearsParams?: string[];
       primary?: boolean;
     }
   | {
@@ -75,6 +79,11 @@ const popoverCls =
 
 function csv(value: string | null): string[] {
   return value ? value.split(",").filter(Boolean) : [];
+}
+
+/** `{param: null}` for each dependent param a filter clears when it changes. */
+function clearsUpdates(params?: string[]): Record<string, null> {
+  return Object.fromEntries((params ?? []).map((p) => [p, null]));
 }
 
 export function FilterBar({
@@ -166,7 +175,11 @@ export function FilterBar({
 
   function clear(def: FilterDef) {
     if (def.kind === "date") navigate({ preset: null, from: null, to: null });
-    else navigate({ [def.param]: null });
+    else {
+      const extra =
+        def.kind === "select" ? clearsUpdates(def.clearsParams) : {};
+      navigate({ [def.param]: null, ...extra });
+    }
   }
 
   const active = filters.map(isActive);
@@ -351,14 +364,22 @@ function SelectPopover({
     return { rows: base, hidden: 0 };
   }, [base, def.searchable, q, selected]);
 
+  const extra = clearsUpdates(def.clearsParams);
+
   function pick(value: string) {
     if (def.multi) {
       const set = new Set(csv(params.get(def.param)));
       if (set.has(value)) set.delete(value);
       else set.add(value);
-      navigate({ [def.param]: [...set].join(",") || null }, { keepOpen: true });
+      navigate(
+        { [def.param]: [...set].join(",") || null, ...extra },
+        { keepOpen: true },
+      );
     } else {
-      navigate({ [def.param]: value === (def.defaultValue ?? "") ? null : value });
+      navigate({
+        [def.param]: value === (def.defaultValue ?? "") ? null : value,
+        ...extra,
+      });
     }
   }
 
@@ -417,7 +438,9 @@ function SelectPopover({
       {def.multi && selected.size > 0 && (
         <button
           type="button"
-          onClick={() => navigate({ [def.param]: null }, { keepOpen: true })}
+          onClick={() =>
+            navigate({ [def.param]: null, ...extra }, { keepOpen: true })
+          }
           className="mt-1 w-full rounded-md px-2.5 py-1.5 text-left text-xs text-slate-500 hover:bg-slate-50"
         >
           Clear selection

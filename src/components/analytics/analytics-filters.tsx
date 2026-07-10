@@ -56,6 +56,9 @@ export function AnalyticsFilters({
       // No selection = all users (the bar drops the explicit "All" option for
       // multi-selects). The `roles` param parses as a comma-separated list.
       multi: true,
+      // Changing the type resets the dependent "User" selection so a stale
+      // person-filter can't survive (e.g. a recruiter picked, then type → Team lead).
+      clearsParams: ["recruiterId"],
       options: [
         { value: "RECRUITER", label: roleLabel("RECRUITER") },
         { value: "TEAM_LEAD", label: roleLabel("TEAM_LEAD") },
