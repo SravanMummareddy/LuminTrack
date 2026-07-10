@@ -165,6 +165,16 @@ export async function createSubmissionRecord(
     }
   }
 
+  // Attribution guard (the real fix — the "Submitted by" picker is UI-only).
+  // Only privileged users (managers / team leads, i.e. actor.isAdmin ===
+  // canReattributeSubmission) may credit a submission to someone else; everyone
+  // else is forced to themselves. Enforced here in the shared record helper so
+  // BOTH entry points — direct create and VPR convert — are covered, and a
+  // recruiter can't forge scorecard attribution via a crafted request.
+  const submittedById = input.actor.isAdmin
+    ? input.submittedById
+    : input.actor.id;
+
   // Settle the résumé: an existing library entry or none. Snapshot its blob URL
   // so the submission's record survives the library row being edited/archived.
   let candidateResumeId: string | null = null;
@@ -178,7 +188,7 @@ export async function createSubmissionRecord(
     data: {
       candidateId: input.candidateId,
       jobId: input.jobId,
-      submittedById: input.submittedById,
+      submittedById,
       candidateResumeId,
       // Snapshot the résumé's blob URL so it survives library edits/deletes.
       resumeBlobUrl: blobSnapshot,
@@ -222,7 +232,7 @@ export async function createSubmissionRecord(
   // Off-bench row (or create one if missing). Leaves PAUSED/PLACED/ACTIVE alone.
   await activateBenchOnSubmission(tx, {
     candidateId: input.candidateId,
-    recruiterId: input.submittedById,
+    recruiterId: submittedById,
     performedById: input.actor.id,
   });
   return { kind: "created", submissionId: created.id };

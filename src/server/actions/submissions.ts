@@ -99,6 +99,23 @@ export async function createSubmission(
   // supplied; only when the stack is empty do we create.
   const claim = String(formData.get("claim") ?? "") === "1";
   const isAdmin = hasFullAccess(user);
+
+  // Attribution: only privileged users may credit a submission to someone else
+  // (createSubmissionRecord forces non-admins to themselves regardless). When an
+  // admin does pick a target, validate it exists so a crafted id returns a clean
+  // field error instead of an unhandled Prisma FK violation.
+  if (isAdmin && d.submittedById && d.submittedById !== user.id) {
+    const target = await prisma.user.findUnique({
+      where: { id: d.submittedById },
+      select: { id: true },
+    });
+    if (!target)
+      return {
+        error: "Please fix the highlighted fields.",
+        fieldErrors: { submittedById: "Pick a valid recruiter." },
+      };
+  }
+
   let hasAssignment = false;
   if (!isAdmin) {
     const assignment = await prisma.jobAssignment.findFirst({
