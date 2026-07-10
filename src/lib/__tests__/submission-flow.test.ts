@@ -3,6 +3,7 @@ import {
   primaryAdvance,
   branchActions,
   isTerminal,
+  resumeFlag,
 } from "@/lib/submission-flow";
 
 describe("primaryAdvance", () => {
@@ -82,5 +83,37 @@ describe("isTerminal", () => {
     expect(isTerminal("BACKED_OUT")).toBe(true);
     expect(isTerminal("SUBMITTED")).toBe(false);
     expect(isTerminal("ON_HOLD")).toBe(false);
+  });
+});
+
+describe("resumeFlag", () => {
+  it("attached when a library résumé is linked", () => {
+    expect(
+      resumeFlag({ candidateResumeId: "r1", resumeBlobUrl: null, resumeWaivedAt: null }),
+    ).toBe("attached");
+  });
+
+  it("attached when only a blob snapshot exists", () => {
+    expect(
+      resumeFlag({ candidateResumeId: null, resumeBlobUrl: "blob://x", resumeWaivedAt: null }),
+    ).toBe("attached");
+  });
+
+  it("missing when no résumé and not waived", () => {
+    expect(
+      resumeFlag({ candidateResumeId: null, resumeBlobUrl: null, resumeWaivedAt: null }),
+    ).toBe("missing");
+  });
+
+  it("waived when no résumé but a waiver is set", () => {
+    expect(
+      resumeFlag({ candidateResumeId: null, resumeBlobUrl: null, resumeWaivedAt: new Date() }),
+    ).toBe("waived");
+  });
+
+  it("attachment wins over a stale waiver (attaching clears the flag)", () => {
+    expect(
+      resumeFlag({ candidateResumeId: "r1", resumeBlobUrl: null, resumeWaivedAt: new Date() }),
+    ).toBe("attached");
   });
 });

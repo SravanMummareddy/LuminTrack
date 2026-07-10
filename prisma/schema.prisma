@@ -255,6 +255,7 @@ model User {
   glossaryNotes      GlossaryNote[]
   customGlossaryTerms CustomGlossaryTerm[]
   vendorsRecruited   Vendor[]         @relation("VendorRecruitedBy")
+  submissionsResumeWaived Submission[] @relation("SubmissionResumeWaivedBy")
 }
 
 model SisterCompanySource {
@@ -697,6 +698,13 @@ model Submission {
   // when status flips to JOINED.
   expectedJoinDate DateTime?
   actualJoinDate   DateTime?
+  // "Résumé not required" waiver — set when a submission is intentionally made
+  // without a résumé (marked by the submitter or an admin). While set, the
+  // submission drops off the "missing résumé" worklist. Cleared automatically if
+  // a résumé is later attached.
+  resumeWaivedAt   DateTime?
+  resumeWaivedById String?
+  resumeWaivedBy   User?     @relation("SubmissionResumeWaivedBy", fields: [resumeWaivedById], references: [id], onDelete: SetNull)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
@@ -733,6 +741,7 @@ model Submission {
   @@index([candidateResumeId])
   @@index([submittedAt])
   @@index([vendorRequirementId])
+  @@index([resumeWaivedById])
 }
 
 // R4.2 — a candidate working an assignment. Auto-created when a submission's

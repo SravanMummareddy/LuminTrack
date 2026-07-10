@@ -54,6 +54,7 @@ export default async function SubmissionsPage({
   };
 
   const mineStale = clean(sp.mineStale) === "1";
+  const missingResume = clean(sp.missingResume) === "1";
 
   const sort = parseSort(
     clean(sp.sort),
@@ -77,6 +78,7 @@ export default async function SubmissionsPage({
     sort,
     page: parsePage(clean(sp.page)),
     mineStale,
+    missingResume,
     currentUserId: user.id,
   };
 
@@ -104,7 +106,8 @@ export default async function SubmissionsPage({
       current.vendorId ||
       current.sisterCompanySourceId ||
       (current.preset && current.preset !== "all") ||
-      mineStale,
+      mineStale ||
+      missingResume,
   );
 
   return (

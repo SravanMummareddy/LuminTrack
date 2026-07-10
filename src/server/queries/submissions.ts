@@ -30,6 +30,8 @@ export type SubmissionListFilters = {
   /** "Mine, stale >7d" quick filter — narrows to `currentUserId`'s early-
    *  pipeline submissions sitting in their current stage longer than 7 days. */
   mineStale?: boolean;
+  // "Missing résumé" — submitted with no résumé and not waived ("not required").
+  missingResume?: boolean;
   currentUserId?: string;
 };
 
@@ -133,6 +135,12 @@ export async function listSubmissions(filters: SubmissionListFilters) {
   if (filters.status?.length) where.status = { in: filters.status };
   if (filters.recruiterId?.length)
     where.submittedById = { in: filters.recruiterId };
+  // Missing résumé = no library pick, no snapshot, and not waived as "not required".
+  if (filters.missingResume) {
+    where.candidateResumeId = null;
+    where.resumeBlobUrl = null;
+    where.resumeWaivedAt = null;
+  }
   if (filters.submittedRange?.gte || filters.submittedRange?.lte)
     where.submittedAt = filters.submittedRange;
 
@@ -233,6 +241,7 @@ export function getSubmissionDetail(id: string) {
         },
       },
       submittedBy: { select: { fullName: true } },
+      resumeWaivedBy: { select: { fullName: true } },
       candidateResume: {
         select: {
           label: true,

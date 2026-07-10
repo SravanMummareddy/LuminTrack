@@ -16,6 +16,7 @@ import {
   getMyWork,
   getMyAssignedJobs,
   getMyRecentActivity,
+  getMissingResumeSubmissions,
   getOnboardingStatus,
   type MyRecentActivity,
 } from "@/server/queries/dashboard";
@@ -136,6 +137,7 @@ export default async function DashboardPage({
     recentActivity,
     expiringDocs,
     ratesPendingPlacements,
+    missingResumeSubs,
     clients,
     vendors,
     sources,
@@ -165,6 +167,9 @@ export default async function DashboardPage({
     // "me" scope or for recruiters this list is hidden — keeps the card tight.
     user && hasFullAccess(user) && scope === "org"
       ? getRatesPendingPlacements({ limit: 5 })
+      : Promise.resolve([]),
+    user
+      ? getMissingResumeSubmissions({ scope, userId: user.id, limit: 8 })
       : Promise.resolve([]),
     listClients(),
     listVendors(),
@@ -215,7 +220,8 @@ export default async function DashboardPage({
           myWork.pendingRequirements.length > 0 ||
           myAssignedJobs.length > 0)) ||
       expiringDocs.length > 0 ||
-      ratesPendingPlacements.length > 0 ? (
+      ratesPendingPlacements.length > 0 ||
+      missingResumeSubs.length > 0 ? (
         <Card title="Needs attention">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {scope === "me" && (
@@ -282,6 +288,21 @@ export default async function DashboardPage({
                 };
               })}
             />
+            {missingResumeSubs.length > 0 && (
+              <MyWorkList
+                heading={`Submissions missing a résumé (${missingResumeSubs.length})`}
+                empty="No submissions missing a résumé."
+                footer={{
+                  href: listHref("/submissions", { missingResume: "1" }),
+                  label: "View all →",
+                }}
+                items={missingResumeSubs.map((s) => ({
+                  href: `/submissions/${s.id}`,
+                  primary: `${s.candidate.fullName} → ${s.job.title}`,
+                  secondary: `${formatSubmissionDisplayId(s)} · submitted ${formatDate(s.submittedAt)}${scope === "org" ? ` · ${s.submittedBy.fullName}` : ""}`,
+                }))}
+              />
+            )}
             {ratesPendingPlacements.length > 0 && (
               <MyWorkList
                 heading={`Placements with rates pending (${ratesPendingPlacements.length})`}

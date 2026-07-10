@@ -1204,11 +1204,14 @@ async function main() {
       times.push(new Date(t));
     }
 
-    // Most submissions carry one of the candidate's saved résumés.
+    // Most submissions carry one of the candidate's saved résumés; ~20% go out
+    // without one (the "missing résumé" worklist). Of those, ~30% are then
+    // waived ("résumé not required") so the demo shows all three states.
     const pickedResume =
       candidate.resumes.length > 0 && chance(0.8)
         ? pick(candidate.resumes)
         : null;
+    const waiveResume = !pickedResume && chance(0.3);
 
     // The requirement this candidate is submitted against (VPR-first).
     const vpr = await getVprForJob(job);
@@ -1235,6 +1238,8 @@ async function main() {
         teamLead: vpr.teamLead,
         candidateResumeId: pickedResume?.id ?? null,
         resumeBlobUrl: pickedResume?.blobUrl ?? null,
+        resumeWaivedAt: waiveResume ? submittedAt : null,
+        resumeWaivedById: waiveResume ? submittedById : null,
         submittedAt,
         createdAt: submittedAt,
         updatedAt: times[times.length - 1],

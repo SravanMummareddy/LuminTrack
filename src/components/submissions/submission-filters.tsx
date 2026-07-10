@@ -32,6 +32,7 @@ export function SubmissionFilters({
     },
     { kind: "date", label: "Submitted", primary: true },
     { kind: "toggle", param: "mineStale", label: "Mine, stale >7d", primary: true },
+    { kind: "toggle", param: "missingResume", label: "Missing résumé", primary: true },
     {
       kind: "select",
       param: "recruiterId",
