@@ -10,6 +10,39 @@ short instead of long.
 
 ---
 
+## 2026-07-10 · Interview "support" wouldn't save — a stale Prisma client, not a form bug
+
+**Situation.** The owner reported the interview "support" fields weren't saving, and
+asked whether the support they were seeing had been auto-populated. Two questions in one:
+is the data real, and why won't a new value persist?
+
+**Diagnosis.** The "auto-populated" half is true by design — the demo seed
+(`prisma/seed-demo.ts:1389`) sets `supportNeeded` on ~30% of rounds and names a provider
+on ~70% of those (dev: 28 of 90 rounds, 16 with a provider). The "won't save" half was not
+a form bug at all: the submission detail page was *crashing*. The dev-server log showed
+`TypeError: Cannot read properties of undefined (reading 'findMany') at
+listSupportProviderOptions` — `prisma.supportProvider` was `undefined` because the
+long-running `npm run dev` still held a Prisma client generated *before* the
+support-providers migration. The whole `SubmissionDetailPage` threw (caught by the error
+boundary → "Something went wrong"), so the interview-rounds card — support fields included —
+never rendered a working save path. The schema, Zod validation, action, read query, and the
+*on-disk* generated client were all correct (a fresh tsx probe read `supportProvider` fine,
+5 rows); only the in-memory process was stale.
+
+**Fix.** Restart the dev server. Confirmed end-to-end after the restart: the page returns
+200, and editing a no-support round to add a provider + method persisted to the DB
+(`supportNeeded:true`, provider "Wei Chen", method saved), then reverted to keep dev
+pristine. No code change. Production (Vercel) was never affected — each deploy runs
+`prisma generate` during the build, so prod's client always has the model.
+
+**Lesson.** `Cannot read properties of undefined (reading 'findMany')` on a `prisma.<model>`
+call almost always means the running process predates a `prisma generate`, not a missing
+model — HMR does not reload the regenerated client (already called out in CLAUDE.md's
+migration workflow). Before debugging the form, check whether the *page itself* is throwing:
+one glance at the dev-server log named the culprit and turned a "save bug" into a restart.
+
+---
+
 ## 2026-07-09 · "Mark joined" looked frozen — a dialog that closed before the work finished
 
 **Situation.** The owner clicked "Mark joined" and the button greyed out with no
