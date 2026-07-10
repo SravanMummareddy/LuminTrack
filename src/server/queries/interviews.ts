@@ -1,5 +1,10 @@
 import { prisma } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
+import type {
+  InterviewResult,
+  InterviewType,
+  Discipline,
+} from "@/generated/prisma/enums";
 import {
   SUB_PAGE_SIZE as PAGE_SIZE,
   PAGE_SIZE as LIST_PAGE_SIZE,
@@ -80,6 +85,9 @@ export type CandidateInterviewGroup = Awaited<
 export type InterviewListFilters = {
   q?: string;
   recruiterId?: string[];
+  results?: InterviewResult[];
+  interviewTypes?: InterviewType[];
+  disciplines?: Discipline[];
   scheduledRange?: DateRange;
   sort?: SortState;
   page?: number;
@@ -112,8 +120,17 @@ export async function listInterviews(filters: InterviewListFilters) {
   const where: Prisma.InterviewRoundWhereInput = { scheduledAt: { not: null } };
   if (filters.scheduledRange?.gte || filters.scheduledRange?.lte)
     where.scheduledAt = { not: null, ...filters.scheduledRange };
+  if (filters.results?.length) where.result = { in: filters.results };
+  if (filters.interviewTypes?.length)
+    where.interviewType = { in: filters.interviewTypes };
+  // Recruiter + discipline both narrow via the parent submission — build one
+  // sub-where so they compose instead of clobbering each other.
+  const submissionWhere: Prisma.SubmissionWhereInput = {};
   if (filters.recruiterId?.length)
-    where.submission = { submittedById: { in: filters.recruiterId } };
+    submissionWhere.submittedById = { in: filters.recruiterId };
+  if (filters.disciplines?.length)
+    submissionWhere.candidate = { discipline: { in: filters.disciplines } };
+  if (Object.keys(submissionWhere).length) where.submission = submissionWhere;
   const terms = searchTerms(filters.q);
   if (terms.length)
     where.AND = terms.map((t) => ({

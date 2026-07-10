@@ -9,7 +9,19 @@ import {
   type InterviewListFilters,
 } from "@/server/queries/interviews";
 import { listActiveRecruiterOptions } from "@/server/queries/org";
-import { parseSort, parsePage, parseDateRange, parseList, PAGE_SIZE } from "@/lib/filters";
+import {
+  parseSort,
+  parsePage,
+  parseDateRange,
+  parseList,
+  parseEnumList,
+  PAGE_SIZE,
+} from "@/lib/filters";
+import {
+  INTERVIEW_RESULTS,
+  INTERVIEW_TYPES,
+  DISCIPLINES,
+} from "@/lib/labels";
 
 function clean(value: string | string[] | undefined): string | undefined {
   const single = Array.isArray(value) ? value[0] : value;
@@ -41,6 +53,9 @@ export default async function InterviewsPage({
   const filters: InterviewListFilters = {
     q: current.q,
     recruiterId: current.recruiterId,
+    results: parseEnumList(parseList(sp.result), INTERVIEW_RESULTS),
+    interviewTypes: parseEnumList(parseList(sp.roundType), INTERVIEW_TYPES),
+    disciplines: parseEnumList(parseList(sp.discipline), DISCIPLINES),
     scheduledRange: parseDateRange({
       preset: current.preset,
       from: current.from,
