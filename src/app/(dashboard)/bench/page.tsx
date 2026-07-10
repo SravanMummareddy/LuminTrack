@@ -10,11 +10,18 @@ import {
 import { BenchFilters } from "@/components/bench/bench-filters";
 import {
   listBenchConsultants,
+  countAllBenchConsultants,
   BENCH_SORT_KEYS,
   BENCH_DEFAULT_SORT,
 } from "@/server/queries/bench-consultants";
 import { listActiveRecruiterOptions } from "@/server/queries/org";
-import { parseSort, parsePage, parseList, PAGE_SIZE } from "@/lib/filters";
+import {
+  parseSort,
+  parsePage,
+  parseList,
+  parseEnumList,
+  PAGE_SIZE,
+} from "@/lib/filters";
 import { BENCH_PRIORITIES, BENCH_MARKETING_STATUSES } from "@/lib/labels";
 import type {
   BenchPriority,
@@ -34,14 +41,23 @@ export default async function BenchRosterPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const sp = await searchParams;
-  // Status modes: absent → "onbench" (default, ACTIVE/PAUSED); "all" → every
-  // status; or a specific marketing status. Lets the roster default to "who
-  // we're marketing now" while keeping placed/inactive one click away.
-  const statusMode = clean(sp.status) ?? "onbench";
+  // Marketing status (multi-select): absent → the "being marketed" default
+  // (ACTIVE + PAUSED), shown visibly checked; "__all__" → every status; else a
+  // subset of the enum. No hidden default — the checkboxes reflect the state.
+  const rawStatus = clean(sp.status);
+  let marketingStatuses: BenchMarketingStatus[] | undefined;
+  if (rawStatus === "__all__") {
+    marketingStatuses = undefined; // show all
+  } else if (rawStatus == null) {
+    marketingStatuses = ["ACTIVE", "PAUSED"]; // default: being marketed
+  } else {
+    const picked = parseEnumList(parseList(rawStatus), BENCH_MARKETING_STATUSES);
+    marketingStatuses = picked.length ? picked : undefined;
+  }
+
   const current = {
     q: clean(sp.q),
     priority: clean(sp.priority),
-    status: statusMode,
     recruiterId: parseList(sp.recruiterId),
     discipline: parseList(sp.discipline),
   };
@@ -61,16 +77,10 @@ export default async function BenchRosterPage({
   )
     ? (current.priority as BenchPriority)
     : undefined;
-  const marketingStatus = (BENCH_MARKETING_STATUSES as string[]).includes(
-    statusMode,
-  )
-    ? (statusMode as BenchMarketingStatus)
-    : undefined;
 
   const base = {
     q: current.q,
-    marketingStatus,
-    onBench: statusMode === "onbench",
+    marketingStatuses,
     recruiterId: current.recruiterId,
     discipline: disciplineFilter,
     sort,
@@ -85,7 +95,18 @@ export default async function BenchRosterPage({
   const groupOn = clean(sp.group) !== "0";
   const grouped = groupOn && !priorityFilter;
 
-  const recruiters = await listActiveRecruiterOptions();
+  const [recruiters, allCount] = await Promise.all([
+    listActiveRecruiterOptions(),
+    countAllBenchConsultants(),
+  ]);
+
+  // "N consultants · M hidden by filters" — so the default (being-marketed)
+  // view never silently hides rows without saying so.
+  const countLabel = (t: number) => {
+    const base = `${t} consultant${t === 1 ? "" : "s"}`;
+    const hidden = allCount - t;
+    return hidden > 0 ? `${base} · ${hidden} hidden by filters` : base;
+  };
 
   let total: number;
   let body: ReactNode;
@@ -121,7 +142,7 @@ export default async function BenchRosterPage({
     body = (
       <BenchRosterTable
         groups={groups}
-        countLabel={`${total} consultant${total === 1 ? "" : "s"}`}
+        countLabel={countLabel(total)}
       />
     );
   } else {
@@ -141,7 +162,7 @@ export default async function BenchRosterPage({
         <BenchRosterTable
           rows={rows}
           pageOffset={(page - 1) * PAGE_SIZE}
-          countLabel={`${total} consultant${total === 1 ? "" : "s"}`}
+          countLabel={countLabel(total)}
         />
         <Pagination page={page} totalPages={totalPages} total={total} />
       </>

@@ -55,7 +55,12 @@ const COLUMNS: Column[] = [
     defaultVisible: true,
     render: (p) => (
       <Td label="ID" secondary className="whitespace-nowrap font-mono text-xs">
-        {formatPlacementDisplayId(p)}
+        <Link
+          href={`/placements/${p.id}`}
+          className={`${cardLink} text-indigo-600 hover:underline`}
+        >
+          {formatPlacementDisplayId(p)}
+        </Link>
       </Td>
     ),
   },
