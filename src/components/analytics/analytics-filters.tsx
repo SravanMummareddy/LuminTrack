@@ -6,6 +6,7 @@ import {
   SUBMISSION_STATUS_LABEL,
   OTHER_SOURCE,
 } from "@/lib/labels";
+import { roleLabel } from "@/lib/permissions";
 
 type Option = { id: string; name: string };
 
@@ -23,6 +24,7 @@ export function AnalyticsFilters({
   recruiters,
   showStatusFilters = true,
   showRecruiterFilter = true,
+  showRoleFilter = false,
 }: {
   basePath: string;
   clients: Option[];
@@ -32,8 +34,25 @@ export function AnalyticsFilters({
   showStatusFilters?: boolean;
   /** Off for the recruiter detail page, which is already scoped to one recruiter. */
   showRecruiterFilter?: boolean;
+  /** On for the Recruiters roster only — narrows rows to Recruiter / Team lead /
+   *  Manager (all shown by default). */
+  showRoleFilter?: boolean;
 }) {
   const filters: FilterDef[] = [{ kind: "date", label: "Date range", primary: true }];
+
+  if (showRoleFilter)
+    filters.push({
+      kind: "select",
+      param: "roles",
+      label: "Role",
+      primary: true,
+      multi: true,
+      options: [
+        { value: "RECRUITER", label: roleLabel("RECRUITER") },
+        { value: "TEAM_LEAD", label: roleLabel("TEAM_LEAD") },
+        { value: "MANAGER", label: roleLabel("MANAGER") },
+      ],
+    });
 
   if (showRecruiterFilter)
     filters.push({

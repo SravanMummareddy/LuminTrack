@@ -63,6 +63,9 @@ export function SubmissionStatusForm({
   status: SubmissionStatus;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
+  // Set when a submit was fired from an open dialog, so we hold the dialog open
+  // (showing a busy state) until the action resolves, then close it.
+  const submittedFromDialog = useRef(false);
   // `target` is the status we're about to POST — set right before every submit.
   const [target, setTarget] = useState<SubmissionStatus>(status);
   const [eventAt, setEventAt] = useState("");
@@ -112,6 +115,19 @@ export function SubmissionStatusForm({
     }
   }, [state, toast]);
 
+  // Close the dialog once the action settles (success OR error). Runs when
+  // isPending falls back to false after a dialog-initiated submit — so the
+  // dialog shows a busy state throughout instead of vanishing the instant it's
+  // confirmed (which read as a frozen page). On error, closing reveals the
+  // error banner below the form.
+  useEffect(() => {
+    if (!isPending && submittedFromDialog.current) {
+      submittedFromDialog.current = false;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDialog(null);
+    }
+  }, [isPending]);
+
   function clearTransient() {
     setNote("");
     setReason("");
@@ -156,7 +172,10 @@ export function SubmissionStatusForm({
   }
 
   function confirmDialog() {
-    setDialog(null);
+    // Keep the dialog open (with a busy button) until the action resolves; the
+    // isPending effect closes it. Closing here left only a greyed button behind
+    // the dialog, which read as a frozen page.
+    submittedFromDialog.current = true;
     submitWith(target);
   }
 
@@ -539,15 +558,25 @@ export function SubmissionStatusForm({
               />
             </div>
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="secondary" onClick={cancelDialog}>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={cancelDialog}
+                disabled={isPending}
+              >
                 Cancel
               </Button>
               <Button
                 type="button"
                 variant={dialog === "reject" ? "danger" : "primary"}
                 onClick={confirmDialog}
+                disabled={isPending}
               >
-                {dialog === "reject" ? "Reject candidate" : "Put on hold"}
+                {isPending
+                  ? "Saving…"
+                  : dialog === "reject"
+                    ? "Reject candidate"
+                    : "Put on hold"}
               </Button>
             </div>
           </div>
@@ -575,11 +604,21 @@ export function SubmissionStatusForm({
               />
             </div>
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="secondary" onClick={cancelDialog}>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={cancelDialog}
+                disabled={isPending}
+              >
                 Cancel
               </Button>
-              <Button type="button" variant="danger" onClick={confirmDialog}>
-                Mark backed out
+              <Button
+                type="button"
+                variant="danger"
+                onClick={confirmDialog}
+                disabled={isPending}
+              >
+                {isPending ? "Saving…" : "Mark backed out"}
               </Button>
             </div>
           </div>
@@ -594,11 +633,23 @@ export function SubmissionStatusForm({
           description="This sets the submission's status and logs the change on the timeline."
         >
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={cancelDialog}>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={cancelDialog}
+              disabled={isPending}
+            >
               Cancel
             </Button>
-            <Button type="button" variant="primary" onClick={confirmDialog}>
-              Move to {SUBMISSION_STATUS_LABEL[target].toLowerCase()}
+            <Button
+              type="button"
+              variant="primary"
+              onClick={confirmDialog}
+              disabled={isPending}
+            >
+              {isPending
+                ? "Saving…"
+                : `Move to ${SUBMISSION_STATUS_LABEL[target].toLowerCase()}`}
             </Button>
           </div>
         </Dialog>
@@ -629,11 +680,21 @@ export function SubmissionStatusForm({
               />
             </div>
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="secondary" onClick={cancelDialog}>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={cancelDialog}
+                disabled={isPending}
+              >
                 Cancel
               </Button>
-              <Button type="button" variant="primary" onClick={confirmDialog}>
-                Mark joined
+              <Button
+                type="button"
+                variant="primary"
+                onClick={confirmDialog}
+                disabled={isPending}
+              >
+                {isPending ? "Marking…" : "Mark joined"}
               </Button>
             </div>
           </div>

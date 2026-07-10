@@ -157,6 +157,22 @@ export const SUBMISSION_PIPELINE: string[] = [
   "Joined",
 ];
 
+/**
+ * Compact labels for the horizontal stepper only, so all 8 stages fit one row
+ * without scrolling. Same order/length as SUBMISSION_PIPELINE; the full label
+ * stays the hover title and is used everywhere else.
+ */
+export const SUBMISSION_PIPELINE_SHORT: string[] = [
+  "Submitted",
+  "Resume",
+  "Vendor screen",
+  "Interview",
+  "Decision",
+  "Offer out",
+  "Offer accepted",
+  "Joined",
+];
+
 export const SUBMISSION_STAGE_INDEX: Record<SubmissionStatus, number> = {
   SUBMITTED: 0,
   RESUME_PICKED: 1,

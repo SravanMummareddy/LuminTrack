@@ -10,6 +10,35 @@ short instead of long.
 
 ---
 
+## 2026-07-09 · "Mark joined" looked frozen — a dialog that closed before the work finished
+
+**Situation.** The owner clicked "Mark joined" and the button greyed out with no
+feedback; the page looked frozen and only a reload "fixed" it. Was it a hang, or a bug?
+
+**Diagnosis.** Not a hang. `confirmDialog()` called `setDialog(null)` *before*
+dispatching the action, so the dialog vanished instantly and all that was left on
+screen was the underlying primary button in its `disabled={isPending}` state — greyed,
+no spinner, no "Saving…". Every other action button (primary advance, the "Jump to any
+stage" Update) already showed a pending label; the four *dialog* confirm buttons were
+the only ones that didn't. The JOINED path is also the slowest (it creates a placement
++ flips the candidate + rolls the bench), so the dead interval was most visible there.
+The theorised "silent placement race" (P2002 → null) is benign: a placement *does*
+exist (the concurrent write made it), and inside a Postgres transaction a caught
+constraint violation can't silently half-commit — so no data fix was needed.
+
+**Fix.** Keep the dialog open through the action: `confirmDialog()` sets a
+`submittedFromDialog` ref instead of closing, the confirm/cancel buttons take
+`disabled={isPending}` + a busy label ("Marking…" / "Saving…"), and one
+`useEffect([isPending])` closes the dialog when the action settles — success (toast +
+reset) or error (reveals the banner). One ref + one effect, no action/DB change.
+
+**Lesson.** "Greyed out with no feedback" is a *missing pending state*, not a stuck
+process — before suspecting the server, check whether the control that should show
+progress is the one on screen. Closing a modal on submit hides the very busy state that
+tells the user it's working; close it on *settle* instead.
+
+---
+
 ## 2026-07-08 · Audit log "semi information" — a dropped SELECT, not missing data
 
 **Situation.** The owner looked at the org-wide Audit log and noticed rows were

@@ -362,6 +362,9 @@ export function BenchRosterTable({
                       count={g.total}
                       rows={g.rows}
                       pageOffset={g.pageOffset}
+                      page={g.page}
+                      totalPages={g.totalPages}
+                      paramKey={g.paramKey}
                       cols={renderCols}
                     />
                   ))
@@ -378,25 +381,6 @@ export function BenchRosterTable({
           </table>
         </div>
       )}
-
-      {/* Grouped mode paginates each priority independently — surfaced below the
-          single table, labeled, only when a group actually spills a page. */}
-      {grouped &&
-        groups!
-          .filter((g) => g.totalPages > 1)
-          .map((g) => (
-            <div key={g.priority} className="flex items-center gap-2">
-              <span className="text-xs font-medium text-slate-500">
-                {BENCH_PRIORITY_LABEL[g.priority]}
-              </span>
-              <Pagination
-                page={g.page}
-                totalPages={g.totalPages}
-                total={g.total}
-                paramKey={g.paramKey}
-              />
-            </div>
-          ))}
     </div>
   );
 }
@@ -408,12 +392,18 @@ function GroupSection({
   count,
   rows,
   pageOffset,
+  page,
+  totalPages,
+  paramKey,
   cols,
 }: {
   priority: Priority;
   count: number;
   rows: BenchListRow[];
   pageOffset: number;
+  page: number;
+  totalPages: number;
+  paramKey: string;
   cols: Column[];
 }) {
   const high = priority === "HIGH";
@@ -442,6 +432,21 @@ function GroupSection({
           zebra={idx % 2 === 1}
         />
       ))}
+      {/* Each priority group paginates on its own — the pager sits directly
+          under its rows (not stacked with the other group's at the page foot),
+          so it's clear which group it drives. Only when the group spills a page. */}
+      {totalPages > 1 && (
+        <tr>
+          <td colSpan={cols.length} className="border-t border-slate-200 bg-slate-50/60 px-4 py-1.5">
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              total={count}
+              paramKey={paramKey}
+            />
+          </td>
+        </tr>
+      )}
     </>
   );
 }

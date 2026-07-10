@@ -5,6 +5,7 @@ import { ArrowRight, Check } from "lucide-react";
 import { cn } from "@/lib/cn";
 import {
   SUBMISSION_PIPELINE,
+  SUBMISSION_PIPELINE_SHORT,
   SUBMISSION_STAGE_INDEX,
   SUBMISSION_STATUS_LABEL,
 } from "@/lib/labels";
@@ -33,15 +34,21 @@ export function StatusPipeline({
   const interactive = typeof onStageClick === "function";
 
   return (
-    <div className="flex items-center overflow-x-auto pb-1">
+    <div className="flex items-start overflow-x-auto pb-1">
       {SUBMISSION_PIPELINE.map((stageLabel, i) => {
         const reached = i <= currentIndex;
         const isCurrent = i === currentIndex;
         const isNext = interactive && i === nextStageIndex;
-        const label =
+        // Full label drives the tooltip + the Decision-branch live status; the
+        // stepper renders the compact label so all 8 stages fit one row.
+        const fullLabel =
           i === 4 && currentIndex === 4
             ? SUBMISSION_STATUS_LABEL[status]
             : stageLabel;
+        const label =
+          i === 4 && currentIndex === 4
+            ? SUBMISSION_STATUS_LABEL[status]
+            : SUBMISSION_PIPELINE_SHORT[i];
 
         let dotClass = "border-slate-300 bg-white text-slate-400";
         if (reached) dotClass = "border-indigo-600 bg-indigo-600 text-white";
@@ -81,7 +88,7 @@ export function StatusPipeline({
             {dot}
             <span
               className={cn(
-                "whitespace-nowrap text-xs font-medium",
+                "text-center text-[11px] font-medium leading-tight",
                 isCurrent
                   ? "text-slate-900"
                   : isNext
@@ -101,7 +108,9 @@ export function StatusPipeline({
             {i > 0 && (
               <div
                 className={cn(
-                  "h-0.5 w-6 shrink-0 sm:w-10",
+                  // flex-1 so the 8 stages spread edge-to-edge and fit one row;
+                  // mt aligns the line to the dot's vertical center (dot = h-7).
+                  "mt-3.5 h-0.5 min-w-[10px] flex-1",
                   i <= currentIndex ? "bg-indigo-600" : "bg-slate-200",
                 )}
               />
@@ -112,24 +121,24 @@ export function StatusPipeline({
                 onClick={() => onStageClick(i)}
                 title={
                   isCurrent
-                    ? label
+                    ? fullLabel
                     : isNext
-                      ? `Advance to ${label.toLowerCase()}`
+                      ? `Advance to ${fullLabel.toLowerCase()}`
                       : reached
-                        ? `Move back to ${label.toLowerCase()}`
-                        : `Skip ahead to ${label.toLowerCase()}`
+                        ? `Move back to ${fullLabel.toLowerCase()}`
+                        : `Skip ahead to ${fullLabel.toLowerCase()}`
                 }
-                className="group flex shrink-0 flex-col items-center gap-1.5 rounded-md p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                className="group flex w-16 shrink-0 flex-col items-center gap-1.5 rounded-md p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
               >
                 {stageBody}
               </button>
             ) : (
               <div
-                className="flex shrink-0 flex-col items-center gap-1.5"
+                className="flex w-16 shrink-0 flex-col items-center gap-1.5"
                 title={
                   i === 4
                     ? "Decision: Selected, Rejected, or On Hold"
-                    : undefined
+                    : fullLabel
                 }
               >
                 {stageBody}

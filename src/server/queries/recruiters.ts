@@ -73,11 +73,18 @@ export const RECRUITER_DEFAULT_SORT: SortState = { key: "name", dir: "asc" };
  * filters submissions by `submittedAt` and assignments by `assignedAt`.
  * Rows are aggregated, then sorted and paginated in memory.
  */
+/** Every role that can carry a performance row. Team leads and managers submit
+ *  too, so they belong on the roster — narrowed by the `roles` filter below. */
+const PERFORMANCE_ROLES: UserRole[] = ["MANAGER", "TEAM_LEAD", "RECRUITER"];
+
 export async function listRecruiterPerformance(
   filters: AnalyticsFilters,
-  opts: { sort?: SortState; page?: number } = {},
+  opts: { sort?: SortState; page?: number; roles?: UserRole[] } = {},
 ) {
   const orgWhere = jobOrgWhere(filters);
+  // Default to all three roles; the roster filter chip can narrow to a subset.
+  const roles =
+    opts.roles && opts.roles.length ? opts.roles : PERFORMANCE_ROLES;
 
   // Only count assignments to jobs that are still being worked. Bulk-closing
   // iLabor reqs would otherwise inflate every recruiter's "Jobs assigned".
@@ -91,8 +98,8 @@ export async function listRecruiterPerformance(
 
   const [users, submissions, assignments] = await Promise.all([
     prisma.user.findMany({
-      // Recruiters only — admins aren't part of the performance list.
-      where: { isActive: true, role: "RECRUITER" },
+      // Recruiters + team leads + managers — anyone who submits shows here.
+      where: { isActive: true, role: { in: roles } },
       select: { id: true, fullName: true, email: true, role: true },
       orderBy: { fullName: "asc" },
     }),
