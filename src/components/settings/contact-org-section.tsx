@@ -6,6 +6,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Field, Input, Textarea } from "@/components/ui/field";
+import { SuggestInput } from "@/components/ui/suggest-input";
 import { Table, Th, Td } from "@/components/ui/table";
 import {
   SettingsListFilter,
@@ -29,7 +30,17 @@ export type ContactOrg = {
   notes: string | null;
   isActive: boolean;
   contacts: ContactRow[];
+  // Vendors only: the owning team member. `recruitedBy` is the linked user;
+  // `recruitedByName` is the free-text fallback when nobody is linked.
+  recruitedBy?: { fullName: string } | null;
+  recruitedByName?: string | null;
 };
+
+/** Display label for a vendor's "Recruited by" — the linked user's name, else
+ *  the free-typed name, else null. */
+function recruitedByLabel(org: ContactOrg): string | null {
+  return org.recruitedBy?.fullName ?? org.recruitedByName ?? null;
+}
 
 type SaveAction = (prev: FormState, formData: FormData) => Promise<FormState>;
 
@@ -41,6 +52,8 @@ export function ContactOrgSection({
   action,
   contactKind,
   isAdmin,
+  showRecruitedBy = false,
+  userNames = [],
 }: {
   title: string;
   singular: string;
@@ -48,6 +61,10 @@ export function ContactOrgSection({
   action: SaveAction;
   contactKind: ContactKind;
   isAdmin: boolean;
+  /** Vendors only — reveal the "Recruited by" column + form field. */
+  showRecruitedBy?: boolean;
+  /** Active user names that seed the "Recruited by" suggestion list. */
+  userNames?: string[];
 }) {
   const [editing, setEditing] = useState<ContactOrg | "new" | null>(null);
   const [contactsOf, setContactsOf] = useState<ContactOrg | null>(null);
@@ -105,6 +122,7 @@ export function ContactOrgSection({
             <tr>
               <Th>Name</Th>
               <Th>Contact</Th>
+              {showRecruitedBy && <Th>Recruited by</Th>}
               <Th>Email</Th>
               <Th>Phone</Th>
               <Th>Location</Th>
@@ -120,6 +138,9 @@ export function ContactOrgSection({
                   {item.name}
                 </Td>
                 <Td label="Contact">{item.contactPerson || "—"}</Td>
+                {showRecruitedBy && (
+                  <Td label="Recruited by">{recruitedByLabel(item) || "—"}</Td>
+                )}
                 <Td label="Email">{item.email || "—"}</Td>
                 <Td label="Phone">{item.phone || "—"}</Td>
                 <Td label="Location">{item.location || "—"}</Td>
@@ -166,6 +187,8 @@ export function ContactOrgSection({
             action={action}
             entity={editing === "new" ? null : editing}
             onDone={() => setEditing(null)}
+            showRecruitedBy={showRecruitedBy}
+            userNames={userNames}
           />
         )}
       </Dialog>
@@ -187,10 +210,14 @@ function ContactOrgForm({
   action,
   entity,
   onDone,
+  showRecruitedBy,
+  userNames,
 }: {
   action: SaveAction;
   entity: ContactOrg | null;
   onDone: () => void;
+  showRecruitedBy: boolean;
+  userNames: string[];
 }) {
   const [state, formAction, pending] = useActionState(action, EMPTY_FORM_STATE);
 
@@ -217,6 +244,23 @@ function ContactOrgForm({
           defaultValue={entity?.contactPerson ?? ""}
         />
       </Field>
+
+      {showRecruitedBy && (
+        <Field
+          label="Recruited by"
+          htmlFor="recruitedBy"
+          hint="Your team member who owns this vendor. Auto-fills the Vendor recruiter on every VPR for this vendor. Pick a name or type one."
+        >
+          <SuggestInput
+            id="recruitedBy"
+            name="recruitedBy"
+            defaultValue={entity ? recruitedByLabel(entity) ?? "" : ""}
+            suggestions={userNames}
+            maxResults={userNames.length}
+            placeholder="Sriman Udugula"
+          />
+        </Field>
+      )}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Email" htmlFor="email" error={state.fieldErrors?.email}>

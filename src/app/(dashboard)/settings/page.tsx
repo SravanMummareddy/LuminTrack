@@ -10,6 +10,7 @@ import {
   listClients,
   listVendors,
   listUsers,
+  listActiveUserOptions,
 } from "@/server/queries/org";
 import { saveSisterCompany, saveVendor } from "@/server/actions/org";
 import { ContactOrgSection } from "@/components/settings/contact-org-section";
@@ -69,14 +70,20 @@ export default async function SettingsPage({
       <ClientSection items={await listClients()} isAdmin={isAdmin} />
     );
   } else if (tab === "vendors") {
+    const [vendors, userOptions] = await Promise.all([
+      listVendors(),
+      listActiveUserOptions(),
+    ]);
     content = (
       <ContactOrgSection
         title="Vendors"
         singular="vendor"
-        items={await listVendors()}
+        items={vendors}
         action={saveVendor}
         contactKind="vendor"
         isAdmin={isAdmin}
+        showRecruitedBy
+        userNames={userOptions.map((u) => u.fullName)}
       />
     );
   } else if (tab === "users") {

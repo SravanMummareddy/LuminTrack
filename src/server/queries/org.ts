@@ -30,8 +30,35 @@ export function listClients() {
 export function listVendors() {
   return prisma.vendor.findMany({
     orderBy: { name: "asc" },
-    include: contactsInclude,
+    include: {
+      ...contactsInclude,
+      // "Recruited by" — the linked owner (if any). Display falls back to the
+      // free-text recruitedByName when no user is linked.
+      recruitedBy: { select: { id: true, fullName: true } },
+    },
   });
+}
+
+/** All active users as `{id, fullName}` — the suggestion pool for the vendor
+ *  "Recruited by" picker (any role: recruiter, team lead, manager). Deduped by
+ *  name so accidental seed duplicates don't double up. */
+export async function listActiveUserOptions(): Promise<
+  { id: string; fullName: string }[]
+> {
+  const rows = await prisma.user.findMany({
+    where: { isActive: true },
+    select: { id: true, fullName: true, updatedAt: true },
+    orderBy: [{ fullName: "asc" }, { updatedAt: "desc" }],
+  });
+  const seen = new Set<string>();
+  const out: { id: string; fullName: string }[] = [];
+  for (const r of rows) {
+    const key = r.fullName.trim().toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ id: r.id, fullName: r.fullName });
+  }
+  return out;
 }
 
 /** App users — never selects passwordHash, so the result is safe to pass to client components. */

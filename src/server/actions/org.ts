@@ -16,8 +16,26 @@ function readContactOrg(formData: FormData) {
     phone: formData.get("phone") ?? "",
     location: formData.get("location") ?? "",
     notes: formData.get("notes") ?? "",
+    recruitedBy: formData.get("recruitedBy") ?? "",
     isActive: formData.get("isActive") != null,
   });
+}
+
+/** Resolve the vendor's "Recruited by" free-text into a link + fallback: an
+ *  exact (case-insensitive) match against an active user becomes a real FK;
+ *  anything else is kept as a plain name; blank clears both. Never sets both. */
+async function resolveRecruitedBy(
+  typed: string | undefined,
+): Promise<{ recruitedById: string | null; recruitedByName: string | null }> {
+  const value = (typed ?? "").trim();
+  if (!value) return { recruitedById: null, recruitedByName: null };
+  const user = await prisma.user.findFirst({
+    where: { isActive: true, fullName: { equals: value, mode: "insensitive" } },
+    select: { id: true },
+  });
+  return user
+    ? { recruitedById: user.id, recruitedByName: null }
+    : { recruitedById: null, recruitedByName: value };
 }
 
 /** Clients, vendors, and sister-company sources are shared org records that
@@ -76,6 +94,7 @@ export async function saveVendor(
   const parsed = readContactOrg(formData);
   if (!parsed.success) return { fieldErrors: toFieldErrors(parsed.error) };
 
+  const recruited = await resolveRecruitedBy(parsed.data.recruitedBy);
   const data = {
     name: parsed.data.name,
     contactPerson: parsed.data.contactPerson ?? null,
@@ -83,6 +102,8 @@ export async function saveVendor(
     phone: parsed.data.phone ?? null,
     location: parsed.data.location ?? null,
     notes: parsed.data.notes ?? null,
+    recruitedById: recruited.recruitedById,
+    recruitedByName: recruited.recruitedByName,
     isActive: parsed.data.isActive,
   };
 

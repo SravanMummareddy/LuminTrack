@@ -660,12 +660,21 @@ async function main() {
   }
   const vendors = [];
   for (const name of VENDOR_NAMES) {
+    // "Recruited by" — the team member who owns this vendor. ~75% link to a real
+    // user; the rest use a free-typed name (someone not in the system) so both
+    // storage paths are exercised in the demo.
+    const linkOwner = chance(0.75);
+    const owner = pick(allUsers);
     vendors.push(
       await prisma.vendor.create({
         data: {
           name,
           contactPerson: pick(FIRST_NAMES) + " " + pick(LAST_NAMES),
           email: name.toLowerCase().replace(/[^a-z]/g, "") + "@vendor.com",
+          recruitedById: linkOwner ? owner.id : null,
+          recruitedByName: linkOwner
+            ? null
+            : pick(FIRST_NAMES) + " " + pick(LAST_NAMES),
           createdAt: adminCreatedAt,
           updatedAt: adminCreatedAt,
         },

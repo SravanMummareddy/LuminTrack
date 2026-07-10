@@ -48,7 +48,15 @@ const REQUIREMENT_INCLUDE = {
       status: true,
       location: true,
       client: { select: { name: true } },
-      vendor: { select: { name: true } },
+      // Vendor + its "Recruited by" owner — a blank VPR vendor-recruiter cell
+      // falls back to the vendor's owner live (so existing rows show it too).
+      vendor: {
+        select: {
+          name: true,
+          recruitedByName: true,
+          recruitedBy: { select: { fullName: true } },
+        },
+      },
     },
   },
   // Company is derived from the candidate's current employer (owner's model).

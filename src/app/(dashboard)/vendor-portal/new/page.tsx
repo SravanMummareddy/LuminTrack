@@ -98,6 +98,12 @@ export default async function NewRequirementPage({
         vendorRate: true,
         description: true,
         client: { select: { name: true } },
+        vendor: {
+          select: {
+            recruitedByName: true,
+            recruitedBy: { select: { fullName: true } },
+          },
+        },
       },
     }),
     listCandidateOptions(),
@@ -148,6 +154,12 @@ export default async function NewRequirementPage({
             // Carry the job's description into the requirement's Job duties so it
             // isn't retyped (editable). Flows on to the submission via convert.
             jobDuties: job.description ?? "",
+            // Prefill the Vendor recruiter from the vendor's "Recruited by"
+            // owner (set once in Settings). Editable per-VPR.
+            vendorRecruiterName:
+              job.vendor?.recruitedBy?.fullName ??
+              job.vendor?.recruitedByName ??
+              "",
           }}
           cancelHref="/vendor-portal"
         />

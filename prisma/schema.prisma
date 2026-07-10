@@ -254,6 +254,7 @@ model User {
   vendorRequirementsConverted VendorRequirement[] @relation("VendorRequirementConvertedBy")
   glossaryNotes      GlossaryNote[]
   customGlossaryTerms CustomGlossaryTerm[]
+  vendorsRecruited   Vendor[]         @relation("VendorRecruitedBy")
 }
 
 model SisterCompanySource {
@@ -311,11 +312,20 @@ model Vendor {
   location      String?
   notes         String?
   isActive      Boolean  @default(true)
+  // "Recruited by" — our team member who owns this vendor relationship. When
+  // set, it auto-fills the "Vendor recruiter" on every VPR for this vendor.
+  // Either a linked user (recruitedById) OR a free-typed name (recruitedByName)
+  // for someone not in the system — never both. Display = user.fullName ?? name.
+  recruitedById   String?
+  recruitedBy     User?    @relation("VendorRecruitedBy", fields: [recruitedById], references: [id], onDelete: SetNull)
+  recruitedByName String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   jobs     Job[]
   contacts Contact[]
+
+  @@index([recruitedById])
 }
 
 // §B1: per-entity contacts. Each row points at exactly one parent via the

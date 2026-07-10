@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { optionalText, optionalEmail } from "./common";
 
-/** Sources and vendors share the same shape (name + contact details). */
+/** Sources and vendors share the same shape (name + contact details). The
+ *  vendor form additionally posts `recruitedBy` (our owning team member, a
+ *  type-or-pick string); sources omit it, so it's optional here. */
 export const contactOrgSchema = z.object({
   name: z.string().trim().min(1, "Name is required.").max(160),
   contactPerson: optionalText,
@@ -9,6 +11,7 @@ export const contactOrgSchema = z.object({
   phone: optionalText,
   location: optionalText,
   notes: optionalText,
+  recruitedBy: optionalText,
   isActive: z.boolean(),
 });
 
