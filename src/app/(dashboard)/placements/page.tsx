@@ -3,7 +3,6 @@ import { Pagination } from "@/components/ui/pagination";
 import { PlacementsTable } from "@/components/placements/placements-table";
 import {
   listPlacements,
-  getPlacementsSummary,
   PLACEMENT_SORT_KEYS,
   PLACEMENT_DEFAULT_SORT,
   type PlacementListFilters,
@@ -13,7 +12,6 @@ import { PlacementsFilters } from "@/components/placements/placements-filters";
 import { parseSort, parsePage, parseDateRange, parseList, PAGE_SIZE } from "@/lib/filters";
 import { PLACEMENT_STATUSES } from "@/lib/labels";
 import { requireUser } from "@/lib/session";
-import { hasFullAccess } from "@/lib/permissions";
 import type { PlacementStatus } from "@/generated/prisma/enums";
 
 function clean(value: string | string[] | undefined): string | undefined {
@@ -26,10 +24,6 @@ function asPlacementStatus(value: string | undefined): PlacementStatus | undefin
   return value && (PLACEMENT_STATUSES as string[]).includes(value)
     ? (value as PlacementStatus)
     : undefined;
-}
-
-function formatMoney(n: number): string {
-  return `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 }
 
 export default async function PlacementsPage({
@@ -72,18 +66,13 @@ export default async function PlacementsPage({
     page: parsePage(clean(sp.page)),
   };
 
-  const [{ rows, total, page }, summary, clients, recruiters] = await Promise.all([
+  const [{ rows, total, page }, clients, recruiters] = await Promise.all([
     listPlacements(filters, { id: user.id, role: user.role }),
-    getPlacementsSummary(),
     listClients(),
     listUsers(),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  // Rate-derived aggregates are admin-only — the per-row Bill/Pay/Margin are
-  // masked for non-admins (except their own placements), so the org-wide weekly
-  // margin must be hidden too or it leaks the sum of numbers they can't see.
-  const isAdmin = hasFullAccess(user);
 
   return (
     <div className="space-y-5">
@@ -91,20 +80,6 @@ export default async function PlacementsPage({
         title="Placements"
         description="Candidates currently working an assignment. Created automatically when a submission's status flips to Joined."
       />
-
-      {/* Sticky summary strip — three pinned stats above the table. */}
-      <div className="sticky top-0 z-10 -mx-1 grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-3">
-        <SummaryStat label="Active placements" value={String(summary.activeCount)} />
-        <SummaryStat
-          label="Weekly margin (active)"
-          value={isAdmin ? formatMoney(summary.weeklyMargin) : "—"}
-          hint={isAdmin ? "bill − pay × 40 h" : "Visible to admins"}
-        />
-        <SummaryStat
-          label="Ending in next 14 days"
-          value={String(summary.endingSoonCount)}
-        />
-      </div>
 
       <PlacementsFilters clients={clients} recruiters={recruiters} />
 
@@ -126,24 +101,6 @@ export default async function PlacementsPage({
           <Pagination page={page} totalPages={totalPages} total={total} />
         </div>
       )}
-    </div>
-  );
-}
-
-function SummaryStat({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-}) {
-  return (
-    <div>
-      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-xl font-semibold text-slate-900 tabular-nums">{value}</p>
-      {hint && <p className="text-xs text-slate-400">{hint}</p>}
     </div>
   );
 }
