@@ -1,6 +1,7 @@
 import { Download, ShieldX, Briefcase } from "lucide-react";
 import { buttonClass } from "@/components/ui/button";
 import { ConfirmSubmit } from "@/components/ui/confirm-dialog";
+import { ArchivePreviewModal } from "@/components/settings/archive-preview-modal";
 import { removeJobArchive } from "@/server/actions/jobs";
 import type { JobArchiveEntry } from "@/server/queries/job-archives";
 
@@ -72,6 +73,14 @@ export function DeletedJobsSection({
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="flex items-center justify-end gap-2">
+                      <ArchivePreviewModal
+                        kind="job"
+                        displayId={a.displayId}
+                        pathname={a.pathname}
+                        url={a.url}
+                        downloadHref={`/api/jobs/archives/download?path=${encodeURIComponent(a.pathname)}`}
+                        removeAction={removeJobArchive}
+                      />
                       <a
                         href={`/api/jobs/archives/download?path=${encodeURIComponent(a.pathname)}`}
                         className={buttonClass("secondary")}
