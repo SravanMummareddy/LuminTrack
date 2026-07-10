@@ -59,6 +59,7 @@ export async function hardEraseCandidate(
     select: {
       seq: true,
       erasedAt: true,
+      deletedAt: true,
       createdById: true,
       resumes: { select: { blobUrl: true } },
       documents: { select: { blobUrl: true } },
@@ -107,6 +108,12 @@ export async function hardEraseCandidate(
         source: null,
         status: "DO_NOT_CONTACT",
         isActive: false,
+        // Erasing a LIVE candidate (never trashed) must also set deletedAt, or
+        // the scrubbed tombstone stays in listCandidates ({deletedAt:null}), is
+        // invisible to the Trash view, and — worse — is still offered by
+        // listCandidateOptions in the submission/VPR/bench pickers. Mirrors
+        // job-erase.ts, which sets both fields.
+        deletedAt: candidate.deletedAt ?? new Date(),
         erasedAt: new Date(),
       },
     });
