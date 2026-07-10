@@ -44,10 +44,14 @@ export function AnalyticsFilters({
     filters.push({
       kind: "select",
       param: "roles",
-      label: "Role",
+      label: "User type",
       primary: true,
-      multi: true,
+      // Single-select so the chip reads "All users / Recruiter / Team lead /
+      // Manager". (A multi-select drops the explicit "All" option — the bar
+      // treats no-selection as all.) The `roles` param still parses as a list,
+      // so one type narrows and "All users" (blank) shows everyone.
       options: [
+        { value: "", label: "All users" },
         { value: "RECRUITER", label: roleLabel("RECRUITER") },
         { value: "TEAM_LEAD", label: roleLabel("TEAM_LEAD") },
         { value: "MANAGER", label: roleLabel("MANAGER") },
