@@ -279,7 +279,10 @@ const COLUMNS: Column[] = [
     defaultVisible: false,
     render: (r) => (
       <Td label="Vendor recruiter" secondary>
-        {r.vendorRecruiterName ?? "—"}
+        {r.vendorRecruiterName ||
+          r.job.vendor?.recruitedBy?.fullName ||
+          r.job.vendor?.recruitedByName ||
+          "—"}
       </Td>
     ),
   },
