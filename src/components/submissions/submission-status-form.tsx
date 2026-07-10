@@ -145,6 +145,10 @@ export function SubmissionStatusForm({
    * inputs before this runs.
    */
   function submitWith(next: SubmissionStatus) {
+    // Re-entrancy guard: never dispatch a second change while one is in flight.
+    // `disabled={isPending}` has a one-frame gap; this closes it and prevents a
+    // second dialog/action stacking mid-transition.
+    if (isPending) return;
     const form = formRef.current;
     if (!form) return;
     const fd = new FormData(form);
@@ -164,8 +168,10 @@ export function SubmissionStatusForm({
     submitWith(next);
   }
 
-  /** Open a branch/confirm dialog for `next`, starting from clean fields. */
+  /** Open a branch/confirm dialog for `next`, starting from clean fields. Ignored
+   *  while a change is in flight so a dialog can't stack on a pending action. */
   function openDialog(kind: DialogKind, next: SubmissionStatus) {
+    if (isPending) return;
     clearTransient();
     setTarget(next);
     setDialog(kind);
