@@ -21,6 +21,8 @@ import {
   OVERRIDE_REASONS,
   OVERRIDE_REASON_LABEL,
 } from "@/lib/labels";
+import { roleLabel } from "@/lib/permissions";
+import type { UserRole } from "@/generated/prisma/enums";
 
 type ResumeOption = { id: string; label: string };
 type CandidateOption = {
@@ -35,7 +37,14 @@ type JobOption = {
   displayId: string;
   clientName: string | null;
 };
-type Recruiter = { id: string; fullName: string; isActive: boolean };
+type Recruiter = {
+  id: string;
+  fullName: string;
+  isActive: boolean;
+  // Team leads and managers submit too; the picker tags them so the person
+  // attributing the submission can tell roles apart.
+  role?: UserRole;
+};
 
 /**
  * One form, three entry points (Round 5). `mode` decides which of the two
@@ -583,10 +592,17 @@ export function SubmissionForm({
             value={fields.submittedById}
             onChange={(v) => setFields((f) => ({ ...f, submittedById: v }))}
             placeholder="Search recruiters…"
-            options={recruiters.map((r) => ({
-              value: r.id,
-              label: r.isActive ? r.fullName : `${r.fullName} (inactive)`,
-            }))}
+            options={recruiters.map((r) => {
+              const name = r.isActive
+                ? r.fullName
+                : `${r.fullName} (inactive)`;
+              // Tag team leads / managers so it's clear who's being credited.
+              const tag =
+                r.role && r.role !== "RECRUITER"
+                  ? ` · ${roleLabel(r.role)}`
+                  : "";
+              return { value: r.id, label: `${name}${tag}` };
+            })}
           />
         </Field>
 

@@ -29,6 +29,7 @@ export default async function EditSubmissionPage({
         id: u.id,
         fullName: u.fullName,
         isActive: u.isActive,
+        role: u.role,
       }))
     : [];
   const teamLeads = await listTeamLeadOptions();

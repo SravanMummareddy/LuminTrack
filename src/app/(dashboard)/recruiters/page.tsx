@@ -19,7 +19,15 @@ import {
   listUsers,
 } from "@/server/queries/org";
 import { parseAnalyticsParams, firstParam } from "@/lib/analytics";
-import { parseSort, parsePage, PAGE_SIZE } from "@/lib/filters";
+import {
+  parseSort,
+  parsePage,
+  parseList,
+  parseEnumList,
+  PAGE_SIZE,
+} from "@/lib/filters";
+
+const PERFORMANCE_ROLE_VALUES = ["MANAGER", "TEAM_LEAD", "RECRUITER"] as const;
 
 export default async function RecruitersPage({
   searchParams,
@@ -36,9 +44,10 @@ export default async function RecruitersPage({
     RECRUITER_DEFAULT_SORT,
   );
   const page = parsePage(firstParam(sp.page));
+  const roles = parseEnumList(parseList(sp.roles), PERFORMANCE_ROLE_VALUES);
 
   const [perf, clients, vendors, sources, recruiters] = await Promise.all([
-    listRecruiterPerformance(filters, { sort, page }),
+    listRecruiterPerformance(filters, { sort, page, roles }),
     listClients(),
     listVendors(),
     listSisterCompanies(),
@@ -52,7 +61,7 @@ export default async function RecruitersPage({
     <div className="space-y-5">
       <PageHeader
         title="Recruiters"
-        description="Performance counts for every active recruiter. Open a recruiter for their full activity."
+        description="Performance counts for recruiters, team leads, and managers who submit. Use the Role filter to narrow, or open anyone for their full activity."
       />
 
       <AnalyticsFilters
@@ -62,6 +71,7 @@ export default async function RecruitersPage({
         sources={sources}
         recruiters={recruiters}
         showStatusFilters={false}
+        showRoleFilter
       />
 
       {total === 0 ? (
