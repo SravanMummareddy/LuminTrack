@@ -40,7 +40,14 @@ async function resolveRecruitedBy(
 
 /** Clients, vendors, and sister-company sources are shared org records that
  *  every job references — letting any recruiter rename or deactivate them
- *  would silently invalidate other people's work. Admin-only for writes. */
+ *  would silently invalidate other people's work. Admin-only for writes.
+ *
+ *  NOTE: these mutations intentionally write no `Activity` audit row — the
+ *  `Activity` model has no relation for org entities, and adding one would take
+ *  a schema migration (new `ActivityAction` values + a nullable FK). Renames/
+ *  deactivations of shared records therefore leave no trail; acceptable for a
+ *  <10-person team where writes are already manager-gated, but flagged here so
+ *  the gap is a known trade-off rather than an oversight (review IN-03). */
 async function requireOrgManager(): Promise<FormState | { ok: true }> {
   const actor = await requireUser();
   if (!canManageOrgEntities(actor))

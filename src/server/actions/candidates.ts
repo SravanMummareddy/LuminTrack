@@ -572,6 +572,10 @@ export async function removeCandidateArchive(formData: FormData): Promise<void> 
   // Delete by the prefix-validated pathname only — never a caller-supplied,
   // unvalidated `url`, which could point `del()` at an arbitrary blob.
   await del(pathname);
+  // Deliberate exception to the project's "write + audit in one $transaction"
+  // rule: a Blob delete can't join a DB transaction, so the audit row is logged
+  // separately after it. Worst case on a crash between the two is an orphaned
+  // audit gap, not a data-integrity problem. (review IN-02)
   await logActivity(prisma, {
     entityType: "CANDIDATE",
     action: "CANDIDATE_ERASED",

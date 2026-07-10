@@ -583,6 +583,10 @@ export async function removeJobArchive(formData: FormData): Promise<void> {
   // request could pass a valid pathname to clear the guard yet delete an
   // arbitrary blob (résumés, other backups).
   await del(pathname);
+  // Deliberate exception to the "write + audit in one $transaction" rule: a Blob
+  // delete can't join a DB transaction, so the audit row is logged separately
+  // after it (worst case is an audit gap on a crash, not a data problem).
+  // (review IN-02)
   await logActivity(prisma, {
     entityType: "JOB",
     action: "JOB_ERASED",

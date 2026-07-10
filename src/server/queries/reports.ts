@@ -3,6 +3,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import {
   buildSubmissionWhere,
   daysSince,
+  PERFORMANCE_ROLES,
   STALE_SUBMISSION_STATUSES,
   type AnalyticsFilters,
 } from "@/lib/analytics";
@@ -47,7 +48,7 @@ export async function getReportsData(
       },
     }),
     prisma.user.findMany({
-      where: { isActive: true },
+      where: { isActive: true, role: { in: PERFORMANCE_ROLES } },
       select: { id: true, fullName: true },
       orderBy: { fullName: "asc" },
     }),

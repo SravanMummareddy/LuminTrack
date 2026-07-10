@@ -3,6 +3,7 @@ import {
   buildJobWhere,
   buildSubmissionWhere,
   daysSince,
+  PERFORMANCE_ROLES,
   type AnalyticsFilters,
 } from "@/lib/analytics";
 import type { JobStatus, SubmissionStatus } from "@/generated/prisma/enums";
@@ -30,7 +31,9 @@ export async function getDashboardData(filters: AnalyticsFilters) {
       },
     }),
     prisma.user.findMany({
-      where: { isActive: true, role: "RECRUITER" },
+      // Same performer universe as the Recruiters page and Reports
+      // (PERFORMANCE_ROLES) — a submitting manager/team lead is ranked too.
+      where: { isActive: true, role: { in: PERFORMANCE_ROLES } },
       select: { id: true, fullName: true },
       orderBy: { fullName: "asc" },
     }),

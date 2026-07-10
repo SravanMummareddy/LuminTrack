@@ -77,6 +77,10 @@ async function uniqueTerm(label: string): Promise<string> {
  * Add or edit an org-wide custom glossary term. Managers + team leads only.
  * Category must come from the fixed list (no invented taxonomy); the label is
  * deduped case-insensitively against built-ins and other custom terms.
+ *
+ * NOTE: this and `deleteCustomGlossaryTerm` write no `Activity` audit row (no
+ * glossary relation on the model; a trail would need a schema migration).
+ * Manager-gated + soft-deleted, so a documented trade-off — see review IN-03.
  */
 export async function saveCustomGlossaryTerm(
   _prev: FormState,

@@ -44,6 +44,7 @@ export function LocationInput({
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const listId = useId();
 
   const matches = useMemo(() => {
@@ -60,21 +61,32 @@ export function LocationInput({
     return [...starts, ...contains].slice(0, MAX_RESULTS);
   }, [text]);
 
-  function emit(next: string, real?: React.ChangeEvent<HTMLInputElement>) {
-    if (!isControlled) setInternal(next);
-    if (!onChange) return;
-    if (real) {
-      real.target.value = next;
-      onChange(real);
-    } else {
-      onChange({
+  // Set the value the way a real keystroke would: drive it through the native
+  // input setter and dispatch a bubbling `input` event. That fires React's own
+  // onChange AND lets any ancestor `<form onInput>` (the unsaved-changes guard)
+  // see the change. A plain synthetic onChange call would skip the native event,
+  // so a mouse-picked suggestion never marked the form dirty and its edit could
+  // be lost on soft navigation. Mirrors `SuggestInput.commit()`.
+  function commit(next: string) {
+    const el = inputRef.current;
+    if (!el) {
+      // No DOM node yet (SSR / tests) — fall back to a direct notify.
+      if (!isControlled) setInternal(next);
+      onChange?.({
         target: { value: next, name: name ?? "" },
       } as unknown as React.ChangeEvent<HTMLInputElement>);
+      return;
     }
+    const setter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      "value",
+    )?.set;
+    setter?.call(el, next);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
   function select(loc: string) {
-    emit(loc);
+    commit(loc);
     setOpen(false);
     setActive(-1);
   }
@@ -105,6 +117,7 @@ export function LocationInput({
     <div className="relative">
       <Input
         {...props}
+        ref={inputRef}
         name={name}
         value={text}
         autoComplete="off"
@@ -114,7 +127,8 @@ export function LocationInput({
         aria-autocomplete="list"
         className={className}
         onChange={(e) => {
-          emit(e.target.value, e);
+          if (!isControlled) setInternal(e.target.value);
+          onChange?.(e);
           setOpen(true);
           setActive(-1);
         }}

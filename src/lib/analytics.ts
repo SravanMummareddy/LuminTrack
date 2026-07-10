@@ -1,7 +1,24 @@
 import type { Prisma } from "@/generated/prisma/client";
-import type { JobStatus, SubmissionStatus } from "@/generated/prisma/enums";
+import type {
+  JobStatus,
+  SubmissionStatus,
+  UserRole,
+} from "@/generated/prisma/enums";
 import { JOB_STATUSES, SUBMISSION_STATUSES, OTHER_SOURCE } from "@/lib/labels";
 import { parseDateRange, parseList, type DateRange } from "@/lib/filters";
+
+/**
+ * The roles that count as "performers" in recruiter analytics. Managers and
+ * team leads submit alongside recruiters, so they belong in the recruiter
+ * breakdown; ADMIN is excluded (support/ops, not a submitter to be ranked).
+ * Single source of truth so the Recruiters page, Reports, and Dashboard all
+ * report the same recruiter universe.
+ */
+export const PERFORMANCE_ROLES: UserRole[] = [
+  "MANAGER",
+  "TEAM_LEAD",
+  "RECRUITER",
+];
 
 // ─── Open-job aging ──────────────────────────────────────────────────────────
 
