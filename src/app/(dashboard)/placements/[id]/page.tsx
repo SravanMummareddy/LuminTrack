@@ -175,8 +175,11 @@ export default async function PlacementDetailPage({
               id: placement.id,
               startDate: placement.startDate,
               endDate: placement.endDate,
-              billRate: placement.billRate,
-              payRate: placement.payRate,
+              // Don't ship real rates into client props for a viewer who can't
+              // manage them — the rate inputs only render when canManageRates,
+              // so 0 is a safe placeholder that never reaches the screen.
+              billRate: canManageRates ? placement.billRate : 0,
+              payRate: canManageRates ? placement.payRate : 0,
               clientPoNumber: placement.clientPoNumber,
               invoiceRef: placement.invoiceRef,
               onsiteManagerName: placement.onsiteManagerName,

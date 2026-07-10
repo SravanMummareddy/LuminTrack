@@ -73,7 +73,7 @@ export default async function PlacementsPage({
   };
 
   const [{ rows, total, page }, summary, clients, recruiters] = await Promise.all([
-    listPlacements(filters),
+    listPlacements(filters, { id: user.id, role: user.role }),
     getPlacementsSummary(),
     listClients(),
     listUsers(),

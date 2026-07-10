@@ -74,7 +74,42 @@ function flattenRates<
   };
 }
 
-export async function listPlacements(filters: PlacementListFilters) {
+/** Who's viewing — drives per-row rate masking. A recruiter may see rates only
+ *  on their own placements; managers / team leads see all. */
+export type PlacementViewer = { id: string; role: string };
+
+/** Null out the rate fields on a flattened row the viewer isn't allowed to see.
+ *  The masking MUST happen here (server-side, before the RSC→Client boundary):
+ *  the "—" the table renders is only a display choice, so leaving the numbers in
+ *  the client payload leaks every recruiter's Bill/Pay/Margin to any recruiter.
+ *  Same rule the client `canSeeRates` uses, so the two never diverge. */
+function maskRatesForViewer<
+  T extends {
+    billRate: number;
+    payRate: number;
+    clientRate: number | null;
+    margin: number;
+    marginPct: number | null;
+    submission: { submittedBy: { id: string } };
+  },
+>(row: T, viewer: PlacementViewer) {
+  const canSee =
+    viewer.role !== "RECRUITER" ||
+    row.submission.submittedBy.id === viewer.id;
+  return {
+    ...row,
+    billRate: canSee ? row.billRate : null,
+    payRate: canSee ? row.payRate : null,
+    clientRate: canSee ? row.clientRate : null,
+    margin: canSee ? row.margin : null,
+    marginPct: canSee ? row.marginPct : null,
+  };
+}
+
+export async function listPlacements(
+  filters: PlacementListFilters,
+  viewer: PlacementViewer,
+) {
   const where: Prisma.PlacementWhereInput = {};
   if (filters.status) where.status = filters.status;
   if (filters.clientId?.length) where.job = { clientId: { in: filters.clientId } };
@@ -130,7 +165,7 @@ export async function listPlacements(filters: PlacementListFilters) {
     },
   });
 
-  const rows = raw.map(flattenRates);
+  const rows = raw.map((p) => maskRatesForViewer(flattenRates(p), viewer));
 
   return { rows, total, page };
 }
