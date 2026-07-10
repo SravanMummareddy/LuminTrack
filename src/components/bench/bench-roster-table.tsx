@@ -93,9 +93,12 @@ const COLUMNS: Column[] = [
     label: "ID",
     defaultVisible: false,
     cell: (c) => (
-      <span className="font-mono text-[11px] text-slate-400">
+      <Link
+        href={`/bench/${c.id}`}
+        className="font-mono text-[11px] text-indigo-600 hover:underline"
+      >
         {formatBenchConsultantDisplayId(c)}
-      </span>
+      </Link>
     ),
   },
   {
@@ -129,7 +132,7 @@ const COLUMNS: Column[] = [
   },
   {
     key: "visa",
-    label: "Visa",
+    label: "Marketing visa",
     defaultVisible: true,
     cell: (c) => {
       const primary = c.mVisa || c.workAuthorization || c.aVisa;

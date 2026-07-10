@@ -10,16 +10,20 @@ import { PAGE_SIZE, searchTerms, type SortDir, type SortState } from "@/lib/filt
 export type BenchListFilters = {
   q?: string;
   priority?: BenchPriority;
-  marketingStatus?: BenchMarketingStatus;
-  /** On-bench = actively being marketed (ACTIVE/PAUSED). The roster's default
-   *  view; placed/inactive consultants are hidden unless explicitly requested.
-   *  Ignored when an explicit `marketingStatus` is set. */
-  onBench?: boolean;
+  /** Marketing statuses to include (multi-select). Undefined = all statuses.
+   *  The page defaults an absent filter to ["ACTIVE","PAUSED"] (being marketed). */
+  marketingStatuses?: BenchMarketingStatus[];
   recruiterId?: string[];
   discipline?: Discipline[];
   sort?: SortState;
   page?: number;
 };
+
+/** Total bench consultants across every status/filter — used to show how many
+ *  rows the active filters are hiding ("N hidden by filters"). */
+export function countAllBenchConsultants() {
+  return prisma.benchConsultant.count();
+}
 
 const BENCH_SORTS: Record<
   string,
@@ -63,8 +67,8 @@ function flattenBench<
 export async function listBenchConsultants(filters: BenchListFilters) {
   const where: Prisma.BenchConsultantWhereInput = {};
   if (filters.priority) where.priority = filters.priority;
-  if (filters.marketingStatus) where.marketingStatus = filters.marketingStatus;
-  else if (filters.onBench) where.marketingStatus = { in: ["ACTIVE", "PAUSED"] };
+  if (filters.marketingStatuses?.length)
+    where.marketingStatus = { in: filters.marketingStatuses };
   if (filters.recruiterId?.length) where.recruiterId = { in: filters.recruiterId };
   // Discipline now lives on the linked candidate (source of truth), so filter
   // through the relation.

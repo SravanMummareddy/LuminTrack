@@ -29,6 +29,14 @@ export type FilterDef =
       searchable?: boolean;
       /** Multiple values, encoded as a comma-separated param. */
       multi?: boolean;
+      /** Multi only: the values shown *checked* when the param is absent (a
+       *  visible default subset, e.g. bench "On bench + Paused"). Unchecking to
+       *  empty then writes an explicit "show all" sentinel — so the default is
+       *  never a hidden magic state and clearing the pill returns to it. */
+      defaultValues?: string[];
+      /** Label for the "reset to default" action in the popover (e.g.
+       *  "Being marketed"). Only used with `defaultValues`. */
+      defaultValuesLabel?: string;
       /** Other params to reset whenever this filter changes (pick or clear).
        *  E.g. the "User type" filter clears the dependent "User" selection so a
        *  stale person-filter doesn't survive a type change. */
@@ -79,6 +87,23 @@ const popoverCls =
 
 function csv(value: string | null): string[] {
   return value ? value.split(",").filter(Boolean) : [];
+}
+
+/** Sentinel written to a multi param when the user clears a filter that has a
+ *  `defaultValues` subset — means "show all", distinct from an absent param
+ *  (which means "use the default subset"). */
+const ALL_SENTINEL = "__all__";
+
+/** The effective checked set for a multi select: explicit "all" → empty; an
+ *  explicit CSV → those; absent → the filter's `defaultValues` (empty if none). */
+function multiSelected(
+  def: { param: string; defaultValues?: string[] },
+  params: URLSearchParams,
+): Set<string> {
+  const raw = params.get(def.param);
+  if (raw === ALL_SENTINEL) return new Set();
+  if (raw != null) return new Set(csv(raw));
+  return new Set(def.defaultValues ?? []);
 }
 
 /** `{param: null}` for each dependent param a filter clears when it changes. */
@@ -138,7 +163,14 @@ export function FilterBar({
       return Boolean(p && p !== "all");
     }
     if (def.kind === "select") {
-      if (def.multi) return csv(params.get(def.param)).length > 0;
+      if (def.multi) {
+        const raw = params.get(def.param);
+        // Explicit "show all" is the un-filtered state; absent falls back to a
+        // default subset (active if one is configured).
+        if (raw === ALL_SENTINEL) return false;
+        if (raw != null) return csv(raw).length > 0;
+        return (def.defaultValues?.length ?? 0) > 0;
+      }
       const v = params.get(def.param) ?? def.defaultValue ?? "";
       return v !== (def.defaultValue ?? "");
     }
@@ -160,7 +192,7 @@ export function FilterBar({
     }
     if (def.kind === "select") {
       if (def.multi) {
-        const vals = csv(params.get(def.param));
+        const vals = [...multiSelected(def, params)];
         if (vals.length === 1)
           return def.options.find((o) => o.value === vals[0])?.label ?? "1 selected";
         return `${vals.length} selected`;
@@ -343,7 +375,7 @@ function SelectPopover({
 }) {
   const [q, setQ] = useState("");
   const selected = useMemo(() => {
-    if (def.multi) return new Set(csv(params.get(def.param)));
+    if (def.multi) return multiSelected(def, params);
     return new Set([params.get(def.param) ?? def.defaultValue ?? ""]);
   }, [def, params]);
 
@@ -368,13 +400,18 @@ function SelectPopover({
 
   function pick(value: string) {
     if (def.multi) {
-      const set = new Set(csv(params.get(def.param)));
+      const set = new Set(multiSelected(def, params));
       if (set.has(value)) set.delete(value);
       else set.add(value);
-      navigate(
-        { [def.param]: [...set].join(",") || null, ...extra },
-        { keepOpen: true },
-      );
+      // Empty with a configured default → explicit "show all" sentinel, so
+      // clearing doesn't silently snap back to the default subset.
+      const next =
+        set.size === 0
+          ? def.defaultValues?.length
+            ? ALL_SENTINEL
+            : null
+          : [...set].join(",");
+      navigate({ [def.param]: next, ...extra }, { keepOpen: true });
     } else {
       navigate({
         [def.param]: value === (def.defaultValue ?? "") ? null : value,
@@ -435,7 +472,28 @@ function SelectPopover({
           <p className="px-2.5 py-2 text-xs text-slate-400">No matches.</p>
         )}
       </div>
-      {def.multi && selected.size > 0 && (
+      {def.multi && def.defaultValues?.length ? (
+        <div className="mt-1 flex items-center justify-between border-t border-slate-100 pt-1">
+          <button
+            type="button"
+            onClick={() =>
+              navigate({ [def.param]: null, ...extra }, { keepOpen: true })
+            }
+            className="rounded-md px-2.5 py-1.5 text-left text-xs font-medium text-indigo-600 hover:bg-slate-50"
+          >
+            ↺ {def.defaultValuesLabel ?? "Reset"}
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              navigate({ [def.param]: ALL_SENTINEL, ...extra }, { keepOpen: true })
+            }
+            className="rounded-md px-2.5 py-1.5 text-left text-xs text-slate-500 hover:bg-slate-50"
+          >
+            Show all
+          </button>
+        </div>
+      ) : def.multi && selected.size > 0 ? (
         <button
           type="button"
           onClick={() =>
@@ -445,7 +503,7 @@ function SelectPopover({
         >
           Clear selection
         </button>
-      )}
+      ) : null}
     </div>
   );
 }

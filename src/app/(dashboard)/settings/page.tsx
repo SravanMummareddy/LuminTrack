@@ -19,6 +19,7 @@ import { AccountSection } from "@/components/settings/account-section";
 import { DeletedCandidatesSection } from "@/components/settings/deleted-candidates-section";
 import { DeletedJobsSection } from "@/components/settings/deleted-jobs-section";
 import { GlossarySection } from "@/components/settings/glossary-section";
+import { AdminToolsDisclosure } from "@/components/settings/admin-tools-disclosure";
 import { Forbidden } from "@/components/ui/forbidden";
 import { listCandidateArchives } from "@/server/queries/candidate-archives";
 import { listJobArchives } from "@/server/queries/job-archives";
@@ -124,12 +125,10 @@ export default async function SettingsPage({
       />
 
       {isAdmin && (
-        <section className="rounded-lg border border-slate-200 bg-white p-5">
-          <h2 className="mb-1 text-sm font-semibold text-slate-700">
-            Admin tools
-          </h2>
+        <AdminToolsDisclosure>
           <p className="mb-3 text-xs text-slate-500">
-            Bulk iLabor requisition imports and their history.
+            Bulk iLabor requisition imports, the org-wide audit log, and data
+            export.
           </p>
           <div className="flex flex-wrap gap-2">
             <LinkButton href="/jobs/import" variant="secondary">
@@ -149,7 +148,7 @@ export default async function SettingsPage({
               Export data
             </LinkButton>
           </div>
-        </section>
+        </AdminToolsDisclosure>
       )}
 
       <div

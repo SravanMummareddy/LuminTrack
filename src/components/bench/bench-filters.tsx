@@ -33,15 +33,16 @@ export function BenchFilters({
       param: "status",
       label: "Marketing",
       primary: true,
-      defaultValue: "onbench",
-      options: [
-        { value: "onbench", label: "Being marketed (On bench + Paused)" },
-        { value: "all", label: "All" },
-        ...BENCH_MARKETING_STATUSES.map((s) => ({
-          value: s,
-          label: BENCH_MARKETING_STATUS_LABEL[s],
-        })),
-      ],
+      multi: true,
+      // Landing shows the two "being marketed" statuses visibly checked (no
+      // hidden default). Unchecking to empty → "Show all"; clearing the pill or
+      // "Being marketed" returns to this default.
+      defaultValues: ["ACTIVE", "PAUSED"],
+      defaultValuesLabel: "Being marketed",
+      options: BENCH_MARKETING_STATUSES.map((s) => ({
+        value: s,
+        label: BENCH_MARKETING_STATUS_LABEL[s],
+      })),
     },
     {
       kind: "select",
