@@ -17,7 +17,10 @@ async function archiveCandidateToBlob(
   candidateId: string,
   displayId: string,
 ): Promise<string | null> {
-  const archive = await buildCandidateArchive(candidateId);
+  // strict: if any file can't be read, this throws and the erase aborts (the
+  // caller runs this BEFORE the destructive transaction) — never shred a file
+  // that didn't make it into the recoverable backup.
+  const archive = await buildCandidateArchive(candidateId, { strict: true });
   if (!archive) return null;
   // Sortable, human-readable key: archives/candidates/CAND-001-2026-07-08-01-40-00.zip
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");

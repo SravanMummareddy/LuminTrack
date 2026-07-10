@@ -353,6 +353,10 @@ export async function getReplacementCandidates(opts: {
       jobId: opts.jobId,
       id: { not: opts.excludeSubmissionId },
       replacementFor: null,
+      // A dead-end submission (rejected / backed out) or a deleted candidate
+      // isn't a viable replacement.
+      status: { notIn: ["REJECTED", "BACKED_OUT"] },
+      candidate: { deletedAt: null },
     },
     orderBy: { submittedAt: "desc" },
     select: {

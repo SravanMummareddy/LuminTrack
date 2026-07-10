@@ -322,6 +322,9 @@ export async function findCandidateDuplicates(opts: {
   return prisma.candidate.findMany({
     where: {
       OR: or,
+      // Don't surface trashed candidates as duplicates — they're hidden
+      // everywhere else and would block/confuse a legitimate re-create.
+      deletedAt: null,
       ...(opts.excludeId ? { id: { not: opts.excludeId } } : {}),
     },
     select: { id: true, fullName: true, email: true, phone: true },

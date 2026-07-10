@@ -13,7 +13,10 @@ const DATE_FMT = new Intl.DateTimeFormat("en-US", {
 });
 
 export function formatDate(date: Date | string): string {
-  return DATE_FMT.format(new Date(date));
+  const d = new Date(date);
+  // Intl.format throws RangeError on an Invalid Date; other formatters guard,
+  // so a nullable date routed here would otherwise crash the render.
+  return Number.isNaN(d.getTime()) ? "—" : DATE_FMT.format(d);
 }
 
 export function formatDateTime(date: Date | string): string {

@@ -224,8 +224,19 @@ export async function updateJob(
   );
   compare("status", existing.status, d.status);
   compare("location", existing.location, d.location);
-  compare("client rate", existing.clientRate?.toString(), effClientRate);
-  compare("vendor rate", existing.vendorRate?.toString(), effVendorRate);
+  // Compare as numbers — existing.*Rate is a Prisma Decimal whose toString()
+  // ("100.00") never string-equals the numeric form (100), so the old compare
+  // flagged rates as changed on every edit.
+  compare(
+    "client rate",
+    existing.clientRate != null ? Number(existing.clientRate) : null,
+    effClientRate,
+  );
+  compare(
+    "vendor rate",
+    existing.vendorRate != null ? Number(existing.vendorRate) : null,
+    effVendorRate,
+  );
   compare("description", existing.description, d.description);
   compare("notes", existing.notes, d.notes);
   compare("positions", existing.positions, d.positions);

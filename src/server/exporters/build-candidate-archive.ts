@@ -42,6 +42,12 @@ async function fetchOriginal(blobPathname: string): Promise<Buffer | null> {
  */
 export async function buildCandidateArchive(
   candidateId: string,
+  // strict: throw if ANY stored file can't be read, instead of silently
+  // omitting it. The erase path passes strict so it never destroys blobs whose
+  // bytes never made it into the backup (a transient Blob read error would
+  // otherwise lose the file with no recovery). The user-download route leaves it
+  // false — a best-effort archive is fine there.
+  opts: { strict?: boolean } = {},
 ): Promise<{ zip: Buffer; candidateName: string; displayId: string } | null> {
   const c = await prisma.candidate.findUnique({
     where: { id: candidateId },
@@ -111,7 +117,10 @@ export async function buildCandidateArchive(
   zip.file("submissions.json", JSON.stringify(submissions, null, 2));
 
   // Fetch every file's bytes in parallel — a candidate can have several
-  // résumés + documents and each is an independent Blob round-trip.
+  // résumés + documents and each is an independent Blob round-trip. Any file
+  // that can't be read is recorded so the erase path (strict) can refuse to
+  // proceed rather than shred an un-backed-up file.
+  const missing: string[] = [];
   const docFolder = zip.folder("documents");
   await Promise.all(
     c.documents
@@ -123,6 +132,7 @@ export async function buildCandidateArchive(
             `${safeName(`${d.category}-${d.label}`)}${extFor(d.contentType)}`,
             buf,
           );
+        else missing.push(`document "${d.label}"`);
       }),
   );
 
@@ -133,8 +143,14 @@ export async function buildCandidateArchive(
       .map(async (r) => {
         const buf = await fetchOriginal(r.blobPathname!);
         if (buf) resFolder?.file(`${safeName(r.label)}${extFor(r.contentType)}`, buf);
+        else missing.push(`resume "${r.label}"`);
       }),
   );
+
+  if (opts.strict && missing.length)
+    throw new Error(
+      `Archive incomplete — could not read ${missing.length} file(s): ${missing.join(", ")}. Aborting so no un-backed-up data is erased.`,
+    );
 
   const zipBuf = await zip.generateAsync({ type: "nodebuffer" });
   return { zip: zipBuf, candidateName: c.fullName, displayId };
