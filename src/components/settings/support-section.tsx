@@ -5,8 +5,10 @@ import { Plus } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Field, Input, Textarea } from "@/components/ui/field";
+import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { Table, Th, Td } from "@/components/ui/table";
+import { DisciplineBadge } from "@/components/ui/discipline-badge";
+import { DISCIPLINES, DISCIPLINE_LABEL } from "@/lib/labels";
 import {
   SettingsListFilter,
   type StatusFilter,
@@ -88,6 +90,7 @@ export function SupportSection({
           <thead className="border-b border-slate-200 bg-slate-50">
             <tr>
               <Th>Name</Th>
+              <Th>Discipline</Th>
               <Th>Phone</Th>
               <Th>Email</Th>
               <Th>Skills</Th>
@@ -101,6 +104,9 @@ export function SupportSection({
               <tr key={item.id}>
                 <Td label="Name" className="font-medium text-slate-900">
                   {item.name}
+                </Td>
+                <Td label="Discipline">
+                  <DisciplineBadge discipline={item.discipline} />
                 </Td>
                 <Td label="Phone">{item.phone || "—"}</Td>
                 <Td label="Email">{item.email || "—"}</Td>
@@ -188,6 +194,26 @@ function SupportProviderForm({
 
       <Field label="Name" htmlFor="name" required error={state.fieldErrors?.name}>
         <Input id="name" name="name" defaultValue={provider?.name ?? ""} required />
+      </Field>
+
+      <Field
+        label="Discipline"
+        htmlFor="discipline"
+        hint="IT / Non-IT — the broad area they support."
+        error={state.fieldErrors?.discipline}
+      >
+        <Select
+          id="discipline"
+          name="discipline"
+          defaultValue={provider?.discipline ?? ""}
+        >
+          <option value="">—</option>
+          {DISCIPLINES.map((d) => (
+            <option key={d} value={d}>
+              {DISCIPLINE_LABEL[d]}
+            </option>
+          ))}
+        </Select>
       </Field>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

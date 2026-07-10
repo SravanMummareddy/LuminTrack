@@ -685,12 +685,16 @@ async function main() {
   }
 
   // ── Support providers (external interview-support individuals) ──
-  const SUPPORT_PROVIDERS: { name: string; skills: string[] }[] = [
-    { name: "Arjun Mehta", skills: ["Java", "Spring Boot", "Microservices"] },
-    { name: "Wei Chen", skills: [".NET", "C#", "Azure"] },
-    { name: "Sofia Álvarez", skills: ["React", "Node.js", "TypeScript"] },
-    { name: "Daniel Owusu", skills: ["Python", "Django", "AWS"] },
-    { name: "Priyanka Rao", skills: ["Data Engineering", "Spark", "Snowflake"] },
+  const SUPPORT_PROVIDERS: {
+    name: string;
+    discipline: "IT" | "NON_IT";
+    skills: string[];
+  }[] = [
+    { name: "Arjun Mehta", discipline: "IT", skills: ["Java", "Spring Boot", "Microservices"] },
+    { name: "Wei Chen", discipline: "IT", skills: [".NET", "C#", "Azure"] },
+    { name: "Sofia Álvarez", discipline: "IT", skills: ["React", "Node.js", "TypeScript"] },
+    { name: "Daniel Owusu", discipline: "IT", skills: ["Python", "Django", "AWS"] },
+    { name: "Priyanka Rao", discipline: "NON_IT", skills: ["Pharmacovigilance", "Clinical Data", "Regulatory"] },
   ];
   const supportProviders = [];
   for (const sp of SUPPORT_PROVIDERS) {
@@ -700,6 +704,7 @@ async function main() {
           name: sp.name,
           email: sp.name.toLowerCase().replace(/[^a-z]/g, "") + "@support.dev",
           phone: `+1 (312) 555-0${randInt(100, 199)}`,
+          discipline: sp.discipline,
           skills: sp.skills,
           reference: chance(0.6) ? pick(FIRST_NAMES) + " " + pick(LAST_NAMES) : null,
           createdAt: adminCreatedAt,
