@@ -52,10 +52,7 @@ export default async function EditCandidatePage({
     discipline: candidate.discipline ?? "",
   };
 
-  const [workAuthOptions, workingTypeOptions] = await Promise.all([
-    listLookupValues("WORK_AUTH"),
-    listLookupValues("WORKING_TYPE"),
-  ]);
+  const workingTypeOptions = await listLookupValues("WORKING_TYPE");
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -65,7 +62,6 @@ export default async function EditCandidatePage({
           action={updateCandidate}
           values={values}
           submitLabel="Save changes"
-          workAuthOptions={workAuthOptions}
           workingTypeOptions={workingTypeOptions}
         />
       </div>

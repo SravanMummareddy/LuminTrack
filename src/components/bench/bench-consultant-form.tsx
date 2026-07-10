@@ -4,6 +4,7 @@ import { useActionState, useMemo, useState } from "react";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { LocationInput } from "@/components/ui/location-input";
 import { SuggestInput } from "@/components/ui/suggest-input";
+import { VISA_OPTIONS } from "@/lib/visa-options";
 import { SearchSelect } from "@/components/ui/search-select";
 import { Button } from "@/components/ui/button";
 import {
@@ -103,7 +104,6 @@ export function BenchConsultantForm({
   recruiters,
   candidates,
   canEditCredentials,
-  workAuthOptions = [],
   callTypeOptions = [],
   payrollTypeOptions = [],
 }: {
@@ -113,7 +113,6 @@ export function BenchConsultantForm({
   recruiters: Option[];
   candidates: Option[];
   canEditCredentials: boolean;
-  workAuthOptions?: string[];
   callTypeOptions?: string[];
   payrollTypeOptions?: string[];
 }) {
@@ -298,11 +297,11 @@ export function BenchConsultantForm({
 
       {/* ── Visa + experience ─────────────────────────────────────── */}
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="M Visa" htmlFor="mVisa" error={errors.mVisa}>
-          <Input id="mVisa" name="mVisa" value={fields.mVisa} onChange={set("mVisa")} placeholder="e.g. H-1B" />
+        <Field label="M Visa" htmlFor="mVisa" hint="Marketing visa — what you market them as." error={errors.mVisa}>
+          <SuggestInput id="mVisa" name="mVisa" value={fields.mVisa} options={VISA_OPTIONS} maxResults={VISA_OPTIONS.length} onChange={set("mVisa")} placeholder="e.g. H-1B" />
         </Field>
-        <Field label="A Visa" htmlFor="aVisa" error={errors.aVisa}>
-          <Input id="aVisa" name="aVisa" value={fields.aVisa} onChange={set("aVisa")} placeholder="e.g. GC-EAD" />
+        <Field label="A Visa" htmlFor="aVisa" hint="Actual work authorization." error={errors.aVisa}>
+          <SuggestInput id="aVisa" name="aVisa" value={fields.aVisa} options={VISA_OPTIONS} maxResults={VISA_OPTIONS.length} onChange={set("aVisa")} placeholder="e.g. GC-EAD" />
         </Field>
         <Field label="Marketing experience (years)" htmlFor="marketingExpYears" error={errors.marketingExpYears}>
           <Input id="marketingExpYears" name="marketingExpYears" type="number" min="0" step="0.1" value={fields.marketingExpYears} onChange={set("marketingExpYears")} />
@@ -349,7 +348,7 @@ export function BenchConsultantForm({
                 <Input id="marketingStartDate" name="marketingStartDate" type="date" value={fields.marketingStartDate} onChange={set("marketingStartDate")} />
               </Field>
               <Field label="Work authorization (A Visa / actual)" htmlFor="workAuthorization" error={errors.workAuthorization}>
-                <SuggestInput id="workAuthorization" name="workAuthorization" value={fields.workAuthorization} suggestions={workAuthOptions} onChange={set("workAuthorization")} placeholder="e.g. Green Card" />
+                <SuggestInput id="workAuthorization" name="workAuthorization" value={fields.workAuthorization} options={VISA_OPTIONS} maxResults={VISA_OPTIONS.length} onChange={set("workAuthorization")} placeholder="e.g. Green Card" />
               </Field>
             </div>
 

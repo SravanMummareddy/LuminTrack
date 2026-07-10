@@ -131,7 +131,6 @@ export async function createCandidate(
       candidateId: created.id,
     });
     // Remember any new free-text work-auth / working-type for future dropdowns.
-    await rememberLookup(tx, "WORK_AUTH", created.workAuthorization);
     await rememberLookup(tx, "WORKING_TYPE", created.workingType);
     // Lifecycle bench: every available candidate is on the bench (being
     // marketed) from creation. Skip retired/non-available ones.
@@ -237,7 +236,6 @@ export async function updateCandidate(
       where: { id: candidateId },
       data: candidateData(d),
     });
-    await rememberLookup(tx, "WORK_AUTH", d.workAuthorization);
     if (d.isWorking) await rememberLookup(tx, "WORKING_TYPE", d.workingType);
     if (changed.length)
       await logActivity(tx, {

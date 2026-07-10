@@ -26,12 +26,11 @@ export default async function EditBenchConsultantPage({
 }) {
   const { id } = await params;
   const user = await requireUser();
-  const [c, recruiters, candidates, workAuthOptions, callTypeOptions, payrollTypeOptions] =
+  const [c, recruiters, candidates, callTypeOptions, payrollTypeOptions] =
     await Promise.all([
       getBenchConsultantForEdit(id),
       listActiveRecruiterOptions(),
       listCandidateOptions(),
-      listLookupValues("WORK_AUTH"),
       listLookupValues("CALL_TYPE"),
       listLookupValues("PAYROLL_TYPE"),
     ]);
@@ -88,7 +87,6 @@ export default async function EditBenchConsultantPage({
           recruiters={recruiters}
           candidates={candidates}
           canEditCredentials={canCreds}
-          workAuthOptions={workAuthOptions}
           callTypeOptions={callTypeOptions}
           payrollTypeOptions={payrollTypeOptions}
         />

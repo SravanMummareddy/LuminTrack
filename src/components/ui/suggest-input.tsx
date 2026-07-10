@@ -1,7 +1,11 @@
 "use client";
 
-import { useId, useMemo, useRef, useState } from "react";
+import { Fragment, useId, useMemo, useRef, useState } from "react";
 import { Input } from "@/components/ui/field";
+
+/** A richer suggestion: an optional `group` (renders a header while browsing)
+ *  and an optional `note` (a muted pill after the value, e.g. "no work auth"). */
+export type SuggestOption = { value: string; group?: string; note?: string };
 
 type Props = Omit<
   React.ComponentProps<"input">,
@@ -10,9 +14,13 @@ type Props = Omit<
   value?: string;
   defaultValue?: string;
   onChange?: React.ChangeEventHandler<HTMLInputElement>;
-  /** The list of suggestions to filter over (e.g. the candidate's skills, or a
-   *  curated + learned lookup list). Anything unlisted still types through. */
-  suggestions: string[];
+  /** Plain suggestion list (e.g. the candidate's skills). Anything unlisted
+   *  still types through. Provide this OR `options`. */
+  suggestions?: string[];
+  /** Grouped/annotated suggestions (e.g. the visa list). While the field is
+   *  empty the options render grouped under their `group` headers; typing
+   *  collapses to a flat relevance list. Still free-text (unlisted types through). */
+  options?: SuggestOption[];
   /** Fires when a value is "committed" — an option picked, Enter pressed, or the
    *  field blurred — carrying the final text. Use it to remember a new value
    *  (e.g. append a typed technology to the skills list). */
@@ -34,6 +42,7 @@ export function SuggestInput({
   onChange,
   onCommit,
   suggestions,
+  options,
   name,
   className,
   maxResults = 8,
@@ -49,18 +58,30 @@ export function SuggestInput({
   const inputRef = useRef<HTMLInputElement>(null);
   const listId = useId();
 
+  // Unify the two inputs into one option list. Grouped rendering + notes only
+  // apply when `options` is supplied.
+  const grouped = options != null;
+  const opts: SuggestOption[] = useMemo(
+    () => options ?? (suggestions ?? []).map((s) => ({ value: s })),
+    [options, suggestions],
+  );
+
+  const browsing = text.trim() === "";
   const matches = useMemo(() => {
     const q = text.trim().toLowerCase();
-    const starts: string[] = [];
-    const contains: string[] = [];
-    for (const s of suggestions) {
-      const low = s.toLowerCase();
-      if (!q || low.startsWith(q)) starts.push(s);
-      else if (low.includes(q)) contains.push(s);
-      if (starts.length >= maxResults) break;
+    // No query → keep source order (so groups read top-to-bottom); a query →
+    // startsWith-first relevance and drop the grouping.
+    if (!q) return opts.slice(0, maxResults);
+    const starts: SuggestOption[] = [];
+    const contains: SuggestOption[] = [];
+    for (const o of opts) {
+      const low = o.value.toLowerCase();
+      if (low.startsWith(q)) starts.push(o);
+      else if (low.includes(q)) contains.push(o);
     }
     return [...starts, ...contains].slice(0, maxResults);
-  }, [text, suggestions, maxResults]);
+  }, [text, opts, maxResults]);
+  const showGroups = grouped && browsing && matches.some((m) => m.group);
 
   // Programmatically set the value the way a real keystroke would: drive it
   // through the native input setter and dispatch a bubbling `input` event. That
@@ -114,7 +135,7 @@ export function SuggestInput({
       setActive((i) => (i <= 0 ? matches.length - 1 : i - 1));
     } else if (e.key === "Enter" && active >= 0) {
       e.preventDefault();
-      select(matches[active]);
+      select(matches[active].value);
     } else if (e.key === "Enter") {
       e.preventDefault();
       onCommit?.(text);
@@ -165,21 +186,45 @@ export function SuggestInput({
             if (blurTimer.current) clearTimeout(blurTimer.current);
           }}
         >
-          {matches.map((s, i) => (
-            <li
-              key={s}
-              role="option"
-              aria-selected={i === active}
-              className={
-                "cursor-pointer px-3 py-1.5 text-slate-900 " +
-                (i === active ? "bg-indigo-50" : "hover:bg-slate-50")
-              }
-              onMouseEnter={() => setActive(i)}
-              onClick={() => select(s)}
-            >
-              {s}
-            </li>
-          ))}
+          {matches.map((o, i) => {
+            // A group header renders before the first option of each group
+            // (browse state only). Headers are non-focusable — arrow-nav steps
+            // through `matches` (options only), so the 1-D keyboard model holds.
+            const header =
+              showGroups &&
+              o.group &&
+              (i === 0 || matches[i - 1].group !== o.group) ? (
+                <li
+                  key={`h-${o.group}`}
+                  role="presentation"
+                  className="px-3 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400"
+                >
+                  {o.group}
+                </li>
+              ) : null;
+            return (
+              <Fragment key={o.value}>
+                {header}
+                <li
+                  role="option"
+                  aria-selected={i === active}
+                  className={
+                    "flex cursor-pointer items-center justify-between gap-2 px-3 py-1.5 text-slate-900 " +
+                    (i === active ? "bg-indigo-50" : "hover:bg-slate-50")
+                  }
+                  onMouseEnter={() => setActive(i)}
+                  onClick={() => select(o.value)}
+                >
+                  <span>{o.value}</span>
+                  {o.note && (
+                    <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-500">
+                      {o.note}
+                    </span>
+                  )}
+                </li>
+              </Fragment>
+            );
+          })}
         </ul>
       )}
     </div>

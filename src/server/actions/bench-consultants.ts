@@ -175,7 +175,6 @@ export async function createBenchConsultant(
               where: { id: d.candidateId as string },
               data: { technology: d.technology },
             });
-          await rememberLookup(tx, "WORK_AUTH", d.workAuthorization);
           await rememberLookup(tx, "CALL_TYPE", d.callType);
           await rememberLookup(tx, "PAYROLL_TYPE", d.payrollType);
           await logActivity(tx, {
@@ -246,7 +245,6 @@ export async function createBenchConsultant(
         performedById: user.id,
         benchConsultantId: created.id,
       });
-      await rememberLookup(tx, "WORK_AUTH", d.workAuthorization);
       await rememberLookup(tx, "CALL_TYPE", d.callType);
       await rememberLookup(tx, "PAYROLL_TYPE", d.payrollType);
       return created;
@@ -341,7 +339,6 @@ export async function updateBenchConsultant(
         candidateId: existing.candidateId,
       });
     }
-    await rememberLookup(tx, "WORK_AUTH", d.workAuthorization);
     await rememberLookup(tx, "CALL_TYPE", d.callType);
     await rememberLookup(tx, "PAYROLL_TYPE", d.payrollType);
     if (changed.length)
