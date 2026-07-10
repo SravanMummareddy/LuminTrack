@@ -48,6 +48,9 @@ export const interviewRoundSchema = z
     scheduledTimezone: optionalText,
     // The sheet's "Support (Y/N)" — a checkbox, so it arrives as a boolean.
     supportNeeded: z.coerce.boolean(),
+    // External support provider (optional FK) + how support was given (note).
+    supportProviderId: z.preprocess(emptyToUndefined, z.string().optional()),
+    supportMethod: optionalText,
     feedback: optionalText,
     notes: optionalText,
   })

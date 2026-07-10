@@ -251,7 +251,10 @@ export function getSubmissionDetail(id: string) {
       },
       interviewRounds: {
         orderBy: { roundOrder: "asc" },
-        include: { updatedBy: { select: { fullName: true } } },
+        include: {
+          updatedBy: { select: { fullName: true } },
+          supportProvider: { select: { name: true } },
+        },
         // Soft cap — recruiters won't realistically run 50 rounds on one
         // submission. Avoids unbounded fetch if data ever goes sideways.
         take: 50,

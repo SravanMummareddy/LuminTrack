@@ -32,6 +32,9 @@ export type InterviewRoundData = {
   scheduledAt: Date | string | null;
   scheduledTimezone: string | null;
   supportNeeded: boolean;
+  supportProviderId: string | null;
+  supportMethod: string | null;
+  supportProvider: { name: string } | null;
   result: InterviewResult;
   feedback: string | null;
   notes: string | null;
@@ -53,10 +56,12 @@ function toDateTimeLocal(value: Date | string | null): string {
 export function InterviewRoundForm({
   submissionId,
   round,
+  supportProviders,
   onDone,
 }: {
   submissionId: string;
   round?: InterviewRoundData;
+  supportProviders: { id: string; name: string; skills: string[] }[];
   onDone: () => void;
 }) {
   const [state, formAction, pending] = useActionState(
@@ -71,6 +76,8 @@ export function InterviewRoundForm({
   const errors = state.fieldErrors ?? {};
   // The video platform field only shows when the mode is a video call.
   const [mode, setMode] = useState(round?.interviewMode ?? "");
+  // "Done with support" reveals the provider + method fields.
+  const [withSupport, setWithSupport] = useState(round?.supportNeeded ?? false);
 
   return (
     <form action={formAction} className="space-y-4">
@@ -198,15 +205,55 @@ export function InterviewRoundForm({
           />
         </Field>
 
-        <label className="flex items-center gap-2 self-end pb-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            name="supportNeeded"
-            defaultChecked={round?.supportNeeded ?? false}
-            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-          />
-          Support needed (a team member shadows this interview)
-        </label>
+        <div className="space-y-2 sm:col-span-2">
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              name="supportNeeded"
+              checked={withSupport}
+              onChange={(e) => setWithSupport(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            Done with support (an external person assisted this interview)
+          </label>
+          {withSupport && (
+            <div className="grid grid-cols-1 gap-3 rounded-md border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-2">
+              <Field
+                label="Support provider"
+                htmlFor="supportProviderId"
+                hint="Manage the list in Settings → Support."
+                error={errors.supportProviderId}
+              >
+                <Select
+                  id="supportProviderId"
+                  name="supportProviderId"
+                  defaultValue={round?.supportProviderId ?? ""}
+                >
+                  <option value="">— Select —</option>
+                  {supportProviders.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                      {p.skills.length ? ` · ${p.skills.slice(0, 3).join(", ")}` : ""}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field
+                label="Support method"
+                htmlFor="supportMethod"
+                hint="How support was given (free text)."
+                error={errors.supportMethod}
+              >
+                <Input
+                  id="supportMethod"
+                  name="supportMethod"
+                  placeholder="e.g. live audio support"
+                  defaultValue={round?.supportMethod ?? ""}
+                />
+              </Field>
+            </div>
+          )}
+        </div>
 
         <Field
           label="Interview date & time"
