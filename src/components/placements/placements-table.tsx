@@ -29,12 +29,16 @@ type Column = {
 
 function canSeeRates(row: PlacementListRow, ctx: ViewerContext): boolean {
   // Managers / team leads see all rates; a recruiter sees rates only on their
-  // own placements (matches the server-side canEditRates policy).
+  // own placements (matches the server-side masking in listPlacements — rows the
+  // viewer can't see arrive with null rates, so this is now defence-in-depth).
   return ctx.userRole !== "RECRUITER" || row.submission.submittedBy.id === ctx.userId;
 }
 
-function formatMoney(value: number): string {
-  return `$${value.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+// value is null when the server masked this row's rates for the viewer.
+function formatMoney(value: number | null): string {
+  return value == null
+    ? "—"
+    : `$${value.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
 }
 
 const COLUMNS: Column[] = [
@@ -174,7 +178,9 @@ const COLUMNS: Column[] = [
     align: "right",
     defaultVisible: true,
     render: (p, _n, ctx) => {
-      if (!canSeeRates(p, ctx))
+      // Hidden (server masked the rates for this viewer, or the client gate
+      // agrees) → show a dash and never touch the null values below.
+      if (!canSeeRates(p, ctx) || p.margin === null)
         return (
           <Td label="Margin" className="text-right tabular-nums">
             —
