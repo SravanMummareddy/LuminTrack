@@ -18,15 +18,18 @@ import { UserSection } from "@/components/settings/user-section";
 import { AccountSection } from "@/components/settings/account-section";
 import { DeletedCandidatesSection } from "@/components/settings/deleted-candidates-section";
 import { DeletedJobsSection } from "@/components/settings/deleted-jobs-section";
+import { GlossarySection } from "@/components/settings/glossary-section";
 import { Forbidden } from "@/components/ui/forbidden";
 import { listCandidateArchives } from "@/server/queries/candidate-archives";
 import { listJobArchives } from "@/server/queries/job-archives";
+import { getGlossaryWithNotes } from "@/server/queries/glossary";
 
 const TABS = [
   { key: "sister-companies", label: "Sources" },
   { key: "clients", label: "Clients" },
   { key: "vendors", label: "Vendors" },
   { key: "users", label: "Users" },
+  { key: "glossary", label: "Glossary" },
   { key: "deleted", label: "Erased backups", adminOnly: true },
   { key: "account", label: "My account" },
 ] as const;
@@ -83,6 +86,8 @@ export default async function SettingsPage({
         canGrantManager={canGrantManager}
       />
     );
+  } else if (tab === "glossary") {
+    content = <GlossarySection rows={await getGlossaryWithNotes()} />;
   } else if (tab === "deleted") {
     if (isAdmin) {
       const [candidateArchives, jobArchives] = await Promise.all([

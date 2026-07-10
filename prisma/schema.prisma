@@ -252,6 +252,7 @@ model User {
   vendorRequirementsRecruited VendorRequirement[] @relation("VendorRequirementRecruiter")
   vendorRequirementsCreated   VendorRequirement[] @relation("VendorRequirementCreatedBy")
   vendorRequirementsConverted VendorRequirement[] @relation("VendorRequirementConvertedBy")
+  glossaryNotes      GlossaryNote[]
 }
 
 model SisterCompanySource {
@@ -977,4 +978,20 @@ model LookupOption {
 
   @@unique([category, value])
   @@index([category])
+}
+
+/// A user's private note against a glossary term. The term list + definitions
+/// are curated in code (src/lib/glossary.ts); this stores only the per-user
+/// personalization, keyed by the stable term slug. One note per (user, term).
+model GlossaryNote {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  term      String
+  note      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, term])
+  @@index([userId])
 }
