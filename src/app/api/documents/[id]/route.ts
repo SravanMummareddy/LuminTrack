@@ -62,7 +62,10 @@ export async function GET(
     headers: {
       "Content-Type": contentType,
       "Content-Encoding": "gzip",
-      "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${filename}"`,
+      // RFC 5987 `filename*` carries the (percent-encoded) name; the quoted
+      // `filename` stays as an ASCII fallback. Encoding keeps the header
+      // injection-safe regardless of what the label sanitizer lets through.
+      "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
       "Cache-Control": "private, no-store",
       "X-Content-Type-Options": "nosniff",
     },

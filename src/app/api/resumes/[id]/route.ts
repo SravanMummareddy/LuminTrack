@@ -62,7 +62,11 @@ export async function GET(
       // Blobs are stored gzip-compressed (see uploadPrivateFile); the browser
       // inflates transparently.
       "Content-Encoding": "gzip",
-      "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${filename}"`,
+      // RFC 5987 `filename*` carries the (percent-encoded) name; the quoted
+      // `filename` stays as an ASCII fallback. Encoding the value keeps the
+      // header injection-safe regardless of what the label sanitizer lets
+      // through, so a future regex change can't leak a quote/CRLF into it.
+      "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
       // Résumés are PII — never cache in shared/proxy caches.
       "Cache-Control": "private, no-store",
       "X-Content-Type-Options": "nosniff",

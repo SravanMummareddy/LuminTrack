@@ -38,6 +38,10 @@ const contactSchema = z.object({
   isPrimary: z.boolean().default(false),
 });
 
+// NOTE: contact create/update AND the hard `deleteContact` below write no
+// `Activity` audit row (the model has no contact relation; adding one is a
+// schema migration). Manager-gated, so this is a documented trade-off, not an
+// oversight — see review IN-03 and the matching note in org.ts.
 async function requireAdmin(): Promise<FormState | { ok: true }> {
   const actor = await requireUser();
   if (!canManageOrgEntities(actor))

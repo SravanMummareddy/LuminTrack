@@ -2,6 +2,14 @@
 
 import { useEffect, useRef, type RefObject } from "react";
 
+/**
+ * Stack of currently-open traps (one token per mounted trap). Only the token on
+ * top owns the keyboard, so when surfaces are stacked (e.g. a `ConfirmDialog`
+ * over another `Dialog`) a single Escape closes just the top one and Tab is
+ * contained to it — instead of every trap's document listener acting at once.
+ */
+const trapStack: object[] = [];
+
 /** Selector matching elements that participate in the tab order. */
 const FOCUSABLE_SELECTOR = [
   "a[href]",
@@ -47,8 +55,16 @@ export function useFocusTrap(
 
   useEffect(() => {
     if (!open) return;
+    // Claim the top of the stack for as long as this trap is open.
+    const token = {};
+    trapStack.push(token);
+    const isTop = () => trapStack[trapStack.length - 1] === token;
     const onKey = (e: KeyboardEvent) => {
+      // A trap nested above this one owns the keyboard; stay out of its way.
+      if (!isTop()) return;
       if (e.key === "Escape") {
+        // Stop a stacked trap below from also seeing this Escape.
+        e.stopPropagation();
         onClose();
         return;
       }
@@ -81,8 +97,11 @@ export function useFocusTrap(
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     return () => {
+      const i = trapStack.indexOf(token);
+      if (i !== -1) trapStack.splice(i, 1);
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
+      // Only release the scroll lock once the last stacked trap has closed.
+      if (trapStack.length === 0) document.body.style.overflow = "";
     };
   }, [open, onClose, panelRef]);
 }

@@ -2,7 +2,11 @@ import { startOfMonth, subMonths, format } from "date-fns";
 import { prisma } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
 import type { SubmissionStatus, UserRole } from "@/generated/prisma/enums";
-import { buildSubmissionWhere, type AnalyticsFilters } from "@/lib/analytics";
+import {
+  buildSubmissionWhere,
+  PERFORMANCE_ROLES,
+  type AnalyticsFilters,
+} from "@/lib/analytics";
 import { OTHER_SOURCE } from "@/lib/labels";
 import { PAGE_SIZE, SUB_PAGE_SIZE, type SortState } from "@/lib/filters";
 
@@ -73,10 +77,6 @@ export const RECRUITER_DEFAULT_SORT: SortState = { key: "name", dir: "asc" };
  * filters submissions by `submittedAt` and assignments by `assignedAt`.
  * Rows are aggregated, then sorted and paginated in memory.
  */
-/** Every role that can carry a performance row. Team leads and managers submit
- *  too, so they belong on the roster — narrowed by the `roles` filter below. */
-const PERFORMANCE_ROLES: UserRole[] = ["MANAGER", "TEAM_LEAD", "RECRUITER"];
-
 export async function listRecruiterPerformance(
   filters: AnalyticsFilters,
   opts: { sort?: SortState; page?: number; roles?: UserRole[] } = {},
