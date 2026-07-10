@@ -15,18 +15,32 @@ import { rateLimit, resetRateLimit } from "@/lib/rate-limit";
 export type LoginState = { error?: string };
 
 // 5 attempts per 15 minutes per email+IP. Slows credential stuffing without
-// locking out legitimate users who fat-finger their password.
+// locking out legitimate users who fat-finger their password. A looser
+// per-account bucket catches a distributed / IP-rotating attack on one account
+// that the per-IP bucket alone would miss.
 const LOGIN_LIMIT = 5;
+const LOGIN_ACCT_LIMIT = 10;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 
-async function loginRateKey(email: string): Promise<string> {
+/**
+ * The trusted client IP. On Vercel, `x-real-ip` is set by the edge to the real
+ * client IP. `x-forwarded-for` can be PREPENDED with a client-supplied value,
+ * so its leftmost entry is attacker-controlled (the old bug — rotating the
+ * header landed the attacker in a fresh bucket every request, defeating the
+ * limit). Prefer `x-real-ip`; fall back to the RIGHTMOST forwarded hop (the one
+ * our proxy appended), never the leftmost.
+ */
+async function clientIp(): Promise<string> {
   const h = await headers();
-  // Vercel and most proxies put the original client IP in x-forwarded-for.
-  const ip =
-    h.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    h.get("x-real-ip") ||
-    "unknown";
-  return `login:${email}:${ip}`;
+  const real = h.get("x-real-ip")?.trim();
+  if (real) return real;
+  const parts =
+    h
+      .get("x-forwarded-for")
+      ?.split(",")
+      .map((s) => s.trim())
+      .filter(Boolean) ?? [];
+  return parts.at(-1) ?? "unknown";
 }
 
 export async function loginAction(
@@ -42,11 +56,20 @@ export async function loginAction(
   }
 
   const email = parsed.data.email.trim().toLowerCase();
-  const key = await loginRateKey(email);
+  const ip = await clientIp();
+  const ipKey = `login:${email}:${ip}`;
+  const acctKey = `login-acct:${email}`;
 
-  const limit = rateLimit(key, LOGIN_LIMIT, LOGIN_WINDOW_MS);
-  if (!limit.ok) {
-    const mins = Math.max(1, Math.ceil(limit.retryAfterMs / 60000));
+  // Two buckets: per-(email, IP) throttles a single source; per-email alone
+  // throttles a distributed attack on one account across many IPs.
+  const ipLimit = rateLimit(ipKey, LOGIN_LIMIT, LOGIN_WINDOW_MS);
+  const acctLimit = rateLimit(acctKey, LOGIN_ACCT_LIMIT, LOGIN_WINDOW_MS);
+  if (!ipLimit.ok || !acctLimit.ok) {
+    const retryMs = Math.max(
+      ipLimit.ok ? 0 : ipLimit.retryAfterMs,
+      acctLimit.ok ? 0 : acctLimit.retryAfterMs,
+    );
+    const mins = Math.max(1, Math.ceil(retryMs / 60000));
     return {
       error: `Too many login attempts. Try again in ${mins} minute${mins === 1 ? "" : "s"}.`,
     };
@@ -64,9 +87,10 @@ export async function loginAction(
     return { error: "Invalid email or password." };
   }
 
-  // Success — clear the failure counter so a single typo doesn't keep eating
+  // Success — clear both failure counters so a single typo doesn't keep eating
   // the budget for the next 15 minutes.
-  resetRateLimit(key);
+  resetRateLimit(ipKey);
+  resetRateLimit(acctKey);
   await createSession(user.id);
   redirect("/");
 }

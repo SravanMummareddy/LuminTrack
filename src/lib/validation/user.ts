@@ -38,7 +38,7 @@ export const profileSchema = z.object({
 export type ProfileInput = z.infer<typeof profileSchema>;
 
 /** Self-service password change — verify the current password, then set a new
- *  one (min 8, must differ from current, must be confirmed). */
+ *  one (must meet the shared password policy, differ from current, be confirmed). */
 export const changePasswordSchema = z
   .object({
     currentPassword: z.string().min(1, "Enter your current password."),

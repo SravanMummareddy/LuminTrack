@@ -382,6 +382,10 @@ export async function bulkChangeJobStatus(
   formData: FormData,
 ): Promise<{ changed: number; skipped: number }> {
   const user = await requireUser();
+  // Blast radius: up to 200 jobs, each cascading its open VPRs to
+  // CANCELLED/CONVERTED. Restrict to managers / team leads, mirroring
+  // bulkChangeSubmissionStatus.
+  if (!hasFullAccess(user)) return { changed: 0, skipped: 0 };
   const status = String(formData.get("status") ?? "");
   if (!(JOB_STATUS_VALUES as readonly string[]).includes(status))
     return { changed: 0, skipped: 0 };
@@ -562,9 +566,12 @@ export async function removeJobArchive(formData: FormData): Promise<void> {
   const user = await requireUser();
   if (!hasFullAccess(user)) return;
   const pathname = String(formData.get("pathname") ?? "").trim();
-  const url = String(formData.get("url") ?? "").trim();
   if (!pathname.startsWith(JOB_ARCHIVE_PREFIX)) return;
-  await del(url || pathname);
+  // Delete by the prefix-validated pathname only. The old code fell back to a
+  // caller-supplied `url` that was never checked against the prefix, so a
+  // request could pass a valid pathname to clear the guard yet delete an
+  // arbitrary blob (résumés, other backups).
+  await del(pathname);
   await logActivity(prisma, {
     entityType: "JOB",
     action: "JOB_ERASED",

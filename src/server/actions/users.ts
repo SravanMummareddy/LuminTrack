@@ -13,6 +13,7 @@ import {
   profileSchema,
 } from "@/lib/validation/user";
 import { toFieldErrors } from "@/lib/validation/common";
+import { rateLimit, resetRateLimit } from "@/lib/rate-limit";
 import type { FormState } from "@/lib/form-state";
 
 export async function saveUser(
@@ -127,6 +128,17 @@ export async function changeOwnPassword(
 ): Promise<FormState> {
   const actor = await requireUser();
 
+  // Throttle the current-password check so a hijacked session can't brute-force
+  // it. 5 attempts / 15 min per user; cleared on a successful change below.
+  const rlKey = `pwchange:${actor.id}`;
+  const limit = rateLimit(rlKey, 5, 15 * 60 * 1000);
+  if (!limit.ok) {
+    const mins = Math.max(1, Math.ceil(limit.retryAfterMs / 60000));
+    return {
+      error: `Too many attempts. Try again in ${mins} minute${mins === 1 ? "" : "s"}.`,
+    };
+  }
+
   const parsed = changePasswordSchema.safeParse({
     currentPassword: formData.get("currentPassword") ?? "",
     newPassword: formData.get("newPassword") ?? "",
@@ -152,6 +164,7 @@ export async function changeOwnPassword(
     });
   });
 
+  resetRateLimit(rlKey);
   return { ok: true, toast: { title: "Password updated" } };
 }
 
