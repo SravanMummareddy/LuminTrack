@@ -860,16 +860,19 @@ model InterviewRound {
 // support). Individuals, not companies — tracked so a recruiter can find one
 // by skill and reach out. Linked from InterviewRound.supportProviderId.
 model SupportProvider {
-  id        String   @id @default(cuid())
-  name      String
-  phone     String?
-  email     String?
-  skills    String[] @default([])
-  reference String?
-  notes     String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String      @id @default(cuid())
+  name       String
+  phone      String?
+  email      String?
+  // Coarse IT / Non-IT bucket (mirrors Candidate/Job) — narrows the pool before
+  // the specific `skills` tags. Optional: a supporter is usually one or neither.
+  discipline Discipline?
+  skills     String[]    @default([])
+  reference  String?
+  notes      String?
+  isActive   Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
 
   interviewRounds InterviewRound[]
 }

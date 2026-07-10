@@ -20,6 +20,10 @@ export const supportProviderSchema = z.object({
   name: z.string().trim().min(1, "Name is required.").max(160),
   phone: optionalText,
   email: optionalEmail,
+  discipline: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.enum(["IT", "NON_IT"]).optional(),
+  ),
   skills: z.array(z.string().trim().min(1)).max(40),
   reference: optionalText,
   notes: optionalText,
