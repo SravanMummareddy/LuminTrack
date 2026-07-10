@@ -97,6 +97,7 @@ export function SubmissionForm({
   recruiters,
   teamLeads = [],
   defaultRecruiterId,
+  canReattribute = false,
   cancelHref,
   requirementId,
   prefill,
@@ -115,6 +116,14 @@ export function SubmissionForm({
   /** Team-lead / manager users for the "Team lead" picker (stores the name). */
   teamLeads?: { id: string; fullName: string }[];
   defaultRecruiterId: string;
+  /**
+   * Whether the acting user may credit the submission to a different recruiter
+   * (managers / team leads). Recruiters see "Submitted by" locked to themselves.
+   * UI mirror of the server-side attribution guard in createSubmissionRecord —
+   * the server enforces it regardless, this just avoids showing a control that
+   * can't be honoured.
+   */
+  canReattribute?: boolean;
   cancelHref: string;
   /**
    * Convert mode — when set, this form moves a Vendor Portal Requirement to a
@@ -580,31 +589,49 @@ export function SubmissionForm({
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field
-          label="Submitted by"
-          htmlFor="submittedById"
-          required
-          error={errors.submittedById}
-        >
-          <SearchSelect
-            id="submittedById"
-            name="submittedById"
-            value={fields.submittedById}
-            onChange={(v) => setFields((f) => ({ ...f, submittedById: v }))}
-            placeholder="Search recruiters…"
-            options={recruiters.map((r) => {
-              const name = r.isActive
-                ? r.fullName
-                : `${r.fullName} (inactive)`;
-              // Tag team leads / managers so it's clear who's being credited.
-              const tag =
-                r.role && r.role !== "RECRUITER"
-                  ? ` · ${roleLabel(r.role)}`
-                  : "";
-              return { value: r.id, label: `${name}${tag}` };
-            })}
-          />
-        </Field>
+        {canReattribute ? (
+          <Field
+            label="Submitted by"
+            htmlFor="submittedById"
+            required
+            error={errors.submittedById}
+          >
+            <SearchSelect
+              id="submittedById"
+              name="submittedById"
+              value={fields.submittedById}
+              onChange={(v) => setFields((f) => ({ ...f, submittedById: v }))}
+              placeholder="Search recruiters…"
+              options={recruiters.map((r) => {
+                const name = r.isActive
+                  ? r.fullName
+                  : `${r.fullName} (inactive)`;
+                // Tag team leads / managers so it's clear who's being credited.
+                const tag =
+                  r.role && r.role !== "RECRUITER"
+                    ? ` · ${roleLabel(r.role)}`
+                    : "";
+                return { value: r.id, label: `${name}${tag}` };
+              })}
+            />
+          </Field>
+        ) : (
+          // Recruiters can't credit a submission to anyone else — the field is
+          // locked to them (the server forces this too). Post the id via a
+          // hidden input so the schema still receives a value.
+          <div>
+            <p className="text-sm font-medium text-slate-700">Submitted by</p>
+            <p className="mt-1 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
+              {recruiters.find((r) => r.id === defaultRecruiterId)?.fullName ??
+                "You"}
+            </p>
+            <input
+              type="hidden"
+              name="submittedById"
+              value={defaultRecruiterId}
+            />
+          </div>
+        )}
 
       </div>
 

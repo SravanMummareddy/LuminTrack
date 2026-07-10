@@ -9,6 +9,7 @@ import { getJobSubmittedCandidateIds } from "@/server/queries/submissions";
 import { listCandidateOptions } from "@/server/queries/candidates";
 import { listUsers, listTeamLeadOptions } from "@/server/queries/org";
 import { requireUser } from "@/lib/session";
+import { canReattributeSubmission } from "@/lib/permissions";
 import { formatVendorRequirementDisplayId } from "@/lib/format";
 
 function rateStr(value: number | null): string {
@@ -28,6 +29,8 @@ export default async function ConvertRequirementPage({
     ? sp.candidateId[0]
     : sp.candidateId;
   const user = await requireUser();
+  // Only managers / team leads may credit the submission to another recruiter.
+  const canReattribute = canReattributeSubmission(user);
   const requirement = await getVendorRequirement(id);
   if (!requirement) notFound();
   if (requirement.status !== "OPEN") redirect(`/vendor-portal/${id}`);
@@ -81,7 +84,12 @@ export default async function ConvertRequirementPage({
           candidates={candidateOptions}
           recruiters={recruiters}
           teamLeads={teamLeads}
-          defaultRecruiterId={requirement.recruiterId ?? user.id}
+          canReattribute={canReattribute}
+          // Admins may retarget, so default to the requirement's recruiter;
+          // a recruiter is locked to themselves (matches the server guard).
+          defaultRecruiterId={
+            canReattribute ? (requirement.recruiterId ?? user.id) : user.id
+          }
           requirementId={requirement.id}
           prefill={{
             candidateId: prefillCandidateId,
