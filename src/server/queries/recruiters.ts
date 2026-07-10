@@ -86,6 +86,16 @@ export async function listRecruiterPerformance(
   const roles =
     opts.roles && opts.roles.length ? opts.roles : PERFORMANCE_ROLES;
 
+  // The "User" chip (filters.recruiterId) must narrow which people are LISTED,
+  // not just whose submissions are counted — otherwise picking 4 users still
+  // shows everyone with the others zeroed out.
+  const userWhere: Prisma.UserWhereInput = {
+    isActive: true,
+    role: { in: roles },
+  };
+  if (filters.recruiterId?.length)
+    userWhere.id = { in: filters.recruiterId };
+
   // Only count assignments to jobs that are still being worked. Bulk-closing
   // iLabor reqs would otherwise inflate every recruiter's "Jobs assigned".
   const activeJobWhere: Prisma.JobWhereInput = {
@@ -98,8 +108,9 @@ export async function listRecruiterPerformance(
 
   const [users, submissions, assignments] = await Promise.all([
     prisma.user.findMany({
-      // Recruiters + team leads + managers — anyone who submits shows here.
-      where: { isActive: true, role: { in: roles } },
+      // Recruiters + team leads + managers — anyone who submits shows here,
+      // narrowed by the user-type and the specific-user filters.
+      where: userWhere,
       select: { id: true, fullName: true, email: true, role: true },
       orderBy: { fullName: "asc" },
     }),

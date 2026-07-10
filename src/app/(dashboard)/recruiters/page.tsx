@@ -57,11 +57,18 @@ export default async function RecruitersPage({
   const { rows, total } = perf;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  // The "User" chip lists people of the selected user type(s) — so picking
+  // "Team lead" up top makes the User chip offer team leads. No type selected
+  // = every active user.
+  const userOptions = recruiters.filter(
+    (u) => u.isActive && (roles.length === 0 || roles.includes(u.role)),
+  );
+
   return (
     <div className="space-y-5">
       <PageHeader
         title="Recruiters"
-        description="Performance counts for recruiters, team leads, and managers who submit. Use the Role filter to narrow, or open anyone for their full activity."
+        description="Performance counts for recruiters, team leads, and managers who submit. Filter by user type or a specific user, or open anyone for their full activity."
       />
 
       <AnalyticsFilters
@@ -69,9 +76,11 @@ export default async function RecruitersPage({
         clients={clients}
         vendors={vendors}
         sources={sources}
-        recruiters={recruiters}
+        recruiters={userOptions}
         showStatusFilters={false}
         showRoleFilter
+        recruiterLabel="User"
+        recruiterAllLabel="All users"
       />
 
       {total === 0 ? (

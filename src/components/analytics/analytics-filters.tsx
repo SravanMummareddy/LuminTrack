@@ -25,6 +25,8 @@ export function AnalyticsFilters({
   showStatusFilters = true,
   showRecruiterFilter = true,
   showRoleFilter = false,
+  recruiterLabel = "Recruiter",
+  recruiterAllLabel = "All recruiters",
 }: {
   basePath: string;
   clients: Option[];
@@ -35,8 +37,12 @@ export function AnalyticsFilters({
   /** Off for the recruiter detail page, which is already scoped to one recruiter. */
   showRecruiterFilter?: boolean;
   /** On for the Recruiters roster only — narrows rows to Recruiter / Team lead /
-   *  Manager (all shown by default). */
+   *  Manager (multi-select; no selection = all users). */
   showRoleFilter?: boolean;
+  /** Label for the individual-person chip. The Recruiters roster passes "User"
+   *  because its options follow the selected user type(s). */
+  recruiterLabel?: string;
+  recruiterAllLabel?: string;
 }) {
   const filters: FilterDef[] = [{ kind: "date", label: "Date range", primary: true }];
 
@@ -46,12 +52,11 @@ export function AnalyticsFilters({
       param: "roles",
       label: "User type",
       primary: true,
-      // Single-select so the chip reads "All users / Recruiter / Team lead /
-      // Manager". (A multi-select drops the explicit "All" option — the bar
-      // treats no-selection as all.) The `roles` param still parses as a list,
-      // so one type narrows and "All users" (blank) shows everyone.
+      // Multi-select: pick any combination of Recruiter / Team lead / Manager.
+      // No selection = all users (the bar drops the explicit "All" option for
+      // multi-selects). The `roles` param parses as a comma-separated list.
+      multi: true,
       options: [
-        { value: "", label: "All users" },
         { value: "RECRUITER", label: roleLabel("RECRUITER") },
         { value: "TEAM_LEAD", label: roleLabel("TEAM_LEAD") },
         { value: "MANAGER", label: roleLabel("MANAGER") },
@@ -62,12 +67,12 @@ export function AnalyticsFilters({
     filters.push({
       kind: "select",
       param: "recruiterId",
-      label: "Recruiter",
+      label: recruiterLabel,
       primary: true,
       searchable: true,
       multi: true,
       options: [
-        { value: "", label: "All recruiters" },
+        { value: "", label: recruiterAllLabel },
         ...recruiters.map((r) => ({ value: r.id, label: r.fullName })),
       ],
     });
