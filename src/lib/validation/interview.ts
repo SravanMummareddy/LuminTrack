@@ -46,8 +46,15 @@ export const interviewRoundSchema = z
     // §D5 — IANA timezone name (e.g. "America/New_York"). Free-text by design
     // so new zones don't need a code release; validated only by length here.
     scheduledTimezone: optionalText,
-    // The sheet's "Support (Y/N)" — a checkbox, so it arrives as a boolean.
-    supportNeeded: z.coerce.boolean(),
+    // The sheet's "Support (Y/N)" — a checkbox. The action passes a real
+    // boolean today, but don't use z.coerce.boolean(): it turns ANY non-empty
+    // string (incl. "false", "off") into true, so a future hidden-input or
+    // serialization change would silently record true. Accept only explicit
+    // truthy checkbox values.
+    supportNeeded: z.preprocess(
+      (v) => v === true || v === "on" || v === "true",
+      z.boolean(),
+    ),
     // External support provider (optional FK) + how support was given (note).
     supportProviderId: z.preprocess(emptyToUndefined, z.string().optional()),
     supportMethod: optionalText,

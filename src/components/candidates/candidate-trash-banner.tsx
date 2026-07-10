@@ -10,6 +10,7 @@ import {
   eraseCandidateNow,
 } from "@/server/actions/candidates";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
+import { formatDate } from "@/lib/format";
 
 export function CandidateTrashBanner({
   candidateId,
@@ -25,11 +26,9 @@ export function CandidateTrashBanner({
   canManage: boolean;
 }) {
   const purgeMs = new Date(deletedAt).getTime() + retentionDays * 86_400_000;
-  const purgeLabel = new Date(purgeMs).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  // UTC-deterministic so this SSR'd client banner renders identical text on the
+  // server and after hydration (a runtime-locale date trips React #418).
+  const purgeLabel = formatDate(new Date(purgeMs));
   const archiveHref = `/api/candidates/${candidateId}/archive`;
 
   const [open, setOpen] = useState(false);

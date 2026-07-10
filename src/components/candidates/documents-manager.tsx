@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { formatDate } from "@/lib/format";
 import { ConfirmSubmit } from "@/components/ui/confirm-dialog";
 import { DocumentForm, type DocumentData } from "./document-form";
 import { deleteCandidateDocument } from "@/server/actions/candidate-documents";
@@ -39,12 +40,11 @@ function daysUntil(date: Date): number {
   return Math.ceil((date.getTime() - Date.now()) / DAY);
 }
 
+// UTC-deterministic (via the shared formatDate) so this SSR'd client component
+// renders the same text on the server and after hydration — a runtime-locale
+// toLocaleDateString differs near day boundaries and trips React #418.
 function fmtDate(date: Date): string {
-  return date.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  return formatDate(date);
 }
 
 function expiryPill(expiresAt: Date | null): { tone: string; text: string } | null {
@@ -209,12 +209,7 @@ export function DocumentsManager({
                                 <span className="text-sm font-semibold text-slate-900">
                                   {d.label}
                                 </span>
-                                {/* fmtDate uses the runtime locale — suppress the
-                                    server/client hydration text mismatch. */}
-                                <p
-                                  className="mt-0.5 text-xs text-slate-500"
-                                  suppressHydrationWarning
-                                >
+                                <p className="mt-0.5 text-xs text-slate-500">
                                   {d.issuedAt
                                     ? `Issued ${fmtDate(d.issuedAt)}`
                                     : "No issue date"}
