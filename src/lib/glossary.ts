@@ -192,7 +192,7 @@ export const GLOSSARY: GlossaryTerm[] = [
     label: "Work authorization",
     category: "Visas & work authorization",
     definition:
-      "The candidate's right to work in the US (US Citizen, Green Card, GC-EAD, H-1B, H-4 EAD, OPT, STEM OPT, TN, etc.). A learn-as-you-type dropdown — new values are remembered.",
+      "The candidate's right to work in the US. Picked from the curated, grouped visa list (Citizen/PR → employer-sponsored → EAD-based → student); a custom value can still be typed on a record.",
   },
   {
     term: "c2c_w2",
@@ -200,6 +200,104 @@ export const GLOSSARY: GlossaryTerm[] = [
     category: "Visas & work authorization",
     definition:
       "Engagement types. C2C (Corp-to-Corp) = we contract with the consultant's company; W2 = the consultant is on payroll. Full-time is also possible for \"working now\".",
+  },
+  {
+    term: "visa_us_citizen",
+    label: "US Citizen (USC)",
+    category: "Visas & work authorization",
+    definition:
+      "US national; unrestricted right to work for any employer, no sponsorship or expiry.",
+  },
+  {
+    term: "visa_green_card",
+    label: "Green Card (GC)",
+    category: "Visas & work authorization",
+    definition:
+      "Lawful permanent resident; works for any employer indefinitely, no sponsorship needed.",
+  },
+  {
+    term: "visa_gc_ead",
+    label: "GC-EAD",
+    category: "Visas & work authorization",
+    definition:
+      "EAD issued while a green-card (adjustment-of-status) application is pending; works for any employer until the card is decided.",
+  },
+  {
+    term: "visa_h1b",
+    label: "H-1B",
+    category: "Visas & work authorization",
+    definition:
+      "Employer-sponsored specialty-occupation work visa; tied to the sponsoring employer and role. \"H-1B transfer\" = the same visa moving to a new employer via portability.",
+  },
+  {
+    term: "visa_opt",
+    label: "OPT (F-1)",
+    category: "Visas & work authorization",
+    definition:
+      "Post-graduation work authorization for F-1 students, up to 12 months; the job must relate to the field of study. Works for any employer.",
+  },
+  {
+    term: "visa_stem_opt",
+    label: "STEM OPT",
+    category: "Visas & work authorization",
+    definition:
+      "24-month OPT extension for F-1 STEM grads; requires an E-Verify employer and a real employer-employee relationship (limits pure third-party bench placement).",
+  },
+  {
+    term: "visa_h4_ead",
+    label: "H-4 EAD",
+    category: "Visas & work authorization",
+    definition:
+      "EAD for certain H-4 spouses (of H-1B holders on the green-card path); works for any employer while valid.",
+  },
+  {
+    term: "visa_l2_ead",
+    label: "L-2 EAD",
+    category: "Visas & work authorization",
+    definition:
+      "Spouse of an L-1 intracompany transferee; L-2 spouses are work-authorized and can work for any employer.",
+  },
+  {
+    term: "visa_tn",
+    label: "TN",
+    category: "Visas & work authorization",
+    definition:
+      "USMCA (ex-NAFTA) status for Canadian/Mexican citizens in listed professions; employer- and occupation-specific, renewable, no EAD needed.",
+  },
+  {
+    term: "visa_e3",
+    label: "E-3",
+    category: "Visas & work authorization",
+    definition:
+      "Specialty-occupation visa for Australian nationals; employer-sponsored like H-1B, renewable in 2-year increments.",
+  },
+  {
+    term: "visa_cpt",
+    label: "CPT",
+    category: "Visas & work authorization",
+    definition:
+      "Curricular Practical Training — F-1 employment tied to a specific school/program while studying; school-authorized and employer-specific.",
+  },
+  {
+    term: "visa_f1",
+    label: "F-1",
+    category: "Visas & work authorization",
+    definition:
+      "International student status; not independently work-authorized until CPT or OPT is granted — so bare \"F-1\" usually means \"F-1 with OPT/CPT\".",
+  },
+  {
+    term: "visa_f2",
+    label: "F-2",
+    category: "Visas & work authorization",
+    definition:
+      "Dependent (spouse/child) of an F-1 student — NOT authorized to work in the US. Flagged \"no work auth\" in the picker; the person needs a status change before they can be submitted.",
+  },
+  {
+    term: "visa_asylum_ead",
+    label: "Asylum / Refugee EAD",
+    category: "Visas & work authorization",
+    definition:
+      "EAD granted to asylees/refugees or pending-asylum applicants; works for any employer while valid.",
   },
 
   // ── Statuses ────────────────────────────────────────────────────────────

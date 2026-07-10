@@ -4,10 +4,7 @@ import { createCandidate } from "@/server/actions/candidates";
 import { listLookupValues } from "@/server/queries/lookups";
 
 export default async function NewCandidatePage() {
-  const [workAuthOptions, workingTypeOptions] = await Promise.all([
-    listLookupValues("WORK_AUTH"),
-    listLookupValues("WORKING_TYPE"),
-  ]);
+  const workingTypeOptions = await listLookupValues("WORKING_TYPE");
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader title="Add candidate" description="Create a new candidate profile." />
@@ -15,7 +12,6 @@ export default async function NewCandidatePage() {
         <CandidateForm
           action={createCandidate}
           submitLabel="Create candidate"
-          workAuthOptions={workAuthOptions}
           workingTypeOptions={workingTypeOptions}
         />
       </div>

@@ -9,11 +9,10 @@ import { canViewBenchCredentials } from "@/lib/permissions";
 
 export default async function NewBenchConsultantPage() {
   const user = await requireUser();
-  const [recruiters, candidates, workAuthOptions, callTypeOptions, payrollTypeOptions] =
+  const [recruiters, candidates, callTypeOptions, payrollTypeOptions] =
     await Promise.all([
       listActiveRecruiterOptions(),
       listCandidateOptions(),
-      listLookupValues("WORK_AUTH"),
       listLookupValues("CALL_TYPE"),
       listLookupValues("PAYROLL_TYPE"),
     ]);
@@ -31,7 +30,6 @@ export default async function NewBenchConsultantPage() {
           recruiters={recruiters}
           candidates={candidates}
           canEditCredentials={canViewBenchCredentials(user)}
-          workAuthOptions={workAuthOptions}
           callTypeOptions={callTypeOptions}
           payrollTypeOptions={payrollTypeOptions}
         />
