@@ -201,27 +201,7 @@ const COLUMNS: Column[] = [
       </Td>
     ),
   },
-  // ─── iLabor / imported columns (hidden by default) ────────────────────────
-  {
-    key: "reqId",
-    label: "Req ID",
-    defaultVisible: false,
-    render: (job) => (
-      <Td label="Req ID" secondary className="tabular-nums">
-        {job.portalRefId ?? "—"}
-      </Td>
-    ),
-  },
-  {
-    key: "ilaborStatus",
-    label: "iLabor status",
-    defaultVisible: false,
-    render: (job) => (
-      <Td label="iLabor status" secondary>
-        {job.externalStatusRaw ?? "—"}
-      </Td>
-    ),
-  },
+  // ─── Extra job-detail columns (hidden by default) ─────────────────────────
   {
     key: "startDate",
     label: "Projected start",
@@ -234,19 +214,6 @@ const COLUMNS: Column[] = [
     ),
   },
   {
-    key: "lastImported",
-    label: "Last imported",
-    sortKey: "lastImported",
-    defaultVisible: false,
-    render: (job) => (
-      <Td label="Last imported" secondary className="whitespace-nowrap">
-        {job.lastImportedAt ? formatDate(job.lastImportedAt) : "—"}
-      </Td>
-    ),
-  },
-  // ─── Vendor-portal requirement columns (hidden by default on /jobs; the
-  //     /vendor-portal view surfaces them via its own column preset) ──────────
-  {
     key: "positions",
     label: "Positions",
     sortKey: "positions",
@@ -255,41 +222,6 @@ const COLUMNS: Column[] = [
     render: (job) => (
       <Td label="Positions" secondary className="text-right tabular-nums">
         {job.positions ?? "—"}
-      </Td>
-    ),
-  },
-  {
-    key: "submitLimit",
-    label: "Submit limit",
-    sortKey: "submitLimit",
-    align: "right",
-    defaultVisible: false,
-    render: (job) => (
-      <Td label="Submit limit" secondary className="text-right tabular-nums">
-        {job.submitLimit ?? "—"}
-      </Td>
-    ),
-  },
-  {
-    key: "activeCount",
-    label: "Active (iLabor)",
-    sortKey: "activeCount",
-    align: "right",
-    defaultVisible: false,
-    render: (job) => (
-      <Td label="Active (iLabor)" secondary className="text-right tabular-nums">
-        {job.externalActiveCount ?? "—"}
-      </Td>
-    ),
-  },
-  {
-    key: "released",
-    label: "Released",
-    sortKey: "released",
-    defaultVisible: false,
-    render: (job) => (
-      <Td label="Released" secondary className="whitespace-nowrap">
-        {job.releasedDate ? formatDate(job.releasedDate) : "—"}
       </Td>
     ),
   },
@@ -308,8 +240,8 @@ const COLUMNS: Column[] = [
 ];
 
 const STORAGE_KEY = "lumintrack.jobs.columns";
-// Bumped to 3 — added the vendor-portal requirement columns to the registry.
-const STORAGE_VERSION = 3;
+// Bumped to 4 — removed the iLabor import columns from the registry.
+const STORAGE_VERSION = 4;
 const DEFAULTS: ColumnPrefs = {
   visible: COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key),
   order: COLUMNS.map((c) => c.key),

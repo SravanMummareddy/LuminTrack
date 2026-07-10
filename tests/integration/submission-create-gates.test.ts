@@ -33,7 +33,7 @@ describe.skipIf(!dbReachable)("createSubmission — gate flows", () => {
     ctx = await seedSubmissionScenario(testPrisma);
   });
 
-  /** Create a job, optionally with iLabor gate flags. */
+  /** Create a job, optionally with extra fields. */
   function makeJob(extra: Record<string, unknown> = {}) {
     return testPrisma.job.create({
       data: {
@@ -135,46 +135,5 @@ describe.skipIf(!dbReachable)("createSubmission — gate flows", () => {
       select: { note: true },
     });
     expect(note!.note).toContain("duplicate:role was rebooted");
-  });
-
-  // ── iLabor "closed for submissions" gate ───────────────────────────────────
-
-  it("gates when iLabor has closed submissions (ilabor_closed) and overrides with a reason", async () => {
-    vi.mocked(requireUser).mockResolvedValue(ctx.admin as never);
-    const job = await makeJob({ ilaborSubmitOpen: 0 });
-
-    const gated = await createSubmission(undefined as never, form(job.id, ctx.admin.id));
-    expect(gated?.needsConfirm).toBe("ilabor_closed");
-    expect(await subCount(job.id)).toBe(0);
-
-    await createSubmission(
-      undefined as never,
-      form(job.id, ctx.admin.id, { ilaborOverrideReason: "client confirmed by email" }),
-    );
-    expect(await subCount(job.id)).toBe(1);
-    const note = await testPrisma.activity.findFirst({
-      where: { action: "CANDIDATE_SUBMITTED" },
-      select: { note: true },
-    });
-    expect(note!.note).toContain("ilabor-override:client confirmed by email");
-  });
-
-  // ── iLabor submission-cap gate ─────────────────────────────────────────────
-
-  it("gates when the iLabor cap is reached (ilabor_cap) and overrides with a reason", async () => {
-    vi.mocked(requireUser).mockResolvedValue(ctx.admin as never);
-    // Cap of 1, with iLabor reporting 1 already active externally.
-    const job = await makeJob({ submitLimit: 1, externalActiveCount: 1 });
-
-    const gated = await createSubmission(undefined as never, form(job.id, ctx.admin.id));
-    expect(gated?.needsConfirm).toBe("ilabor_cap");
-    expect(gated?.confirmData).toMatchObject({ cap: 1, active: 1 });
-    expect(await subCount(job.id)).toBe(0);
-
-    await createSubmission(
-      undefined as never,
-      form(job.id, ctx.admin.id, { ilaborOverrideReason: "approved over cap" }),
-    );
-    expect(await subCount(job.id)).toBe(1);
   });
 });

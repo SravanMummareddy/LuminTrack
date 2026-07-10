@@ -296,7 +296,6 @@ export async function getMyAssignedJobs(userId: string) {
         select: {
           id: true,
           seq: true,
-          portalRefId: true,
           title: true,
           status: true,
           client: { select: { name: true } },

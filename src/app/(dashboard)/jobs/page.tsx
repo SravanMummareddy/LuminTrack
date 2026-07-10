@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Download, History, Trash2, ArrowLeft } from "lucide-react";
+import { Plus, Trash2, ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { LinkButton } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/session";
@@ -12,14 +12,10 @@ import { JobTrashList } from "@/components/jobs/job-trash-list";
 import {
   listJobs,
   countTrashedJobs,
-  getLastIlaborImport,
   JOB_SORT_KEYS,
   JOB_DEFAULT_SORT,
   type JobListFilters,
-  type JobSource,
 } from "@/server/queries/jobs";
-import { formatDateTime } from "@/lib/format";
-import { JobSourceTabs } from "@/components/jobs/job-source-tabs";
 import {
   listClients,
   listVendors,
@@ -42,10 +38,6 @@ function clean(value: string | string[] | undefined): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
-function asJobSource(value: string | undefined): JobSource | undefined {
-  return value === "manual" || value === "randstad" ? value : undefined;
-}
-
 export default async function JobsPage({
   searchParams,
 }: {
@@ -62,12 +54,10 @@ export default async function JobsPage({
     status: parseList(sp.status),
     discipline: parseList(sp.discipline),
     location: clean(sp.location),
-    source: clean(sp.source),
     preset: clean(sp.preset),
     from: clean(sp.from),
     to: clean(sp.to),
   };
-  const activeSource = asJobSource(current.source);
 
   const sort = parseSort(
     clean(sp.sort),
@@ -89,7 +79,6 @@ export default async function JobsPage({
     status: parseEnumList(current.status, JOB_STATUSES),
     discipline: parseEnumList(current.discipline, DISCIPLINES),
     location: current.location,
-    source: activeSource,
     createdRange: parseDateRange({
       preset: current.preset,
       from: current.from,
@@ -106,7 +95,6 @@ export default async function JobsPage({
     vendors,
     sources,
     recruiters,
-    lastImport,
     trashCount,
   ] = await Promise.all([
     listJobs(filters),
@@ -114,33 +102,8 @@ export default async function JobsPage({
     listVendors(),
     listSisterCompanies(),
     listUsers(),
-    // Only fetched (used) on the Randstad tab as admin, but cheap enough to
-    // always run in parallel — it's a single indexed findFirst.
-    getLastIlaborImport(),
     isAdmin ? countTrashedJobs() : Promise.resolve(0),
   ]);
-
-  const showLastImportBanner =
-    activeSource === "randstad" &&
-    hasFullAccess(currentUser) &&
-    lastImport !== null;
-
-  let bannerCounts: { createdCount: number; updatedCount: number } | null = null;
-  if (showLastImportBanner && lastImport.newValue) {
-    try {
-      const parsed = JSON.parse(lastImport.newValue) as {
-        createdCount?: number;
-        updatedCount?: number;
-      };
-      bannerCounts = {
-        createdCount: parsed.createdCount ?? 0,
-        updatedCount: parsed.updatedCount ?? 0,
-      };
-    } catch {
-      // Older audit rows may have a non-JSON newValue — banner still renders
-      // with timestamps only.
-    }
-  }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -176,20 +139,10 @@ export default async function JobsPage({
         }
       >
         {!isTrashView && isAdmin ? (
-          <>
-            <LinkButton href="/jobs/imports" variant="secondary">
-              <History className="h-4 w-4" />
-              Import history
-            </LinkButton>
-            <LinkButton href="/jobs/import" variant="secondary">
-              <Download className="h-4 w-4" />
-              Import from iLabor
-            </LinkButton>
-            <LinkButton href="/jobs?trash=1" variant="secondary">
-              <Trash2 className="h-4 w-4" />
-              Trash{trashCount > 0 ? ` (${trashCount})` : ""}
-            </LinkButton>
-          </>
+          <LinkButton href="/jobs?trash=1" variant="secondary">
+            <Trash2 className="h-4 w-4" />
+            Trash{trashCount > 0 ? ` (${trashCount})` : ""}
+          </LinkButton>
         ) : null}
         {!isTrashView && (
           <LinkButton href="/jobs/new">
@@ -198,39 +151,6 @@ export default async function JobsPage({
           </LinkButton>
         )}
       </PageHeader>
-
-      {!isTrashView && (
-        <JobSourceTabs active={activeSource} searchParams={sp} />
-      )}
-
-      {!isTrashView && showLastImportBanner && lastImport ? (
-        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-          Last imported{" "}
-          {bannerCounts ? (
-            <>
-              <strong className="text-slate-800">
-                {bannerCounts.createdCount}
-              </strong>{" "}
-              new ·{" "}
-              <strong className="text-slate-800">
-                {bannerCounts.updatedCount}
-              </strong>{" "}
-              updated ·{" "}
-            </>
-          ) : null}
-          {formatDateTime(lastImport.createdAt)}
-          {lastImport.performedBy
-            ? ` · by ${lastImport.performedBy.fullName}`
-            : ""}
-          {" · "}
-          <Link
-            href="/jobs/imports"
-            className="text-indigo-600 hover:underline"
-          >
-            View all
-          </Link>
-        </div>
-      ) : null}
 
       {!isTrashView && (
         <JobFilters

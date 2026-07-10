@@ -7,7 +7,6 @@ const NO_REASONS = {
   bench: "",
   convert: "",
   duplicate: "",
-  ilabor: "",
 };
 
 const clean = {
@@ -18,8 +17,6 @@ const clean = {
   notMarketed: false,
   convertWarnings: [] as string[],
   duplicateExistingId: null as string | null,
-  ilaborClosed: false,
-  ilaborCap: null as { cap: number; active: number } | null,
   reasons: NO_REASONS,
 };
 
@@ -36,8 +33,6 @@ describe("collectSubmissionGates", () => {
       candidateStatusLabel: "Do not contact",
       notMarketed: true,
       duplicateExistingId: "sub_1",
-      ilaborClosed: true,
-      ilaborCap: { cap: 30, active: 31 },
     });
     expect(gates.map((g) => g.kind)).toEqual([
       "not_assigned",
@@ -45,8 +40,6 @@ describe("collectSubmissionGates", () => {
       "candidate_status",
       "not_marketing",
       "duplicate",
-      "ilabor_closed",
-      "ilabor_cap",
     ]);
   });
 
@@ -79,7 +72,6 @@ describe("collectSubmissionGates", () => {
       ...clean,
       rateWarnings: ["a", "b"],
       duplicateExistingId: "sub_9",
-      ilaborCap: { cap: 30, active: 45 },
     });
     expect(gates.find((g) => g.kind === "rate_chain")?.warnings).toEqual([
       "a",
@@ -88,9 +80,6 @@ describe("collectSubmissionGates", () => {
     expect(
       gates.find((g) => g.kind === "duplicate")?.existingSubmissionId,
     ).toBe("sub_9");
-    const cap = gates.find((g) => g.kind === "ilabor_cap");
-    expect(cap?.cap).toBe(30);
-    expect(cap?.active).toBe(45);
   });
 
   it("convert warnings collapse into one gate cleared by one reason", () => {
@@ -107,24 +96,6 @@ describe("collectSubmissionGates", () => {
       collectSubmissionGates({
         ...base,
         reasons: { ...NO_REASONS, convert: "why" },
-      }),
-    ).toEqual([]);
-  });
-
-  it("iLabor closed and cap share one reason field", () => {
-    const base = {
-      ...clean,
-      ilaborClosed: true,
-      ilaborCap: { cap: 30, active: 30 },
-    };
-    expect(collectSubmissionGates(base).map((g) => g.kind)).toEqual([
-      "ilabor_closed",
-      "ilabor_cap",
-    ]);
-    expect(
-      collectSubmissionGates({
-        ...base,
-        reasons: { ...NO_REASONS, ilabor: "CLIENT_APPROVED" },
       }),
     ).toEqual([]);
   });

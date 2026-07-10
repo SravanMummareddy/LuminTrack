@@ -31,7 +31,6 @@ export async function globalSearch(q: string): Promise<SearchResult[]> {
   const jobOR: Prisma.JobWhereInput["OR"] = [
     { title: like },
     { location: like },
-    { portalRefId: like },
   ];
   if (jobSeq != null) jobOR.push({ seq: jobSeq });
 

@@ -43,7 +43,6 @@ const PLACEHOLDER_PASSWORD_HASH = "$2a$10$restore.pending.no.password.set.yet.pl
 const INSERT_ORDER: ReadonlyArray<[string, string]> = [
   ["user", "user"],
   ["sisterCompanySource", "sisterCompanySource"],
-  ["jobPortal", "jobPortal"],
   ["client", "client"],
   ["vendor", "vendor"],
   ["contact", "contact"],
@@ -55,6 +54,10 @@ const INSERT_ORDER: ReadonlyArray<[string, string]> = [
   ["submission", "submission"],
   ["placement", "placement"],
   ["placementExtension", "placementExtension"],
+  // SupportProvider has no outgoing FKs but InterviewRound.supportProviderId
+  // points at it, so it must be inserted first. LookupOption is FK-free.
+  ["supportProvider", "supportProvider"],
+  ["lookupOption", "lookupOption"],
   ["interviewRound", "interviewRound"],
   // BenchConsultant needs user + candidate; VendorRequirement needs job +
   // candidate + submission. Note references benchConsultant, Activity
@@ -63,6 +66,9 @@ const INSERT_ORDER: ReadonlyArray<[string, string]> = [
   ["vendorRequirement", "vendorRequirement"],
   ["note", "note"],
   ["activity", "activity"],
+  // Glossary tables reference User; safe anywhere after user, kept last.
+  ["glossaryNote", "glossaryNote"],
+  ["customGlossaryTerm", "customGlossaryTerm"],
 ];
 
 // Wipe order is the reverse — children before parents so FK cascades don't fight us.
@@ -87,7 +93,9 @@ async function main() {
     version: number;
     tables: Record<string, unknown[]>;
   };
-  if (backup.version !== 1) {
+  // v1 backups predate the supportProvider/lookupOption/glossary tables; the
+  // `?? []` fallbacks below restore them as empty, so they remain importable.
+  if (backup.version !== 1 && backup.version !== 2) {
     throw new Error(`Unsupported backup version: ${backup.version}`);
   }
 

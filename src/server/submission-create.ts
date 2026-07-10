@@ -1,8 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
-import type {
-  BenchEngagement,
-  SubmissionStatus,
-} from "@/generated/prisma/enums";
+import type { BenchEngagement } from "@/generated/prisma/enums";
 import { logActivity } from "@/server/activity";
 import { activateBenchOnSubmission } from "@/server/bench-lifecycle";
 
@@ -25,25 +22,9 @@ export function hashPair(a: string, b: string): { a: number; b: number } {
   return { a: hash(a), b: hash(b) };
 }
 
-// Non-terminal submission statuses — i.e. ones that still count against an
-// iLabor cap. Excludes JOINED (slot already filled) and REJECTED (no longer in
-// pipeline). Matches iLabor's own "active" definition.
-export const ACTIVE_STATUSES: SubmissionStatus[] = [
-  "SUBMITTED",
-  "RESUME_PICKED",
-  "VENDOR_SCREENING_CALL",
-  "CLIENT_INTERVIEW",
-  "SELECTED",
-  "ON_HOLD",
-  "OFFER_RELEASED",
-  "OFFER_ACCEPTED",
-];
-
 export type CreateSubmissionResult =
   | { kind: "created"; submissionId: string }
-  | { kind: "duplicate"; existingId: string }
-  | { kind: "ilabor_closed" }
-  | { kind: "ilabor_cap"; cap: number; active: number };
+  | { kind: "duplicate"; existingId: string };
 
 export type SubmissionRecordInput = {
   candidateId: string;
@@ -62,7 +43,6 @@ export type SubmissionRecordInput = {
   pickedResume: { id: string; blobUrl: string | null } | null;
   /** Override reasons — empty string means "not provided" (gate still blocks). */
   duplicateReason: string;
-  ilaborOverrideReason: string;
   /** Free-text reason logged when the recruiter saves past a broken rate chain.
    *  The gate itself lives in the calling action; this only records it. */
   rateOverrideReason?: string;
@@ -72,13 +52,10 @@ export type SubmissionRecordInput = {
   /** Free-text reason logged when submitting an Off-bench candidate. The gate
    *  lives in the calling action; this only records it. */
   benchOverrideReason?: string;
-  /** Pre-loaded job signal fields driving the iLabor gates + audit text. */
+  /** Pre-loaded job identity for the audit text. */
   job: {
     id: string;
     title: string;
-    submitLimit: number | null;
-    ilaborSubmitOpen: number | null;
-    externalActiveCount: number | null;
   };
   candidateFullName: string;
   actor: { id: string; fullName: string; isAdmin: boolean };
@@ -86,11 +63,11 @@ export type SubmissionRecordInput = {
 
 /**
  * Creates a Submission row inside a caller-supplied transaction, enforcing the
- * shared gates (duplicate, iLabor closed/cap), self-claiming the job for a
- * non-admin recruiter, settling the résumé, and writing the CANDIDATE_SUBMITTED
- * audit row. Returns a discriminated union instead of throwing for the
- * overridable gates, so both the direct-submit action and the
- * requirement→submission convert flow can surface a `needsConfirm` prompt.
+ * duplicate gate, self-claiming the job for a non-admin recruiter, settling the
+ * résumé, and writing the CANDIDATE_SUBMITTED audit row. Returns a discriminated
+ * union instead of throwing for the overridable duplicate gate, so both the
+ * direct-submit action and the requirement→submission convert flow can surface a
+ * `needsConfirm` prompt.
  *
  * MUST run inside an open `prisma.$transaction` — it takes a
  * `pg_advisory_xact_lock` on the (candidate, job) pair so concurrent submits to
@@ -110,31 +87,6 @@ export async function createSubmissionRecord(
   });
   if (existing && !input.duplicateReason)
     return { kind: "duplicate", existingId: existing.id };
-
-  // iLabor "closed for submissions" gate — fires when iLabor's submitStatus is
-  // 0, independent of LuminTrack's job status. Override with a reason.
-  if (input.job.ilaborSubmitOpen === 0 && !input.ilaborOverrideReason) {
-    return { kind: "ilabor_closed" };
-  }
-
-  // iLabor cap gate. Effective active = max(iLabor's last-known count, our local
-  // non-terminal count) so locally-created subs can't slip past the cap.
-  if (input.job.submitLimit !== null && input.job.submitLimit !== undefined) {
-    const localActive = await tx.submission.count({
-      where: { jobId: input.jobId, status: { in: ACTIVE_STATUSES } },
-    });
-    const effectiveActive = Math.max(
-      input.job.externalActiveCount ?? 0,
-      localActive,
-    );
-    if (effectiveActive >= input.job.submitLimit && !input.ilaborOverrideReason) {
-      return {
-        kind: "ilabor_cap",
-        cap: input.job.submitLimit,
-        active: effectiveActive,
-      };
-    }
-  }
 
   // Self-claim: a non-admin submitting to a job they don't own gets assigned to
   // it here, in the same tx, so ownership and the submission commit together.
@@ -207,8 +159,6 @@ export async function createSubmissionRecord(
   // Compose an audit note carrying every override reason that fired.
   const notes: string[] = [];
   if (existing) notes.push(`duplicate:${input.duplicateReason}`);
-  if (input.ilaborOverrideReason)
-    notes.push(`ilabor-override:${input.ilaborOverrideReason}`);
   if (input.rateOverrideReason)
     notes.push(`rate-override:${input.rateOverrideReason}`);
   if (input.candidateStatusOverrideReason)
@@ -217,9 +167,7 @@ export async function createSubmissionRecord(
     notes.push(`bench-override:${input.benchOverrideReason}`);
   const description = existing
     ? `${input.candidateFullName} re-submitted to "${input.job.title}" (duplicate override: ${input.duplicateReason})`
-    : input.ilaborOverrideReason
-      ? `${input.candidateFullName} submitted to "${input.job.title}" (iLabor override: ${input.ilaborOverrideReason})`
-      : `${input.candidateFullName} submitted to "${input.job.title}"`;
+    : `${input.candidateFullName} submitted to "${input.job.title}"`;
   await logActivity(tx, {
     entityType: "SUBMISSION",
     action: "CANDIDATE_SUBMITTED",

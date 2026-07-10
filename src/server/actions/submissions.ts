@@ -27,10 +27,7 @@ import {
   ensurePlacementOnJoined,
   terminatePlacementOnRevert,
 } from "@/server/placement-lifecycle";
-import {
-  createSubmissionRecord,
-  ACTIVE_STATUSES,
-} from "@/server/submission-create";
+import { createSubmissionRecord } from "@/server/submission-create";
 import {
   collectSubmissionGates,
   gatesFromCreateResult,
@@ -75,10 +72,6 @@ export async function createSubmission(
         id: true,
         title: true,
         status: true,
-        // iLabor signal fields — drive the cap + "closed for subs" warnings.
-        submitLimit: true,
-        ilaborSubmitOpen: true,
-        externalActiveCount: true,
       },
     }),
     prisma.candidate.findUnique({
@@ -159,9 +152,6 @@ export async function createSubmission(
     formData.get("benchOverrideReason") ?? "",
   ).trim();
   const duplicateReason = String(formData.get("duplicateReason") ?? "").trim();
-  const ilaborOverrideReason = String(
-    formData.get("ilaborOverrideReason") ?? "",
-  ).trim();
 
   const rateWarnings = rateChainWarnings({
     payRate: d.payRate,
@@ -174,21 +164,12 @@ export async function createSubmission(
   const bench = candidate.benchConsultant;
   const notMarketed = !bench || bench.marketingStatus === "INACTIVE";
 
-  // Pre-check duplicate + iLabor here (createSubmissionRecord re-checks under the
-  // advisory lock as the race-safe net) so they join the same stacked prompt.
+  // Pre-check duplicate here (createSubmissionRecord re-checks under the advisory
+  // lock as the race-safe net) so it joins the same stacked prompt.
   const existingDup = await prisma.submission.findFirst({
     where: { candidateId: d.candidateId, jobId: d.jobId },
     select: { id: true },
   });
-  const ilaborClosed = job.ilaborSubmitOpen === 0;
-  let ilaborCap: { cap: number; active: number } | null = null;
-  if (job.submitLimit != null) {
-    const localActive = await prisma.submission.count({
-      where: { jobId: d.jobId, status: { in: ACTIVE_STATUSES } },
-    });
-    const eff = Math.max(job.externalActiveCount ?? 0, localActive);
-    if (eff >= job.submitLimit) ilaborCap = { cap: job.submitLimit, active: eff };
-  }
 
   // Resolve a previously-saved résumé up front so a bad pick returns cleanly.
   let pickedResume: { id: string; blobUrl: string | null } | null = null;
@@ -217,15 +198,12 @@ export async function createSubmission(
     notMarketed,
     convertWarnings: [],
     duplicateExistingId: existingDup?.id ?? null,
-    ilaborClosed,
-    ilaborCap,
     reasons: {
       rate: rateOverrideReason,
       candidateStatus: candidateStatusOverrideReason,
       bench: benchOverrideReason,
       convert: "",
       duplicate: duplicateReason,
-      ilabor: ilaborOverrideReason,
     },
   });
   if (gates.length > 0)
@@ -234,7 +212,7 @@ export async function createSubmission(
       error: `Review ${gates.length} item${gates.length === 1 ? "" : "s"} below, then submit.`,
     };
 
-  // All gates satisfied — create. The helper re-checks dup/iLabor under the
+  // All gates satisfied — create. The helper re-checks the duplicate under the
   // advisory lock; a race that slips one in comes back as a stacked gate.
   const result = await prisma.$transaction((tx) =>
     createSubmissionRecord(tx, {
@@ -251,7 +229,6 @@ export async function createSubmission(
       teamLead: d.teamLead ?? null,
       pickedResume,
       duplicateReason,
-      ilaborOverrideReason,
       rateOverrideReason,
       candidateStatusOverrideReason,
       benchOverrideReason,

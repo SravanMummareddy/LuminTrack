@@ -56,16 +56,11 @@ export function formatRate(
  * Display-ID helpers. The `id` field (cuid) stays the FK source-of-truth;
  * these strings are for humans (URLs still use the cuid).
  *
- *   Manual job  → JOB-00123       (5-digit padded sequence)
- *   iLabor job  → REQ-159263      (real iLabor portalRefId, no padding)
+ *   Job         → JOB-00123       (5-digit padded sequence)
  *   Candidate   → CAND-001        (3-digit padded sequence)
  *   Submission  → SUB-001         (3-digit padded sequence)
  */
-export function formatJobDisplayId(job: {
-  seq: number;
-  portalRefId?: string | null;
-}): string {
-  if (job.portalRefId) return `REQ-${job.portalRefId}`;
+export function formatJobDisplayId(job: { seq: number }): string {
   return `JOB-${String(job.seq).padStart(5, "0")}`;
 }
 

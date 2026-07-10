@@ -43,7 +43,6 @@ const REQUIREMENT_INCLUDE = {
     select: {
       id: true,
       seq: true,
-      portalRefId: true,
       title: true,
       status: true,
       location: true,

@@ -6,8 +6,6 @@
  */
 export type ConfirmKind =
   | "duplicate"
-  | "ilabor_closed"
-  | "ilabor_cap"
   | "not_assigned"
   // Convert-a-requirement-to-submission warn+override gates (R2). Each is
   // overridable with a single `convertOverrideReason`.
@@ -39,9 +37,7 @@ export type PendingGateKind =
   | "candidate_status"
   | "not_marketing"
   | "convert_warn"
-  | "duplicate"
-  | "ilabor_closed"
-  | "ilabor_cap";
+  | "duplicate";
 
 export type PendingGate = {
   kind: PendingGateKind;
@@ -51,17 +47,10 @@ export type PendingGate = {
   warnings?: string[];
   /** Existing submission to link, for the duplicate gate. */
   existingSubmissionId?: string;
-  /** iLabor cap + effective active count, for the cap gate. */
-  cap?: number;
-  active?: number;
 };
 
 /** Extra context for a paused gate, surfaced in the confirm prompt. */
 export type ConfirmData = {
-  /** iLabor cap value, for the cap gate. */
-  cap?: number;
-  /** Effective active-submission count, for the cap gate. */
-  active?: number;
   /** The existing submission this one duplicates, for a "view it" link. */
   existingSubmissionId?: string;
   /** The job's display id, for the not-assigned / claim prompt. */

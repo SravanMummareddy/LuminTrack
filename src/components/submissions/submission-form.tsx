@@ -75,16 +75,14 @@ type Fields = {
   clientRate: string;
   teamLead: string;
   // Every gate reason is its own field, so the whole stack of warnings can be
-  // filled at once and posts together via latched hidden inputs below. Preset +
-  // note pairs (duplicate / iLabor) compose into one reason string per field.
+  // filled at once and posts together via latched hidden inputs below. The
+  // duplicate preset + note pair composes into one reason string.
   rateReason: string;
   convertReason: string;
   candidateStatusReason: string;
   benchReason: string;
   duplicatePreset: string;
   duplicateNote: string;
-  ilaborPreset: string;
-  ilaborNote: string;
 };
 
 export function SubmissionForm({
@@ -157,15 +155,13 @@ export function SubmissionForm({
     benchReason: "",
     duplicatePreset: "",
     duplicateNote: "",
-    ilaborPreset: "",
-    ilaborNote: "",
     ...prefill,
   });
   // Surfaced after a candidate switch clears a résumé pick, so the wipe isn't
   // silent (it used to vanish a freshly-typed Drive link with no warning).
   const [resumeCleared, setResumeCleared] = useState(false);
   // A recruiter who self-claims an unassigned job can hit a SECOND gate right
-  // after (iLabor closed/cap, or a duplicate). The claim flag used to live only
+  // after (e.g. a duplicate). The claim flag used to live only
   // inside the not-assigned prompt, so it was dropped on the next submit and the
   // action re-fired `not_assigned` — an inescapable loop that also discarded the
   // override reason. Once the recruiter chooses to claim, latch this and keep
@@ -275,8 +271,6 @@ export function SubmissionForm({
       benchReason: "",
       duplicatePreset: "",
       duplicateNote: "",
-      ilaborPreset: "",
-      ilaborNote: "",
     }));
   };
 
@@ -370,8 +364,6 @@ export function SubmissionForm({
   const gate = (k: string) => pendingGates.find((g) => g.kind === k);
   const hasGates = pendingGates.length > 0;
   const dupGate = gate("duplicate");
-  const ilaborGate = gate("ilabor_closed") ?? gate("ilabor_cap");
-  const ilaborCapGate = gate("ilabor_cap");
   // Composed override strings posted via the latched hidden inputs below.
   const composeReason = (preset: string, note: string) =>
     preset === "" ? "" : preset + (note.trim() ? ` (${note.trim()})` : "");
@@ -506,13 +498,6 @@ export function SubmissionForm({
           type="hidden"
           name="duplicateReason"
           value={composeReason(fields.duplicatePreset, fields.duplicateNote)}
-        />
-      )}
-      {composeReason(fields.ilaborPreset, fields.ilaborNote) !== "" && (
-        <input
-          type="hidden"
-          name="ilaborOverrideReason"
-          value={composeReason(fields.ilaborPreset, fields.ilaborNote)}
         />
       )}
       {/* Persisted across gate transitions once the recruiter has claimed —
@@ -954,48 +939,6 @@ export function SubmissionForm({
                   rows={2}
                   value={fields.duplicateNote}
                   onChange={set("duplicateNote")}
-                />
-              </Field>
-            </div>
-          )}
-
-          {ilaborGate && (
-            <div className="border-t border-amber-200 pt-3">
-              <p className="text-sm font-medium text-amber-800">
-                {gate("ilabor_closed") && ilaborCapGate
-                  ? `iLabor has closed submissions and the cap of ${ilaborCapGate.cap} is reached (${ilaborCapGate.active} active).`
-                  : ilaborCapGate
-                    ? `iLabor's cap of ${ilaborCapGate.cap} is reached (${ilaborCapGate.active} active).`
-                    : "iLabor has closed submissions on this requisition."}
-              </p>
-              <Field label="Reason to submit anyway" htmlFor="ilaborPreset" required>
-                <Select
-                  key={`ilaborPreset-${selectSyncKey}`}
-                  id="ilaborPreset"
-                  value={fields.ilaborPreset}
-                  onChange={set("ilaborPreset")}
-                  required
-                >
-                  <option value="" disabled>
-                    Pick a reason…
-                  </option>
-                  {OVERRIDE_REASONS.map((r) => (
-                    <option key={r} value={r}>
-                      {OVERRIDE_REASON_LABEL[r]}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field
-                label="Note"
-                htmlFor="ilaborNote"
-                hint="Optional — captured on the audit trail."
-              >
-                <Textarea
-                  id="ilaborNote"
-                  rows={2}
-                  value={fields.ilaborNote}
-                  onChange={set("ilaborNote")}
                 />
               </Field>
             </div>

@@ -70,13 +70,6 @@ export const GLOSSARY: GlossaryTerm[] = [
       "Whether the role or candidate is IT or Non-IT. Set on the Job and the Candidate; the bench reads it from the linked candidate.",
   },
   {
-    term: "ilabor",
-    label: "iLabor requisition",
-    category: "Jobs & requirements",
-    definition:
-      "A requisition imported from the Randstad iLabor vendor portal. Carries extra signals: a submit cap, whether iLabor is still accepting submissions, and whether a screener is attached.",
-  },
-  {
     term: "positions",
     label: "Positions",
     category: "Jobs & requirements",

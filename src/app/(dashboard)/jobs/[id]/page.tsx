@@ -42,7 +42,6 @@ import {
   formatVendorRequirementDisplayId,
   deletedSuffix,
 } from "@/lib/format";
-import { ilaborStatusToJobStatus } from "@/lib/validation/ilabor-import";
 import { RecentlyViewedTracker } from "@/components/layout/recently-viewed";
 
 function SummaryItem({
@@ -97,9 +96,7 @@ export default async function JobDetailPage({
     requirements,
     currentUser,
     // Local non-terminal submission count — what we actually have in the
-    // pipeline right now, vs iLabor's externalActiveCount which is a
-    // snapshot from the last import. The card shows the higher of the
-    // two so a stale iLabor number doesn't mislead recruiters.
+    // pipeline right now. Drives the "in flight" hint on the status form.
     localActiveCount,
     activePlacementCount,
   ] = await Promise.all([
@@ -144,23 +141,10 @@ export default async function JobDetailPage({
     openRequirements.length === 1
       ? `/vendor-portal/${openRequirements[0].id}/convert`
       : "#requirements";
-  const effectiveActiveCount = Math.max(
-    job.externalActiveCount ?? 0,
-    localActiveCount,
-  );
-  const activeCountDiverges =
-    job.externalActiveCount != null && localActiveCount > job.externalActiveCount;
   const submissionsTotalPages = Math.max(
     1,
     Math.ceil(submissionsTotal / PAGE_SIZE),
   );
-
-  // For iLabor-linked jobs: warn when the LuminTrack status has drifted from
-  // what iLabor most recently reported. Catches silent post-import re-imports.
-  const ilaborDrift =
-    job.portal && job.externalStatusRaw
-      ? ilaborStatusToJobStatus(job.externalStatusRaw).status !== job.status
-      : false;
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
@@ -237,95 +221,6 @@ export default async function JobDetailPage({
         </>
       )}
 
-      {job.portal ? (
-        <Card title={`${job.portal.name} requisition`}>
-          <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <SummaryItem label="Requisition ID">
-              {job.portalRefId ?? "—"}
-            </SummaryItem>
-            <SummaryItem label="Customer ref">{job.atsId ?? "—"}</SummaryItem>
-            <SummaryItem label="iLabor status">
-              <span className="inline-flex items-center gap-1.5">
-                {job.externalStatusRaw ?? "—"}
-                {ilaborDrift ? (
-                  <Badge tone="amber">
-                    Differs from LuminTrack ({JOB_STATUS_LABEL[job.status]})
-                  </Badge>
-                ) : null}
-              </span>
-            </SummaryItem>
-            <SummaryItem label="Position type">{job.reqType ?? "—"}</SummaryItem>
-            {job.department && job.department !== "Default" ? (
-              <SummaryItem label="Department">{job.department}</SummaryItem>
-            ) : null}
-            <SummaryItem label="Positions">{job.positions ?? "—"}</SummaryItem>
-            <SummaryItem label="Duration">{job.durationLabel ?? "—"}</SummaryItem>
-            <SummaryItem label="Projected start">
-              {job.startDate ? formatDate(job.startDate) : "—"}
-            </SummaryItem>
-            <SummaryItem label="Projected end">
-              {job.endDate ? formatDate(job.endDate) : "—"}
-            </SummaryItem>
-            <SummaryItem label="Released">
-              {job.releasedDate ? formatDate(job.releasedDate) : "—"}
-            </SummaryItem>
-            <SummaryItem label="Assigned to (iLabor)">
-              {job.assignedToName ?? "—"}
-            </SummaryItem>
-            <SummaryItem label="Account manager">
-              {job.ownerName ?? "—"}
-            </SummaryItem>
-            <SummaryItem label="iLabor subs">
-              <span className="inline-flex flex-wrap items-center gap-1.5">
-                <span>
-                  {job.externalSubsCount ?? "—"}
-                  {" ("}
-                  {effectiveActiveCount} active
-                  {activeCountDiverges ? (
-                    <span
-                      className="ml-1 text-xs text-amber-700"
-                      title={`iLabor's last-imported active count was ${job.externalActiveCount}; LuminTrack has ${localActiveCount} non-terminal submissions in the pipeline. The higher number is shown here.`}
-                    >
-                      (iLabor said {job.externalActiveCount})
-                    </span>
-                  ) : null}
-                  {")"}
-                </span>
-                {job.ilaborSubmitOpen === 1 ? (
-                  <Badge tone="slate">Accepting</Badge>
-                ) : job.ilaborSubmitOpen === 0 ? (
-                  <Badge tone="red">Submissions closed at iLabor</Badge>
-                ) : null}
-              </span>
-            </SummaryItem>
-            {job.submitLimit != null ? (
-              <SummaryItem label="Submission cap">
-                {job.submitLimit}
-              </SummaryItem>
-            ) : null}
-            {job.ilaborScreenerCode != null && job.ilaborScreenerCode > 0 ? (
-              <SummaryItem label="Screener">
-                <Badge tone="amber">
-                  Screening required (code {job.ilaborScreenerCode})
-                </Badge>
-              </SummaryItem>
-            ) : null}
-            <SummaryItem label="Last imported">
-              {job.lastImportedAt ? formatDate(job.lastImportedAt) : "—"}
-            </SummaryItem>
-          </dl>
-          {/* Forensic line for unknown submitStatus values — preserves the
-              raw int so we can investigate if iLabor ever surfaces 2/3/etc. */}
-          {job.ilaborSubmitOpen != null &&
-          job.ilaborSubmitOpen !== 0 &&
-          job.ilaborSubmitOpen !== 1 ? (
-            <p className="mt-3 text-xs text-slate-400">
-              iLabor submitStatus code: {job.ilaborSubmitOpen}
-            </p>
-          ) : null}
-        </Card>
-      ) : null}
-
       <Card title="Job summary">
         <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <SummaryItem label="Client">{job.client.name}</SummaryItem>
@@ -338,35 +233,32 @@ export default async function JobDetailPage({
           <SummaryItem label="Created">{formatDate(job.createdAt)}</SummaryItem>
           <SummaryItem label="Last updated">{formatDate(job.updatedAt)}</SummaryItem>
           {/* Optional planning fields — only render the ones the recruiter
-              actually filled in. iLabor jobs already show these in their own
-              card above; this surfaces them for manually-added jobs too. */}
-          {!job.portal && job.positions != null && (
+              actually filled in. */}
+          {job.positions != null && (
             <SummaryItem label="Positions">{job.positions}</SummaryItem>
           )}
-          {!job.portal && job.reqType && (
+          {job.reqType && (
             <SummaryItem label="Position type">{job.reqType}</SummaryItem>
           )}
-          {!job.portal && job.department && (
+          {job.department && (
             <SummaryItem label="Department">{job.department}</SummaryItem>
           )}
-          {!job.portal && job.durationLabel && (
+          {job.durationLabel && (
             <SummaryItem label="Duration">{job.durationLabel}</SummaryItem>
           )}
-          {!job.portal && job.startDate && (
+          {job.startDate && (
             <SummaryItem label="Projected start">
               {formatDate(job.startDate)}
             </SummaryItem>
           )}
-          {!job.portal && job.endDate && (
+          {job.endDate && (
             <SummaryItem label="Projected end">
               {formatDate(job.endDate)}
             </SummaryItem>
           )}
-          {!job.portal && job.atsId && (
+          {job.atsId && (
             <SummaryItem label="Customer ref">{job.atsId}</SummaryItem>
           )}
-          {/* §A2 LuminTrack-native planning fields — shown for both manual
-              and iLabor jobs since they're not in the iLabor payload. */}
           {job.workMode && (
             <SummaryItem label="Work mode">
               {WORK_MODE_LABEL[job.workMode]}

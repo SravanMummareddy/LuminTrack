@@ -10,7 +10,6 @@ type TrashRow = {
   id: string;
   seq: number;
   title: string;
-  portalRefId: string | null;
   deletedAt: Date | null;
   client: { name: string } | null;
 };

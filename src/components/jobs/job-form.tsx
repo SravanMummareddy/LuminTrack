@@ -287,8 +287,7 @@ export function JobForm({
           More job details (optional)
         </summary>
         <p className="mt-1 text-xs text-slate-500">
-          Mirrors what iLabor stores. Fill what you have — every field is
-          optional.
+          Fill what you have — every field is optional.
         </p>
         <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field
