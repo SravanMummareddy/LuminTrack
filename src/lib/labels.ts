@@ -199,20 +199,13 @@ export const OTHER_SOURCE = "__OTHER__";
 export const NEW_ORG_ENTITY = "__NEW_ORG__";
 
 /**
- * A job's display source — managed source name, free-text fallback, or the
- * external portal name if the job was imported (e.g. "Randstad iLabor").
+ * A job's display source — managed source name or free-text fallback.
  */
 export function jobSourceLabel(job: {
   sisterCompanySource: { name: string } | null;
   sourceOther: string | null;
-  portal?: { name: string } | null;
 }): string {
-  return (
-    job.sisterCompanySource?.name ??
-    job.sourceOther ??
-    job.portal?.name ??
-    "—"
-  );
+  return job.sisterCompanySource?.name ?? job.sourceOther ?? "—";
 }
 
 // ─── Interview mode & platform ───────────────────────────────────────────────
@@ -337,18 +330,17 @@ export const STATUS_CHANGE_REASON_LABEL: Record<StatusChangeReason, string> = {
 };
 
 /**
- * Preset reasons offered when a recruiter overrides a submission gate
- * (duplicate / iLabor closed / iLabor cap). Plain strings, not a DB enum, so
- * the list can evolve without a migration — same pattern as
- * STATUS_CHANGE_REASONS. Persisted into the `CANDIDATE_SUBMITTED` audit note
- * so overrides become analyzable instead of free text.
+ * Preset reasons offered when a recruiter overrides the duplicate-submission
+ * gate. Plain strings, not a DB enum, so the list can evolve without a
+ * migration — same pattern as STATUS_CHANGE_REASONS. Persisted into the
+ * `CANDIDATE_SUBMITTED` audit note so overrides become analyzable instead of
+ * free text.
  */
 export const OVERRIDE_REASONS = [
   "ROLE_REBOOTED",
   "PRIOR_CANCELLED",
   "MANAGER_APPROVED",
   "CLIENT_REQUESTED",
-  "DATA_OUT_OF_DATE",
   "OTHER",
 ] as const;
 
@@ -359,7 +351,6 @@ export const OVERRIDE_REASON_LABEL: Record<OverrideReason, string> = {
   PRIOR_CANCELLED: "Prior submission cancelled",
   MANAGER_APPROVED: "Manager approved",
   CLIENT_REQUESTED: "Client / vendor requested",
-  DATA_OUT_OF_DATE: "iLabor data is out of date",
   OTHER: "Other",
 };
 

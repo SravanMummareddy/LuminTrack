@@ -2,7 +2,6 @@ import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { PrismaNeon } from "@prisma/adapter-neon";
 import { PrismaClient } from "../src/generated/prisma/client";
-import { ensureSourceForPortal } from "../src/server/portals";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -56,19 +55,6 @@ async function main() {
   for (const name of ["ABC Staffing", "TalentBridge"]) {
     await prisma.vendor.upsert({ where: { name }, update: {}, create: { name } });
   }
-
-  // ── External job portals (sources for imported requisitions) ───────────────
-  // The iLabor import action also upserts this row defensively, so the import
-  // works on a fresh DB even if the seed wasn't run.
-  const ilaborPortal = await prisma.jobPortal.upsert({
-    where: { name: "Randstad iLabor" },
-    update: {},
-    create: { name: "Randstad iLabor", kind: "VMS" },
-  });
-  // Mirror the portal as a managed Source so it shows up under Settings →
-  // Sources and in the /jobs Source filter. ensureSourceForPortal is the
-  // single rule — call it next to every JobPortal upsert.
-  await ensureSourceForPortal(prisma, ilaborPortal.name);
 
   console.log("Seed complete.");
   console.log(`  Admin login:     ${adminEmail} / (SEED_ADMIN_PASSWORD)`);

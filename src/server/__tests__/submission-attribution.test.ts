@@ -53,13 +53,9 @@ function baseInput(over: Partial<SubmissionRecordInput> = {}): SubmissionRecordI
     teamLead: null,
     pickedResume: null,
     duplicateReason: "",
-    ilaborOverrideReason: "",
     job: {
       id: "job_1",
       title: "Backend Engineer",
-      submitLimit: null,
-      ilaborSubmitOpen: 1,
-      externalActiveCount: 0,
     },
     candidateFullName: "Ada Lovelace",
     actor: { id: "actor_self", fullName: "Ada", isAdmin: false },

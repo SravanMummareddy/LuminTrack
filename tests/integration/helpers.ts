@@ -54,7 +54,7 @@ export async function seedBasics(prisma: PrismaClient) {
 
 /** Loose actors for the createSubmission gate tests: an admin, an unassigned
  *  recruiter, a candidate, and a client/vendor pair. Jobs are created per-test
- *  (with the iLabor flags each gate needs) via the returned ids. */
+ *  via the returned ids. */
 export async function seedSubmissionScenario(prisma: PrismaClient) {
   const [admin, recruiter] = await Promise.all([
     prisma.user.create({

@@ -9,7 +9,6 @@ import { logActivity } from "@/server/activity";
 import { deriveTeamLead } from "@/server/team-lead";
 import {
   createSubmissionRecord,
-  ACTIVE_STATUSES,
   type CreateSubmissionResult,
 } from "@/server/submission-create";
 import {
@@ -323,9 +322,6 @@ export async function convertRequirementToSubmission(
     formData.get("convertOverrideReason") ?? "",
   ).trim();
   const duplicateReason = String(formData.get("duplicateReason") ?? "").trim();
-  const ilaborOverrideReason = String(
-    formData.get("ilaborOverrideReason") ?? "",
-  ).trim();
   const candidateStatusOverrideReason = String(
     formData.get("candidateStatusOverrideReason") ?? "",
   ).trim();
@@ -348,9 +344,6 @@ export async function convertRequirementToSubmission(
         id: true,
         title: true,
         status: true,
-        submitLimit: true,
-        ilaborSubmitOpen: true,
-        externalActiveCount: true,
       },
     }),
     prisma.candidate.findUnique({
@@ -437,20 +430,11 @@ export async function convertRequirementToSubmission(
   if (d.payRate != null && d.billRate != null && d.billRate < d.payRate)
     convertWarnings.push("Bill rate is below pay rate (negative margin).");
 
-  // Pre-check duplicate + iLabor (createSubmissionRecord re-checks under the lock).
+  // Pre-check duplicate (createSubmissionRecord re-checks under the lock).
   const existingDup = await prisma.submission.findFirst({
     where: { candidateId: d.candidateId, jobId: d.jobId },
     select: { id: true },
   });
-  const ilaborClosed = job.ilaborSubmitOpen === 0;
-  let ilaborCap: { cap: number; active: number } | null = null;
-  if (job.submitLimit != null) {
-    const localActive = await prisma.submission.count({
-      where: { jobId: d.jobId, status: { in: ACTIVE_STATUSES } },
-    });
-    const eff = Math.max(job.externalActiveCount ?? 0, localActive);
-    if (eff >= job.submitLimit) ilaborCap = { cap: job.submitLimit, active: eff };
-  }
 
   const gates = collectSubmissionGates({
     isConvert: true,
@@ -462,15 +446,12 @@ export async function convertRequirementToSubmission(
     notMarketed,
     convertWarnings,
     duplicateExistingId: existingDup?.id ?? null,
-    ilaborClosed,
-    ilaborCap,
     reasons: {
       rate: "",
       candidateStatus: candidateStatusOverrideReason,
       bench: benchOverrideReason,
       convert: convertOverrideReason,
       duplicate: duplicateReason,
-      ilabor: ilaborOverrideReason,
     },
   });
   if (gates.length > 0)
@@ -496,7 +477,6 @@ export async function convertRequirementToSubmission(
         teamLead: d.teamLead ?? null,
         pickedResume,
         duplicateReason,
-        ilaborOverrideReason,
         candidateStatusOverrideReason,
         benchOverrideReason,
         job,
@@ -522,7 +502,7 @@ export async function convertRequirementToSubmission(
     });
   } catch (e) {
     if (e instanceof SubmitGate) {
-      // A dup/iLabor gate slipped in under the advisory lock — surface it stacked.
+      // A duplicate slipped in under the advisory lock — surface it stacked.
       return {
         pendingGates: gatesFromCreateResult(e.result),
         error: "Resolve the item below, then submit.",

@@ -274,20 +274,6 @@ model SisterCompanySource {
   contacts Contact[]
 }
 
-// External portals/VMSes we mirror requisitions from (Randstad iLabor, etc.).
-// One row per portal; imported Jobs link via Job.portalId + Job.portalRefId.
-model JobPortal {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  // Free-text descriptor — "VMS", "Job board", etc. Not driven by any logic.
-  kind      String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  jobs Job[]
-}
-
 model Client {
   id            String   @id @default(cuid())
   name          String   @unique
@@ -388,27 +374,14 @@ model Job {
   sisterCompanySourceId String?
   sisterCompanySource   SisterCompanySource? @relation(fields: [sisterCompanySourceId], references: [id])
   sourceOther           String?
-  // External portal linkage. portalId points at JobPortal; portalRefId is the
-  // portal's own id for this req (e.g. iLabor "requisitionId"). Together they
-  // form the upsert key so re-imports update instead of duplicating.
-  portalId              String?
-  portal                JobPortal?           @relation(fields: [portalId], references: [id])
-  portalRefId           String?
-  // ─── iLabor-flavored data columns (all nullable — manual jobs ignore these) ──
+  // ─── Optional job-detail fields (all nullable) ──────────────────────────────
   atsId                 String?
   startDate             DateTime?
   endDate               DateTime?
   durationLabel         String?
   positions             Int?
-  externalSubsCount     Int?
-  externalActiveCount   Int?
-  releasedDate          DateTime?
-  assignedToName        String?
-  ownerName             String?
-  ownerAltEmail         String?
   reqType               String?
   department            String?
-  // §A2: LuminTrack-native job planning fields (not in iLabor either).
   workMode              WorkMode?
   priority              JobPriority?
   discipline            Discipline?
@@ -416,12 +389,6 @@ model Job {
   postingUrl            String?
   workAuthRequirement   String?
   skills                String[]             @default([])
-  externalStatusRaw     String?
-  externalCreatedDate   DateTime?
-  lastImportedAt        DateTime?
-  submitLimit           Int?
-  ilaborSubmitOpen      Int?
-  ilaborScreenerCode    Int?
   createdById           String
   createdBy             User                 @relation(fields: [createdById], references: [id])
 
@@ -432,13 +399,11 @@ model Job {
   activities  Activity[]
   vendorRequirements VendorRequirement[]
 
-  @@unique([portalId, portalRefId])
   @@index([status])
   @@index([deletedAt])
   @@index([clientId])
   @@index([vendorId])
   @@index([sisterCompanySourceId])
-  @@index([portalId])
   @@index([createdAt])
 }
 

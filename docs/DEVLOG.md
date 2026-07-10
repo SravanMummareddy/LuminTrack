@@ -10,6 +10,82 @@ short instead of long.
 
 ---
 
+## 2026-07-10 · Removed the iLabor / Randstad requisition-import feature entirely
+
+**Situation.** The owner decided jobs will only ever be added manually and asked to
+"take out everything related to iLabor." iLabor was a whole sub-build: a browser-extension
+→ JSON → admin-upload pipeline that created/updated Jobs, plus a `JobPortal` table, ~14
+iLabor-only Job columns, two soft submission gates (`ilabor_closed` / `ilabor_cap`), source
+sub-tabs, an import wizard + history pages, and a "disappeared-from-iLabor" stale-job scan.
+
+**Diagnosis.** The coupling spanned ~40 files across every layer, but it split cleanly into
+three buckets: (a) **delete-entirely** — the import action, `portals.ts`, the two validation/
+format libs, the `/jobs/import` + `/jobs/imports` routes, the wizard component, the changelog
+API; (b) **surgical** — the gate machinery (which is *shared* with the duplicate/rate/bench
+gates, so the iLabor branches had to be excised without touching the rest), jobs queries/list/
+detail/table, and `formatJobDisplayId` (dropped its `REQ-` portalRef branch → always `JOB-`);
+(c) **schema** — drop `JobPortal` + the iLabor columns. The one trap: the "More job details"
+fields (`positions`, dates, `reqType`, `department`, `atsId`, `durationLabel`) were added *for*
+iLabor but are generic — the owner chose to keep them, so those columns stay and only the
+import-signal columns drop.
+
+**Fix.** Migration `20260710170000_remove_ilabor` drops the FK/unique/index, the 14 iLabor
+columns, and the `JobPortal` table (kept the two `ActivityAction` enum values — dropping a
+Postgres enum value needs a type-recreate and historical audit rows reference them). Code:
+removed the gate types from `form-state`, `submission-create`, `submission-gates`, and both
+submit actions; deleted the source-tabs component; simplified the jobs list/detail/table;
+reseeded dev (50 manual jobs, no portal). `tsc` clean, **178 unit tests pass**, production
+build green (`/jobs/import*` gone from the route table). **Prod migration + reseed deliberately
+NOT run** — flagged for owner go-ahead.
+
+**Lesson.** When ripping out a feature whose gate logic is *woven into shared machinery*, the
+win is a clean seam: because every submission gate already funneled through one
+`collectSubmissionGates` + a `PendingGateKind` union, removing iLabor was "delete two union
+members and their branches" rather than untangling conditionals scattered across the submit
+paths. The same shared-seam discipline that made the gates testable made them removable.
+
+---
+
+## 2026-07-10 · Whole-codebase review — two Criticals: a dead RBAC literal and a lossy "restore-grade" backup
+
+**Situation.** A deep review of the whole codebase (6 parallel domain reviewers) surfaced
+two Critical findings that both hid behind code that *looked* correct.
+
+**Diagnosis.**
+1. **Dead RBAC gate (silent data loss).** `canEditRates` in `placements.ts` returned
+   `userRole === "ADMIN" || userId === submittedById`. But `ADMIN` was retired from the
+   `UserRole` enum (now `MANAGER | TEAM_LEAD | RECRUITER`), so the first clause is *always
+   false*. The placement detail page still renders rate fields as editable to any
+   `hasFullAccess` user, so a manager/team-lead edited bill/pay/client rates, hit Save, and
+   the action silently discarded them — a broken gate AND silent loss of commercial data for
+   the exact users meant to own it. Grep confirmed this was the last live `"ADMIN"` string in
+   `src/` outside a comment — a retirement that missed one call site.
+2. **Backup drops 4 tables + FK-violates on restore.** `build-backup-json.ts` (the
+   "restore-grade" dump) omitted `SupportProvider`, `LookupOption`, `GlossaryNote`,
+   `CustomGlossaryTerm`. Beyond silent data loss, `InterviewRound.supportProviderId` is a
+   real FK and interview rounds *are* re-inserted on restore — so a backup taken after any
+   round was linked to a provider would blow up mid-restore with an FK violation, pointing at
+   a provider row that was never restored. The `SupportProvider` table (migration
+   `20260710160000`) shipped after the backup code and nobody circled back to add it.
+
+**Fix.**
+1. `canEditRates` now calls the shared `hasFullAccess({ role })` helper (typed `UserRole`)
+   instead of the dead literal — one line, routing through the single source of RBAC truth.
+2. Added all four tables to the backup dump + preflight counts and to `INSERT_ORDER`/
+   `WIPE_ORDER` in FK-safe positions (`supportProvider`/`lookupOption` before `interviewRound`;
+   glossary tables after `user`). Bumped backup `version` 1→2; restore accepts both (v1's
+   missing keys fall back to `[]`). `tsc` clean, 179 tests pass; export UI unchanged (`totals`
+   is a generic `Record<string, number>` consumed via a lookup map with `?? 0`).
+
+**Lesson.** Both bugs are "retirement/addition left one edge unfinished" — a dropped enum
+value and a new table. The durable defenses are structural: (a) never inline a role string,
+always funnel through `hasFullAccess` so retiring a role is a one-file change *and* a compile
+error at stragglers; and (b) a "restore-grade" claim needs a test that round-trips every model
+(a `Object.keys(prisma)` vs. `INSERT_ORDER` diff would have caught the four missing tables at
+CI, not in a disaster).
+
+---
+
 ## 2026-07-10 · Interview "support" wouldn't save — a stale Prisma client, not a form bug
 
 **Situation.** The owner reported the interview "support" fields weren't saving, and

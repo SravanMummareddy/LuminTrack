@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Download, History, ScrollText, FileDown } from "lucide-react";
+import { ScrollText, FileDown } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
 import { hasFullAccess } from "@/lib/permissions";
 import { cn } from "@/lib/cn";
@@ -143,18 +143,9 @@ export default async function SettingsPage({
       {isAdmin && (
         <AdminToolsDisclosure>
           <p className="mb-3 text-xs text-slate-500">
-            Bulk iLabor requisition imports, the org-wide audit log, and data
-            export.
+            The org-wide audit log and data export.
           </p>
           <div className="flex flex-wrap gap-2">
-            <LinkButton href="/jobs/import" variant="secondary">
-              <Download className="h-4 w-4" />
-              Import from iLabor
-            </LinkButton>
-            <LinkButton href="/jobs/imports" variant="secondary">
-              <History className="h-4 w-4" />
-              Import history
-            </LinkButton>
             <LinkButton href="/audit" variant="secondary">
               <ScrollText className="h-4 w-4" />
               Audit log

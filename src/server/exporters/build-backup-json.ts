@@ -10,7 +10,8 @@ import { prisma } from "@/server/db";
 
 export type BackupJson = {
   exportedAt: string;
-  version: 1;
+  // v2 added supportProvider, lookupOption, glossaryNote, customGlossaryTerm.
+  version: 2;
   tables: Record<string, unknown[]>;
 };
 
@@ -18,7 +19,6 @@ export async function buildBackupJson(): Promise<BackupJson> {
   const [
     users,
     sources,
-    portals,
     clients,
     vendors,
     contacts,
@@ -30,11 +30,15 @@ export async function buildBackupJson(): Promise<BackupJson> {
     submissions,
     placements,
     placementExtensions,
+    supportProviders,
+    lookupOptions,
     interviewRounds,
     benchConsultants,
     vendorRequirements,
     notes,
     activities,
+    glossaryNotes,
+    customGlossaryTerms,
   ] = await Promise.all([
     prisma.user.findMany({
       select: {
@@ -48,7 +52,6 @@ export async function buildBackupJson(): Promise<BackupJson> {
       },
     }),
     prisma.sisterCompanySource.findMany(),
-    prisma.jobPortal.findMany(),
     prisma.client.findMany(),
     prisma.vendor.findMany(),
     prisma.contact.findMany(),
@@ -60,20 +63,25 @@ export async function buildBackupJson(): Promise<BackupJson> {
     prisma.submission.findMany(),
     prisma.placement.findMany(),
     prisma.placementExtension.findMany(),
+    // SupportProvider must round-trip: InterviewRound.supportProviderId is a real
+    // FK, so a restore that omits it FK-violates when re-inserting interview rounds.
+    prisma.supportProvider.findMany(),
+    prisma.lookupOption.findMany(),
     prisma.interviewRound.findMany(),
     prisma.benchConsultant.findMany(),
     prisma.vendorRequirement.findMany(),
     prisma.note.findMany(),
     prisma.activity.findMany(),
+    prisma.glossaryNote.findMany(),
+    prisma.customGlossaryTerm.findMany(),
   ]);
 
   return {
     exportedAt: new Date().toISOString(),
-    version: 1,
+    version: 2,
     tables: {
       user: users,
       sisterCompanySource: sources,
-      jobPortal: portals,
       client: clients,
       vendor: vendors,
       contact: contacts,
@@ -85,11 +93,15 @@ export async function buildBackupJson(): Promise<BackupJson> {
       submission: submissions,
       placement: placements,
       placementExtension: placementExtensions,
+      supportProvider: supportProviders,
+      lookupOption: lookupOptions,
       interviewRound: interviewRounds,
       benchConsultant: benchConsultants,
       vendorRequirement: vendorRequirements,
       note: notes,
       activity: activities,
+      glossaryNote: glossaryNotes,
+      customGlossaryTerm: customGlossaryTerms,
     },
   };
 }
@@ -111,11 +123,15 @@ export async function getBackupPreflight(): Promise<BackupPreflight> {
     documents,
     submissions,
     placements,
+    supportProviders,
+    lookupOptions,
     interviewRounds,
     benchConsultants,
     vendorRequirements,
     notes,
     activities,
+    glossaryNotes,
+    customGlossaryTerms,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.client.count(),
@@ -127,11 +143,15 @@ export async function getBackupPreflight(): Promise<BackupPreflight> {
     prisma.candidateDocument.count(),
     prisma.submission.count(),
     prisma.placement.count(),
+    prisma.supportProvider.count(),
+    prisma.lookupOption.count(),
     prisma.interviewRound.count(),
     prisma.benchConsultant.count(),
     prisma.vendorRequirement.count(),
     prisma.note.count(),
     prisma.activity.count(),
+    prisma.glossaryNote.count(),
+    prisma.customGlossaryTerm.count(),
   ]);
 
   const totals = {
@@ -145,11 +165,15 @@ export async function getBackupPreflight(): Promise<BackupPreflight> {
     documents,
     submissions,
     placements,
+    supportProviders,
+    lookupOptions,
     interviewRounds,
     benchConsultants,
     vendorRequirements,
     notes,
     activities,
+    glossaryNotes,
+    customGlossaryTerms,
   };
   // Rough heuristic: ~1KB per row averaged across small + large models.
   const rowCount = Object.values(totals).reduce((a, b) => a + b, 0);

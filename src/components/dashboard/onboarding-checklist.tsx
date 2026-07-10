@@ -27,11 +27,9 @@ export function OnboardingChecklist({
     {
       done: status.hasJobs,
       title: "Add your first job",
-      description: isAdmin
-        ? "Create one manually, or bulk-import requisitions from iLabor."
-        : "Create the requirement you're recruiting for.",
-      href: isAdmin ? "/jobs/import" : "/jobs/new",
-      cta: isAdmin ? "Import or add a job" : "Add a job",
+      description: "Create the requirement you're recruiting for.",
+      href: "/jobs/new",
+      cta: "Add a job",
     },
     {
       done: status.hasCandidates,

@@ -569,7 +569,6 @@ async function main() {
   await prisma.job.deleteMany();
   await prisma.candidate.deleteMany();
   await prisma.contact.deleteMany();
-  await prisma.jobPortal.deleteMany();
   await prisma.vendor.deleteMany();
   await prisma.client.deleteMany();
   await prisma.sisterCompanySource.deleteMany();
@@ -722,20 +721,6 @@ async function main() {
   ];
 
   // ── Jobs + assignments ──
-  // Vendor-portal (Randstad iLabor) — some jobs are sourced from it so the
-  // submission-level "Vendor Portal" view has data. Name must match
-  // RANDSTAD_PORTAL_NAME in src/server/queries/jobs.ts.
-  console.log("Creating job portal…");
-  const randstadPortal = await prisma.jobPortal.create({
-    data: {
-      name: "Randstad iLabor",
-      kind: "VMS",
-      createdAt: adminCreatedAt,
-      updatedAt: adminCreatedAt,
-    },
-    select: { id: true },
-  });
-
   console.log("Creating 50 jobs…");
   const jobs: {
     id: string;
@@ -773,9 +758,6 @@ async function main() {
     const clientRate = chance(0.8) ? payBase + randInt(30, 55) : null;
     const creator = chance(0.7) ? admin : pick(recruiters);
     const client = pick(clients);
-    // ~35% come from the Randstad iLabor vendor portal; those carry a portal
-    // ref instead of a managed source so the source label reads "Randstad iLabor".
-    const isPortal = chance(0.35);
 
     const job = await prisma.job.create({
       data: {
@@ -798,19 +780,9 @@ async function main() {
         notes: chance(0.4) ? pick(JOB_NOTES) : null,
         clientId: client.id,
         vendorId: pick(vendors).id,
-        sisterCompanySourceId: isPortal ? null : pick(sources).id,
-        portalId: isPortal ? randstadPortal.id : null,
-        portalRefId: isPortal ? String(159000 + i) : null,
-        // iLabor signal fields — only on vendor-portal jobs. Some are closed for
-        // submissions (ilaborSubmitOpen=0) and some are at/over their cap so the
-        // submission gates can be exercised; some require a screener (code > 0).
-        positions: isPortal ? randInt(1, 4) : null,
-        submitLimit: isPortal ? 30 : null,
-        ilaborSubmitOpen: isPortal ? (chance(0.2) ? 0 : 1) : null,
-        ilaborScreenerCode: isPortal ? (chance(0.3) ? 3 : 0) : null,
-        externalSubsCount: isPortal ? randInt(0, 45) : null,
-        externalActiveCount: isPortal ? (chance(0.25) ? 30 : randInt(0, 22)) : null,
-        releasedDate: isPortal ? createdAt : null,
+        sisterCompanySourceId: pick(sources).id,
+        // Optional job-detail fields — populated on a subset so the columns have data.
+        positions: chance(0.5) ? randInt(1, 4) : null,
         createdById: creator.id,
         createdAt,
         updatedAt: createdAt,

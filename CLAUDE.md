@@ -6,6 +6,17 @@ Internal recruitment tracking dashboard for a small recruiting team (<10 recruit
 Tracks job requirements, candidate submissions, interview rounds, outcomes, notes, an audit
 timeline, and recruiter performance. Replaces a manual Excel/Word process.
 
+> **⚠️ iLabor / Randstad import REMOVED (2026-07-10).** Jobs are added **manually only**.
+> The entire iLabor requisition-import feature was deleted — the `JobPortal` table, all
+> iLabor-only Job columns, the `/jobs/import` + `/jobs/imports` routes, the import wizard,
+> the source sub-tabs, and the `ilabor_closed` / `ilabor_cap` submission gates are all gone
+> (migration `20260710170000_remove_ilabor`). **Any iLabor / Randstad-import / JobPortal /
+> requisition-import references in the historical sections below are obsolete — ignore them.**
+> The `atsId`/`startDate`/`endDate`/`durationLabel`/`positions`/`reqType`/`department` columns
+> were KEPT as generic manual job-detail fields. Vendor Portal Requirements (VPR,
+> `/vendor-portal`) is a separate feature and is unaffected. **Prod migration not yet applied
+> — pending owner go-ahead.** See DEVLOG 2026-07-10.
+
 **Source of truth for requirements:** `docs/PROJECT_REQUIREMENTS.md`
 **Approved build plan:** `~/.claude/plans/we-have-the-requirements-optimized-balloon.md`
 **Open work / bug backlog:** `bugs.md` (top of file has a grouped

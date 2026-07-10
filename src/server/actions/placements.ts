@@ -11,6 +11,8 @@ import {
 } from "@/lib/validation/placement";
 import { toFieldErrors } from "@/lib/validation/common";
 import { endOfPlacementCascade } from "@/server/placement-lifecycle";
+import { hasFullAccess } from "@/lib/permissions";
+import type { UserRole } from "@/generated/prisma/enums";
 import type { FormState } from "@/lib/form-state";
 
 const END_REASON_LABEL: Record<string, string> = {
@@ -21,15 +23,17 @@ const END_REASON_LABEL: Record<string, string> = {
   OTHER: "Other",
 };
 
-// R4.2 — rate-edit permission. Admins always pass; otherwise the user must be
-// the submission's recruiter-of-record. Non-eligible users may still edit
-// non-rate fields (manager, PO #, etc.).
+// R4.2 — rate-edit permission. Managers / team leads (full access) always pass;
+// otherwise the user must be the submission's recruiter-of-record. Non-eligible
+// users may still edit non-rate fields (manager, PO #, etc.).
 function canEditRates(args: {
-  userRole: string;
+  userRole: UserRole;
   userId: string;
   submittedById: string;
 }): boolean {
-  return args.userRole === "ADMIN" || args.userId === args.submittedById;
+  return (
+    hasFullAccess({ role: args.userRole }) || args.userId === args.submittedById
+  );
 }
 
 function fmtRate(value: unknown): string {

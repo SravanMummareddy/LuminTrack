@@ -4,14 +4,6 @@ import type { JobStatus, Discipline } from "@/generated/prisma/enums";
 import { OTHER_SOURCE } from "@/lib/labels";
 import { PAGE_SIZE, searchTerms, type DateRange, type SortDir, type SortState } from "@/lib/filters";
 
-/**
- * Source sub-tabs on /jobs:
- *   "manual"   — Job.portalId is null (recruiter-entered)
- *   "randstad" — linked to the Randstad iLabor JobPortal
- *   undefined  — all jobs (default)
- */
-export type JobSource = "manual" | "randstad";
-
 export type JobListFilters = {
   q?: string;
   clientId?: string[];
@@ -21,7 +13,6 @@ export type JobListFilters = {
   status?: JobStatus[];
   discipline?: Discipline[];
   location?: string;
-  source?: JobSource;
   createdRange?: DateRange;
   sort?: SortState;
   page?: number;
@@ -29,8 +20,6 @@ export type JobListFilters = {
    *  live jobs only (trashed + erased tombstones hidden). */
   trash?: boolean;
 };
-
-export const RANDSTAD_PORTAL_NAME = "Randstad iLabor";
 
 /** Columns the Jobs list can be sorted by → their Prisma `orderBy`. */
 const JOB_SORTS: Record<
@@ -48,11 +37,7 @@ const JOB_SORTS: Record<
   created: (d) => ({ createdAt: d }),
   updated: (d) => ({ updatedAt: d }),
   startDate: (d) => ({ startDate: d }),
-  lastImported: (d) => ({ lastImportedAt: d }),
   positions: (d) => ({ positions: d }),
-  submitLimit: (d) => ({ submitLimit: d }),
-  activeCount: (d) => ({ externalActiveCount: d }),
-  released: (d) => ({ releasedDate: d }),
 };
 
 export const JOB_SORT_KEYS = Object.keys(JOB_SORTS);
@@ -95,9 +80,6 @@ export async function listJobs(filters: JobListFilters) {
     where.location = { contains: filters.location, mode: "insensitive" };
   if (filters.recruiterId?.length)
     where.assignments = { some: { recruiterId: { in: filters.recruiterId } } };
-  if (filters.source === "manual") where.portalId = null;
-  if (filters.source === "randstad")
-    where.portal = { is: { name: RANDSTAD_PORTAL_NAME } };
   if (filters.createdRange?.gte || filters.createdRange?.lte)
     where.createdAt = filters.createdRange;
 
@@ -122,7 +104,6 @@ export async function listJobs(filters: JobListFilters) {
       client: { select: { name: true } },
       vendor: { select: { name: true } },
       sisterCompanySource: { select: { name: true } },
-      portal: { select: { name: true } },
       assignments: {
         include: { recruiter: { select: { id: true, fullName: true } } },
       },
@@ -180,78 +161,6 @@ export async function listJobs(filters: JobListFilters) {
 
 export type JobListRow = Awaited<ReturnType<typeof listJobs>>["rows"][number];
 
-/**
- * Most recent bulk-import audit row, for the "Last imported …" banner on the
- * Randstad tab. Returns null on a fresh DB.
- *
- * Reads the existing JSON summary on Activity.newValue (set by importRequisitions)
- * so the banner can show the counts without re-aggregating jobs.
- */
-export async function getLastIlaborImport() {
-  return prisma.activity.findFirst({
-    where: { action: "REQUISITIONS_IMPORTED" },
-    orderBy: { createdAt: "desc" },
-    include: { performedBy: { select: { fullName: true } } },
-  });
-}
-
-/**
- * Full history of bulk iLabor imports — one row per import run.
- * Powers the admin-only `/jobs/imports` page. Paginated client-side for now;
- * if this ever grows past ~hundreds of runs we'd add offset paging.
- */
-export async function listIlaborImports() {
-  return prisma.activity.findMany({
-    where: { action: "REQUISITIONS_IMPORTED" },
-    orderBy: { createdAt: "desc" },
-    include: { performedBy: { select: { fullName: true } } },
-    take: 200,
-  });
-}
-
-/**
- * Jobs that were imported from iLabor at some point but did NOT appear in
- * the most recent import — surfaces silent "disappeared from iLabor"
- * cases. Only includes jobs that are still OPEN or ON_HOLD in LuminTrack
- * (closed/filled/cancelled jobs aren't worth flagging — they're already
- * terminal). Limit to portal-linked jobs (i.e. ones that came from iLabor
- * in the first place).
- */
-export async function listStaleIlaborJobs(opts: { limit?: number } = {}) {
-  const limit = opts.limit ?? 50;
-  const lastRun = await prisma.activity.findFirst({
-    where: { action: "REQUISITIONS_IMPORTED" },
-    orderBy: { createdAt: "desc" },
-    select: { createdAt: true },
-  });
-  if (!lastRun) return { rows: [], lastImportAt: null as Date | null };
-
-  // A job is "stale" when its last import touched it BEFORE the most recent
-  // bulk-import run. Small clock-skew buffer (60s) avoids false positives
-  // for the run that's actively in flight.
-  const cutoff = new Date(lastRun.createdAt.getTime() - 60_000);
-  const rows = await prisma.job.findMany({
-    where: {
-      portalId: { not: null },
-      status: { in: ["OPEN", "ON_HOLD"] },
-      lastImportedAt: { lt: cutoff },
-      deletedAt: null,
-    },
-    orderBy: { lastImportedAt: "asc" },
-    take: limit,
-    select: {
-      id: true,
-      seq: true,
-      title: true,
-      portalRefId: true,
-      lastImportedAt: true,
-      externalStatusRaw: true,
-      client: { select: { name: true } },
-    },
-  });
-  return { rows, lastImportAt: lastRun.createdAt };
-}
-
 export function getJobDetail(id: string) {
   return prisma.job.findUnique({
     where: { id },
@@ -259,7 +168,6 @@ export function getJobDetail(id: string) {
       client: true,
       vendor: true,
       sisterCompanySource: true,
-      portal: true,
       createdBy: { select: { fullName: true } },
       assignments: {
         include: { recruiter: { select: { id: true, fullName: true } } },
@@ -273,8 +181,7 @@ export function getJobDetail(id: string) {
  * Lightweight job list for the submission form's job picker (candidate-locked
  * and open entry points). Mirrors `listCandidateOptions`. Scoped to jobs that
  * still accept submissions (OPEN / ON_HOLD) so the dropdown isn't cluttered
- * with filled/closed/cancelled reqs. `seq`/`portalRefId` build the display id
- * label.
+ * with filled/closed/cancelled reqs. `seq` builds the display id label.
  */
 export async function listJobOptions() {
   const rows = await prisma.job.findMany({
@@ -284,7 +191,6 @@ export async function listJobOptions() {
       id: true,
       title: true,
       seq: true,
-      portalRefId: true,
       client: { select: { name: true } },
     },
   });

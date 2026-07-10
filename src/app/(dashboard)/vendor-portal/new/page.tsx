@@ -92,7 +92,6 @@ export default async function NewRequirementPage({
         id: true,
         title: true,
         seq: true,
-        portalRefId: true,
         location: true,
         clientRate: true,
         vendorRate: true,
