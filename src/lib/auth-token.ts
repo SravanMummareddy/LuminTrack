@@ -23,7 +23,12 @@ export async function signSessionToken(userId: string): Promise<string> {
 /** Returns the user id if the token is valid and unexpired, otherwise null. */
 export async function verifySessionToken(token: string): Promise<string | null> {
   try {
-    const { payload } = await jwtVerify(token, getSecret());
+    // Pin the algorithm — without an allowlist jwtVerify accepts any alg the
+    // header claims. Not currently exploitable (symmetric key rejects alg:none),
+    // but defence-in-depth against algorithm-confusion.
+    const { payload } = await jwtVerify(token, getSecret(), {
+      algorithms: ["HS256"],
+    });
     return typeof payload.sub === "string" ? payload.sub : null;
   } catch {
     return null;

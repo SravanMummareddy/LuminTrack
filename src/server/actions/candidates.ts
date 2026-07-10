@@ -567,10 +567,11 @@ export async function removeCandidateArchive(formData: FormData): Promise<void> 
   if (!hasFullAccess(user)) return;
 
   const pathname = String(formData.get("pathname") ?? "").trim();
-  const url = String(formData.get("url") ?? "").trim();
   if (!pathname.startsWith(CANDIDATE_ARCHIVE_PREFIX)) return;
 
-  await del(url || pathname);
+  // Delete by the prefix-validated pathname only — never a caller-supplied,
+  // unvalidated `url`, which could point `del()` at an arbitrary blob.
+  await del(pathname);
   await logActivity(prisma, {
     entityType: "CANDIDATE",
     action: "CANDIDATE_ERASED",
