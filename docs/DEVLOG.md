@@ -10,6 +10,38 @@ short instead of long.
 
 ---
 
+## 2026-07-11 · Prod outage — schema-changing code deployed ahead of its deferred migration
+
+**Situation.** Right after Wave 1b (#79) merged to `main`, the owner reported "can't view the
+application" on `lumin-track.vercel.app`. The Vercel **build succeeded** and the login page served
+fine, but every authenticated page 500'd.
+
+**Diagnosis.** Wave 1b's migration (`20260711120000_org_reporting_model`) was applied to **dev only**
+— prod was deliberately deferred. But merging to `main` **auto-deploys the code** to prod, and that
+code requires the new `Team` table + `User.teamId`/`reportsToId` and no longer selects `teamLabel`.
+Prod's schema still had `teamLabel` and none of the new objects, so every query through the
+dashboard/scorecard/team paths hit "column/table does not exist." The login page didn't break because
+it doesn't touch org data — which is exactly why the build passing and the homepage loading masked
+the outage. Root cause wasn't the code or the migration (both correct) — it was **shipping the code
+and the schema change out of lockstep**: a schema migration and the code that depends on it must
+deploy together, and merging to an auto-deploying branch IS the deploy.
+
+**Fix.** Immediate: **Vercel Instant Rollback** to the previous production deployment (Wave 1a,
+`063f7b6`) — which has no schema changes, so it's compatible with the un-migrated prod DB. Verified
+by resolving the `lumin-track.vercel.app` alias back to that deployment. Service restored with zero
+data risk. The real roll-forward (backup → `migrate deploy` on prod → re-promote the already-built
+Wave 1b deployment) is deferred to a coordinated window.
+
+**Lesson.** "Prod migration deferred" is not a safe state to merge a schema-dependent PR into an
+auto-deploying `main` — the merge ships the mismatch. Either (a) apply the prod migration as part of
+the same window the PR merges, or (b) hold the PR on its branch until the migration window. A green
+build says nothing about schema compatibility (Next builds don't touch the live DB), and a loading
+homepage says nothing when the failure is data-path-only — verify a DB-backed page, not just `/`.
+Also: after an Instant Rollback, `main` still holds the new code, so the **next** push/redeploy of
+`main` re-ships the break — the rollback is a pin, not a fix.
+
+---
+
 ## 2026-07-11 · Wave 1b org model — the reseed that collided with its own migration
 
 **Situation.** Replaced the free-text `User.teamLabel` with a real model (`Team` + a self-
