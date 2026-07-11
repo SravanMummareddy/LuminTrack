@@ -16,12 +16,15 @@ import { saveUser } from "@/server/actions/users";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
 import { roleLabel } from "@/lib/permissions";
 import type { UserRole } from "@/generated/prisma/enums";
+import type { RoleOption } from "@/server/queries/roles";
 
 export type UserRow = {
   id: string;
   fullName: string;
   email: string;
   role: UserRole;
+  roleId: string | null;
+  roleName: string | null;
   isActive: boolean;
   showInOrgChart: boolean;
   teamId: string | null;
@@ -37,6 +40,7 @@ export function UserSection({
   canGrantManager,
   teams,
   userOptions,
+  roleOptions,
 }: {
   items: UserRow[];
   canManage: boolean;
@@ -46,6 +50,8 @@ export function UserSection({
   teams: { id: string; name: string }[];
   /** Active users for the "Reports to" picker. */
   userOptions: Option[];
+  /** Roles for the "Role" picker (from the RBAC roles table). */
+  roleOptions: RoleOption[];
 }) {
   const [editing, setEditing] = useState<UserRow | "new" | null>(null);
   const [search, setSearch] = useState("");
@@ -121,7 +127,7 @@ export function UserSection({
                 <Td label="Email">{item.email}</Td>
                 <Td label="Role">
                   <Badge tone={item.role === "RECRUITER" ? "slate" : "indigo"}>
-                    {roleLabel(item.role)}
+                    {item.roleName ?? roleLabel(item.role)}
                   </Badge>
                 </Td>
                 <Td label="Team" className="text-slate-600">
@@ -161,6 +167,7 @@ export function UserSection({
             canGrantManager={canGrantManager}
             teams={teams}
             userOptions={userOptions}
+            roleOptions={roleOptions}
             onDone={() => setEditing(null)}
           />
         )}
@@ -174,14 +181,25 @@ function UserForm({
   canGrantManager,
   teams,
   userOptions,
+  roleOptions,
   onDone,
 }: {
   entity: UserRow | null;
   canGrantManager: boolean;
   teams: { id: string; name: string }[];
   userOptions: Option[];
+  roleOptions: RoleOption[];
   onDone: () => void;
 }) {
+  // Manager-tier roles are only assignable by someone who can grant them.
+  const assignableRoles = roleOptions.filter(
+    (r) => canGrantManager || !r.isManagerTier,
+  );
+  const defaultRoleId =
+    entity?.roleId ??
+    assignableRoles.find((r) => r.name === "Recruiter")?.id ??
+    assignableRoles[0]?.id ??
+    "";
   const [state, formAction, pending] = useActionState(saveUser, EMPTY_FORM_STATE);
   const [password, setPassword] = useState("");
 
@@ -212,11 +230,13 @@ function UserForm({
         />
       </Field>
 
-      <Field label="Role" htmlFor="role" required error={state.fieldErrors?.role}>
-        <Select id="role" name="role" defaultValue={entity?.role ?? "RECRUITER"}>
-          <option value="RECRUITER">Recruiter</option>
-          <option value="TEAM_LEAD">Team Lead</option>
-          {canGrantManager && <option value="MANAGER">Manager</option>}
+      <Field label="Role" htmlFor="roleId" required error={state.fieldErrors?.roleId}>
+        <Select id="roleId" name="roleId" defaultValue={defaultRoleId}>
+          {assignableRoles.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.name}
+            </option>
+          ))}
         </Select>
       </Field>
 

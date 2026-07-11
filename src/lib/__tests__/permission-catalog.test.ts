@@ -4,6 +4,7 @@ import {
   PERMISSION_KEYS,
   SYSTEM_ROLE_GRANTS,
   permissionsForRole,
+  deriveEnumTier,
 } from "@/lib/permission-catalog";
 
 // Locks the catalog ↔ system-role-template mapping so seeded roles reproduce
@@ -61,5 +62,20 @@ describe("can() bridge", () => {
       new Set(SYSTEM_ROLE_GRANTS.TEAM_LEAD),
     );
     expect(permissionsForRole(null).size).toBe(0);
+  });
+});
+
+describe("deriveEnumTier — legacy enum from a role's permissions", () => {
+  it("maps the three system-role templates back to their enum", () => {
+    expect(deriveEnumTier(SYSTEM_ROLE_GRANTS.MANAGER)).toBe("MANAGER");
+    expect(deriveEnumTier(SYSTEM_ROLE_GRANTS.TEAM_LEAD)).toBe("TEAM_LEAD");
+    expect(deriveEnumTier(SYSTEM_ROLE_GRANTS.RECRUITER)).toBe("RECRUITER");
+  });
+
+  it("classifies a custom role by its highest tier", () => {
+    expect(deriveEnumTier(["tier:manager", "job:edit_rates"])).toBe("MANAGER");
+    expect(deriveEnumTier(["tier:full", "requirement:manage"])).toBe("TEAM_LEAD");
+    expect(deriveEnumTier(["orgentity:quickadd"])).toBe("RECRUITER");
+    expect(deriveEnumTier([])).toBe("RECRUITER");
   });
 });
