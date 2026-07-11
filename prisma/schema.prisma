@@ -242,6 +242,11 @@ model User {
   reportsToId  String?
   reportsTo    User?    @relation("ReportingChain", fields: [reportsToId], references: [id], onDelete: SetNull)
   reports      User[]   @relation("ReportingChain")
+  // Dynamic RBAC (Phase B, expand-contract): the composable role this user is
+  // assigned. Coexists with the `role` enum during the transition; `can()` reads
+  // the role's permissions, falling back to the enum→template map when unset.
+  roleId       String?
+  assignedRole Role?    @relation("UserRoleAssignment", fields: [roleId], references: [id], onDelete: SetNull)
   // Overseers/admins who sit outside the reporting hierarchy (e.g. an owner who
   // silently sees everything) are hidden from the org chart. Defaults true.
   showInOrgChart Boolean @default(true)
@@ -250,6 +255,7 @@ model User {
 
   @@index([teamId])
   @@index([reportsToId])
+  @@index([roleId])
 
   jobsCreated        Job[]
   assignments        JobAssignment[]  @relation("AssignmentRecruiter")
@@ -284,6 +290,41 @@ model Team {
   updatedAt DateTime @updatedAt
 
   @@index([leadId])
+}
+
+// Dynamic RBAC (Phase B). Permissions = the fixed code-defined vocabulary
+// (mirrors `src/lib/permission-catalog.ts`, seeded); Role = a composable set an
+// admin edits in Settings → Roles. `isSystem` roles (Manager/Team Lead/
+// Recruiter) can't be deleted/renamed and carry `systemRole` to line up with the
+// `User.role` enum during the transition.
+model Permission {
+  key      String           @id
+  label    String
+  category String
+  roles    RolePermission[]
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  label       String
+  description String?
+  isSystem    Boolean          @default(false)
+  systemRole  UserRole?        @unique
+  permissions RolePermission[]
+  users       User[]           @relation("UserRoleAssignment")
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model RolePermission {
+  roleId        String
+  role          Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionKey String
+  permission    Permission @relation(fields: [permissionKey], references: [key], onDelete: Cascade)
+
+  @@id([roleId, permissionKey])
+  @@index([permissionKey])
 }
 
 model SisterCompanySource {

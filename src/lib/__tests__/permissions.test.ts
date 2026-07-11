@@ -64,7 +64,6 @@ describe("permissions — gates default to deny", () => {
       it("denies null / undefined / role-less viewers", () => {
         expect(gate(null)).toBe(false);
         expect(gate(undefined)).toBe(false);
-        // @ts-expect-error — exercising a malformed viewer at runtime
         expect(gate({})).toBe(false);
       });
     });
@@ -82,7 +81,6 @@ describe("permissions — gates default to deny", () => {
     it("denies null / undefined / role-less viewers", () => {
       expect(canViewBenchCredentials(null)).toBe(false);
       expect(canViewBenchCredentials(undefined)).toBe(false);
-      // @ts-expect-error — exercising a malformed viewer at runtime
       expect(canViewBenchCredentials({})).toBe(false);
     });
   });
@@ -107,7 +105,6 @@ describe("permissions — manager-tier gates DENY team leads", () => {
       it("denies null / undefined / role-less viewers", () => {
         expect(gate(null)).toBe(false);
         expect(gate(undefined)).toBe(false);
-        // @ts-expect-error — exercising a malformed viewer at runtime
         expect(gate({})).toBe(false);
       });
     });
@@ -132,7 +129,6 @@ describe("canQuickAddOrgEntities", () => {
   it("denies null / undefined / role-less viewers", () => {
     expect(canQuickAddOrgEntities(null)).toBe(false);
     expect(canQuickAddOrgEntities(undefined)).toBe(false);
-    // @ts-expect-error — exercising a malformed viewer at runtime
     expect(canQuickAddOrgEntities({})).toBe(false);
   });
 });

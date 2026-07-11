@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 import { prisma, isUniqueConstraintError } from "@/server/db";
 import { requireUser } from "@/lib/session";
 import { hashPassword, verifyPassword } from "@/lib/password";
-import { canManageUsers, hasFullAccess, roleLabel } from "@/lib/permissions";
+import {
+  canManageUsers,
+  hasFullAccess,
+  canGrantManagerRole,
+  roleLabel,
+} from "@/lib/permissions";
 import { logActivity } from "@/server/activity";
 import {
   userCreateSchema,
@@ -45,7 +50,7 @@ export async function saveUser(
   // Manager's account. Team leads can manage recruiters and team leads (and
   // grant the Team Lead role) but cannot escalate anyone — including
   // themselves — to Manager.
-  const actorIsManager = actor.role === "MANAGER";
+  const actorIsManager = canGrantManagerRole(actor);
   if (!actorIsManager) {
     if (parsed.data.role === "MANAGER")
       return { error: "Only managers can grant the Manager role." };
@@ -97,6 +102,13 @@ export async function saveUser(
     if (team?.leadId && team.leadId !== id) reportsToId = team.leadId;
   }
 
+  // Keep the RBAC role assignment in sync with the enum during the transition:
+  // point roleId at the system role that mirrors the chosen enum role.
+  const systemRole = await prisma.role.findUnique({
+    where: { systemRole: parsed.data.role },
+    select: { id: true },
+  });
+
   const fields = {
     fullName: parsed.data.fullName,
     email: parsed.data.email.toLowerCase(),
@@ -105,6 +117,7 @@ export async function saveUser(
     showInOrgChart: parsed.data.showInOrgChart,
     teamId,
     reportsToId,
+    roleId: systemRole?.id ?? null,
   };
 
   // Hash outside the transaction — bcrypt is CPU-bound and shouldn't hold the tx

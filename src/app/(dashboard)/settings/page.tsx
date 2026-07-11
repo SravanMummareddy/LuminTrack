@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { ScrollText, FileDown } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
-import { isManagerTier } from "@/lib/permissions";
+import { isManagerTier, canGrantManagerRole, canManageRoles } from "@/lib/permissions";
+import { RolesSection } from "@/components/settings/roles-section";
+import { listRoles } from "@/server/queries/roles";
 import { cn } from "@/lib/cn";
 import { PageHeader } from "@/components/ui/page-header";
 import { LinkButton } from "@/components/ui/button";
@@ -38,6 +40,7 @@ const TABS = [
   { key: "support", label: "Support" },
   { key: "teams", label: "Teams" },
   { key: "users", label: "Users" },
+  { key: "roles", label: "Roles" },
   { key: "glossary", label: "Glossary" },
   { key: "deleted", label: "Erased backups", adminOnly: true },
   { key: "account", label: "My account" },
@@ -53,7 +56,7 @@ export default async function SettingsPage({
   const sp = await searchParams;
   const user = await getCurrentUser();
   const isAdmin = isManagerTier(user);
-  const canGrantManager = user?.role === "MANAGER";
+  const canGrantManager = canGrantManagerRole(user);
 
   const rawTab = Array.isArray(sp.tab) ? sp.tab[0] : sp.tab;
   // Only managers get the management tabs. Everyone else is limited to their own
@@ -135,6 +138,10 @@ export default async function SettingsPage({
         teams={allTeams.map((t) => ({ id: t.id, name: t.name }))}
         userOptions={userOptions}
       />
+    );
+  } else if (tab === "roles") {
+    content = (
+      <RolesSection roles={await listRoles()} canManage={canManageRoles(user)} />
     );
   } else if (tab === "glossary") {
     content = (

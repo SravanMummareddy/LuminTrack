@@ -38,9 +38,23 @@ export const getCurrentUser = cache(async () => {
   const userId = await verifySessionToken(token);
   if (!userId) return null;
 
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: {
+      assignedRole: {
+        include: { permissions: { select: { permissionKey: true } } },
+      },
+    },
+  });
   if (!user || !user.isActive) return null;
-  return user;
+  // Hydrate the RBAC permission set from the assigned role so `can()` reads it
+  // directly. When no role is assigned yet (pre-backfill), we drop `permissions`
+  // and `can()` falls back to the enum→template map — identical behavior.
+  const { assignedRole, ...rest } = user;
+  const permissions = assignedRole
+    ? new Set(assignedRole.permissions.map((p) => p.permissionKey))
+    : undefined;
+  return { ...rest, permissions };
 });
 
 /** Use in Server Components/Actions that require a signed-in user. */
