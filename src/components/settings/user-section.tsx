@@ -23,6 +23,7 @@ export type UserRow = {
   email: string;
   role: UserRole;
   isActive: boolean;
+  showInOrgChart: boolean;
   teamId: string | null;
   teamName: string | null;
   reportsToId: string | null;
@@ -292,6 +293,26 @@ function UserForm({
           className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-200"
         />
         Active
+      </label>
+
+      <label
+        htmlFor="user-showInOrgChart"
+        className="flex items-start gap-2 text-sm font-medium text-slate-700"
+      >
+        <input
+          id="user-showInOrgChart"
+          type="checkbox"
+          name="showInOrgChart"
+          defaultChecked={entity?.showInOrgChart ?? true}
+          className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-200"
+        />
+        <span>
+          Show in org chart
+          <span className="mt-0.5 block text-xs font-normal text-slate-400">
+            Uncheck for owners/overseers who see everything but sit outside the
+            reporting hierarchy.
+          </span>
+        </span>
       </label>
 
       {state.error && (

@@ -7,6 +7,8 @@ const base = z.object({
   email: z.email("Enter a valid email address."),
   role: z.enum(["MANAGER", "TEAM_LEAD", "RECRUITER"]),
   isActive: z.boolean(),
+  // Overseers/admins can be hidden from the org chart (default shown).
+  showInOrgChart: z.boolean(),
   // Org placement — both optional ("" → undefined → the action nulls them).
   teamId: z.preprocess(emptyToUndefined, z.string().optional()),
   reportsToId: z.preprocess(emptyToUndefined, z.string().optional()),

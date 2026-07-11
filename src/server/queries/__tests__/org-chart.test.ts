@@ -5,7 +5,11 @@ import { describe, it, expect, vi } from "vitest";
 // buildOrgLayout function here.
 vi.mock("@/server/db", () => ({ prisma: {} }));
 
-import { buildOrgLayout, type OrgUser } from "@/server/queries/org-chart";
+import {
+  buildOrgLayout,
+  reportsToCreatesCycle,
+  type OrgUser,
+} from "@/server/queries/org-chart";
 import type { UserRole } from "@/generated/prisma/enums";
 
 const u = (
@@ -47,8 +51,10 @@ describe("buildOrgLayout", () => {
     expect(pos.ceo.y).toBeLessThan(pos.m.y);
     expect(pos.m.y).toBeLessThan(pos.l1.y);
     expect(pos.l1.y).toBeLessThan(pos.r1.y);
-    // A parent centers over its children.
-    expect(pos.l1.x).toBeCloseTo((pos.r1.x + pos.r2.x) / 2);
+    // A parent sits above and between its children (dagre centers approximately).
+    const [lo, hi] = [Math.min(pos.r1.x, pos.r2.x), Math.max(pos.r1.x, pos.r2.x)];
+    expect(pos.l1.x).toBeGreaterThanOrEqual(lo);
+    expect(pos.l1.x).toBeLessThanOrEqual(hi);
   });
 
   it("never collapses two nodes onto the same coordinate", () => {
@@ -72,5 +78,43 @@ describe("buildOrgLayout", () => {
     const { edges, nodes } = buildOrgLayout([u("orphan", "ghost")]);
     expect(nodes).toHaveLength(1);
     expect(edges).toHaveLength(0); // "ghost" isn't a node → no edge
+  });
+});
+
+describe("reportsToCreatesCycle", () => {
+  // ceo → m → l1 → r1  (each reports up to the next)
+  const chain = [
+    { id: "ceo", reportsToId: null },
+    { id: "m", reportsToId: "ceo" },
+    { id: "l1", reportsToId: "m" },
+    { id: "r1", reportsToId: "l1" },
+  ];
+
+  it("rejects self-reporting", () => {
+    expect(reportsToCreatesCycle(chain, "m", "m")).toBe(true);
+  });
+
+  it("rejects reporting to a direct descendant", () => {
+    // ceo can't report to m (m already reports up to ceo)
+    expect(reportsToCreatesCycle(chain, "ceo", "m")).toBe(true);
+  });
+
+  it("rejects reporting to an indirect descendant", () => {
+    // ceo can't report to r1 (r1 → l1 → m → ceo)
+    expect(reportsToCreatesCycle(chain, "ceo", "r1")).toBe(true);
+  });
+
+  it("allows a valid upward reporting line", () => {
+    // r1 reporting to ceo (skip-level) closes no loop
+    expect(reportsToCreatesCycle(chain, "r1", "ceo")).toBe(false);
+  });
+
+  it("allows reporting to an unrelated branch", () => {
+    const forest = [
+      ...chain,
+      { id: "m2", reportsToId: "ceo" },
+      { id: "r2", reportsToId: "m2" },
+    ];
+    expect(reportsToCreatesCycle(forest, "r2", "l1")).toBe(false);
   });
 });

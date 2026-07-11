@@ -13,6 +13,7 @@ import {
   profileSchema,
 } from "@/lib/validation/user";
 import { toFieldErrors } from "@/lib/validation/common";
+import { reportsToCreatesCycle } from "@/server/queries/org-chart";
 import { rateLimit, resetRateLimit } from "@/lib/rate-limit";
 import type { FormState } from "@/lib/form-state";
 
@@ -30,6 +31,7 @@ export async function saveUser(
     email: formData.get("email") ?? "",
     role: formData.get("role") ?? "RECRUITER",
     isActive: formData.get("isActive") != null,
+    showInOrgChart: formData.get("showInOrgChart") != null,
     password: formData.get("password") ?? "",
     teamId: formData.get("teamId") ?? "",
     reportsToId: formData.get("reportsToId") ?? "",
@@ -74,6 +76,18 @@ export async function saveUser(
   let reportsToId = parsed.data.reportsToId ?? null;
   if (id && reportsToId === id)
     return { error: "A user cannot report to themselves." };
+  // Reject a reporting line that would create a cycle (report to your own
+  // descendant) — that's what left prod with no apex and a flat chart.
+  if (id && reportsToId) {
+    const chain = await prisma.user.findMany({
+      select: { id: true, reportsToId: true },
+    });
+    if (reportsToCreatesCycle(chain, id, reportsToId))
+      return {
+        error:
+          "That reporting line creates a loop — the selected manager already reports (directly or indirectly) to this user.",
+      };
+  }
   if (!reportsToId && teamId) {
     const team = await prisma.team.findUnique({
       where: { id: teamId },
@@ -88,6 +102,7 @@ export async function saveUser(
     email: parsed.data.email.toLowerCase(),
     role: parsed.data.role,
     isActive: parsed.data.isActive,
+    showInOrgChart: parsed.data.showInOrgChart,
     teamId,
     reportsToId,
   };

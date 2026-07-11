@@ -56,12 +56,7 @@ export function Textarea({ className, ...props }: React.ComponentProps<"textarea
   );
 }
 
-export function Select({ className, ...props }: React.ComponentProps<"select">) {
-  return (
-    <select
-      className={cn(controlClass, "bg-white", className)}
-      suppressHydrationWarning
-      {...props}
-    />
-  );
-}
+// The styled custom dropdown (client component) replaces the native <select>
+// while keeping the same <option>-children + name/value API. Re-exported here
+// so the ~18 call sites keep importing `Select` from this module unchanged.
+export { Select } from "./select-menu";
