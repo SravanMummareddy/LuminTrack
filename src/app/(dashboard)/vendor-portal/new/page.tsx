@@ -3,6 +3,7 @@ import { ArrowLeft } from "lucide-react";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { RequirementForm } from "@/components/vendor-portal/requirement-form";
+import { JobPicker } from "@/components/vendor-portal/job-picker";
 import { createVendorRequirement } from "@/server/actions/requirements";
 import { listCandidateOptions } from "@/server/queries/candidates";
 import { listJobOptions } from "@/server/queries/jobs";
@@ -49,36 +50,12 @@ export default async function NewRequirementPage({
             </p>
           </div>
         ) : (
-          <form method="get" className="rounded-lg border border-slate-200 bg-white p-6 space-y-4">
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-slate-700">Job</span>
-              <select
-                name="jobId"
-                required
-                defaultValue=""
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              >
-                <option value="" disabled>
-                  Select a job…
-                </option>
-                {jobs.map((j) => (
-                  <option key={j.id} value={j.id}>
-                    {j.title}
-                    {j.clientName ? ` — ${j.clientName}` : ""} (
-                    {formatJobDisplayId(j)})
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-              >
-                Continue
-              </button>
-            </div>
-          </form>
+          <JobPicker
+            jobs={jobs.map((j) => ({
+              value: j.id,
+              label: `${j.title}${j.clientName ? ` — ${j.clientName}` : ""} (${formatJobDisplayId(j)})`,
+            }))}
+          />
         )}
       </div>
     );

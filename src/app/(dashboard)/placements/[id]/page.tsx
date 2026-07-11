@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { BackLink } from "@/components/ui/back-link";
 import { Badge } from "@/components/ui/badge";
 import { ActivityTimeline } from "@/components/timeline/activity-timeline";
 import { ExtensionHistory } from "@/components/placements/extension-history";
@@ -119,13 +119,7 @@ export default async function PlacementDetailPage({
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <Link
-        href="/placements"
-        className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to placements
-      </Link>
+      <BackLink fallbackHref="/placements" />
 
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>

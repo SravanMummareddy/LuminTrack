@@ -233,6 +233,11 @@ export async function closeVendorRequirement(formData: FormData): Promise<void> 
   });
 
   revalidatePath("/vendor-portal");
+  // Also refresh THIS requirement's detail page — otherwise its Router Cache
+  // keeps the stale "OPEN" render (incl. the "Submit a candidate" button), and
+  // clicking it soft-navigates to the convert page which redirects straight
+  // back, reading as a dead button until a hard reload. (Matches updateVendorRequirement.)
+  revalidatePath(`/vendor-portal/${id}`);
   redirect(`/vendor-portal/${id}`);
 }
 

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Pencil, Plus } from "lucide-react";
+import { BackLink } from "@/components/ui/back-link";
+import { Pencil, Plus } from "lucide-react";
 import { LinkButton } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, Th, Td } from "@/components/ui/table";
@@ -154,13 +155,7 @@ export default async function JobDetailPage({
         label={job.title}
         sub={job.client.name}
       />
-      <Link
-        href="/jobs"
-        className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to jobs
-      </Link>
+      <BackLink fallbackHref="/jobs" />
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">

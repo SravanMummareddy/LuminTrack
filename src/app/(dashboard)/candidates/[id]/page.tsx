@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { BackLink } from "@/components/ui/back-link";
 import {
-  ArrowLeft,
   ExternalLink,
   Pencil,
   Send,
@@ -176,13 +176,7 @@ export default async function CandidateDetailPage({
         label={candidate.fullName}
         sub={candidate.email ?? candidate.phone ?? undefined}
       />
-      <Link
-        href="/candidates"
-        className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to candidates
-      </Link>
+      <BackLink fallbackHref="/candidates" />
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
@@ -505,7 +499,12 @@ export default async function CandidateDetailPage({
               {submissions.map((s) => (
                 <tr key={s.id} className="hover:bg-slate-50">
                   <Td label="Sub ID" secondary className="font-mono text-xs">
-                    {formatSubmissionDisplayId(s)}
+                    <Link
+                      href={`/submissions/${s.id}`}
+                      className="text-indigo-600 hover:underline"
+                    >
+                      {formatSubmissionDisplayId(s)}
+                    </Link>
                   </Td>
                   <Td label="Job">
                     <Link
