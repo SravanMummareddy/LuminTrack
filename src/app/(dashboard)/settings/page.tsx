@@ -125,6 +125,7 @@ export default async function SettingsPage({
           email: u.email,
           role: u.role,
           isActive: u.isActive,
+          showInOrgChart: u.showInOrgChart,
           teamId: u.teamId,
           teamName: u.team?.name ?? null,
           reportsToId: u.reportsToId,

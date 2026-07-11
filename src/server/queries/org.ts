@@ -76,6 +76,7 @@ export function listUsers() {
       team: { select: { name: true } },
       reportsToId: true,
       reportsTo: { select: { fullName: true } },
+      showInOrgChart: true,
     },
   });
 }
