@@ -1331,3 +1331,706 @@ would have caught this on day one.
 - **When the next non-trivial problem hits:** add an entry here
   while the diagnosis is fresh. Future-you won't remember why a
   one-line fix took two days to find.
+
+---
+
+# Historical build log (migrated from CLAUDE.md, 2026-07-10)
+
+These round-by-round "Current work / SHIPPED" narratives lived in CLAUDE.md and
+were moved here to keep the always-loaded project instructions lean. They are
+preserved verbatim for reference; treat them as history, not current state.
+Note: any iLabor / Randstad-import references are OBSOLETE (feature removed
+2026-07-10 — see the dated entry above).
+
+## 🚧 Current work — feedback round 3: Candidate + Bench forms & marketing lifecycle (BUILT on `main`, tsc clean, 164 tests, NOT yet committed/deployed — 2026-07-08)
+
+Plan: `~/.claude/plans/mossy-skipping-umbrella.md`. Owner feedback from live-testing the
+Add-candidate + Bench screens, built in 5 phases (all done + browser-verified on dev):
+- **P1 (no schema):** candidate "Source" → **"Reference"** (label only, column stays
+  `source`); `LocationInput` (existing, ~1k US cities) swapped onto the candidate + bench
+  **Current location** fields (jobs/VPR already had it).
+- **P2 (migration `20260708200000`):** **Candidate.technology** + **realTimeExperienceYears**
+  added; **Bench.technology dropped** (bench reads the candidate's — mirrors the discipline
+  move). Technology is a skills-sourced combobox (typing a new tech adds it to Skills). New
+  generic **`SuggestInput`** (`src/components/ui/suggest-input.tsx`) = free-text + suggestions
+  (generalizes LocationInput; unlike the strict `SearchSelect` it keeps any typed value).
+- **P3 (migration `20260708210000`):** **`LookupOption`** table (category+value, learned
+  values) backs work-auth / working-type / call-type / payroll-type dropdowns —
+  `listLookupValues(cat)` (defaults ∪ learned, `src/lib/lookups.ts` + `src/server/queries/lookups.ts`)
+  + `rememberLookup(tx,cat,val)` (`src/server/lookups.ts`). New **Candidate.isWorking +
+  workingType** ("Working now?" — **independent of Placement**; Placements = through-us only).
+- **P4 (no schema; `reconcile-bench-status.ts`):** **collapsed the two bench status axes into
+  one** — `marketingStatus` relabeled **On bench / Paused / Placed / Off bench**, single badge;
+  `isActive` retired (forced true, deprecated). Candidate detail gained a **Marketing (bench)**
+  line + Add-to-bench/Market-again. **Re-market** action (`remarketConsultant`) keeps a PLACED
+  consultant in BOTH placement and bench; re-adding an off-bench consultant **reactivates** the
+  retained row (no retype). `bench.aVisa` auto-fills from `candidate.workAuthorization`.
+- **P5:** bench "View candidate" link now dirty-guarded (`GuardedLink`); `personalNumber`
+  defaults to the contact phone; **marketing credentials now visible to ALL recruiters**
+  (`canViewBenchCredentials` = any signed-in user — owner decision); Back button on bench detail.
+
+- **Round 3.1 follow-up (migration `20260708220000`):** consolidated the scattered marketing
+  fields into the orange **"Marketing details"** card (renamed from "Marketing credentials",
+  dropped the now-wrong "Admin only" badge, grouped marketing recruiter/start-date/experience
+  with the email/password/number; personal number removed — redundant with contact phone). New
+  **`BenchConsultant.relocationCities`** — when "Open to relocation" is unchecked the form
+  reveals a specific-cities input; detail shows "Only to: …". `BenchCredentials` export renamed
+  `BenchMarketingDetails`.
+
+**Owner decisions (this round):** recruiters see full marketing section incl. password;
+Source==Reference (relabel); collapse bench status to one axis; manual Re-market for
+placed-and-ending consultants. **Deploy TODO:** commit → apply both migrations to prod
+`ep-orange-dew` + run `reconcile-bench-status.ts --confirm` → reseed. Dev already migrated +
+reseeded.
+
+## ✅ CURRENT STATE — feedback rounds 1–2 SHIPPED + LIVE on prod (2026-07-08)
+
+**`main` @ `a7062da` (PR #41), deployed to prod, tsc clean, 166 unit tests.** Repo is a
+single clean branch (`main`); all feedback branches merged + deleted. **Live demo:**
+`lumin-track.vercel.app` — admin `sriman@lumintrack.com` / team-lead + recruiter
+`hrishikesh@lumintrack.com`, password `LuminTrack2026!`. **Two Neon DBs:** dev
+`ep-billowing-mountain-at6ftznc` (active `.env`), prod `ep-orange-dew-aqe9z6f3`
+(`.env.neon-prod.bak`, gitignored — the DB Vercel prod uses). Both reseeded clean
+(`npx tsx prisma/seed-demo.ts`, direct `PrismaPg`/`DIRECT_URL` adapter). **Vercel does NOT
+run `migrate deploy`** — apply prod migrations manually against the prod `DIRECT_URL`
+(`set -a; . ./.env.neon-prod.bak; set +a; npx prisma migrate deploy`).
+
+**The app is now a three-tier pipeline: Job → VendorRequirement (VPR, 1:many) →
+Submission.** Job = bare requisition (title/client/vendor/location/status/positions +
+Client rate only). VPR = team-lead-scoped commercial terms (Bill/Pay/engagement/team-lead),
+`status` OPEN/CONVERTED/CANCELLED, analytics-invisible. Submission = the tracked record
+(recruiter performance). Nav: **Jobs · Vendor Portal Requirements · Submissions**.
+
+**Feedback round 1 (discipline, candidate-first bench, trash/lifecycle, Blob):**
+- **IT/Non-IT `discipline`** on **Candidate + Job** (enum `Discipline`, `DISCIPLINES`/
+  `DISCIPLINE_LABEL` in `labels.ts`, `DisciplineBadge` chip). Removed from BenchConsultant
+  (bench reads its linked candidate's). Multi-select filters via `parseEnumList` +
+  `parseList` (`src/lib/filters.ts`) on jobs/candidates/submissions/bench.
+- **Candidate-first bench** — adding a bench consultant picks/creates a **Candidate**
+  (source of truth); every bench person is a submittable candidate.
+- **Unified trash/erase ladder (Candidates + Jobs):** Active → Inactive → Trash (30d) →
+  Erased (backup-to-Blob first). `deletedAt`/`erasedAt` on both; queries filter
+  `deletedAt: null`. `candidate-erase.ts` / `job-erase.ts` (+ `build-*-archive.ts`);
+  purge crons. Recycle bin in Settings → "Erased backups".
+- **Résumés + Documents = private Vercel Blob uploads** (Google Drive fully retired). Served
+  via `/api/resumes/[id]` + `/api/documents/[id]` (auth + sensitive-doc gate). `blob-upload.ts`
+  gzips before `put`. Store `store_L1XBCjldTdCtq2Ay`.
+- **Date-hydration fix:** `formatDate` is UTC-deterministic (`Intl.DateTimeFormat`, tz UTC)
+  to kill React #418 in list tables; `formatDateTime`/`formatTime` stay local (wall-clock).
+
+**Feedback round 2 (this deploy — trash/erase UX, VPR consistency, VPR delete):**
+- **VPR consistency:** a VPR under a terminal job is never left OPEN. The runtime cascade
+  (`changeJobStatus`) was already correct; stale rows came from the seed. Seed derives VPR
+  status from the job; `prisma/reconcile-vpr-status.ts` (idempotent) aligns existing rows —
+  RAN on dev + prod. See DEVLOG 2026-07-08.
+- **Erased records keep the real name + show "(deleted)"** (owner decision — lighter erase,
+  not strict RTBF): `hardErase*` no longer scrub the name; `deletedSuffix()` (`lib/format.ts`)
+  applied across submissions/placements/VPR/interviews lists.
+- **Jobs Trash:** `JobTrashList` (per-row Restore + Erase permanently, no status actions) +
+  `countTrashedJobs` badge; erase dialog = shared `JobEraseButton`.
+- **Trash confirms** list linked ACTIVE items (open VPRs / in-flight subs / active placements;
+  active placement blocks) — `job-danger-zone.tsx`, `candidate-danger-zone.tsx`.
+- **Delete a VPR when empty (0 submissions), else Cancel** — `deleteVendorRequirement` logs
+  `REQUIREMENT_DELETED` (migration `20260708190000`) on the parent job.
+- **Round-1 review + P2 fixes:** `listCandidateOptions` filters `deletedAt: null` (was leaking
+  trashed into pickers); submission-form stale-gate suppressed on candidate change
+  (`gateDismissed`); candidate list `whitespace-nowrap` (row-height); upload-saves-to-library copy.
+
+> **Open owner questions (unchanged, still gating rate/scorecard work):** confirm rate chain;
+> retire legacy Candidate rate; "New vendors" company-wide semantics; rate guardrail soft vs
+> hard; cap requirements per job. In the walkthrough DOCX.
+
+## 🚧 (Superseded) Current work — Rate model, clientRate, company-wide scorecard, rate guardrail (2026-06-22, PRs #32–#35, on `main`)
+
+Post-verification baseline: `main` @ `23c4f86`, no open PRs, tsc clean, 113 unit tests.
+Demo reseeded + sent to the stakeholder for verification (creds `sriman@lumintrack.com`
+admin+team-lead / `hrishikesh@lumintrack.com` recruiter, password `LuminTrack2026!`);
+`LuminTrack-App-Walkthrough.docx` (feature tour + open questions) delivered. **Awaiting
+stakeholder feedback.**
+
+- **`clientRate` end-to-end (PR #32).** New nullable `clientRate Decimal(12,2)` on **Job,
+  Submission, Placement, VendorRequirement** (migration `20260622190000_client_rate`,
+  applied to the Neon dev DB), wired through Zod schemas, all create/edit forms, server
+  actions (incl. audit-drift compare + the VPR→submission convert path), and queries
+  (Decimal→number flatten). Rate model documented above. `candidateRate` intentionally
+  **not** dropped (owner to confirm).
+- **Live rate-chain warning (PR #34).** `src/lib/rates.ts` `rateChainWarnings()` +
+  `src/components/ui/rate-chain-warning.tsx` — advisory amber note on the submission
+  new/edit forms when rates break the chain (pay>bill / bill,candidate>client). **Never
+  blocks a save**; silent when client rate is blank. 10 unit tests in `src/lib/__tests__/rates.test.ts`.
+- **Company-wide "New vendors" scorecard (PR #32).** `getMonthlyScorecard`
+  (`src/server/queries/monthly-scorecard.ts`) now counts the first-ever submission *anyone*
+  made to a vendor (credited to whoever made it), not per-recruiter.
+- **UX clarity fixes (PR #32).** Admin-only weekly-margin strip on `/placements`; JOINED
+  cascade heads-up on the submission status form; clarified rate/source/vendor/client hints;
+  "⚠ Rates pending" shown when bill==pay (instead of a fake $0 margin); Candidates/Bench/Settings copy.
+- **Bug fixes.** clientRate `Decimal` leak on `/submissions` (`flattenRow` missed the new
+  column — PR #33); clientRate dropped on the VPR→submission convert path (the convert
+  action's `safeParse` omitted the field while still writing it — PR #35). Both in `docs/DEVLOG.md`.
+
+> **Open owner questions gating the rate model + scorecard** (in the walkthrough DOCX):
+> confirm the rate chain; retire legacy Candidate rate?; "New vendors" company-wide
+> semantics; rate guardrail soft-warn vs hard-block; cap requirements per job? Hold
+> rate/scorecard changes until answered.
+
+## ✅ Vendor Portal Requirements (R0–R5) — SHIPPED 2026-06-22 (on `bench-sales-build` / PR #31)
+
+A pre-submission **planning layer**: a team-lead/admin scopes a vendor
+requirement's commercial terms; a recruiter later "moves it to a submission"
+(prefilled + editable), creating the real Submission. Modeled as a **separate
+`VendorRequirement` table** (not Submission+status) so it's invisible to all
+submission analytics by construction. **Team lead = `User.isTeamLead` flag**
+(not a 3rd role); `canManageRequirements = ADMIN || isTeamLead`. Convert reuses an
+extracted `createSubmissionRecord(tx, …)` (`src/server/submission-create.ts`) via
+an idempotent OPEN→CONVERTED claim + a `ConvertGate` sentinel rollback so a
+shared gate (duplicate/iLabor) never orphans a submission. Display id `VPR-###`.
+Key files: `src/app/(dashboard)/vendor-portal/{page,new,[id],[id]/edit,[id]/convert}`,
+`src/components/vendor-portal/*`, `src/server/{actions,queries}/requirements.ts`,
+`src/server/team-lead.ts`. Nav "Vendor Portal" → "Vendor Portal Requirements";
+the old `/jobs?source=randstad` tab relabeled "iLabor Requisitions". Job-create
+form has an optional "plan a requirement" section; job detail + dashboard surface
+them. Full detail + the resume marker: the plan file's "🟢 PROGRESS" block.
+**Owner to-do:** reseed (`npx tsx prisma/seed-demo.ts`) → restart → re-login;
+real-browser eyeball; `git push`.
+
+## 🚧 Current work — Lifecycle bench + reseed + Vendor Portal tab + filter redesign (2026-06-21, on `bench-sales-build` / PR #31)
+
+Four phases, all shipped to the branch (green CI). Plan:
+`~/.claude/plans/users-smumma-documents-company-dashboar-prancy-lightning.md`
+(active section at top).
+
+- **Phase 0 — Lifecycle bench (no migration).** Owner's model: the Bench is "who
+  we're marketing now." A candidate is on the bench via a `BenchConsultant`
+  linked 1:1 (`candidateId`), and `marketingStatus` drives on/off-bench
+  (ACTIVE/PAUSED = on, PLACED/INACTIVE = off). New `src/server/bench-lifecycle.ts`:
+  `ensureBenchForCandidate` (auto-creates the linked bench row when a candidate is
+  created AVAILABLE — wired in `createCandidate`) + `syncBenchOnPlacement` (wired
+  into `placement-lifecycle.ts`: JOINED → PLACED, placement-end/revert → ACTIVE).
+  One-click **Remove from bench** (`removeFromBench` → INACTIVE) on the detail
+  page. Roster defaults to on-bench (new `onBench` filter on `listBenchConsultants`).
+  +3 integration tests.
+- **Phase A — Reseed (`prisma/seed-demo.ts`, run `npx tsx prisma/seed-demo.ts`).**
+  **Admin login changed → `sriman@lumintrack.com` / `LuminTrack2026!`** (Sriman
+  Udugula, the team lead). 11 users total: **3 admins** (Sriman + 2 generated
+  managers) + **8 recruiters** (3 real from the sheet — Hrishikesh Batta TK2090,
+  Sameer Shaik TK2161, Akhila Kalyadapu INC83 — + 5 generated), across **2 teams**
+  (`USEI-Sales IT` / `USEI-Sales IT-2`). Bench consultants now seeded **linked 1:1
+  to candidates** with `marketingStatus` derived from pipeline state. New edge
+  cases: candidate documents with past/within-30d/future expiries, iLabor jobs
+  closed-for-subs / at-cap / unassigned, rates-pending placements, archived
+  résumés, all candidate/submission statuses.
+- **Phase B — Vendor Portal nav tab.** New `/vendor-portal` route +
+  `nav-links.tsx` entry (ClipboardList, after Jobs); reuses
+  `listJobs({ source: "randstad" })`. `JobsTable` gained optional
+  `storageKey`/`columnDefaults` props + 4 requirement columns (positions,
+  submitLimit, externalActiveCount, releasedDate) so the view leads with the
+  requisition fields. The old `/jobs?source=randstad` sub-tab still works.
+- **Phase C — Unified filter redesign + Placements date filter.** New
+  `src/components/ui/date-range-field.tsx` (preset dropdown that reveals From/To
+  **inline** on "Custom range"). Restyled `FilterBar` (kept API; added optional
+  `search` prop = polished icon search box; indigo pill chips). Migrated all list
+  pages: Placements (new `startedRange` startDate filter), Bench, Interviews onto
+  FilterBar; Jobs/Candidates/Submissions adopt the `search` prop;
+  `analytics-filters` (Recruiters/Reports) swapped preset+from/to → inline
+  `DateRangeField` (fixes the custom-range-hides-inputs gap).
+- **Also fixed: `src/proxy.ts` matcher** — excluded the whole `_next/` tree (was
+  only `_next/static|_next/image`), so middleware no longer runs on
+  `/_next/webpack-hmr` and breaks the dev HMR WebSocket (→ broken hydration). See
+  `docs/DEVLOG.md` 2026-06-21.
+
+> **Verification caveat (2026-06-21):** client interactivity (the Filters
+> expand/collapse toggle, the custom-range click-reveal) could **not** be verified
+> through the agent's browser tooling — the preview/Playwright path can't complete
+> the HMR WebSocket handshake, so React doesn't hydrate there. Native form
+> filtering (search/dropdowns/Apply → GET) IS verified, and the reveal is verified
+> server-side (`?preset=custom` renders the inputs). The toggle/reveal are standard
+> `useState` (unchanged pattern) — **needs a real-browser eyeball** (owner testing
+> on Vercel preview or a clean local `npm run dev`). Owner reported the toggle not
+> opening; the proxy matcher fix is the prime suspect (restart + hard-refresh).
+
+## 🚧 Current work — Bench-Sales build (post-June-19 demo)
+
+After the 2026-06-20 demo the stakeholder handed over
+`Dashboard - requirements- user-june-19th.xlsx` (6 tabs). The product owner
+**pivoted** the architecture: most tabs map onto existing concepts, so only two
+things are genuinely new. Full plan:
+`~/.claude/plans/users-smumma-documents-company-dashboar-prancy-lightning.md`.
+**All phases SHIPPED + verified 2026-06-20.**
+
+- **P1 — Bench roster:** new `BenchConsultant` table (the marketing "as-marketed"
+  identity), optionally 1:1-linked to `Candidate` via `candidateId @unique`.
+  `/bench` roster groups by `BenchPriority` (HIGH/SECOND), `ColumnsMenu` defaults
+  to the sheet's display subset; add/edit form has grouped sections + a
+  collapsible "More details" + an **admin-gated marketing-credentials** section
+  (`canViewBenchCredentials` in `src/lib/permissions.ts`, masked password +
+  Reveal). New enums `BenchPriority`/`BenchMarketingStatus`/`BenchEngagement`;
+  `BC-001` display IDs; `Note`/`Activity` gained `benchConsultantId`. Migrations
+  `20260620120000` (P0 enum/user fields) + `20260620130000`.
+- **P2 — Submission bench fields:** `engagement` (C2C/W2), `vendorRecruiterName`,
+  `jobDuties` on `Submission` (migration `20260620140000`); wired through
+  form/edit/table (hidden-by-default cols)/detail. `SUBMISSION_UPDATED` covers it.
+- **P3 — Interviews list:** standalone read-only `/interviews` roll-up
+  (`listInterviews`) of every scheduled round, linking to candidate + submission.
+- **P4 — Vendor Portal:** Jobs "Randstad iLabor" source tab relabeled →
+  "Vendor Portal" (**label only** — `randstad` key + portal-name filter intact).
+- **P5 — Monthly Performance:** added `SubmissionStatus.BACKED_OUT` (migration
+  `20260620150000`, standalone enum-add) + the exhaustive-map fan-out
+  (`labels.ts`, `validation/submission.ts` `SUBMISSION_STATUS_VALUES` — which
+  also closed a pre-existing missing-`OFFER_ACCEPTED` gap, `reports.ts`
+  `TERMINAL`, `dashboard.ts` active-pipeline `notIn`). `/reports` became a
+  `?tab=` router (`reports-tabs.tsx` + `analytics-tab.tsx` (old body moved
+  verbatim) + `monthly-performance-tab.tsx`); Analytics is the no-param default
+  so its filters/pagination are unchanged. `getMonthlyScorecard`
+  (`src/server/queries/monthly-scorecard.ts`, in-memory Mon-start weekly buckets
+  via date-fns `eachWeekOfInterval`) drives `scorecard-grid.tsx` (2-row grouped
+  header, sticky recruiter col, team Total + grand Total rows, red non-zero
+  Backouts) + `scorecard-picker.tsx` (`?month=YYYY-MM&team=`). Metrics:
+  Submissions/Backouts (on `submittedAt`), Interviews (round `scheduledAt`),
+  New vendors (recruiter's first-ever submit to a vendor), Closures (placement
+  `startDate`). Seed sets `User.empId` (`EMP-101..`) + teams Alpha/Beta;
+  `prisma/backfill-emp-team.ts` for real data. **Also fixed:** `seed-demo` wipe
+  was missing Placements/Documents/Bench (FK violation on re-seed) — now a
+  comprehensive FK-safe cascade.
+
+> **Migration workflow (non-interactive shell):** `prisma migrate dev` is
+> interactive — instead hand-write the SQL under `prisma/migrations/<ts>_<name>/`
+> then `prisma migrate deploy` + `prisma generate`. **After `generate`, RESTART
+> the dev server** (HMR does not reload the regenerated client) — which also
+> **logs you out** (session cookie), so re-login after a restart.
+
+## 🚧 Current work — Round 5: Submission & workflow UX overhaul (IN PROGRESS)
+
+Owner asked (2026-05-29) for a deep rework of the submission experience.
+A 5-persona UX/product audit (recruiter, admin, UX, PM, QA) all converged on
+the same problems. Full plan + decisions + phased build in
+[`docs/PLAN_submission_workflow_overhaul.md`](./docs/PLAN_submission_workflow_overhaul.md)
+(working copy: `~/.claude/plans/i-got-a-initial-cozy-sloth.md`).
+
+**Owner decisions:** (1) submissions **gated by assignment with self-claim**
+("Claim this job" → submit; admins submit/assign freely); (2) **three submit
+entry points** sharing one form (job page + candidate page + global
+`/submissions` "New submission"); (3) override + status reasons become a
+**preset list + optional note**; (4) all four areas in scope (submission flow,
+assignment, columns/density, confirmations/feedback).
+
+**Top problems found:** no toast/success feedback anywhere (silent saves,
+incl. the JOINED→placement cascade); submissions only startable from a job
+page; assignment is decorative (`createSubmission` never reads `JobAssignment`);
+override gates are toothless/brittle (`error.startsWith("iLabor")` field sniff);
+no inline list editing; submissions list lacks days-in-stage / "mine stale >7d";
+résumé silently wiped on candidate switch; native `window.confirm` in 4 delete
+paths; `submittedById` un-correctable.
+
+**Phases:** 1 — toast primitive + typed gate kinds (foundational); 2 —
+assignment gate + self-claim + 3 entry points; 3 — wire toasts + branded
+confirm dialogs; 4 — submissions-list upgrades; 5 — polish. Reasons are
+`labels.ts` string sets, so the only possible migration is one optional
+`Activity.isOverride` boolean.
+
+**Post-build UX testing (2026-05-29/30, admin + recruiter personas via the
+Claude-in-Chrome extension).** Live test tracker (what's tested / pending, incl.
+the `uploads/` iLabor scenarios) in
+[`docs/ROUND5_UX_FINDINGS.md`](./docs/ROUND5_UX_FINDINGS.md). The headline
+assignment-gate + self-claim flow, all three submit entry points, the
+"Mine, stale >7d" filter, the Columns menu, and the iLabor `closed` gate were
+all verified live. **Four bugs found + fixed (all shipped to `main`):**
+- `dc0fe1d` — after any submission gate, React 19's post-action `<form>` reset
+  snapped controlled `<select>`s to their first option, silently mis-attributing
+  `submittedById`. Fixed with a hidden-input backstop + a remount key on the
+  selects (`submission-form.tsx`).
+- `542c65c` — same React-19 reset exposure applied to `submission-edit-form.tsx`
+  (the earlier follow-up; now done).
+- `38871b4` — the "days in stage > 7d" **amber stale highlight never rendered**:
+  `<Td>` bakes in `text-slate-700` and `cn()` has no `tailwind-merge`, so the
+  passed `text-amber-700` lost the cascade. Moved the colour onto the inner span.
+- `1a99bc4` — a recruiter on a job that's **both unassigned and iLabor-closed**
+  (or capped/duplicate) was trapped in an infinite not_assigned → claim → second
+  gate → not_assigned loop, because `claim=1` only lived in the not-assigned
+  block. Fixed by latching `claimIntent` and persisting `claim=1` across
+  follow-up gates.
+
+**Résumé archive (soft delete) — SHIPPED 2026-05-30 (commit `cf03c8f`,
+migration `20260530052124_resume_soft_delete`).** "Deleting" a résumé now
+**archives** it (`CandidateResume.isActive = false`) instead of hard-deleting,
+so a submission keeps its live `candidateResumeId` link (and snapshot) — the
+résumé → submission → interview chain stays intact. New `archiveCandidateResume`
+/ `restoreCandidateResume` actions (`RESUME_ARCHIVED` / `RESUME_RESTORED`
+audit); `deleteCandidateResume` kept but guarded to **zero-submission** résumés
+only. The new-submission picker (`listCandidateOptions`) offers active résumés
+only; the edit form (`getSubmissionForEdit`) also includes the in-use résumé
+even if archived, labelled "(archived)", so the controlled select never drops
+the saved selection. The library splits active vs archived behind a
+"Show archived (N)" chip with an *Archived* badge + Restore; permanent delete
+shows only on unused résumés. Verified live end-to-end.
+
+**Loose-ends wrap (2026-05-30).** (1) **`cn()` → `tailwind-merge`**
+([`src/lib/cn.ts`](./src/lib/cn.ts)): the amber-highlight bug's root cause was
+`cn` plain-joining classes with no conflict resolution, so a component's baked
+`text-slate-700` beat a caller's `text-*`. Now conflicts resolve last-wins,
+fixing the whole class — including a silently-defeated `text-red-600` on the
+reports negative-margin cell. The submissions stale cell reverted to the simple
+cell-level colour. (2) **Contacts dialog** close-with-unsaved-edits prompt is now
+a branded `ConfirmDialog` (the rare cross-entity-switch guard stays native — a
+synchronous render-phase decision). (3) **iLabor cap gate verified live**. All
+delete confirm dialogs are branded `ConfirmSubmit`. Remaining low-priority,
+code-verified-only: job-status-change toast + no-toast-on-login.
+
+## 🚧 Current work — Round 4 pre-demo (Documents → Placements → Export)
+
+Admin handed over a new pre-demo requirements bundle on 2026-05-28.
+The full plan + UI/UX shape + code-review fixes live in
+`~/.claude/plans/expressive-whistling-hedgehog.md`.
+
+- **R4.1 — Candidate documents library: SHIPPED 2026-05-28.**
+  Per-candidate `CandidateDocument` model (4 categories: Identity,
+  Work Auth, Education, Employment; the first two gated to admin via
+  `src/lib/permissions.ts`), Google-Drive-link storage matching
+  `CandidateResume`, optional issued / expiry dates, expiry color
+  pills (slate / amber / red) and a Deel-style "expiring within 30
+  days" banner. Mounted on `/candidates/[id]` between résumés and
+  submissions; Dashboard "Needs attention" card gained a third sub-
+  section "Documents expiring (30 days)" scoped by `?scope=me|org`.
+  Audit log: `CANDIDATE_DOCUMENT_ADDED / UPDATED / REMOVED` (migration
+  `20260528183656_r4_1_candidate_documents`).
+- **R4.2 — Placements tab: SHIPPED 2026-05-28.**
+  Auto-creates a `Placement` row when a submission status flips to
+  JOINED (`PlacementStatus`: ACTIVE / EXTENDED / ENDED /
+  TERMINATED), with `billRate` / `payRate` `Decimal(12, 2)`,
+  extensions via `PlacementExtension` rows (overlap-blocked by Zod,
+  edit-only), end-of-placement card with reason + optional
+  replacement-submission picker (named relation
+  `"PlacementReplacement"`), and a candidate-lifecycle cascade:
+  Candidate.status auto-flips to PLACED on JOINED and back to
+  AVAILABLE when no other ACTIVE/EXTENDED placements remain (logged
+  via `CANDIDATE_STATUS_CHANGED`). Reverting a JOINED submission
+  marks the placement TERMINATED with a system endNote rather than
+  hard-deleting (no-hard-delete project norm). Concurrent-JOINED
+  race protected by `submissionId @unique` + a P2002 no-op catch.
+  Rate edits gated to admin OR submission's recruiter-of-record
+  (`src/server/actions/placements.ts`); list page masks rates for
+  ineligible viewers. Lifecycle helpers extracted into
+  `src/server/placement-lifecycle.ts` and reused by both
+  submissions.ts and placements.ts. New `/placements` list with
+  sticky summary strip (active count · weekly margin · ending in
+  14d), default ACTIVE filter, ColumnsMenu (Recruiter hidden by
+  default), and `PLC-001` display IDs. Detail page at
+  `/placements/[id]` has a summary grid, details card, extension
+  history mini-cards + inline Extend popover, and an
+  end-of-placement card that only renders when the placement is no
+  longer ACTIVE. Reports gained "Active placements + projected
+  margin" (Σ (bill − pay) × 8h × remaining-days, 90-day fallback
+  for open-ended, amber when < 15%, red when negative). Dashboard
+  "Needs attention" gets a "Placements with rates pending"
+  sub-list (admin + org scope only). Candidate detail shows a
+  "Currently placed" pinned card while ACTIVE and a "Placement
+  history" sub-table for past ones. Backfill via
+  `npx tsx prisma/backfill-placements.ts` (idempotent). Migrations:
+  `20260528193426_placements_and_extensions` (tables + enums) +
+  `20260528193550_placement_audit_actions` (`PLACEMENT_*` and
+  `CANDIDATE_STATUS_CHANGED` enum value adds — split because
+  Postgres can't add enum values and use them in one transactional
+  migration).
+- **R4.3 — Manual data export: SHIPPED 2026-05-28.**
+  Two Route Handlers under `src/app/api/export/`: `full/route.ts`
+  returns a restore-grade JSON dump of every table (User rows have
+  `passwordHash` stripped); `excel/route.ts` builds a multi-sheet
+  `.xlsx` via `exceljs` with two modes — `business` (no PII, no
+  rates, no Identity/Work Auth documents, no résumé Drive links,
+  no activity log) and `full` (admin-only — everything). Shared
+  builders live in `src/server/exporters/` (`build-backup-json.ts`,
+  `build-business-excel.ts`) so the deferred R4.4 cron can reuse
+  them. Admin-only `/settings/export` page has a segmented mode
+  toggle, grouped entity checkboxes (Operational / Reference /
+  Sensitive — Sensitive group hidden in business mode), live
+  pre-flight summary driven by `getBackupPreflight()`, two
+  download buttons (Excel primary, JSON full-mode only), and an
+  Export history table reading the last 20 `DATA_EXPORTED` audit
+  rows. Each export logs `DATA_EXPORTED` with a `mode=…;format=…;
+  entities=…;bytes=…` note. Migration
+  `20260528200000_data_exported_action` adds the enum value.
+- **R4.4 — Scheduled Drive backup: deferred to post-demo.**
+- **Pre-demo polish round (2026-05-28, commits `ae4847f..03fede5`):**
+  surgical fixes surfaced during a scenario sweep + data-driven
+  re-import deep dive.
+  - **Placement reactivation on re-JOINED** (`ae4847f`):
+    `ensurePlacementOnJoined` now finds-then-reactivates a
+    TERMINATED/ENDED placement before falling through to create,
+    logging `PLACEMENT_UPDATED note=reactivated`. Closes the
+    inconsistent-state path where reverting JOINED → re-applying
+    JOINED left the candidate flagged PLACED with zero ACTIVE
+    placements.
+  - **Candidate-status guard** (`ae4847f`): `updateCandidate`
+    blocks manual status edits away from PLACED while an ACTIVE/
+    EXTENDED placement exists. The lifecycle helper owns PLACED ↔
+    AVAILABLE transitions.
+  - **Replaces-pill on placement detail** (`018fc6e`):
+    `getPredecessorPlacement(submissionId)` finds the prior
+    placement that picked this submission as a replacement; the
+    detail page header shows "Replaces PLC-007 (Jane Doe)".
+  - **Expiring-docs banner on placement detail** (`018fc6e`):
+    `getExpiringDocumentsForCandidate` surfaces a candidate's
+    documents expiring within 30 days as an amber banner on the
+    placement page while ACTIVE — compliance signal where it
+    matters, not just hidden on the candidate page.
+  - **Restore-from-backup script** (`a878f00`):
+    `prisma/restore-from-backup.ts`. Dry-run by default; `--confirm`
+    wipes + re-inserts every table from a backup JSON in FK-safe
+    order. User rows get a placeholder password hash and
+    `isActive=false` so login is blocked until reset. Makes the
+    "restore-grade" claim on the JSON dump actually true.
+  - **Streaming Excel export** (`a878f00`, `ef95d13`):
+    `buildBusinessExcel` → `streamBusinessExcel` (returns a Node
+    `Readable` via `ExcelJS.stream.xlsx.WorkbookWriter`); route
+    handler returns `Readable.toWeb(stream)` so large workbooks
+    no longer hold the whole file in memory. `buildBusinessExcelBuffer`
+    kept for the deferred R4.4 cron. Worksheet `views` must go in
+    the `addWorksheet` options bag — the streaming writer rejects
+    `ws.views = ...` as read-only.
+  - **Reports `<thead>` fix** (`3425b90`): `CollapsibleTable` now
+    wraps the `head` row in `<thead>`; bare `<tr>` inside `<table>`
+    was tripping React's hydration warning on `/reports`.
+- **iLabor re-import hardening (2026-05-28, commits
+  `a1aa862..03fede5`):** data-driven gap closure on what else
+  could go wrong on a re-import. See `ENHANCEMENTS.md` "Round 4
+  follow-ups" for the remaining medium/low items.
+  - **3 iLabor signal fields captured** (`a1aa862`, migration
+    `20260528210000_ilabor_signal_fields`): nullable `Job.submitLimit`
+    (always 30 in sample), `Job.ilaborSubmitOpen` (0 = iLabor closed
+    for subs, 1 = accepting; 52/306 rows = 0), `Job.ilaborScreenerCode`
+    (>0 means screener attached; 33/306 rows = 3). Job detail iLabor
+    card now renders Accepting / "Submissions closed at iLabor" pill
+    next to the iLabor subs count, Submission cap row, and a
+    "Screening required" amber badge. "Department" row hidden when
+    the value is "Default" (all 306 sample rows).
+  - **Soft submission gates** (`a1aa862`): `createSubmission`
+    gained two `needsConfirm` paths reusing the duplicate-override
+    pattern — `ilabor_closed` (when `ilaborSubmitOpen === 0`) and
+    `ilabor_cap` (when `max(externalActiveCount, local active
+    count) >= submitLimit`). Override field is `ilaborOverrideReason`;
+    the `CANDIDATE_SUBMITTED` audit note composes from up to two
+    triggers, joined by "; ".
+  - **Preview drift detection** (`962e861`): `RowDigest` gained
+    `titleDrifted` / `customerDrifted` / `existing*` fields; the
+    preview shows red "title changed" / "client changed" badges on
+    updated rows and a top-of-preview red banner with the drifted
+    count. The per-job `JOB_UPDATED` audit row that already fired
+    for client/vendor relinks now also fires on title change, with
+    a unified diff in the description.
+  - **4 re-import guards** (`03fede5`):
+    1. **Intra-batch Req ID dedup** — `validateRows` skips duplicate
+       `requisitionId`s within a single file and emits a per-row
+       "Duplicate requisitionId" error so the dropped row appears
+       in the skipped list.
+    2. **Effective active count** — job detail card shows
+       `max(externalActiveCount, local non-terminal sub count)`
+       instead of iLabor's stale snapshot; amber inline note shows
+       the iLabor value when they diverge.
+    3. **Disappeared-from-iLabor signal** — new `listStaleIlaborJobs`
+       query surfaces portal-linked jobs still OPEN/ON_HOLD whose
+       `lastImportedAt` predates the most recent
+       `REQUISITIONS_IMPORTED` audit row; `/jobs/imports` renders
+       them as an amber "Stale iLabor jobs" section.
+    4. **Case-insensitive Vendor/Client match** — `findFirst({mode:
+       "insensitive"})` → create-if-missing replaces the exact-name
+       upsert. "RANDSTAD" and "Randstad" now reuse the same row;
+       previously the rename created orphan rows. Preview lists
+       net-new vendor/client names so a true rename ("RANDSTAD" →
+       "Randstad Technologies") is visible before commit.
+
+## iLabor requisition import (Phase 8b: browser extension is next)
+
+Active build: importing Randstad iLabor requisitions into LuminTrack via a
+browser-extension → JSON-file → admin-upload pipeline, plus related Jobs-page
+enhancements.
+
+**Read first:** [`ILABOR_IMPORT_HANDOFF.md`](./ILABOR_IMPORT_HANDOFF.md) — live
+snapshot, file map, resolved decisions, iLabor JSON sample. The architectural
+"why" lives in [`docs/PLAN_iLabor_import.md`](./docs/PLAN_iLabor_import.md).
+
+> **✅ Fix shipped (2026-05-28) — iLabor import "expired transaction".**
+> The 306-row sample import used to crash with a Prisma "expired
+> transaction" error inside `logActivity`. Root cause was the single
+> 60s interactive `$transaction` wrapping the whole import in
+> `src/server/actions/ilabor-import.ts` — not `logActivity` itself.
+> Now split into a session-scoped `pg_try_advisory_lock` +
+> un-wrapped prep + per-row mini `$transaction(job.upsert + audit)` +
+> un-wrapped summary audit. See `docs/DEVLOG.md` for the full story.
+
+- **Status:** Phases 0–7 done **and** the post-Phase-7 polish round shipped
+  (concurrent-import lock, per-job `JOB_IMPORTED` audit + backfill, `/jobs/imports`
+  history page, page-jump input, SNo on candidate/submission lists,
+  `jobSourceLabel` portal fallback). Phase 8b — the browser extension in a
+  separate repo — is the only piece remaining.
+- **Audit follow-ups:** see [`bugs.md`](./bugs.md) — "Polish round 2"
+  (2026-05-24 audit) is now **mostly shipped**: correctness items 1–6, UX
+  items 8–14, dialog focus trap, error/not-found pages, mobile topbar,
+  dashboard tooltips + Top-5 source bucket, Reports Joined %, sub-table
+  pagination, collapsed timeline, column pickers on Candidates/Submissions
+  with shared `ColumnsMenu` + keyboard reorder, plus Round 3 §A1 (manual
+  job form parity for 7 iLabor columns) — all in commits 861c90f..e9d5652
+  (2026-05-25). **Round 3.5 also shipped 2026-05-25**: Dashboard "Active
+  jobs" subtitle tightened, Candidates Skills column hidden-by-default +
+  capped at 3 chips with `+N` tooltip, new `Candidate.featuredSkills`
+  star-picker (chip wall) feeding the list-view truncation, candidate
+  detail Interview History replaced with grouped-by-job rows + ✓/✗/⌛
+  pips + `<details>` expand, sub-tables paginate at `SUB_PAGE_SIZE = 5`
+  (with `Pagination` `pageSize` prop + jump input at >3 pages), and
+  `listCandidates`/`listSubmissions` now flatten Prisma `Decimal`
+  fields before returning so the Client-Component tables don't crash.
+  **Tier 1 pre-demo fixes shipped 2026-05-25** (commits
+  `1296300..144296a`): org-entity writes (clients/vendors/sources) gated
+  on admin role; `useFocusTrap` hook extracted from `Dialog` and adopted
+  by `MobileNav`; `buttonClass` gains a visible focus-ring; submission
+  status form uses `useTransition` for a pending button; global topbar
+  search supports ↑/↓/Enter keyboard nav with combobox ARIA; new
+  `?scope=me|org` Dashboard toggle (defaults to `me` for recruiters,
+  `org` for admins) plus a "My work — needs attention" card driven
+  by a new `getMyWork(userId)` query.
+- **Post-demo polish shipped 2026-05-25** (commits `3cd010c..ea73c31`):
+  optional `meetingLink` URL on `InterviewRound` (migration
+  `20260525120000_interview_meeting_link`) with form input + "Join"
+  link on round cards and the candidate interview-history sub-table;
+  candidate interview-history switched from a cramped `<table>` to
+  per-round mini-cards (mirrors `interview-rounds-manager.tsx`
+  pattern), and the collapsed group row reorganized into a two-cluster
+  layout — `Job · Client` on the left, `[status] [pips] date See details`
+  on the right — fixing the "stacked at narrow widths" complaint.
+- **Narrow-width hardening (2026-05-25, commits `3683f2f`, `596bd9b`):**
+  the interview-history summary row's two clusters now wrap as *units*
+  at every viewport tested (1280 → 360 px). The `·` separator binds to
+  the client name in a single inline-flex span, and the date + "See
+  details ▾" toggle share a `whitespace-nowrap` span so they never
+  orphan. Pip row tightened to `flex-nowrap` (capped at 5 so width is
+  bounded). Verified with Playwright MCP screenshots.
+- **Medium-bug sweep shipped 2026-05-26** (PRs #6 / #7 / #8):
+  - **§B4 + §E2 + §E3 + §E4** — `Candidate.status` (CandidateStatus enum:
+    AVAILABLE / PLACED / NOT_INTERESTED / DO_NOT_CONTACT, separate from
+    `isActive`), `tags[]` (lowercased free-form labels), `lastContactedAt`
+    (bumped explicitly via new `markCandidateContacted` action + new
+    `CANDIDATE_CONTACTED` audit), `source` (free-text origin). Migration
+    `20260526140000_candidate_status_tags_contact_source` + companion
+    `20260526145000_restore_array_defaults`. Candidate form gets the four
+    inputs; detail page surfaces status badge + source + last-contacted
+    row + tag chips.
+  - **§D5 + §C4** — `InterviewRound.scheduledTimezone` (IANA string,
+    UTC `scheduledAt` unchanged); dropped `@@unique([candidateId, jobId])`
+    on Submission and replaced the DB block with an action-layer duplicate
+    check that captures `duplicateReason` and a custom audit note when
+    overridden. Migration `20260526150000_interview_tz_and_dup_override`.
+  - **§F3 + §F4 + §J2** — `/reports` gained a "Recruiter aging" table
+    (submissions >14 days still in early pipeline stages) + a "Client
+    revenue projection" table (`Σ candidateRate × 8h × duration ×
+    positions` for OPEN/ON_HOLD jobs, 90-day default duration when
+    start/end dates missing). New admin-only `/audit` route — org-wide
+    activity log filterable by action + user, paginated 25/page, linked
+    from Settings → Admin tools. No migration.
+- **§F2 funnel velocity shipped 2026-05-26** (PR #11): `/reports` gained
+  a "Time to fill" card (median + p90 days from `Job.createdAt` to a
+  JOINED submission, overall + by client + by source) and a "Time in
+  stage" table (median + p90 days each submission sits in each
+  non-terminal pipeline status, walked from `SUBMISSION_STATUS_CHANGED`
+  audit rows). No migration. New `median()` / `percentile()` helpers in
+  `src/server/queries/reports.ts`.
+- **iLabor signal fields shipped 2026-05-28**: data-driven gap closure
+  after a fill-rate scan over the 306-row sample. New nullable columns
+  on `Job` — `submitLimit` (iLabor's per-req max), `ilaborSubmitOpen`
+  (0 = iLabor closed for subs, 1 = accepting; raw int preserved for
+  unknown values), and `ilaborScreenerCode` (>0 means a screener is
+  attached). iLabor card on `/jobs/[id]` now shows an Accepting /
+  "Submissions closed at iLabor" pill next to the iLabor subs count,
+  a "Submission cap" row, and a "Screening required" amber badge
+  when a screener is attached. The "Department" row is hidden when
+  the value is literally "Default" (all 306 sample rows). `createSubmission`
+  gained two soft warnings reusing the existing duplicate-override
+  pattern: `ilabor_closed` fires when iLabor stopped accepting subs,
+  `ilabor_cap` fires when `max(externalActiveCount, local active
+  count) ≥ submitLimit`. Both override with a reason field
+  (`ilaborOverrideReason`) appended to the `CANDIDATE_SUBMITTED`
+  audit note as `ilabor-override:<reason>`. Manual job form
+  unchanged — these are iLabor system signals. Migration
+  `20260528210000_ilabor_signal_fields`.
+- **Remaining large items moved to [`ENHANCEMENTS.md`](./ENHANCEMENTS.md):**
+  §J1 PII export → iLabor 8b extension → §J3 admin 2FA → §E1 résumé
+  parsing → §J4 session inspector. **§G1-G3 (notifications) and §I4
+  (dark mode) are deferred indefinitely on user direction.**
+- **Process:** phase-by-phase with product-owner confirmation between phases;
+  teaching-style narration of meaningful code; additive only — the existing
+  dashboard's behavior is unchanged for anyone not exercising the new flow.
+
+## Build status
+
+All 7 original build phases are complete and verified:
+
+- **Phase 1** — Foundation & Auth ✅
+- **Phase 2** — Jobs & org entities ✅
+- **Phase 3** — Candidates (Drive-link résumé + inline preview, duplicate warning) ✅
+- **Phase 4** — Submissions (status pipeline, duplicate prevention) ✅
+- **Phase 5** — Interview rounds ✅
+- **Phase 6** — Timeline / audit UI + Notes ✅
+- **Phase 7** — Dashboard, Reports, Recruiters, global search ✅
+
+iLabor import sub-build (additive — see `ILABOR_IMPORT_HANDOFF.md`):
+
+- **iLabor Phases 0–3** — Recon, schema + migration, validation, server actions ✅
+- **iLabor Phase 4** — `/jobs/import` admin wizard (upload → preview → confirm) ✅
+- **iLabor Phase 5** — Source sub-tabs (`?source=`) + iLabor detail card ✅
+- **iLabor Phase 6** — Column show/hide + drag-reorder on Jobs list (`useColumnPrefs`) ✅
+- **iLabor Phase 7** — Display IDs (`JOB-00123` / `REQ-159263` / `CAND-001` / `SUB-001`) + SNo ✅
+- **iLabor Phase 8a (polish)** — pg advisory lock on import, per-job `JOB_IMPORTED` audit + backfill, `/jobs/imports` history page, page-jump input, source-label portal fallback ✅
+- **iLabor Phase 8b** — Browser extension (separate repo, Manifest V3) ⏳
+
+The tolerant envelope adapter (added in Phase 4 polish) means admins can paste
+raw iLabor network captures directly today — the extension is purely a UX
+upgrade, not a functional gate.
+
+**Post-Phase-7 work (committed to `main`):**
+- List pages (Jobs/Candidates/Submissions/Recruiters) gained clickable column
+  **sorting** (`?sort=&dir=`), **10-row pagination** (`?page=`), and a **collapsible
+  filter bar** — shared primitives `src/components/ui/{sortable-header,pagination,filter-bar}.tsx`;
+  list queries return `{ rows, total, page }`.
+- Phase 7 review bugs fixed (Dashboard "Active jobs" KPI subtitle, dead recruiter-detail
+  filter, admin excluded from the Recruiters list, `$/hr` rate units, clearer timeline labels).
+- **Résumé library** — each candidate keeps many labelled Google Drive résumés
+  (`CandidateResume`, 1:N), managed in a section on the candidate detail page. Submitting
+  a candidate picks a saved résumé or adds one inline (optional). The submission keeps
+  `resumeDriveLink` as a snapshot (so history survives résumé edits/deletes) plus a
+  nullable `candidateResumeId` FK; `Candidate.resumeDriveLink` was dropped. Shown on the
+  submission detail (inline preview) and as a column on the job's candidate table.
+- **Submission edit form** — `/submissions/[id]/edit` lets the rate, résumé, and notes
+  of an existing submission be changed (candidate, job, and recruiter stay fixed at
+  creation; status keeps its own form). Reuses the résumé picker via a shared
+  `submissionEditSchema`; `updateSubmission` logs a new `SUBMISSION_UPDATED` audit
+  action (migration `20260522020000_submission_updated_action`).
+- **Status-change context** — the "Update status" form also captures an optional
+  real-world event date/time, a note, and (for Rejected / On Hold) a preset reason.
+  Stored on three new nullable `Activity` columns (`eventAt`, `note`, `reason`;
+  migration `20260522030000_status_change_details`) and shown on the activity
+  timeline. Reason presets live in `src/lib/labels.ts` as app-level strings.
+- **iLabor bulk import (Phases 4–8a)** — `/jobs/import` admin wizard,
+  `/jobs/imports` history page, source sub-tabs on the Jobs list, read-only
+  iLabor requisition card on job detail, column show/hide + drag-reorder
+  (`useColumnPrefs` hook + localStorage, versioned), display IDs (`JOB-00123` /
+  `REQ-159263` / `CAND-001` / `SUB-001`) backed by `seq Int @unique @default(autoincrement())`
+  on Job / Candidate / Submission (migration `20260524160000_display_sequences`),
+  SNo column on all three lists, Pagination "Go to page N" jump (>7 pages),
+  Postgres advisory lock guarding concurrent admin imports, per-job
+  `JOB_IMPORTED` audit entry (enum migration `20260524180000_job_imported_action`)
+  with one-off backfill script `prisma/backfill-job-imported.ts`, and
+  `jobSourceLabel` portal-name fallback for imported rows.
+- **Polish Round 2 (2026-05-25)** — sub-table pagination with namespaced
+  query params (`?subs=` on jobs/candidates, `?ints=` on candidates,
+  `?jobs=`/`?rsubs=`/`?rstatus=` on recruiters) reusing the existing
+  `Pagination` component (now with an optional `paramKey` prop). Activity
+  timeline became a Client Component that collapses to 5 by default and
+  pages 20-at-a-time when expanded >30 entries; `getTimelineFor` capped at
+  200 rows. Column pickers on `/candidates` + `/submissions` driven by a
+  shared `src/components/ui/columns-menu.tsx` (drag-reorder + ↑/↓ keyboard
+  buttons), replacing ~110 lines of duplication in `JobsTable`. Dialog
+  focus trap + return-focus on close. Dashboard StatCard tooltips + Top-5
+  source bucket + em-dash for zero-row recruiters. Reports gained a
+  Joined % column per dimension. Manual job form parity for 7 nullable
+  iLabor columns (positions, reqType, department, durationLabel, atsId,
+  startDate, endDate) under a collapsible "More job details" section.
+  `error.tsx` + `not-found.tsx` for the dashboard segment.
+  Recruiter-detail status pill filter. Settings Admin Tools card.
+  See commits 861c90f..e9d5652.
