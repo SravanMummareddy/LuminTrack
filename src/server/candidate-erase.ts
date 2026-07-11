@@ -1,5 +1,5 @@
 import { del, put } from "@vercel/blob";
-import { prisma } from "@/server/db";
+import type { ScopedPrisma } from "@/server/db";
 import { logActivity } from "@/server/activity";
 import { buildCandidateArchive } from "@/server/exporters/build-candidate-archive";
 
@@ -14,13 +14,14 @@ export const CANDIDATE_ARCHIVE_PREFIX = "archives/candidates/";
  * data with no backup. Returns the stored pathname.
  */
 async function archiveCandidateToBlob(
+  db: ScopedPrisma,
   candidateId: string,
   displayId: string,
 ): Promise<string | null> {
   // strict: if any file can't be read, this throws and the erase aborts (the
   // caller runs this BEFORE the destructive transaction) — never shred a file
   // that didn't make it into the recoverable backup.
-  const archive = await buildCandidateArchive(candidateId, { strict: true });
+  const archive = await buildCandidateArchive(db, candidateId, { strict: true });
   if (!archive) return null;
   // Sortable, human-readable key: archives/candidates/CAND-001-2026-07-08-01-40-00.zip
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
@@ -54,10 +55,11 @@ export const CANDIDATE_TRASH_RETENTION_DAYS = 30;
  * audit row's FK stays valid).
  */
 export async function hardEraseCandidate(
+  db: ScopedPrisma,
   candidateId: string,
   performedById: string | null,
 ): Promise<boolean> {
-  const candidate = await prisma.candidate.findUnique({
+  const candidate = await db.candidate.findUnique({
     where: { id: candidateId },
     select: {
       seq: true,
@@ -79,9 +81,9 @@ export async function hardEraseCandidate(
 
   // Back up FIRST — never scrub without a recoverable archive in Blob. If this
   // throws (e.g. Blob misconfigured), the erase aborts and the data is intact.
-  const archivedTo = await archiveCandidateToBlob(candidateId, displayId);
+  const archivedTo = await archiveCandidateToBlob(db, candidateId, displayId);
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.candidateResume.deleteMany({ where: { candidateId } });
     await tx.candidateDocument.deleteMany({ where: { candidateId } });
     // Take the (now erased) person off the marketing bench for good.
@@ -143,18 +145,18 @@ export async function hardEraseCandidate(
  * Permanently erase every trashed candidate whose retention window has expired.
  * Returns the number erased. Called by the scheduled purge route.
  */
-export async function purgeExpiredTrash(): Promise<number> {
+export async function purgeExpiredTrash(db: ScopedPrisma): Promise<number> {
   const cutoff = new Date(
     Date.now() - CANDIDATE_TRASH_RETENTION_DAYS * 86_400_000,
   );
-  const expired = await prisma.candidate.findMany({
+  const expired = await db.candidate.findMany({
     where: { deletedAt: { lt: cutoff }, erasedAt: null },
     select: { id: true },
   });
   let count = 0;
   for (const c of expired) {
     try {
-      if (await hardEraseCandidate(c.id, null)) count += 1;
+      if (await hardEraseCandidate(db, c.id, null)) count += 1;
     } catch {
       // A failed archive/erase (e.g. transient Blob error) leaves this candidate
       // untouched for the next run rather than aborting the whole purge.

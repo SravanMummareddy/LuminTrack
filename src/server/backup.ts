@@ -1,6 +1,7 @@
 import { gzipSync } from "node:zlib";
 import { put, list, del } from "@vercel/blob";
-import { buildBackupJson } from "@/server/exporters/build-backup-json";
+import { prisma, scopedPrisma } from "@/server/db";
+import { buildBackupJson, type BackupJson } from "@/server/exporters/build-backup-json";
 import {
   backupKeys,
   keysToPrune,
@@ -87,8 +88,27 @@ export async function runScheduledBackup(
   now: Date = new Date(),
   sink: BackupSink = getBackupSink(),
 ): Promise<BackupSummary> {
-  const backup = await buildBackupJson();
-  const gz = gzipSync(Buffer.from(JSON.stringify(backup)));
+  // A disaster-recovery snapshot must span every tenant. We assemble the whole
+  // database from per-org scoped reads (never the unscoped client, so the same
+  // code path stays tenant-safe): list active orgs with the base client, then
+  // merge each org's `buildBackupJson` into one dump. Foundation has a single
+  // org → one pass, identical to the pre-tenancy backup.
+  const orgs = await prisma.organization.findMany({
+    where: { isActive: true },
+    select: { id: true },
+  });
+  const merged: BackupJson = {
+    exportedAt: now.toISOString(),
+    version: 2,
+    tables: {},
+  };
+  for (const org of orgs) {
+    const part = await buildBackupJson(scopedPrisma(org.id));
+    for (const [table, rows] of Object.entries(part.tables)) {
+      (merged.tables[table] ??= []).push(...rows);
+    }
+  }
+  const gz = gzipSync(Buffer.from(JSON.stringify(merged)));
 
   const { dailyKey, monthlyKey } = backupKeys(now);
   await sink.put(dailyKey, gz);

@@ -2,8 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { prisma } from "@/server/db";
-import { requireUser } from "@/lib/session";
+import { getScopedPrisma, requireUser } from "@/lib/session";
 import { canManageOrgEntities } from "@/lib/permissions";
 import { toFieldErrors } from "@/lib/validation/common";
 import type { FormState } from "@/lib/form-state";
@@ -60,6 +59,7 @@ export async function saveContact(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const gate = await requireAdmin();
   if ("error" in gate) return gate;
   const kind = parsedKind(formData);
@@ -83,7 +83,7 @@ export async function saveContact(
   // in the same transaction so the "single primary" intent holds without a DB
   // constraint (a partial unique index would force one primary even if none
   // is wanted).
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     if (parsed.data.isPrimary) {
       await tx.contact.updateMany({
         where: { [fk]: parentId, isPrimary: true, NOT: id ? { id } : undefined },
@@ -99,10 +99,11 @@ export async function saveContact(
 }
 
 export async function deleteContact(formData: FormData): Promise<void> {
+  const db = await getScopedPrisma();
   const gate = await requireAdmin();
   if ("error" in gate) return;
   const id = String(formData.get("id") ?? "").trim();
   if (!id) return;
-  await prisma.contact.delete({ where: { id } });
+  await db.contact.delete({ where: { id } });
   revalidatePath("/settings");
 }

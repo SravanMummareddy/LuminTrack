@@ -1,5 +1,5 @@
 import dagre from "@dagrejs/dagre";
-import { prisma } from "@/server/db";
+import { getScopedPrisma } from "@/lib/session";
 import type { UserRole } from "@/generated/prisma/enums";
 
 export type OrgNodeData = {
@@ -101,7 +101,8 @@ export function buildOrgLayout(users: OrgUser[]): OrgChart {
 
 /** The org chart for the current active users, positioned server-side. */
 export async function getOrgChart(): Promise<OrgChart> {
-  const users = await prisma.user.findMany({
+  const db = await getScopedPrisma();
+  const users = await db.user.findMany({
     where: { isActive: true, showInOrgChart: true },
     select: {
       id: true,

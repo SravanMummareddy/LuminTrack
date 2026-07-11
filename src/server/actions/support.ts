@@ -1,8 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/server/db";
-import { requireUser } from "@/lib/session";
+import { getScopedPrisma, requireUser } from "@/lib/session";
 import { canManageOrgEntities } from "@/lib/permissions";
 import { supportProviderSchema, parseSkills } from "@/lib/validation/support";
 import { toFieldErrors } from "@/lib/validation/common";
@@ -16,6 +15,7 @@ export async function saveSupportProvider(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const actor = await requireUser();
   if (!canManageOrgEntities(actor))
     return { error: "Only managers and team leads can manage support providers." };
@@ -44,8 +44,8 @@ export async function saveSupportProvider(
     isActive: parsed.data.isActive,
   };
 
-  if (id) await prisma.supportProvider.update({ where: { id }, data });
-  else await prisma.supportProvider.create({ data });
+  if (id) await db.supportProvider.update({ where: { id }, data });
+  else await db.supportProvider.create({ data });
 
   revalidatePath("/settings");
   return { ok: true };

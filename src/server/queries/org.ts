@@ -1,4 +1,4 @@
-import { prisma } from "@/server/db";
+import { getScopedPrisma } from "@/lib/session";
 
 // Each list now includes a contact count so the settings UI can render
 // "Contacts (N)" links without a follow-up roundtrip.
@@ -13,22 +13,25 @@ const contactsInclude = {
   },
 };
 
-export function listSisterCompanies() {
-  return prisma.sisterCompanySource.findMany({
+export async function listSisterCompanies() {
+  const db = await getScopedPrisma();
+  return db.sisterCompanySource.findMany({
     orderBy: { name: "asc" },
     include: contactsInclude,
   });
 }
 
-export function listClients() {
-  return prisma.client.findMany({
+export async function listClients() {
+  const db = await getScopedPrisma();
+  return db.client.findMany({
     orderBy: { name: "asc" },
     include: contactsInclude,
   });
 }
 
-export function listVendors() {
-  return prisma.vendor.findMany({
+export async function listVendors() {
+  const db = await getScopedPrisma();
+  return db.vendor.findMany({
     orderBy: { name: "asc" },
     include: {
       ...contactsInclude,
@@ -45,7 +48,8 @@ export function listVendors() {
 export async function listActiveUserOptions(): Promise<
   { id: string; fullName: string }[]
 > {
-  const rows = await prisma.user.findMany({
+  const db = await getScopedPrisma();
+  const rows = await db.user.findMany({
     where: { isActive: true },
     select: { id: true, fullName: true, updatedAt: true },
     orderBy: [{ fullName: "asc" }, { updatedAt: "desc" }],
@@ -62,8 +66,9 @@ export async function listActiveUserOptions(): Promise<
 }
 
 /** App users — never selects passwordHash, so the result is safe to pass to client components. */
-export function listUsers() {
-  return prisma.user.findMany({
+export async function listUsers() {
+  const db = await getScopedPrisma();
+  return db.user.findMany({
     orderBy: { fullName: "asc" },
     select: {
       id: true,
@@ -84,8 +89,9 @@ export function listUsers() {
 }
 
 /** Teams for the Settings "Teams" tab: name, lead, and member count. */
-export function listTeamsAdmin() {
-  return prisma.team.findMany({
+export async function listTeamsAdmin() {
+  const db = await getScopedPrisma();
+  return db.team.findMany({
     orderBy: { name: "asc" },
     select: {
       id: true,
@@ -101,7 +107,8 @@ export function listTeamsAdmin() {
  *  admins and inactive users. Dedupes by `fullName` (keeps most-recently-
  *  updated) so accidental seed duplicates don't double up in the UI. */
 export async function listActiveRecruiterOptions() {
-  const rows = await prisma.user.findMany({
+  const db = await getScopedPrisma();
+  const rows = await db.user.findMany({
     where: { isActive: true, role: "RECRUITER" },
     select: { id: true, fullName: true, updatedAt: true },
     orderBy: [{ fullName: "asc" }, { updatedAt: "desc" }],
@@ -124,7 +131,8 @@ export async function listActiveRecruiterOptions() {
 export async function listTeamLeadOptions(): Promise<
   { id: string; fullName: string }[]
 > {
-  const rows = await prisma.user.findMany({
+  const db = await getScopedPrisma();
+  const rows = await db.user.findMany({
     where: { isActive: true, role: { in: ["MANAGER", "TEAM_LEAD"] } },
     select: { id: true, fullName: true },
     orderBy: { fullName: "asc" },
@@ -135,7 +143,8 @@ export async function listTeamLeadOptions(): Promise<
 /** Teams that have at least one active recruiter — powers the Monthly
  *  Performance team filter. Empty when nobody has been assigned a team yet. */
 export async function listTeams(): Promise<{ id: string; name: string }[]> {
-  return prisma.team.findMany({
+  const db = await getScopedPrisma();
+  return db.team.findMany({
     where: { members: { some: { role: "RECRUITER", isActive: true } } },
     select: { id: true, name: true },
     orderBy: { name: "asc" },

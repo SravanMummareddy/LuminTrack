@@ -3,8 +3,7 @@
 import { del } from "@vercel/blob";
 import { uploadPrivateFile } from "@/server/blob-upload";
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/server/db";
-import { requireUser } from "@/lib/session";
+import { getScopedPrisma, requireUser } from "@/lib/session";
 import { logActivity } from "@/server/activity";
 import {
   resumeUploadMetaSchema,
@@ -32,6 +31,7 @@ export async function uploadCandidateResume(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
 
   const parsed = resumeUploadMetaSchema.safeParse({
@@ -55,7 +55,7 @@ export async function uploadCandidateResume(
   if (fileErr)
     return { error: fileErr, fieldErrors: { file: fileErr } };
 
-  const candidate = await prisma.candidate.findUnique({
+  const candidate = await db.candidate.findUnique({
     where: { id: candidateId },
     select: { id: true },
   });
@@ -68,7 +68,7 @@ export async function uploadCandidateResume(
     file,
   );
 
-  const created = await prisma.$transaction(async (tx) => {
+  const created = await db.$transaction(async (tx) => {
     const row = await tx.candidateResume.create({
       data: {
         candidateId,
@@ -100,6 +100,7 @@ export async function updateCandidateResume(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const resumeId = String(formData.get("id") ?? "").trim();
   if (!resumeId) return { error: "Missing résumé reference." };
@@ -114,14 +115,14 @@ export async function updateCandidateResume(
     };
   const { label } = parsed.data;
 
-  const existing = await prisma.candidateResume.findUnique({
+  const existing = await db.candidateResume.findUnique({
     where: { id: resumeId },
     select: { id: true, label: true, candidateId: true },
   });
   if (!existing) return { error: "This résumé no longer exists." };
 
   if (existing.label !== label) {
-    await prisma.$transaction(async (tx) => {
+    await db.$transaction(async (tx) => {
       await tx.candidateResume.update({
         where: { id: resumeId },
         data: { label },
@@ -149,17 +150,18 @@ export async function updateCandidateResume(
 export async function archiveCandidateResume(
   formData: FormData,
 ): Promise<void> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const resumeId = String(formData.get("id") ?? "").trim();
   if (!resumeId) return;
 
-  const existing = await prisma.candidateResume.findUnique({
+  const existing = await db.candidateResume.findUnique({
     where: { id: resumeId },
     select: { id: true, label: true, candidateId: true, isActive: true },
   });
   if (!existing || !existing.isActive) return;
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.candidateResume.update({
       where: { id: resumeId },
       data: { isActive: false },
@@ -180,17 +182,18 @@ export async function archiveCandidateResume(
 export async function restoreCandidateResume(
   formData: FormData,
 ): Promise<void> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const resumeId = String(formData.get("id") ?? "").trim();
   if (!resumeId) return;
 
-  const existing = await prisma.candidateResume.findUnique({
+  const existing = await db.candidateResume.findUnique({
     where: { id: resumeId },
     select: { id: true, label: true, candidateId: true, isActive: true },
   });
   if (!existing || existing.isActive) return;
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.candidateResume.update({
       where: { id: resumeId },
       data: { isActive: true },
@@ -214,11 +217,12 @@ export async function restoreCandidateResume(
  * résumés; this count check is the server-side backstop.
  */
 export async function deleteCandidateResume(formData: FormData): Promise<void> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const resumeId = String(formData.get("id") ?? "").trim();
   if (!resumeId) return;
 
-  const existing = await prisma.candidateResume.findUnique({
+  const existing = await db.candidateResume.findUnique({
     where: { id: resumeId },
     select: {
       id: true,
@@ -232,7 +236,7 @@ export async function deleteCandidateResume(formData: FormData): Promise<void> {
   // Backstop: never hard-delete a résumé still referenced by a submission.
   if (existing._count.submissions > 0) return;
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.candidateResume.delete({ where: { id: resumeId } });
     await logActivity(tx, {
       entityType: "CANDIDATE",

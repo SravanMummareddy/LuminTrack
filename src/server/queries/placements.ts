@@ -1,6 +1,6 @@
-import { prisma } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
 import type { PlacementStatus, UserRole } from "@/generated/prisma/enums";
+import { getScopedPrisma } from "@/lib/session";
 import { canViewFinancials } from "@/lib/permissions";
 import {
   PAGE_SIZE,
@@ -111,6 +111,7 @@ export async function listPlacements(
   filters: PlacementListFilters,
   viewer: PlacementViewer,
 ) {
+  const db = await getScopedPrisma();
   const where: Prisma.PlacementWhereInput = {};
   if (filters.status) where.status = filters.status;
   if (filters.clientId?.length) where.job = { clientId: { in: filters.clientId } };
@@ -134,11 +135,11 @@ export async function listPlacements(
     { id: "asc" },
   ];
 
-  const total = await prisma.placement.count({ where });
+  const total = await db.placement.count({ where });
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
 
-  const raw = await prisma.placement.findMany({
+  const raw = await db.placement.findMany({
     where,
     orderBy,
     skip: (page - 1) * PAGE_SIZE,
@@ -177,7 +178,8 @@ export type PlacementListRow = Awaited<
 
 /** Placement detail with extensions + submission + replacement (if set). */
 export async function getPlacement(id: string) {
-  const raw = await prisma.placement.findUnique({
+  const db = await getScopedPrisma();
+  const raw = await db.placement.findUnique({
     where: { id },
     include: {
       candidate: {
@@ -220,7 +222,8 @@ export async function getPlacement(id: string) {
  *  surface a "Replaces PLC-007" pill. Returns null when this is not a
  *  replacement. */
 export async function getPredecessorPlacement(submissionId: string) {
-  return prisma.placement.findFirst({
+  const db = await getScopedPrisma();
+  return db.placement.findFirst({
     where: { replacementSubmissionId: submissionId },
     select: {
       id: true,
@@ -233,15 +236,16 @@ export async function getPredecessorPlacement(submissionId: string) {
 /** Top-strip summary for /placements: active count, total weekly margin,
  *  ending-within-14-days count. Weekly margin assumes 40-hour weeks. */
 export async function getPlacementsSummary() {
+  const db = await getScopedPrisma();
   const today = new Date();
   const in14 = new Date(today.getTime() + 14 * 86_400_000);
 
   const [activeRows, endingSoon] = await Promise.all([
-    prisma.placement.findMany({
+    db.placement.findMany({
       where: { status: { in: ["ACTIVE", "EXTENDED"] } },
       select: { billRate: true, payRate: true },
     }),
-    prisma.placement.count({
+    db.placement.count({
       where: {
         status: { in: ["ACTIVE", "EXTENDED"] },
         endDate: { gte: today, lte: in14 },
@@ -264,8 +268,9 @@ export async function getPlacementsSummary() {
 /** Placements with both rates still at 0 — surfaces on the Dashboard
  *  "Needs attention" card so admins close the loop on JOINED transitions. */
 export async function getRatesPendingPlacements(opts: { limit?: number } = {}) {
+  const db = await getScopedPrisma();
   const limit = opts.limit ?? 5;
-  const raw = await prisma.placement.findMany({
+  const raw = await db.placement.findMany({
     where: {
       status: { in: ["ACTIVE", "EXTENDED"] },
       billRate: 0,
@@ -292,12 +297,13 @@ export async function getCandidatePlacements(
   candidateId: string,
   opts: { page?: number } = {},
 ) {
+  const db = await getScopedPrisma();
   const where = { candidateId };
-  const total = await prisma.placement.count({ where });
+  const total = await db.placement.count({ where });
   const totalPages = Math.max(1, Math.ceil(total / SUB_PAGE_SIZE));
   const page = Math.min(Math.max(1, opts.page ?? 1), totalPages);
 
-  const raw = await prisma.placement.findMany({
+  const raw = await db.placement.findMany({
     where,
     orderBy: { startDate: "desc" },
     skip: (page - 1) * SUB_PAGE_SIZE,
@@ -322,7 +328,8 @@ export type CandidatePlacementRow = Awaited<
 /** The one currently-active placement for a candidate, if any. Used by the
  *  candidate detail page to render the "Currently placed" pinned card. */
 export async function getActivePlacementForCandidate(candidateId: string) {
-  const raw = await prisma.placement.findFirst({
+  const db = await getScopedPrisma();
+  const raw = await db.placement.findFirst({
     where: {
       candidateId,
       status: { in: ["ACTIVE", "EXTENDED"] },
@@ -349,7 +356,8 @@ export async function getReplacementCandidates(opts: {
   jobId: string;
   excludeSubmissionId: string;
 }) {
-  return prisma.submission.findMany({
+  const db = await getScopedPrisma();
+  return db.submission.findMany({
     where: {
       jobId: opts.jobId,
       id: { not: opts.excludeSubmissionId },

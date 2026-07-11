@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { Plus, Send } from "lucide-react";
-import { prisma } from "@/server/db";
 import { PageHeader } from "@/components/ui/page-header";
 import { Pagination } from "@/components/ui/pagination";
 import { buttonClass } from "@/components/ui/button";
 import { VendorRequirementsTable } from "@/components/vendor-portal/vendor-requirements-table";
 import { FilterBar, type FilterDef } from "@/components/ui/filter-bar";
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser, getScopedPrisma } from "@/lib/session";
 import { canManageRequirements } from "@/lib/permissions";
 import {
   listVendorRequirements,
@@ -45,6 +44,7 @@ export default async function VendorPortalPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  const db = await getScopedPrisma();
   const sp = await searchParams;
   const current = {
     q: clean(sp.q),
@@ -88,7 +88,7 @@ export default async function VendorPortalPage({
   // carries the candidate into the convert flow.
   const submitCandidateId = clean(sp.submitCandidateId);
   const submitCandidate = submitCandidateId
-    ? await prisma.candidate.findFirst({
+    ? await db.candidate.findFirst({
         where: { id: submitCandidateId, deletedAt: null },
         select: { fullName: true },
       })

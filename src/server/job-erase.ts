@@ -1,5 +1,5 @@
 import { put } from "@vercel/blob";
-import { prisma } from "@/server/db";
+import type { ScopedPrisma } from "@/server/db";
 import { logActivity } from "@/server/activity";
 import { buildJobArchive } from "@/server/exporters/build-job-archive";
 
@@ -16,10 +16,11 @@ export const JOB_ARCHIVE_PREFIX = "archives/jobs/";
  * stored pathname.
  */
 async function archiveJobToBlob(
+  db: ScopedPrisma,
   jobId: string,
   displayId: string,
 ): Promise<string | null> {
-  const archive = await buildJobArchive(jobId);
+  const archive = await buildJobArchive(db, jobId);
   if (!archive) return null;
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
   const blob = await put(
@@ -46,10 +47,11 @@ async function archiveJobToBlob(
  * admin erase action and the scheduled purge. Idempotent.
  */
 export async function hardEraseJob(
+  db: ScopedPrisma,
   jobId: string,
   performedById: string | null,
 ): Promise<boolean> {
-  const job = await prisma.job.findUnique({
+  const job = await db.job.findUnique({
     where: { id: jobId },
     select: {
       seq: true,
@@ -65,9 +67,9 @@ export async function hardEraseJob(
   const empty = job._count.submissions === 0 && job._count.placements === 0;
 
   // Back up FIRST — never scrub/remove without a recoverable archive.
-  const archivedTo = await archiveJobToBlob(jobId, displayId);
+  const archivedTo = await archiveJobToBlob(db, jobId, displayId);
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     // VPRs are staging planning records with a Restrict FK — drop them
     // explicitly (their submissions keep their rate snapshots; the FK is SetNull).
     await tx.vendorRequirement.deleteMany({ where: { jobId } });
@@ -114,16 +116,16 @@ export async function hardEraseJob(
  * Returns the count erased. Called by the scheduled purge route. One failure
  * (e.g. transient Blob error) leaves that job for the next run.
  */
-export async function purgeExpiredTrashedJobs(): Promise<number> {
+export async function purgeExpiredTrashedJobs(db: ScopedPrisma): Promise<number> {
   const cutoff = new Date(Date.now() - JOB_TRASH_RETENTION_DAYS * 86_400_000);
-  const expired = await prisma.job.findMany({
+  const expired = await db.job.findMany({
     where: { deletedAt: { lt: cutoff }, erasedAt: null },
     select: { id: true },
   });
   let count = 0;
   for (const j of expired) {
     try {
-      if (await hardEraseJob(j.id, null)) count += 1;
+      if (await hardEraseJob(db, j.id, null)) count += 1;
     } catch {
       // Skip — retried next run.
     }

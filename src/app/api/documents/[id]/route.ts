@@ -1,6 +1,5 @@
 import { get } from "@vercel/blob";
-import { getCurrentUser } from "@/lib/session";
-import { prisma } from "@/server/db";
+import { getCurrentUser, getScopedPrisma } from "@/lib/session";
 import { canViewSensitiveDocs, isSensitiveCategory } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
@@ -31,8 +30,9 @@ export async function GET(
   const user = await getCurrentUser();
   if (!user) return new Response("Unauthorized", { status: 401 });
 
+  const db = await getScopedPrisma();
   const { id } = await context.params;
-  const doc = await prisma.candidateDocument.findUnique({
+  const doc = await db.candidateDocument.findUnique({
     where: { id },
     select: {
       category: true,

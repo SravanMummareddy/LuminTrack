@@ -1,8 +1,7 @@
 import { Readable } from "node:stream";
 import { z } from "zod";
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser, getScopedPrisma } from "@/lib/session";
 import { hasFullAccess } from "@/lib/permissions";
-import { prisma } from "@/server/db";
 import { logActivity } from "@/server/activity";
 import {
   streamBusinessExcel,
@@ -21,6 +20,8 @@ export async function POST(req: Request): Promise<Response> {
   const user = await getCurrentUser();
   if (!user) return new Response("Unauthorized", { status: 401 });
   if (!hasFullAccess(user)) return new Response("Forbidden", { status: 403 });
+
+  const db = await getScopedPrisma();
 
   let body: unknown;
   const contentType = req.headers.get("content-type") ?? "";
@@ -43,7 +44,7 @@ export async function POST(req: Request): Promise<Response> {
 
   // Audit-log eagerly. Bytes are unknown in streaming mode — the trail still
   // captures who/when/what, just not exact size.
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await logActivity(tx, {
       entityType: "JOB",
       action: "DATA_EXPORTED",

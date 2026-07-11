@@ -6,8 +6,7 @@ import type {
   ActivityAction,
   SubmissionStatus,
 } from "@/generated/prisma/enums";
-import { prisma } from "@/server/db";
-import { requireUser } from "@/lib/session";
+import { getScopedPrisma, requireUser } from "@/lib/session";
 import { hasFullAccess, canReattributeSubmission } from "@/lib/permissions";
 import { logActivity } from "@/server/activity";
 import {
@@ -56,6 +55,7 @@ export async function createSubmission(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const parsed = readSubmission(formData);
   if (!parsed.success)
@@ -66,7 +66,7 @@ export async function createSubmission(
   const d = parsed.data;
 
   const [job, candidate] = await Promise.all([
-    prisma.job.findUnique({
+    db.job.findUnique({
       where: { id: d.jobId },
       select: {
         id: true,
@@ -74,7 +74,7 @@ export async function createSubmission(
         status: true,
       },
     }),
-    prisma.candidate.findUnique({
+    db.candidate.findUnique({
       where: { id: d.candidateId },
       select: {
         id: true,
@@ -122,7 +122,7 @@ export async function createSubmission(
   // admin does pick a target, validate it exists so a crafted id returns a clean
   // field error instead of an unhandled Prisma FK violation.
   if (isAdmin && d.submittedById && d.submittedById !== user.id) {
-    const target = await prisma.user.findUnique({
+    const target = await db.user.findUnique({
       where: { id: d.submittedById },
       select: { id: true },
     });
@@ -135,7 +135,7 @@ export async function createSubmission(
 
   let hasAssignment = false;
   if (!isAdmin) {
-    const assignment = await prisma.jobAssignment.findFirst({
+    const assignment = await db.jobAssignment.findFirst({
       where: { jobId: d.jobId, recruiterId: user.id },
       select: { id: true },
     });
@@ -166,7 +166,7 @@ export async function createSubmission(
 
   // Pre-check duplicate here (createSubmissionRecord re-checks under the advisory
   // lock as the race-safe net) so it joins the same stacked prompt.
-  const existingDup = await prisma.submission.findFirst({
+  const existingDup = await db.submission.findFirst({
     where: { candidateId: d.candidateId, jobId: d.jobId },
     select: { id: true },
   });
@@ -174,7 +174,7 @@ export async function createSubmission(
   // Resolve a previously-saved résumé up front so a bad pick returns cleanly.
   let pickedResume: { id: string; blobUrl: string | null } | null = null;
   if (d.resumeChoice === "existing" && d.candidateResumeId) {
-    const resume = await prisma.candidateResume.findUnique({
+    const resume = await db.candidateResume.findUnique({
       where: { id: d.candidateResumeId },
       select: { id: true, blobUrl: true, candidateId: true },
     });
@@ -214,7 +214,7 @@ export async function createSubmission(
 
   // All gates satisfied — create. The helper re-checks the duplicate under the
   // advisory lock; a race that slips one in comes back as a stacked gate.
-  const result = await prisma.$transaction((tx) =>
+  const result = await db.$transaction((tx) =>
     createSubmissionRecord(tx, {
       candidateId: d.candidateId,
       jobId: d.jobId,
@@ -276,6 +276,7 @@ export async function updateSubmission(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const submissionId = String(formData.get("id") ?? "").trim();
   if (!submissionId) return { error: "Missing submission reference." };
@@ -305,7 +306,7 @@ export async function updateSubmission(
     };
   }
 
-  const existing = await prisma.submission.findUnique({
+  const existing = await db.submission.findUnique({
     where: { id: submissionId },
     include: {
       candidate: { select: { id: true, fullName: true } },
@@ -327,7 +328,7 @@ export async function updateSubmission(
     d.submittedById &&
     d.submittedById !== existing.submittedById
   ) {
-    const target = await prisma.user.findUnique({
+    const target = await db.user.findUnique({
       where: { id: d.submittedById },
       select: { id: true, fullName: true },
     });
@@ -343,7 +344,7 @@ export async function updateSubmission(
   // Resolve a previously-saved résumé up front so a bad pick returns cleanly.
   let pickedResume: { id: string; blobUrl: string | null } | null = null;
   if (d.resumeChoice === "existing" && d.candidateResumeId) {
-    const resume = await prisma.candidateResume.findUnique({
+    const resume = await db.candidateResume.findUnique({
       where: { id: d.candidateResumeId },
       select: { id: true, blobUrl: true, candidateId: true },
     });
@@ -357,7 +358,7 @@ export async function updateSubmission(
     pickedResume = { id: resume.id, blobUrl: resume.blobUrl };
   }
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     // Settle the résumé: an existing library entry or none.
     const candidateResumeId = pickedResume?.id ?? null;
     const blobSnapshot = pickedResume?.blobUrl ?? null;
@@ -438,6 +439,7 @@ export async function changeSubmissionStatus(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const parsed = statusChangeSchema.safeParse({
     id: formData.get("id") ?? "",
@@ -455,7 +457,7 @@ export async function changeSubmissionStatus(
     };
   const d = parsed.data;
 
-  const submission = await prisma.submission.findUnique({
+  const submission = await db.submission.findUnique({
     where: { id: d.id },
     include: {
       candidate: { select: { id: true, fullName: true, status: true } },
@@ -499,7 +501,7 @@ export async function changeSubmissionStatus(
   // Surfaced in the success toast — set when JOINED creates/reactivates a placement.
   let placementSeq: number | null = null;
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.submission.update({
       where: { id: d.id },
       data: {
@@ -614,6 +616,7 @@ export type BulkStatusResult = { changed: number; skipped: number };
 export async function bulkChangeSubmissionStatus(
   formData: FormData,
 ): Promise<BulkStatusResult> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const ids = bulkIds(formData);
   // Bulk status is restricted to admins / team leads — the blast radius (many
@@ -625,7 +628,7 @@ export async function bulkChangeSubmissionStatus(
     return { changed: 0, skipped: ids.length };
   const next = target as SubmissionStatus;
 
-  const submissions = await prisma.submission.findMany({
+  const submissions = await db.submission.findMany({
     where: { id: { in: ids } },
     select: {
       id: true,
@@ -653,7 +656,7 @@ export async function bulkChangeSubmissionStatus(
     // current status — this is the invariant guard.
     if (!branchActions(s.status).includes(next)) continue;
 
-    const applied = await prisma.$transaction(async (tx) => {
+    const applied = await db.$transaction(async (tx) => {
       // Optimistic-concurrency guard: the update only lands if the row is still
       // at the status we validated against. If it raced (e.g. into JOINED, which
       // owns a placement) since the read above, `count` is 0 and we skip it —
@@ -697,8 +700,9 @@ export async function bulkChangeSubmissionStatus(
  *  allowed for the submission's recruiter-of-record OR any full-access user
  *  (manager / team lead). Returns the loaded row, or a FormState error. */
 async function loadForResumeWaiver(submissionId: string) {
+  const db = await getScopedPrisma();
   const user = await requireUser();
-  const submission = await prisma.submission.findUnique({
+  const submission = await db.submission.findUnique({
     where: { id: submissionId },
     select: {
       id: true,
@@ -735,6 +739,7 @@ export async function waiveSubmissionResume(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const id = String(formData.get("id") ?? "").trim();
   const loaded = await loadForResumeWaiver(id);
   if ("error" in loaded) return { error: loaded.error };
@@ -745,7 +750,7 @@ export async function waiveSubmissionResume(
   if (submission.resumeWaivedAt)
     return { ok: true, toast: { title: "Already marked not required" } };
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.submission.update({
       where: { id },
       data: { resumeWaivedAt: new Date(), resumeWaivedById: user.id },
@@ -769,6 +774,7 @@ export async function unwaiveSubmissionResume(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const id = String(formData.get("id") ?? "").trim();
   const loaded = await loadForResumeWaiver(id);
   if ("error" in loaded) return { error: loaded.error };
@@ -777,7 +783,7 @@ export async function unwaiveSubmissionResume(
   if (!submission.resumeWaivedAt)
     return { ok: true, toast: { title: "Not waived" } };
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.submission.update({
       where: { id },
       data: { resumeWaivedAt: null, resumeWaivedById: null },

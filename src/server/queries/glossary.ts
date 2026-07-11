@@ -1,5 +1,4 @@
-import { prisma } from "@/server/db";
-import { requireUser } from "@/lib/session";
+import { requireUser, getScopedPrisma } from "@/lib/session";
 import { formatDate } from "@/lib/format";
 import { GLOSSARY, type GlossaryTerm } from "@/lib/glossary";
 
@@ -19,13 +18,14 @@ export type GlossaryRow = GlossaryTerm & {
  * note merged on by the stable term slug.
  */
 export async function getGlossaryWithNotes(): Promise<GlossaryRow[]> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const [notes, custom] = await Promise.all([
-    prisma.glossaryNote.findMany({
+    db.glossaryNote.findMany({
       where: { userId: user.id },
       select: { term: true, note: true },
     }),
-    prisma.customGlossaryTerm.findMany({
+    db.customGlossaryTerm.findMany({
       where: { deletedAt: null },
       orderBy: { createdAt: "asc" },
       select: {

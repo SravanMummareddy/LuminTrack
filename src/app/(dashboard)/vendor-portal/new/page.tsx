@@ -8,8 +8,7 @@ import { createVendorRequirement } from "@/server/actions/requirements";
 import { listCandidateOptions } from "@/server/queries/candidates";
 import { listJobOptions } from "@/server/queries/jobs";
 import { listUsers, listTeamLeadOptions } from "@/server/queries/org";
-import { prisma } from "@/server/db";
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser, getScopedPrisma } from "@/lib/session";
 import { canManageRequirements } from "@/lib/permissions";
 import { formatJobDisplayId } from "@/lib/format";
 
@@ -18,6 +17,7 @@ export default async function NewRequirementPage({
 }: {
   searchParams: Promise<{ jobId?: string }>;
 }) {
+  const db = await getScopedPrisma();
   const user = await getCurrentUser();
   if (!canManageRequirements(user ?? undefined)) redirect("/vendor-portal");
 
@@ -63,7 +63,7 @@ export default async function NewRequirementPage({
 
   // Step 2 — job chosen: the requirement form.
   const [job, candidates, recruiters, teamLeads] = await Promise.all([
-    prisma.job.findUnique({
+    db.job.findUnique({
       where: { id: jobId },
       select: {
         id: true,

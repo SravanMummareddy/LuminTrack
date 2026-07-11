@@ -2,8 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { prisma } from "@/server/db";
-import { requireUser } from "@/lib/session";
+import { getScopedPrisma, requireUser } from "@/lib/session";
 import { canViewBenchCredentials } from "@/lib/permissions";
 import { logActivity } from "@/server/activity";
 import { rememberLookup } from "@/server/lookups";
@@ -120,6 +119,7 @@ export async function createBenchConsultant(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const parsed = readBenchConsultant(formData);
   if (!parsed.success)
@@ -153,7 +153,7 @@ export async function createBenchConsultant(
     };
   }
   if (linkExisting) {
-    const already = await prisma.benchConsultant.findUnique({
+    const already = await db.benchConsultant.findUnique({
       where: { candidateId: d.candidateId as string },
       select: { id: true, marketingStatus: true },
     });
@@ -162,7 +162,7 @@ export async function createBenchConsultant(
       // existing row (all its stored details are kept — no retype) instead of
       // erroring. A row that's still on the bench / placed is a real duplicate.
       if (already.marketingStatus === "INACTIVE") {
-        await prisma.$transaction(async (tx) => {
+        await db.$transaction(async (tx) => {
           await tx.benchConsultant.update({
             where: { id: already.id },
             data: { marketingStatus: "ACTIVE" },
@@ -175,8 +175,8 @@ export async function createBenchConsultant(
               where: { id: d.candidateId as string },
               data: { technology: d.technology },
             });
-          await rememberLookup(tx, "CALL_TYPE", d.callType);
-          await rememberLookup(tx, "PAYROLL_TYPE", d.payrollType);
+          await rememberLookup(tx, user.organizationId, "CALL_TYPE", d.callType);
+          await rememberLookup(tx, user.organizationId, "PAYROLL_TYPE", d.payrollType);
           await logActivity(tx, {
             entityType: "CONSULTANT",
             action: "BENCH_CONSULTANT_UPDATED",
@@ -200,7 +200,7 @@ export async function createBenchConsultant(
 
   let consultant;
   try {
-    consultant = await prisma.$transaction(async (tx) => {
+    consultant = await db.$transaction(async (tx) => {
       let candidateId = linkExisting ? (d.candidateId as string) : null;
       if (!linkExisting) {
         const cand = await tx.candidate.create({
@@ -245,8 +245,8 @@ export async function createBenchConsultant(
         performedById: user.id,
         benchConsultantId: created.id,
       });
-      await rememberLookup(tx, "CALL_TYPE", d.callType);
-      await rememberLookup(tx, "PAYROLL_TYPE", d.payrollType);
+      await rememberLookup(tx, user.organizationId, "CALL_TYPE", d.callType);
+      await rememberLookup(tx, user.organizationId, "PAYROLL_TYPE", d.payrollType);
       return created;
     });
   } catch (e) {
@@ -270,6 +270,7 @@ export async function updateBenchConsultant(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const id = String(formData.get("id") ?? "").trim();
   if (!id) return { error: "Missing consultant reference." };
@@ -282,7 +283,7 @@ export async function updateBenchConsultant(
     };
   const d = parsed.data;
 
-  const existing = await prisma.benchConsultant.findUnique({
+  const existing = await db.benchConsultant.findUnique({
     where: { id },
     include: { candidate: { select: { id: true, technology: true } } },
   });
@@ -314,7 +315,7 @@ export async function updateBenchConsultant(
   else if (existing.marketingPassword !== (d.marketingPassword ?? null))
     changed.push("marketing credentials");
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.benchConsultant.update({ where: { id }, data });
     // Technology is candidate-owned. Only write a NON-BLANK change through to the
     // candidate — the bench form must never blank-wipe the candidate's technology
@@ -339,8 +340,8 @@ export async function updateBenchConsultant(
         candidateId: existing.candidateId,
       });
     }
-    await rememberLookup(tx, "CALL_TYPE", d.callType);
-    await rememberLookup(tx, "PAYROLL_TYPE", d.payrollType);
+    await rememberLookup(tx, user.organizationId, "CALL_TYPE", d.callType);
+    await rememberLookup(tx, user.organizationId, "PAYROLL_TYPE", d.payrollType);
     if (changed.length)
       await logActivity(tx, {
         entityType: "CONSULTANT",
@@ -363,15 +364,16 @@ export async function updateBenchConsultant(
  * without deleting the record — the marketing history stays intact.
  */
 export async function removeFromBench(formData: FormData): Promise<void> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const id = String(formData.get("id") ?? "").trim();
   if (!id) return;
-  const existing = await prisma.benchConsultant.findUnique({
+  const existing = await db.benchConsultant.findUnique({
     where: { id },
     select: { marketingStatus: true },
   });
   if (!existing || existing.marketingStatus === "INACTIVE") return;
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.benchConsultant.update({
       where: { id },
       data: { marketingStatus: "INACTIVE" },
@@ -396,15 +398,16 @@ export async function removeFromBench(formData: FormData): Promise<void> {
  * candidate if none exists. Idempotent for a candidate already on the bench.
  */
 export async function addCandidateToBench(formData: FormData): Promise<void> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const candidateId = String(formData.get("candidateId") ?? "").trim();
   if (!candidateId) return;
-  const existing = await prisma.benchConsultant.findUnique({
+  const existing = await db.benchConsultant.findUnique({
     where: { candidateId },
     select: { id: true, marketingStatus: true },
   });
   try {
-    await prisma.$transaction(async (tx) => {
+    await db.$transaction(async (tx) => {
       if (existing) {
         if (existing.marketingStatus !== "ACTIVE") {
           await tx.benchConsultant.update({
@@ -470,15 +473,16 @@ export async function addCandidateToBench(formData: FormData): Promise<void> {
  * No-op if already ACTIVE.
  */
 export async function remarketConsultant(formData: FormData): Promise<void> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const id = String(formData.get("id") ?? "").trim();
   if (!id) return;
-  const existing = await prisma.benchConsultant.findUnique({
+  const existing = await db.benchConsultant.findUnique({
     where: { id },
     select: { marketingStatus: true },
   });
   if (!existing || existing.marketingStatus === "ACTIVE") return;
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.benchConsultant.update({
       where: { id },
       data: { marketingStatus: "ACTIVE" },

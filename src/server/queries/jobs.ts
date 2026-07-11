@@ -1,4 +1,4 @@
-import { prisma } from "@/server/db";
+import { getScopedPrisma } from "@/lib/session";
 import type { Prisma } from "@/generated/prisma/client";
 import type { JobStatus, Discipline } from "@/generated/prisma/enums";
 import { OTHER_SOURCE } from "@/lib/labels";
@@ -44,13 +44,15 @@ export const JOB_SORT_KEYS = Object.keys(JOB_SORTS);
 export const JOB_DEFAULT_SORT: SortState = { key: "created", dir: "desc" };
 
 /** Count of jobs in trash (trashed, not yet erased) — drives the Trash badge. */
-export function countTrashedJobs(): Promise<number> {
-  return prisma.job.count({
+export async function countTrashedJobs(): Promise<number> {
+  const db = await getScopedPrisma();
+  return db.job.count({
     where: { deletedAt: { not: null }, erasedAt: null },
   });
 }
 
 export async function listJobs(filters: JobListFilters) {
+  const db = await getScopedPrisma();
   // Trash view shows trashed-not-erased jobs; the normal list hides anything
   // with a deletedAt (trashed jobs AND erased tombstones keep it set).
   const where: Prisma.JobWhereInput = filters.trash
@@ -91,11 +93,11 @@ export async function listJobs(filters: JobListFilters) {
     { id: "asc" },
   ];
 
-  const total = await prisma.job.count({ where });
+  const total = await db.job.count({ where });
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
 
-  const raw = await prisma.job.findMany({
+  const raw = await db.job.findMany({
     where,
     orderBy,
     skip: (page - 1) * PAGE_SIZE,
@@ -118,7 +120,7 @@ export async function listJobs(filters: JobListFilters) {
   // definition as the dashboard KPIs, so the numbers reconcile).
   const jobIds = raw.map((j) => j.id);
   const subStats = jobIds.length
-    ? await prisma.submission.findMany({
+    ? await db.submission.findMany({
         where: { jobId: { in: jobIds } },
         select: {
           jobId: true,
@@ -161,8 +163,9 @@ export async function listJobs(filters: JobListFilters) {
 
 export type JobListRow = Awaited<ReturnType<typeof listJobs>>["rows"][number];
 
-export function getJobDetail(id: string) {
-  return prisma.job.findUnique({
+export async function getJobDetail(id: string) {
+  const db = await getScopedPrisma();
+  return db.job.findUnique({
     where: { id },
     include: {
       client: true,
@@ -184,7 +187,8 @@ export function getJobDetail(id: string) {
  * with filled/closed/cancelled reqs. `seq` builds the display id label.
  */
 export async function listJobOptions() {
-  const rows = await prisma.job.findMany({
+  const db = await getScopedPrisma();
+  const rows = await db.job.findMany({
     where: { status: { in: ["OPEN", "ON_HOLD"] }, deletedAt: null },
     orderBy: { title: "asc" },
     select: {
@@ -203,8 +207,9 @@ export async function listJobOptions() {
 export type JobOption = Awaited<ReturnType<typeof listJobOptions>>[number];
 
 /** Minimal job shape for the edit form — includes assigned recruiter IDs. */
-export function getJobForEdit(id: string) {
-  return prisma.job.findUnique({
+export async function getJobForEdit(id: string) {
+  const db = await getScopedPrisma();
+  return db.job.findUnique({
     where: { id },
     include: { assignments: { select: { recruiterId: true } } },
   });

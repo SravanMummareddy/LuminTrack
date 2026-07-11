@@ -75,3 +75,34 @@ Expand step only — the `UserRole` enum is kept; a later contract migration dro
 - [ ] Coordinated prod deploy: apply migration → promote code in one window; smoke-test login + `/org-chart`.
 </content>
 </invoke>
+
+## Phase C — multi-tenancy foundation (2026-07-11)
+
+### C1 — schema + migration + backfill
+- [x] `Organization` model + `organizationId` on all 25 tenant-data tables (not `Permission`); `User.isPlatformAdmin`; 8 composite uniques; sentinel `@default("")`. Migrations `20260711170000_multi_tenancy` + `..170500_org_default_sentinel` applied to **dev**. **Prod: PENDING (C7).**
+- [x] Backfill verified on dev: 1 default org, all 12 users / 50 jobs / 4 roles stamped, Sriman = sole platform admin.
+
+### C2 — enforcement (`scopedPrisma`)
+- [x] `orgScopeExtension` (src/server/org-scope.ts) + `scopedPrisma(orgId)` + memoized `getScopedPrisma()`. 8 unit tests (inject/rewrite logic + `canManageOrganizations`).
+- [x] Runtime isolation proven (script): create auto-stamps org; cross-org find/findUnique/updateMany/delete all blocked.
+
+### C3 — re-root sweep
+- [x] 56 files base `prisma`→scoped `db`; 67 `$transaction` entry points re-rooted; shared helpers retyped to `Tx`. Base `prisma` only at 5 audited escape hatches (health, login + getCurrentUser bootstraps, 2 cron org-listers). "Zero stray prisma." grep passes.
+- [x] Cron purge + backup iterate active orgs with `scopedPrisma(org.id)` (no user session).
+
+### C4 — analytics
+- [x] No raw SQL; all analytics scoped; "company-wide new vendors" correctly scopes to the tenant.
+
+### C5 — Organizations admin (super-admin only)
+- [x] Settings → Organizations tab (list/create/edit), gated 3 ways (hidden tab, `<Forbidden/>` on direct URL, action rejects non-super-admins) — verified in browser as Sriman.
+- [x] Create-org provisions the new tenant's 3 system roles; per-org role isolation confirmed (script: new org sees 3, default sees 4).
+- [ ] DEFERRED: assigning a user to a *different* org (org-switch / onboarding) — foundation creates users in the acting admin's org.
+
+### C6 — tests + build
+- [x] Full unit suite green (**222**, +8). tsc clean. `npm run build` clean.
+- [x] Demo seed org-aware + re-run: all rows org-stamped (0 sentinel-empty).
+- [x] `tests/integration/tenant-isolation.test.ts` committed (Docker-gated; Docker was down locally — run via `npm run test:db:up`).
+- [x] Browser: Organizations tab + full dashboard render under the scoped client, no console errors.
+
+### C7 — prod deploy (PENDING owner go-ahead)
+- [ ] Apply both migrations + backfill to prod `DIRECT_URL` FIRST (additive, invisible to live code); verify default org + `isPlatformAdmin` populated; THEN merge code. Smoke: login, dashboard, Settings → Organizations.

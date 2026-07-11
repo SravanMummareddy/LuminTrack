@@ -29,6 +29,8 @@ import {
 export type Viewer = {
   role?: UserRole | null;
   permissions?: ReadonlySet<string> | readonly string[] | null;
+  // Platform super-admin — the cross-org axis (see canManageOrganizations).
+  isPlatformAdmin?: boolean | null;
 };
 
 /** Human-facing role label. */
@@ -143,4 +145,15 @@ export function canGrantManagerRole(viewer: Viewer | null | undefined): boolean 
 // Manage the roles/permissions themselves (Settings → Roles).
 export function canManageRoles(viewer: Viewer | null | undefined): boolean {
   return can(viewer, "role:manage");
+}
+
+/**
+ * Platform super-admin — may create and manage Organizations and act across
+ * tenants (Settings → Organizations). This is the ONE cross-org capability, so
+ * it's an orthogonal `User.isPlatformAdmin` flag (like the team-lead flag), NOT a
+ * per-org permission key — a cross-tenant power granted by a per-org role would
+ * be a category error.
+ */
+export function canManageOrganizations(viewer: Viewer | null | undefined): boolean {
+  return Boolean(viewer?.isPlatformAdmin);
 }

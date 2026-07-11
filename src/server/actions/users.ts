@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma, isUniqueConstraintError } from "@/server/db";
-import { requireUser } from "@/lib/session";
+import { isUniqueConstraintError } from "@/server/db";
+import { getScopedPrisma, requireUser } from "@/lib/session";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import {
   canManageUsers,
@@ -26,6 +26,7 @@ export async function saveUser(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const actor = await requireUser();
   if (!canManageUsers(actor))
     return { error: "Only managers and team leads can manage users." };
@@ -48,7 +49,7 @@ export async function saveUser(
 
   // Resolve the picked role → its permission keys → the legacy enum tier it maps
   // to (kept in sync for data-classification: PERFORMANCE_ROLES, badge tints…).
-  const chosenRole = await prisma.role.findUnique({
+  const chosenRole = await db.role.findUnique({
     where: { id: parsed.data.roleId },
     select: { name: true, permissions: { select: { permissionKey: true } } },
   });
@@ -64,7 +65,7 @@ export async function saveUser(
     if (derivedRole === "MANAGER")
       return { error: "Only managers can assign a manager-tier role." };
     if (id) {
-      const target = await prisma.user.findUnique({
+      const target = await db.user.findUnique({
         where: { id },
         select: { role: true },
       });
@@ -93,7 +94,7 @@ export async function saveUser(
   // Reject a reporting line that would create a cycle (report to your own
   // descendant) — that's what left prod with no apex and a flat chart.
   if (id && reportsToId) {
-    const chain = await prisma.user.findMany({
+    const chain = await db.user.findMany({
       select: { id: true, reportsToId: true },
     });
     if (reportsToCreatesCycle(chain, id, reportsToId))
@@ -103,7 +104,7 @@ export async function saveUser(
       };
   }
   if (!reportsToId && teamId) {
-    const team = await prisma.team.findUnique({
+    const team = await db.team.findUnique({
       where: { id: teamId },
       select: { leadId: true },
     });
@@ -132,7 +133,7 @@ export async function saveUser(
     : null;
 
   try {
-    await prisma.$transaction(async (tx) => {
+    await db.$transaction(async (tx) => {
       if (id) {
         await tx.user.update({
           where: { id },
@@ -177,6 +178,7 @@ export async function changeOwnPassword(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const actor = await requireUser();
 
   // Throttle the current-password check so a hijacked session can't brute-force
@@ -202,7 +204,7 @@ export async function changeOwnPassword(
     return { fieldErrors: { currentPassword: "Current password is incorrect." } };
 
   const newHash = await hashPassword(parsed.data.newPassword);
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.user.update({
       where: { id: actor.id },
       data: { passwordHash: newHash },
@@ -228,6 +230,7 @@ export async function updateOwnProfile(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const actor = await requireUser();
   const parsed = profileSchema.safeParse({
     fullName: formData.get("fullName") ?? "",
@@ -237,7 +240,7 @@ export async function updateOwnProfile(
 
   const email = parsed.data.email.toLowerCase();
   try {
-    await prisma.$transaction(async (tx) => {
+    await db.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: actor.id },
         data: { fullName: parsed.data.fullName, email },

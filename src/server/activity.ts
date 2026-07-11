@@ -1,4 +1,4 @@
-import type { Prisma } from "@/generated/prisma/client";
+import type { Tx } from "@/server/db";
 import type { ActivityAction, EntityType } from "@/generated/prisma/enums";
 
 export type LogActivityInput = {
@@ -26,7 +26,7 @@ export type LogActivityInput = {
  * (`prisma.$transaction(async (tx) => ...)`) alongside the data change it
  * describes, so the activity row and the change commit atomically.
  */
-export function logActivity(db: Prisma.TransactionClient, input: LogActivityInput) {
+export function logActivity(db: Tx, input: LogActivityInput) {
   return db.activity.create({
     data: {
       entityType: input.entityType,

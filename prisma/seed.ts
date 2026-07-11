@@ -2,6 +2,11 @@ import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { PrismaNeon } from "@prisma/adapter-neon";
 import { PrismaClient } from "../src/generated/prisma/client";
+import {
+  DEFAULT_ORG_ID,
+  DEFAULT_ORG_NAME,
+  DEFAULT_ORG_SLUG,
+} from "../src/lib/default-org";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -13,6 +18,14 @@ const prisma = new PrismaClient({ adapter: new PrismaNeon({ connectionString }) 
 const SAMPLE_RECRUITER_PASSWORD = "Recruiter123!";
 
 async function main() {
+  // ── Default organization (tenant boundary) ─────────────────────────────────
+  const orgId = DEFAULT_ORG_ID;
+  await prisma.organization.upsert({
+    where: { id: orgId },
+    update: {},
+    create: { id: orgId, name: DEFAULT_ORG_NAME, slug: DEFAULT_ORG_SLUG },
+  });
+
   // ── Admin user (from env) ──────────────────────────────────────────────────
   const adminEmail = (process.env.SEED_ADMIN_EMAIL ?? "admin@lumintrack.local")
     .trim()
@@ -24,10 +37,12 @@ async function main() {
     where: { email: adminEmail },
     update: {},
     create: {
+      organizationId: orgId,
       email: adminEmail,
       fullName: adminName,
       passwordHash: await bcrypt.hash(adminPassword, 10),
       role: "MANAGER",
+      isPlatformAdmin: true,
     },
   });
 
@@ -41,19 +56,31 @@ async function main() {
     await prisma.user.upsert({
       where: { email: r.email },
       update: {},
-      create: { ...r, passwordHash: recruiterHash, role: "RECRUITER" },
+      create: { ...r, organizationId: orgId, passwordHash: recruiterHash, role: "RECRUITER" },
     });
   }
 
   // ── Sample organisation entities ───────────────────────────────────────────
   for (const name of ["Sister Company One", "Sister Company Two"]) {
-    await prisma.sisterCompanySource.upsert({ where: { name }, update: {}, create: { name } });
+    await prisma.sisterCompanySource.upsert({
+      where: { organizationId_name: { organizationId: orgId, name } },
+      update: {},
+      create: { organizationId: orgId, name },
+    });
   }
   for (const name of ["Apple", "Microsoft"]) {
-    await prisma.client.upsert({ where: { name }, update: {}, create: { name } });
+    await prisma.client.upsert({
+      where: { organizationId_name: { organizationId: orgId, name } },
+      update: {},
+      create: { organizationId: orgId, name },
+    });
   }
   for (const name of ["ABC Staffing", "TalentBridge"]) {
-    await prisma.vendor.upsert({ where: { name }, update: {}, create: { name } });
+    await prisma.vendor.upsert({
+      where: { organizationId_name: { organizationId: orgId, name } },
+      update: {},
+      create: { organizationId: orgId, name },
+    });
   }
 
   console.log("Seed complete.");

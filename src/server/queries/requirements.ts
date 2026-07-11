@@ -1,4 +1,4 @@
-import { prisma } from "@/server/db";
+import { getScopedPrisma } from "@/lib/session";
 import type { Prisma } from "@/generated/prisma/client";
 import type { RequirementStatus } from "@/generated/prisma/enums";
 import { PAGE_SIZE, searchTerms, type SortDir, type SortState } from "@/lib/filters";
@@ -99,6 +99,7 @@ function flatten<
 }
 
 export async function listVendorRequirements(filters: VendorRequirementFilters) {
+  const db = await getScopedPrisma();
   const where: Prisma.VendorRequirementWhereInput = {};
   if (filters.status) where.status = filters.status;
   if (filters.recruiterId?.length)
@@ -129,11 +130,11 @@ export async function listVendorRequirements(filters: VendorRequirementFilters) 
     { id: "asc" },
   ];
 
-  const total = await prisma.vendorRequirement.count({ where });
+  const total = await db.vendorRequirement.count({ where });
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
 
-  const rows = await prisma.vendorRequirement.findMany({
+  const rows = await db.vendorRequirement.findMany({
     where,
     orderBy,
     skip: (page - 1) * PAGE_SIZE,
@@ -151,7 +152,8 @@ export type VendorRequirementRow = Awaited<
 /** All requirements for one job — compact rows for the job-detail sub-section.
  *  No pagination (a job rarely has more than a handful). OPEN first. */
 export async function getRequirementsForJob(jobId: string) {
-  const rows = await prisma.vendorRequirement.findMany({
+  const db = await getScopedPrisma();
+  const rows = await db.vendorRequirement.findMany({
     where: { jobId },
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     select: {
@@ -183,7 +185,8 @@ export type JobRequirementRow = Awaited<
  * blank). Returns null when the job has no OPEN requirement.
  */
 export async function getOpenRequirementPrefill(jobId: string) {
-  const r = await prisma.vendorRequirement.findFirst({
+  const db = await getScopedPrisma();
+  const r = await db.vendorRequirement.findFirst({
     where: { jobId, status: "OPEN" },
     orderBy: { createdAt: "desc" },
     select: {
@@ -213,7 +216,8 @@ export async function getOpenRequirementPrefill(jobId: string) {
 }
 
 export async function getVendorRequirement(id: string) {
-  const row = await prisma.vendorRequirement.findUnique({
+  const db = await getScopedPrisma();
+  const row = await db.vendorRequirement.findUnique({
     where: { id },
     include: {
       ...REQUIREMENT_INCLUDE,

@@ -6,7 +6,8 @@
  *
  * Output shape: `{ exportedAt, version, tables: { user: [...], job: [...], ... } }`.
  */
-import { prisma } from "@/server/db";
+import type { ScopedPrisma } from "@/server/db";
+import { getScopedPrisma } from "@/lib/session";
 
 export type BackupJson = {
   exportedAt: string;
@@ -15,7 +16,11 @@ export type BackupJson = {
   tables: Record<string, unknown[]>;
 };
 
-export async function buildBackupJson(): Promise<BackupJson> {
+/** Builds the backup for ONE organization via the passed scoped client. The
+ *  authed full-export route passes getScopedPrisma() (the manager's own org);
+ *  the scheduled backup iterates active orgs and passes scopedPrisma(org.id),
+ *  writing one snapshot per tenant. */
+export async function buildBackupJson(db: ScopedPrisma): Promise<BackupJson> {
   const [
     users,
     sources,
@@ -40,7 +45,7 @@ export async function buildBackupJson(): Promise<BackupJson> {
     glossaryNotes,
     customGlossaryTerms,
   ] = await Promise.all([
-    prisma.user.findMany({
+    db.user.findMany({
       select: {
         id: true,
         fullName: true,
@@ -51,29 +56,29 @@ export async function buildBackupJson(): Promise<BackupJson> {
         updatedAt: true,
       },
     }),
-    prisma.sisterCompanySource.findMany(),
-    prisma.client.findMany(),
-    prisma.vendor.findMany(),
-    prisma.contact.findMany(),
-    prisma.job.findMany(),
-    prisma.jobAssignment.findMany(),
-    prisma.candidate.findMany(),
-    prisma.candidateResume.findMany(),
-    prisma.candidateDocument.findMany(),
-    prisma.submission.findMany(),
-    prisma.placement.findMany(),
-    prisma.placementExtension.findMany(),
+    db.sisterCompanySource.findMany(),
+    db.client.findMany(),
+    db.vendor.findMany(),
+    db.contact.findMany(),
+    db.job.findMany(),
+    db.jobAssignment.findMany(),
+    db.candidate.findMany(),
+    db.candidateResume.findMany(),
+    db.candidateDocument.findMany(),
+    db.submission.findMany(),
+    db.placement.findMany(),
+    db.placementExtension.findMany(),
     // SupportProvider must round-trip: InterviewRound.supportProviderId is a real
     // FK, so a restore that omits it FK-violates when re-inserting interview rounds.
-    prisma.supportProvider.findMany(),
-    prisma.lookupOption.findMany(),
-    prisma.interviewRound.findMany(),
-    prisma.benchConsultant.findMany(),
-    prisma.vendorRequirement.findMany(),
-    prisma.note.findMany(),
-    prisma.activity.findMany(),
-    prisma.glossaryNote.findMany(),
-    prisma.customGlossaryTerm.findMany(),
+    db.supportProvider.findMany(),
+    db.lookupOption.findMany(),
+    db.interviewRound.findMany(),
+    db.benchConsultant.findMany(),
+    db.vendorRequirement.findMany(),
+    db.note.findMany(),
+    db.activity.findMany(),
+    db.glossaryNote.findMany(),
+    db.customGlossaryTerm.findMany(),
   ]);
 
   return {
@@ -112,6 +117,7 @@ export type BackupPreflight = {
 };
 
 export async function getBackupPreflight(): Promise<BackupPreflight> {
+  const db = await getScopedPrisma();
   const [
     users,
     clients,
@@ -133,25 +139,25 @@ export async function getBackupPreflight(): Promise<BackupPreflight> {
     glossaryNotes,
     customGlossaryTerms,
   ] = await Promise.all([
-    prisma.user.count(),
-    prisma.client.count(),
-    prisma.vendor.count(),
-    prisma.sisterCompanySource.count(),
-    prisma.job.count(),
-    prisma.candidate.count(),
-    prisma.candidateResume.count(),
-    prisma.candidateDocument.count(),
-    prisma.submission.count(),
-    prisma.placement.count(),
-    prisma.supportProvider.count(),
-    prisma.lookupOption.count(),
-    prisma.interviewRound.count(),
-    prisma.benchConsultant.count(),
-    prisma.vendorRequirement.count(),
-    prisma.note.count(),
-    prisma.activity.count(),
-    prisma.glossaryNote.count(),
-    prisma.customGlossaryTerm.count(),
+    db.user.count(),
+    db.client.count(),
+    db.vendor.count(),
+    db.sisterCompanySource.count(),
+    db.job.count(),
+    db.candidate.count(),
+    db.candidateResume.count(),
+    db.candidateDocument.count(),
+    db.submission.count(),
+    db.placement.count(),
+    db.supportProvider.count(),
+    db.lookupOption.count(),
+    db.interviewRound.count(),
+    db.benchConsultant.count(),
+    db.vendorRequirement.count(),
+    db.note.count(),
+    db.activity.count(),
+    db.glossaryNote.count(),
+    db.customGlossaryTerm.count(),
   ]);
 
   const totals = {

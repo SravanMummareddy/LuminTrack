@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@/generated/prisma/client";
+import { orgScopeExtension } from "@/server/db";
 
 /** Wipe every table (except the migration ledger) between tests. Discovered
  *  dynamically so new models never need to be added here by hand. */
@@ -11,9 +12,20 @@ export async function truncateAll(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${list} RESTART IDENTITY CASCADE`);
 }
 
+/** Create a fresh tenant and return an org-scoped client for it. Every seed
+ *  helper builds its graph through this, so all rows are auto-stamped with the
+ *  org (tests run one org at a time — truncateAll wipes between them). */
+export async function seedOrg(base: PrismaClient, slug = "test-org") {
+  const org = await base.organization.create({
+    data: { name: `Org ${slug}`, slug },
+  });
+  return { org, db: base.$extends(orgScopeExtension(org.id)) };
+}
+
 /** Minimal connected graph: admin user → client/vendor → candidate → job →
  *  one SELECTED submission. Enough to exercise the status-change cascades. */
-export async function seedBasics(prisma: PrismaClient) {
+export async function seedBasics(base: PrismaClient) {
+  const { org, db: prisma } = await seedOrg(base);
   const user = await prisma.user.create({
     data: {
       fullName: "Test Admin",
@@ -49,13 +61,14 @@ export async function seedBasics(prisma: PrismaClient) {
       submittedBy: { connect: { id: user.id } },
     },
   });
-  return { user, client, vendor, candidate, job, submission };
+  return { org, user, client, vendor, candidate, job, submission };
 }
 
 /** Loose actors for the createSubmission gate tests: an admin, an unassigned
  *  recruiter, a candidate, and a client/vendor pair. Jobs are created per-test
  *  via the returned ids. */
-export async function seedSubmissionScenario(prisma: PrismaClient) {
+export async function seedSubmissionScenario(base: PrismaClient) {
+  const { org, db: prisma } = await seedOrg(base);
   const [admin, recruiter] = await Promise.all([
     prisma.user.create({
       data: { fullName: "Admin", email: "admin@test.local", passwordHash: "x", role: "MANAGER" },
@@ -71,14 +84,15 @@ export async function seedSubmissionScenario(prisma: PrismaClient) {
   const candidate = await prisma.candidate.create({
     data: { fullName: "Bench Candidate", status: "AVAILABLE", createdBy: { connect: { id: admin.id } } },
   });
-  return { admin, recruiter, client, vendor, candidate };
+  return { org, admin, recruiter, client, vendor, candidate };
 }
 
 /** A live SUBMITTED submission owned by `recruiterA`, plus an admin, a
  *  re-attribution target `recruiterB`, and one résumé in the candidate's
  *  library. For the updateSubmission edit tests. The submission's submittedAt
  *  is pinned to a fixed minute so a no-op edit can re-post it unchanged. */
-export async function seedSubmissionEditScenario(prisma: PrismaClient) {
+export async function seedSubmissionEditScenario(base: PrismaClient) {
+  const { org, db: prisma } = await seedOrg(base);
   const [admin, recruiterA, recruiterB] = await Promise.all([
     prisma.user.create({
       data: { fullName: "Admin", email: "admin@test.local", passwordHash: "x", role: "MANAGER" },
@@ -124,12 +138,13 @@ export async function seedSubmissionEditScenario(prisma: PrismaClient) {
       submittedBy: { connect: { id: recruiterA.id } },
     },
   });
-  return { admin, recruiterA, recruiterB, client, vendor, candidate, job, resume, submission };
+  return { org, admin, recruiterA, recruiterB, client, vendor, candidate, job, resume, submission };
 }
 
 /** A placement owned by `recruiterA` (recruiter-of-record), plus an admin and an
  *  unrelated `recruiterB`. For the rate-permission gating tests. */
-export async function seedPlacementScenario(prisma: PrismaClient) {
+export async function seedPlacementScenario(base: PrismaClient) {
+  const { org, db: prisma } = await seedOrg(base);
   const [admin, recruiterA, recruiterB] = await Promise.all([
     prisma.user.create({
       data: { fullName: "Admin", email: "admin@test.local", passwordHash: "x", role: "MANAGER" },
@@ -174,5 +189,5 @@ export async function seedPlacementScenario(prisma: PrismaClient) {
       job: { connect: { id: job.id } },
     },
   });
-  return { admin, recruiterA, recruiterB, client, vendor, candidate, job, submission, placement };
+  return { org, admin, recruiterA, recruiterB, client, vendor, candidate, job, submission, placement };
 }

@@ -1,7 +1,7 @@
 import JSZip from "jszip";
 import { gunzipSync } from "node:zlib";
 import { get } from "@vercel/blob";
-import { prisma } from "@/server/db";
+import type { ScopedPrisma } from "@/server/db";
 
 /** File extension inferred from the stored content type (blobs don't keep a name). */
 function extFor(contentType: string | null | undefined): string {
@@ -41,6 +41,10 @@ async function fetchOriginal(blobPathname: string): Promise<Buffer | null> {
  * right-to-be-forgotten flow. Returns null if the candidate doesn't exist.
  */
 export async function buildCandidateArchive(
+  // The tenant-scoped client (authed callers pass getScopedPrisma(); the cron
+  // purge passes scopedPrisma(org.id) per org) — so a cron with no user session
+  // can still archive, and every read stays org-scoped.
+  db: ScopedPrisma,
   candidateId: string,
   // strict: throw if ANY stored file can't be read, instead of silently
   // omitting it. The erase path passes strict so it never destroys blobs whose
@@ -49,7 +53,7 @@ export async function buildCandidateArchive(
   // false — a best-effort archive is fine there.
   opts: { strict?: boolean } = {},
 ): Promise<{ zip: Buffer; candidateName: string; displayId: string } | null> {
-  const c = await prisma.candidate.findUnique({
+  const c = await db.candidate.findUnique({
     where: { id: candidateId },
     include: {
       resumes: true,

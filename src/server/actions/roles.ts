@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma, isUniqueConstraintError } from "@/server/db";
-import { requireUser } from "@/lib/session";
+import { isUniqueConstraintError } from "@/server/db";
+import { getScopedPrisma, requireUser } from "@/lib/session";
 import { canManageRoles } from "@/lib/permissions";
 import { logActivity } from "@/server/activity";
 import { roleSchema } from "@/lib/validation/role";
@@ -20,6 +20,7 @@ export async function saveRole(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const actor = await requireUser();
   if (!canManageRoles(actor))
     return { error: "You don't have permission to manage roles." };
@@ -33,7 +34,7 @@ export async function saveRole(
   if (!parsed.success) return { fieldErrors: toFieldErrors(parsed.error) };
 
   const existing = id
-    ? await prisma.role.findUnique({
+    ? await db.role.findUnique({
         where: { id },
         select: {
           isSystem: true,
@@ -55,12 +56,12 @@ export async function saveRole(
   const keepsManage = nextPerms.includes(MANAGE_KEY);
   if (id && hadManage && !keepsManage) {
     const otherManagerRoleIds = (
-      await prisma.role.findMany({
+      await db.role.findMany({
         where: { id: { not: id }, permissions: { some: { permissionKey: MANAGE_KEY } } },
         select: { id: true },
       })
     ).map((r) => r.id);
-    const stillCovered = await prisma.user.count({
+    const stillCovered = await db.user.count({
       where: { isActive: true, roleId: { in: otherManagerRoleIds } },
     });
     if (stillCovered === 0)
@@ -71,7 +72,7 @@ export async function saveRole(
   }
 
   try {
-    await prisma.$transaction(async (tx) => {
+    await db.$transaction(async (tx) => {
       const role = id
         ? await tx.role.update({
             where: { id },
@@ -113,12 +114,13 @@ export async function deleteRole(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const actor = await requireUser();
   if (!canManageRoles(actor))
     return { error: "You don't have permission to manage roles." };
 
   const id = String(formData.get("id") ?? "").trim();
-  const role = await prisma.role.findUnique({
+  const role = await db.role.findUnique({
     where: { id },
     select: { name: true, isSystem: true, _count: { select: { users: true } } },
   });
@@ -129,7 +131,7 @@ export async function deleteRole(
       error: `Reassign the ${role._count.users} user${role._count.users === 1 ? "" : "s"} on this role before deleting it.`,
     };
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.role.delete({ where: { id } });
     await logActivity(tx, {
       entityType: "USER",

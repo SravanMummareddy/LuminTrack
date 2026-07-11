@@ -1,6 +1,5 @@
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser, getScopedPrisma } from "@/lib/session";
 import { hasFullAccess } from "@/lib/permissions";
-import { prisma } from "@/server/db";
 import { buildJobArchive } from "@/server/exporters/build-job-archive";
 
 /**
@@ -15,11 +14,12 @@ export async function GET(
   const user = await getCurrentUser();
   if (!hasFullAccess(user)) return new Response("Forbidden", { status: 403 });
 
+  const db = await getScopedPrisma();
   const { id } = await params;
-  const archive = await buildJobArchive(id);
+  const archive = await buildJobArchive(db, id);
   if (!archive) return new Response("Not found", { status: 404 });
 
-  await prisma.activity.create({
+  await db.activity.create({
     data: {
       entityType: "JOB",
       action: "DATA_EXPORTED",

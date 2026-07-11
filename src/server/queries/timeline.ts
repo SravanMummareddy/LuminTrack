@@ -1,4 +1,4 @@
-import { prisma } from "@/server/db";
+import { getScopedPrisma } from "@/lib/session";
 import type { Prisma } from "@/generated/prisma/client";
 
 export type TimelineEntityType =
@@ -26,6 +26,7 @@ export async function getTimelineFor(
   entityType: TimelineEntityType,
   id: string,
 ) {
+  const db = await getScopedPrisma();
   const or: Prisma.ActivityWhereInput[] = [];
 
   if (entityType === "CONSULTANT") {
@@ -37,7 +38,7 @@ export async function getTimelineFor(
     or.push({ requirementId: id });
   } else if (entityType === "SUBMISSION") {
     or.push({ submissionId: id });
-    const rounds = await prisma.interviewRound.findMany({
+    const rounds = await db.interviewRound.findMany({
       where: { submissionId: id },
       select: { id: true },
     });
@@ -46,7 +47,7 @@ export async function getTimelineFor(
   } else {
     // JOB or CANDIDATE — own activity, plus every submission and round below it.
     or.push(entityType === "JOB" ? { jobId: id } : { candidateId: id });
-    const submissions = await prisma.submission.findMany({
+    const submissions = await db.submission.findMany({
       where: entityType === "JOB" ? { jobId: id } : { candidateId: id },
       select: { id: true, interviewRounds: { select: { id: true } } },
     });
@@ -58,7 +59,7 @@ export async function getTimelineFor(
     if (roundIds.length) or.push({ interviewRoundId: { in: roundIds } });
   }
 
-  return prisma.activity.findMany({
+  return db.activity.findMany({
     where: { OR: or },
     orderBy: { createdAt: "desc" },
     include: { performedBy: { select: { fullName: true } } },

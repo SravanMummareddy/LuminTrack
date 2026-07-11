@@ -7,12 +7,9 @@
 // Every helper takes a Prisma transaction client so the caller composes the
 // write + its audit row atomically (audit invariant).
 
-import type { Prisma } from "@/generated/prisma/client";
 import type { BenchMarketingStatus } from "@/generated/prisma/enums";
-import { isUniqueConstraintError } from "@/server/db";
+import { isUniqueConstraintError, type Tx } from "@/server/db";
 import { logActivity } from "@/server/activity";
-
-type Tx = Prisma.TransactionClient;
 
 /**
  * Ensures a candidate has a linked bench presence. Called when a candidate is

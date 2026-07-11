@@ -4,10 +4,8 @@
 
 import type { Prisma } from "@/generated/prisma/client";
 import { logActivity } from "@/server/activity";
-import { isUniqueConstraintError } from "@/server/db";
+import { isUniqueConstraintError, type Tx } from "@/server/db";
 import { syncBenchOnPlacement } from "@/server/bench-lifecycle";
-
-type Tx = Prisma.TransactionClient;
 
 /**
  * Auto-creates a Placement when a submission flips to JOINED, and flips the

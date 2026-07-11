@@ -1,8 +1,8 @@
-import { prisma } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
 import type { UserRole, Discipline } from "@/generated/prisma/enums";
 import { PAGE_SIZE, searchTerms, type DateRange, type SortDir, type SortState } from "@/lib/filters";
 import { canViewSensitiveDocs } from "@/lib/permissions";
+import { getScopedPrisma } from "@/lib/session";
 
 export type CandidateListFilters = {
   q?: string;
@@ -21,8 +21,9 @@ export type CandidateListFilters = {
 };
 
 /** Count of candidates in trash (restorable, not yet erased). */
-export function countTrashedCandidates(): Promise<number> {
-  return prisma.candidate.count({
+export async function countTrashedCandidates(): Promise<number> {
+  const db = await getScopedPrisma();
+  return db.candidate.count({
     where: { deletedAt: { not: null }, erasedAt: null },
   });
 }
@@ -53,6 +54,7 @@ const candidateListInclude = {
 } satisfies Prisma.CandidateInclude;
 
 export async function listCandidates(filters: CandidateListFilters) {
+  const db = await getScopedPrisma();
   // Default roster hides trashed + erased candidates (a trashed one is pending
   // deletion; an erased one is an anonymized tombstone). The trash view flips
   // that to show only restorable (trashed, not-yet-erased) candidates.
@@ -97,7 +99,7 @@ export async function listCandidates(filters: CandidateListFilters) {
   // partial match on array elements, so the skill filter (and therefore
   // pagination) runs in memory when a skill is supplied.
   if (skill) {
-    const all = await prisma.candidate.findMany({
+    const all = await db.candidate.findMany({
       where,
       orderBy,
       include: candidateListInclude,
@@ -114,11 +116,11 @@ export async function listCandidates(filters: CandidateListFilters) {
     return { rows, total, page };
   }
 
-  const total = await prisma.candidate.count({ where });
+  const total = await db.candidate.count({ where });
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
 
-  const raw = await prisma.candidate.findMany({
+  const raw = await db.candidate.findMany({
     where,
     orderBy,
     skip: (page - 1) * PAGE_SIZE,
@@ -158,8 +160,9 @@ export type CandidateListRow = Awaited<
   ReturnType<typeof listCandidates>
 >["rows"][number];
 
-export function getCandidateDetail(id: string) {
-  return prisma.candidate.findUnique({
+export async function getCandidateDetail(id: string) {
+  const db = await getScopedPrisma();
+  return db.candidate.findUnique({
     where: { id },
     include: {
       createdBy: { select: { fullName: true } },
@@ -180,11 +183,12 @@ export async function getCandidateDocuments(
   candidateId: string,
   viewer: { role: UserRole },
 ) {
+  const db = await getScopedPrisma();
   const where: Prisma.CandidateDocumentWhereInput = { candidateId };
   if (!canViewSensitiveDocs(viewer)) {
     where.category = { in: ["EDUCATION", "EMPLOYMENT"] };
   }
-  const rows = await prisma.candidateDocument.findMany({
+  const rows = await db.candidateDocument.findMany({
     where,
     orderBy: [{ expiresAt: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }],
     include: { uploadedBy: { select: { fullName: true } } },
@@ -207,6 +211,7 @@ export async function getExpiringDocuments(
   viewer: { role: UserRole; id: string },
   opts: { scope: "me" | "org"; withinDays?: number } = { scope: "org" },
 ) {
+  const db = await getScopedPrisma();
   const withinDays = opts.withinDays ?? 30;
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() + withinDays);
@@ -221,7 +226,7 @@ export async function getExpiringDocuments(
     where.candidate = { createdById: viewer.id };
   }
 
-  const rows = await prisma.candidateDocument.findMany({
+  const rows = await db.candidateDocument.findMany({
     where,
     orderBy: { expiresAt: "asc" },
     take: 50,
@@ -249,6 +254,7 @@ export async function getExpiringDocumentsForCandidate(
   viewer: { role: UserRole },
   opts: { withinDays?: number } = {},
 ) {
+  const db = await getScopedPrisma();
   const withinDays = opts.withinDays ?? 30;
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() + withinDays);
@@ -261,7 +267,7 @@ export async function getExpiringDocumentsForCandidate(
     where.category = { in: ["EDUCATION", "EMPLOYMENT"] };
   }
 
-  const rows = await prisma.candidateDocument.findMany({
+  const rows = await db.candidateDocument.findMany({
     where,
     orderBy: { expiresAt: "asc" },
   });
@@ -274,16 +280,18 @@ export async function getExpiringDocumentsForCandidate(
   }));
 }
 
-export function getCandidateForEdit(id: string) {
-  return prisma.candidate.findUnique({ where: { id } });
+export async function getCandidateForEdit(id: string) {
+  const db = await getScopedPrisma();
+  return db.candidate.findUnique({ where: { id } });
 }
 
 /** Lightweight candidate list for select inputs (e.g. the new-submission form),
  *  each with its saved résumés so the submission form can offer a picker.
  *  Only **active** résumés are offered — archived ones can't be picked for a
  *  new submission (existing submissions keep their link via the edit form). */
-export function listCandidateOptions() {
-  return prisma.candidate.findMany({
+export async function listCandidateOptions() {
+  const db = await getScopedPrisma();
+  return db.candidate.findMany({
     // Never offer trashed/erased candidates in a picker (submission, VPR,
     // bench) — mirrors the `deletedAt: null` invariant every list view uses.
     where: { deletedAt: null },
@@ -319,7 +327,8 @@ export async function findCandidateDuplicates(opts: {
   if (opts.phone) or.push({ phone: opts.phone });
   if (or.length === 0) return [];
 
-  return prisma.candidate.findMany({
+  const db = await getScopedPrisma();
+  return db.candidate.findMany({
     where: {
       OR: or,
       // Don't surface trashed candidates as duplicates — they're hidden
