@@ -7,12 +7,12 @@ import Link from "next/link";
  */
 export function ScorecardPicker({
   month, // "YYYY-MM"
-  team,
-  teamLabels,
+  team, // selected team id ("" = all)
+  teams,
 }: {
   month: string;
   team: string;
-  teamLabels: string[];
+  teams: { id: string; name: string }[];
 }) {
   return (
     <form
@@ -35,12 +35,12 @@ export function ScorecardPicker({
           name="team"
           defaultValue={team}
           className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          disabled={teamLabels.length === 0}
+          disabled={teams.length === 0}
         >
           <option value="">All teams</option>
-          {teamLabels.map((t) => (
-            <option key={t} value={t}>
-              {t}
+          {teams.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
             </option>
           ))}
         </select>

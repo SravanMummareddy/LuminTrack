@@ -13,6 +13,7 @@ import {
   UserRound,
   UsersRound,
   ChartColumn,
+  Network,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -63,6 +64,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/recruiters", label: "Recruiters", icon: UserRound },
       { href: "/reports", label: "Reports", icon: ChartColumn },
+      { href: "/org-chart", label: "Org chart", icon: Network },
     ],
   },
   { divider: true, items: [{ href: "/settings", label: "Settings", icon: Settings }] },

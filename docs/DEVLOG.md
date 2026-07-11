@@ -10,6 +10,34 @@ short instead of long.
 
 ---
 
+## 2026-07-11 · Wave 1b org model — the reseed that collided with its own migration
+
+**Situation.** Replaced the free-text `User.teamLabel` with a real model (`Team` + a self-
+referential `User.reportsToId` chain: CEO → managers → team leads → recruiters) plus a React-Flow
+org chart. The hand-written migration backfilled two Teams from the existing labels. Then
+`npx tsx prisma/seed-demo.ts` (which wipes + reloads) blew up: `Unique constraint failed on the
+fields: (name)` on `prisma.team.create({ name: "USEI-Sales IT" })`.
+
+**Diagnosis.** The seed's wipe block is an explicit ordered list of `deleteMany()` calls — one per
+table — written before `Team` existed. So the wipe cleared users/jobs/etc. but **left the
+migration-backfilled Team rows in place**, and the seed then tried to re-create a team with the
+same unique `name`. The migration's backfill (correct, and needed for prod) and the seed's rebuild
+(correct for dev) each assumed they owned the Team table; nobody cleared it between them.
+
+**Fix.** Added `await prisma.team.deleteMany();` to the wipe list, just before the user wipe. Order
+was the only subtlety: `Team.leadId → User` and `User.teamId → Team` are a mutual FK pair, but both
+are `onDelete: SetNull`, so neither delete blocks the other — no Cascade/Restrict cycle to sequence
+around. Reseed then produced the full chain (CEO Anjali → Sriman → Vikram/Deepa → 8 recruiters),
+verified against the live scorecard (still groups by the two named teams) and the org chart.
+
+**Lesson.** A hand-written data migration and a wipe-and-reseed script are two independent writers
+of the same tables, and an *explicit* per-table wipe list silently omits any table added after it
+was written. When a migration creates a table, grep the seed's teardown for it in the same change —
+the failure mode isn't a type error (the seed compiled fine), it's a runtime unique-constraint
+collision that only surfaces on the *second* reseed against a migrated DB.
+
+---
+
 ## 2026-07-11 · Wave 1a access tiers — and two report pages that were never guarded
 
 **Situation.** Owner wants recruiters **and team leads** restricted to the operational surface

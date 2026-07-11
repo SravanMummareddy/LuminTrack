@@ -43,14 +43,16 @@ async function seedScorecard() {
   const admin = await testPrisma.user.create({
     data: { fullName: "Admin", email: "admin@s.local", passwordHash: "x", role: "MANAGER" },
   });
+  const teamAlpha = await testPrisma.team.create({ data: { name: "Alpha" } });
+  const teamBeta = await testPrisma.team.create({ data: { name: "Beta" } });
   const recA = await testPrisma.user.create({
-    data: { fullName: "Rec A", email: "a@s.local", passwordHash: "x", role: "RECRUITER", empId: "EMP-101", teamLabel: "Alpha" },
+    data: { fullName: "Rec A", email: "a@s.local", passwordHash: "x", role: "RECRUITER", empId: "EMP-101", teamId: teamAlpha.id },
   });
   const recB = await testPrisma.user.create({
-    data: { fullName: "Rec B", email: "b@s.local", passwordHash: "x", role: "RECRUITER", empId: "EMP-102", teamLabel: "Beta" },
+    data: { fullName: "Rec B", email: "b@s.local", passwordHash: "x", role: "RECRUITER", empId: "EMP-102", teamId: teamBeta.id },
   });
   const recC = await testPrisma.user.create({
-    data: { fullName: "Rec C", email: "c@s.local", passwordHash: "x", role: "RECRUITER", empId: "EMP-103", teamLabel: "Alpha", isActive: false },
+    data: { fullName: "Rec C", email: "c@s.local", passwordHash: "x", role: "RECRUITER", empId: "EMP-103", teamId: teamAlpha.id, isActive: false },
   });
 
   const client = await testPrisma.client.create({ data: { name: "Client" } });
@@ -104,7 +106,7 @@ async function seedScorecard() {
   // recruiterC (inactive) — must be dropped
   await mkSub(jobV1.id, recC.id, new Date(2026, 5, 4, 12), "SUBMITTED");
 
-  return { recA, recB };
+  return { recA, recB, teamAlpha };
 }
 
 describe.skipIf(!dbReachable)("getMonthlyScorecard — metric bucketing", () => {
@@ -158,9 +160,10 @@ describe.skipIf(!dbReachable)("getMonthlyScorecard — metric bucketing", () => 
     expect(b.total.submissions).toBe(1);
   });
 
-  it("filters by team label", async () => {
-    const sc = await getMonthlyScorecard({ ...JUNE, teamLabel: "Alpha" });
+  it("filters by team", async () => {
+    const sc = await getMonthlyScorecard({ ...JUNE, teamId: ids.teamAlpha.id });
     expect(sc.rows.map((r) => r.recruiterName)).toEqual(["Rec A"]); // B is Beta, C inactive
+    expect(sc.rows[0]?.teamName).toBe("Alpha");
   });
 
   it("zero-seeds every active recruiter for a month with no activity", async () => {

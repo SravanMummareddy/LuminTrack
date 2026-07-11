@@ -33,29 +33,28 @@ try {
 }
 
 async function seed() {
-  const [admin, lead, recruiter] = await Promise.all([
+  const [admin, lead] = await Promise.all([
     testPrisma.user.create({
       data: { fullName: "Admin", email: "admin@test.local", passwordHash: "x", role: "MANAGER" },
     }),
     testPrisma.user.create({
-      data: {
-        fullName: "Team Lead",
-        email: "lead@test.local",
-        passwordHash: "x",
-        role: "TEAM_LEAD",
-        teamLabel: "Alpha",
-      },
-    }),
-    testPrisma.user.create({
-      data: {
-        fullName: "Rec One",
-        email: "rec1@test.local",
-        passwordHash: "x",
-        role: "RECRUITER",
-        teamLabel: "Alpha",
-      },
+      data: { fullName: "Team Lead", email: "lead@test.local", passwordHash: "x", role: "TEAM_LEAD" },
     }),
   ]);
+  // Real team + membership so deriveTeamLead resolves the recruiter → its lead.
+  const team = await testPrisma.team.create({
+    data: { name: "Alpha", leadId: lead.id },
+  });
+  await testPrisma.user.update({ where: { id: lead.id }, data: { teamId: team.id } });
+  const recruiter = await testPrisma.user.create({
+    data: {
+      fullName: "Rec One",
+      email: "rec1@test.local",
+      passwordHash: "x",
+      role: "RECRUITER",
+      teamId: team.id,
+    },
+  });
   const [client, vendor] = await Promise.all([
     testPrisma.client.create({ data: { name: "Client" } }),
     testPrisma.vendor.create({ data: { name: "Vendor" } }),

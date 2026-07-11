@@ -184,34 +184,37 @@ const SHARED_PASSWORD = "LuminTrack2026!";
 const TEAM_A = "USEI-Sales IT";
 const TEAM_B = "USEI-Sales IT-2";
 
-// Real people from the June-19 spreadsheet + generated teammates. Three tiers:
-// 1 Manager (Sriman, primary login) + 2 Team Leads (one per team) + 8
-// recruiters. Managers and team leads both have full access. Everyone shares
-// SHARED_PASSWORD.
+// Real people from the June-19 spreadsheet + generated teammates. Tiers:
+// CEO (apex) → Manager (Sriman, primary login) → 2 Team Leads (one per team) →
+// 8 recruiters. Managers and team leads both have full-management access; the
+// CEO + managers sit above teams (teamKey null). Everyone shares SHARED_PASSWORD.
 const ADMIN_LOGIN = "sriman@lumintrack.com";
+const CEO_LOGIN = "ceo@lumintrack.com";
 type RosterUser = {
   fullName: string;
   email: string;
   role: "MANAGER" | "TEAM_LEAD" | "RECRUITER";
   empId: string;
-  teamLabel: string;
+  teamKey: "A" | "B" | null; // null = CEO / manager (above the teams)
 };
 const USER_ROSTER: RosterUser[] = [
-  // ── Manager (full access; primary login) ──
-  { fullName: "Sriman Udugula", email: ADMIN_LOGIN, role: "MANAGER", empId: "INC105", teamLabel: TEAM_A },
-  // ── Team leads (full access; one per team, drive VPR planning) ──
-  { fullName: "Vikram Reddy", email: "vikram@lumintrack.com", role: "TEAM_LEAD", empId: "INC112", teamLabel: TEAM_A },
-  { fullName: "Deepa Nair", email: "deepa@lumintrack.com", role: "TEAM_LEAD", empId: "TK2204", teamLabel: TEAM_B },
+  // ── CEO (org apex; real login, reports to nobody) ──
+  { fullName: "Anjali Rao", email: CEO_LOGIN, role: "MANAGER", empId: "INC001", teamKey: null },
+  // ── Manager (primary login; reports to the CEO) ──
+  { fullName: "Sriman Udugula", email: ADMIN_LOGIN, role: "MANAGER", empId: "INC105", teamKey: null },
+  // ── Team leads (one per team, drive VPR planning; report to the manager) ──
+  { fullName: "Vikram Reddy", email: "vikram@lumintrack.com", role: "TEAM_LEAD", empId: "INC112", teamKey: "A" },
+  { fullName: "Deepa Nair", email: "deepa@lumintrack.com", role: "TEAM_LEAD", empId: "TK2204", teamKey: "B" },
   // ── Recruiters — real (from the sheet's Monthly Performance tab) ──
-  { fullName: "Hrishikesh Batta", email: "hrishikesh@lumintrack.com", role: "RECRUITER", empId: "TK2090", teamLabel: TEAM_A },
-  { fullName: "Sameer Shaik", email: "sameer@lumintrack.com", role: "RECRUITER", empId: "TK2161", teamLabel: TEAM_A },
-  { fullName: "Akhila Kalyadapu", email: "akhila@lumintrack.com", role: "RECRUITER", empId: "INC83", teamLabel: TEAM_B },
+  { fullName: "Hrishikesh Batta", email: "hrishikesh@lumintrack.com", role: "RECRUITER", empId: "TK2090", teamKey: "A" },
+  { fullName: "Sameer Shaik", email: "sameer@lumintrack.com", role: "RECRUITER", empId: "TK2161", teamKey: "A" },
+  { fullName: "Akhila Kalyadapu", email: "akhila@lumintrack.com", role: "RECRUITER", empId: "INC83", teamKey: "B" },
   // ── Recruiters — generated ──
-  { fullName: "Anil Kumar", email: "anil@lumintrack.com", role: "RECRUITER", empId: "INC121", teamLabel: TEAM_A },
-  { fullName: "Pooja Verma", email: "pooja@lumintrack.com", role: "RECRUITER", empId: "TK2233", teamLabel: TEAM_A },
-  { fullName: "Rahul Joshi", email: "rahul@lumintrack.com", role: "RECRUITER", empId: "INC138", teamLabel: TEAM_B },
-  { fullName: "Sneha Iyer", email: "sneha@lumintrack.com", role: "RECRUITER", empId: "TK2251", teamLabel: TEAM_B },
-  { fullName: "Karthik Menon", email: "karthik@lumintrack.com", role: "RECRUITER", empId: "INC146", teamLabel: TEAM_B },
+  { fullName: "Anil Kumar", email: "anil@lumintrack.com", role: "RECRUITER", empId: "INC121", teamKey: "A" },
+  { fullName: "Pooja Verma", email: "pooja@lumintrack.com", role: "RECRUITER", empId: "TK2233", teamKey: "A" },
+  { fullName: "Rahul Joshi", email: "rahul@lumintrack.com", role: "RECRUITER", empId: "INC138", teamKey: "B" },
+  { fullName: "Sneha Iyer", email: "sneha@lumintrack.com", role: "RECRUITER", empId: "TK2251", teamKey: "B" },
+  { fullName: "Karthik Menon", email: "karthik@lumintrack.com", role: "RECRUITER", empId: "INC146", teamKey: "B" },
 ];
 
 const SOURCE_NAMES = [
@@ -577,6 +580,8 @@ async function main() {
   // them first so the user wipe doesn't fail.
   await prisma.customGlossaryTerm.deleteMany();
   await prisma.glossaryNote.deleteMany();
+  // Team ↔ User FKs are both SetNull, so neither delete blocks the other.
+  await prisma.team.deleteMany();
   await prisma.user.deleteMany();
 
   // ── Learned dropdown values (a few non-default extras, to show the
@@ -601,7 +606,8 @@ async function main() {
     id: string;
     fullName: string;
     role: string;
-    teamLabel: string | null;
+    email: string;
+    teamKey: "A" | "B" | null;
   }[] = [];
   for (const u of USER_ROSTER) {
     const created = await prisma.user.create({
@@ -611,16 +617,43 @@ async function main() {
         passwordHash,
         role: u.role,
         empId: u.empId,
-        teamLabel: u.teamLabel,
         createdAt: adminCreatedAt,
         updatedAt: adminCreatedAt,
       },
-      select: { id: true, fullName: true, role: true, teamLabel: true },
+      select: { id: true, fullName: true, role: true, email: true },
     });
-    allUsers.push(created);
+    allUsers.push({ ...created, teamKey: u.teamKey });
   }
   // Sriman is the primary manager (used as createdBy / assignedBy across the seed).
-  const admin = allUsers.find((u) => u.fullName === "Sriman Udugula")!;
+  const admin = allUsers.find((u) => u.email === ADMIN_LOGIN)!;
+  const ceo = allUsers.find((u) => u.email === CEO_LOGIN)!;
+
+  // ── Org: named teams + the reporting chain ──
+  // Each team is led by the TEAM_LEAD carrying its teamKey.
+  const leadByKey: Record<"A" | "B", (typeof allUsers)[number]> = {
+    A: allUsers.find((u) => u.role === "TEAM_LEAD" && u.teamKey === "A")!,
+    B: allUsers.find((u) => u.role === "TEAM_LEAD" && u.teamKey === "B")!,
+  };
+  const teamByKey: Record<"A" | "B", { id: string }> = {
+    A: await prisma.team.create({ data: { name: TEAM_A, leadId: leadByKey.A.id } }),
+    B: await prisma.team.create({ data: { name: TEAM_B, leadId: leadByKey.B.id } }),
+  };
+  // Wire team membership + reporting line: recruiter → its team's lead;
+  // team lead → the manager; manager → the CEO; CEO → nobody (apex).
+  for (const u of allUsers) {
+    if (u.email === CEO_LOGIN) continue;
+    const data: { teamId?: string; reportsToId?: string } = {};
+    if (u.teamKey) data.teamId = teamByKey[u.teamKey].id;
+    if (u.role === "RECRUITER" && u.teamKey) data.reportsToId = leadByKey[u.teamKey].id;
+    else if (u.role === "TEAM_LEAD") data.reportsToId = admin.id;
+    else if (u.role === "MANAGER") data.reportsToId = ceo.id;
+    await prisma.user.update({ where: { id: u.id }, data });
+  }
+  const leadNameByKey: Record<"A" | "B", string> = {
+    A: leadByKey.A.fullName,
+    B: leadByKey.B.fullName,
+  };
+
   // Submissions/assignments are attributed to RECRUITER-role users only, so the
   // Monthly Performance scorecard (recruiters only) reconciles. Managers and team
   // leads show zero activity — matching Sriman's row on the sheet.
@@ -1087,10 +1120,6 @@ async function main() {
   // Scope one requirement per job on first use (occasionally a second one) and
   // reuse it for that job's other submissions — one requirement, many candidate
   // submissions. The requirement's commercial terms are carried onto each sub.
-  const teamLeadByLabel = new Map<string, string>();
-  for (const u of USER_ROSTER) {
-    if (u.role === "TEAM_LEAD") teamLeadByLabel.set(u.teamLabel, u.fullName);
-  }
   type VprRec = {
     id: string;
     payRate: number;
@@ -1113,7 +1142,7 @@ async function main() {
     const payRate = job.payBase - randInt(0, 6);
     const billRate = job.payBase + randInt(10, 30);
     const engagement: "C2C" | "W2" = chance(0.6) ? "C2C" : "W2";
-    const teamLead = teamLeadByLabel.get(recruiter.teamLabel ?? "") ?? null;
+    const teamLead = recruiter.teamKey ? leadNameByKey[recruiter.teamKey] : null;
     const vendorRecruiterName = chance(0.5) ? pick(VENDOR_RECRUITER_NAMES) : null;
     // Scoped right after the job is created, so it always predates its submissions.
     const createdAt = new Date(job.createdAt.getTime() + 6 * HOUR);
@@ -1644,7 +1673,7 @@ async function main() {
         clientRate: job.clientRate, // carried from the job (Client >= Bill >= Pay)
         engagement: chance(0.6) ? "C2C" : "W2",
         vendorRecruiterName: chance(0.5) ? pick(VENDOR_RECRUITER_NAMES) : null,
-        teamLead: teamLeadByLabel.get(recruiter.teamLabel ?? "") ?? null,
+        teamLead: recruiter.teamKey ? leadNameByKey[recruiter.teamKey] : null,
         submissionNotes: chance(0.4) ? pick(CANDIDATE_NOTES) : null,
         status,
         createdById: admin.id,
@@ -1883,7 +1912,7 @@ async function main() {
   console.log(`  Notes:        ${noteRows.length}`);
   console.log(`  Activity rows: ${activityRows.length}`);
   console.log(`\n  Admin login:  ${ADMIN_LOGIN}  /  ${SHARED_PASSWORD}  (Sriman Udugula)`);
-  console.log(`  (all 11 users share the same password)`);
+  console.log(`  (all ${USER_ROSTER.length} users share the same password)`);
 }
 
 main()

@@ -47,11 +47,12 @@ export function ScorecardGrid({ scorecard }: { scorecard: MonthlyScorecard }) {
   const weekCount = weekLabels.length;
   const metricsPerGroup = SCORECARD_METRICS.length;
 
-  // Group recruiters by team, preserving the query's team-then-name ordering.
+  // Group recruiters by team (keyed on teamId), preserving the query's
+  // team-then-name ordering. Display name comes off the rows (teamName).
   const groupOrder: (string | null)[] = [];
   const grouped = new Map<string | null, ScorecardRow[]>();
   for (const r of rows) {
-    const key = r.teamLabel ?? null;
+    const key = r.teamId ?? null;
     if (!grouped.has(key)) {
       grouped.set(key, []);
       groupOrder.push(key);
@@ -126,13 +127,13 @@ export function ScorecardGrid({ scorecard }: { scorecard: MonthlyScorecard }) {
           </tr>
         </thead>
         <tbody>
-          {groupOrder.map((team) => {
-            const teamRows = grouped.get(team)!;
+          {groupOrder.map((teamId) => {
+            const teamRows = grouped.get(teamId)!;
             const teamTotal = sumRows(teamRows, weekCount);
             return (
               <TeamSection
-                key={team ?? "__none__"}
-                team={team}
+                key={teamId ?? "__none__"}
+                teamName={teamRows[0]?.teamName ?? null}
                 teamRows={teamRows}
                 teamTotal={teamTotal}
                 weekCount={weekCount}
@@ -211,14 +212,14 @@ function MetricGroup({
 }
 
 function TeamSection({
-  team,
+  teamName,
   teamRows,
   teamTotal,
   weekCount,
   showTeamHeader,
   renderCountsRow,
 }: {
-  team: string | null;
+  teamName: string | null;
   teamRows: ScorecardRow[];
   teamTotal: { weeks: Counts[]; total: Counts };
   weekCount: number;
@@ -237,7 +238,7 @@ function TeamSection({
             colSpan={colCount}
             className="sticky left-0 px-3 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-indigo-700"
           >
-            {team ?? "Unassigned"}
+            {teamName ?? "Unassigned"}
           </td>
         </tr>
       )}
@@ -256,7 +257,7 @@ function TeamSection({
       ))}
       <tr className="border-t border-slate-200 bg-slate-50/80 font-semibold">
         <td className="sticky left-0 z-10 bg-slate-50 px-3 py-1.5 text-left text-slate-600">
-          {showTeamHeader ? `${team ?? "Unassigned"} — Total` : "Total"}
+          {showTeamHeader ? `${teamName ?? "Unassigned"} — Total` : "Total"}
         </td>
         {renderCountsRow(teamTotal, true)}
       </tr>
