@@ -232,11 +232,21 @@ model User {
   // shown verbatim on the Monthly Performance scorecard. Nullable + unique
   // (Postgres treats multiple NULLs as distinct, so existing users are fine).
   empId        String?  @unique
-  // Free-text team label (e.g. "USEI-Sales IT") used to group the scorecard.
-  // v1 placeholder — normalize to a Team model later.
-  teamLabel    String?
+  // Org / reporting model (replaced the old free-text `teamLabel`, Wave 1b).
+  // `team` = the named team this user belongs to (recruiters + their lead;
+  // managers sit above teams → null). `reportsTo` = the self-referential
+  // reporting chain: recruiter → team lead → manager → CEO (reportsTo null).
+  teamId       String?
+  team         Team?    @relation("TeamMembers", fields: [teamId], references: [id], onDelete: SetNull)
+  teamsLed     Team[]   @relation("TeamLead")
+  reportsToId  String?
+  reportsTo    User?    @relation("ReportingChain", fields: [reportsToId], references: [id], onDelete: SetNull)
+  reports      User[]   @relation("ReportingChain")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  @@index([teamId])
+  @@index([reportsToId])
 
   jobsCreated        Job[]
   assignments        JobAssignment[]  @relation("AssignmentRecruiter")
@@ -256,6 +266,21 @@ model User {
   customGlossaryTerms CustomGlossaryTerm[]
   vendorsRecruited   Vendor[]         @relation("VendorRecruitedBy")
   submissionsResumeWaived Submission[] @relation("SubmissionResumeWaivedBy")
+}
+
+// A named team (e.g. "USEI-Sales IT") with a designated team lead. Members are
+// recruiters + the lead; the lead is a TEAM_LEAD user. Replaced the free-text
+// `User.teamLabel` (Wave 1b). All FKs SetNull so a lead leaving never cascades.
+model Team {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  leadId    String?
+  lead      User?    @relation("TeamLead", fields: [leadId], references: [id], onDelete: SetNull)
+  members   User[]   @relation("TeamMembers")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([leadId])
 }
 
 model SisterCompanySource {

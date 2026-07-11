@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma, isUniqueConstraintError } from "@/server/db";
 import { requireUser } from "@/lib/session";
 import { canManageOrgEntities } from "@/lib/permissions";
-import { contactOrgSchema, clientSchema } from "@/lib/validation/org";
+import { contactOrgSchema, clientSchema, teamSchema } from "@/lib/validation/org";
 import { toFieldErrors } from "@/lib/validation/common";
 import type { FormState } from "@/lib/form-state";
 
@@ -165,5 +165,35 @@ export async function saveClient(
   }
 
   revalidatePath("/settings");
+  return { ok: true };
+}
+
+/** Create/rename a team and set its lead. Manager-only (same gate as the other
+ *  org entities). The lead FK is SetNull, so an unpicked/removed lead is fine. */
+export async function saveTeam(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const gate = await requireOrgManager();
+  if ("error" in gate) return gate;
+  const id = String(formData.get("id") ?? "").trim();
+  const parsed = teamSchema.safeParse({
+    name: formData.get("name") ?? "",
+    leadId: formData.get("leadId") ?? "",
+  });
+  if (!parsed.success) return { fieldErrors: toFieldErrors(parsed.error) };
+
+  const data = { name: parsed.data.name, leadId: parsed.data.leadId ?? null };
+  try {
+    if (id) await prisma.team.update({ where: { id }, data });
+    else await prisma.team.create({ data });
+  } catch (error) {
+    if (isUniqueConstraintError(error))
+      return { fieldErrors: { name: "A team with this name already exists." } };
+    throw error;
+  }
+
+  revalidatePath("/settings");
+  revalidatePath("/org-chart");
   return { ok: true };
 }

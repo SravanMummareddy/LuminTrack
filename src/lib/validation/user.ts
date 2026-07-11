@@ -7,6 +7,9 @@ const base = z.object({
   email: z.email("Enter a valid email address."),
   role: z.enum(["MANAGER", "TEAM_LEAD", "RECRUITER"]),
   isActive: z.boolean(),
+  // Org placement — both optional ("" → undefined → the action nulls them).
+  teamId: z.preprocess(emptyToUndefined, z.string().optional()),
+  reportsToId: z.preprocess(emptyToUndefined, z.string().optional()),
 });
 
 // Strength policy lives in @/lib/password-policy (shared with the live

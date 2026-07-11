@@ -25,5 +25,12 @@ export const clientSchema = z.object({
   isActive: z.boolean(),
 });
 
+/** A named team + its optional lead (a team-lead user; "" → no lead). */
+export const teamSchema = z.object({
+  name: z.string().trim().min(1, "Team name is required.").max(120),
+  leadId: optionalText,
+});
+
 export type ContactOrgInput = z.infer<typeof contactOrgSchema>;
 export type ClientInput = z.infer<typeof clientSchema>;
+export type TeamInput = z.infer<typeof teamSchema>;

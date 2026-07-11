@@ -71,7 +71,8 @@ export type ScorecardRow = {
   recruiterId: string;
   recruiterName: string;
   empId: string | null;
-  teamLabel: string | null;
+  teamId: string | null;
+  teamName: string | null;
   /** One MetricCounts per week, index-aligned with `weekLabels`. */
   weeks: MetricCounts[];
   /** Sum of all weeks for this recruiter. */
@@ -89,13 +90,13 @@ export type MonthlyScorecard = {
 export type ScorecardParams = {
   year: number;
   monthIndex: number; // 0-based
-  teamLabel?: string;
+  teamId?: string;
 };
 
 export async function getMonthlyScorecard({
   year,
   monthIndex,
-  teamLabel,
+  teamId,
 }: ScorecardParams): Promise<MonthlyScorecard> {
   const monthStart = startOfMonth(new Date(year, monthIndex, 1));
   const monthEnd = endOfMonth(monthStart);
@@ -125,7 +126,7 @@ export async function getMonthlyScorecard({
   // The recruiter filter shared by every per-recruiter aggregation.
   const recruiterWhere = {
     role: "RECRUITER" as const,
-    ...(teamLabel ? { teamLabel } : {}),
+    ...(teamId ? { teamId } : {}),
   };
 
   // Status-change audit rows carry the human status LABEL in `newValue`.
@@ -136,8 +137,14 @@ export async function getMonthlyScorecard({
     await Promise.all([
       prisma.user.findMany({
         where: { ...recruiterWhere, isActive: true },
-        select: { id: true, fullName: true, empId: true, teamLabel: true },
-        orderBy: [{ teamLabel: "asc" }, { fullName: "asc" }],
+        select: {
+          id: true,
+          fullName: true,
+          empId: true,
+          team: { select: { id: true, name: true } },
+        },
+        // nulls-last so "Unassigned" recruiters sort after the named teams.
+        orderBy: [{ team: { name: "asc" } }, { fullName: "asc" }],
       }),
       prisma.submission.findMany({
         where: {
@@ -200,7 +207,8 @@ export async function getMonthlyScorecard({
       recruiterId: r.id,
       recruiterName: r.fullName,
       empId: r.empId,
-      teamLabel: r.teamLabel,
+      teamId: r.team?.id ?? null,
+      teamName: r.team?.name ?? null,
       weeks: weeks.map(zeroCounts),
       total: zeroCounts(),
     });

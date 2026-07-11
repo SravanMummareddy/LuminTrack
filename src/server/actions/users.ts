@@ -31,6 +31,8 @@ export async function saveUser(
     role: formData.get("role") ?? "RECRUITER",
     isActive: formData.get("isActive") != null,
     password: formData.get("password") ?? "",
+    teamId: formData.get("teamId") ?? "",
+    reportsToId: formData.get("reportsToId") ?? "",
   };
   const parsed = id
     ? userUpdateSchema.safeParse(raw)
@@ -65,11 +67,29 @@ export async function saveUser(
       };
   }
 
+  // Org placement. A user can't report to themselves. Convenience: if no
+  // explicit "reports to" was picked but a team was, default the reporting line
+  // to that team's lead so the org chart stays connected without double entry.
+  const teamId = parsed.data.teamId ?? null;
+  let reportsToId = parsed.data.reportsToId ?? null;
+  if (id && reportsToId === id)
+    return { error: "A user cannot report to themselves." };
+  if (!reportsToId && teamId) {
+    const team = await prisma.team.findUnique({
+      where: { id: teamId },
+      select: { leadId: true },
+    });
+    // Don't point a team lead at themselves when they lead their own team.
+    if (team?.leadId && team.leadId !== id) reportsToId = team.leadId;
+  }
+
   const fields = {
     fullName: parsed.data.fullName,
     email: parsed.data.email.toLowerCase(),
     role: parsed.data.role,
     isActive: parsed.data.isActive,
+    teamId,
+    reportsToId,
   };
 
   // Hash outside the transaction — bcrypt is CPU-bound and shouldn't hold the tx

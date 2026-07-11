@@ -23,17 +23,28 @@ export type UserRow = {
   email: string;
   role: UserRole;
   isActive: boolean;
+  teamId: string | null;
+  teamName: string | null;
+  reportsToId: string | null;
 };
+
+type Option = { id: string; fullName: string };
 
 export function UserSection({
   items,
   canManage,
   canGrantManager,
+  teams,
+  userOptions,
 }: {
   items: UserRow[];
   canManage: boolean;
   /** Only a Manager may grant the Manager role or edit a Manager's account. */
   canGrantManager: boolean;
+  /** Named teams for the "Team" picker. */
+  teams: { id: string; name: string }[];
+  /** Active users for the "Reports to" picker. */
+  userOptions: Option[];
 }) {
   const [editing, setEditing] = useState<UserRow | "new" | null>(null);
   const [search, setSearch] = useState("");
@@ -95,6 +106,7 @@ export function UserSection({
               <Th>Name</Th>
               <Th>Email</Th>
               <Th>Role</Th>
+              <Th>Team</Th>
               <Th>Status</Th>
               <Th />
             </tr>
@@ -110,6 +122,9 @@ export function UserSection({
                   <Badge tone={item.role === "RECRUITER" ? "slate" : "indigo"}>
                     {roleLabel(item.role)}
                   </Badge>
+                </Td>
+                <Td label="Team" className="text-slate-600">
+                  {item.teamName ?? <span className="text-slate-300">—</span>}
                 </Td>
                 <Td label="Status">
                   <Badge tone={item.isActive ? "green" : "slate"}>
@@ -143,6 +158,8 @@ export function UserSection({
           <UserForm
             entity={editing === "new" ? null : editing}
             canGrantManager={canGrantManager}
+            teams={teams}
+            userOptions={userOptions}
             onDone={() => setEditing(null)}
           />
         )}
@@ -154,10 +171,14 @@ export function UserSection({
 function UserForm({
   entity,
   canGrantManager,
+  teams,
+  userOptions,
   onDone,
 }: {
   entity: UserRow | null;
   canGrantManager: boolean;
+  teams: { id: string; name: string }[];
+  userOptions: Option[];
   onDone: () => void;
 }) {
   const [state, formAction, pending] = useActionState(saveUser, EMPTY_FORM_STATE);
@@ -195,6 +216,42 @@ function UserForm({
           <option value="RECRUITER">Recruiter</option>
           <option value="TEAM_LEAD">Team Lead</option>
           {canGrantManager && <option value="MANAGER">Manager</option>}
+        </Select>
+      </Field>
+
+      <Field
+        label="Team"
+        htmlFor="teamId"
+        hint="Managers sit above teams — leave blank for them."
+      >
+        <Select id="teamId" name="teamId" defaultValue={entity?.teamId ?? ""}>
+          <option value="">— No team —</option>
+          {teams.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </Select>
+      </Field>
+
+      <Field
+        label="Reports to"
+        htmlFor="reportsToId"
+        hint="Leave blank to default to the team's lead."
+      >
+        <Select
+          id="reportsToId"
+          name="reportsToId"
+          defaultValue={entity?.reportsToId ?? ""}
+        >
+          <option value="">— Auto / none —</option>
+          {userOptions
+            .filter((u) => u.id !== entity?.id)
+            .map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.fullName}
+              </option>
+            ))}
         </Select>
       </Field>
 

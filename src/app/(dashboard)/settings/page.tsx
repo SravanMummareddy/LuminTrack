@@ -11,8 +11,11 @@ import {
   listVendors,
   listUsers,
   listActiveUserOptions,
+  listTeamsAdmin,
+  listTeamLeadOptions,
 } from "@/server/queries/org";
 import { saveSisterCompany, saveVendor } from "@/server/actions/org";
+import { TeamSection } from "@/components/settings/team-section";
 import { listSupportProviders } from "@/server/queries/support";
 import { ContactOrgSection } from "@/components/settings/contact-org-section";
 import { SupportSection } from "@/components/settings/support-section";
@@ -33,6 +36,7 @@ const TABS = [
   { key: "clients", label: "Clients" },
   { key: "vendors", label: "Vendors" },
   { key: "support", label: "Support" },
+  { key: "teams", label: "Teams" },
   { key: "users", label: "Users" },
   { key: "glossary", label: "Glossary" },
   { key: "deleted", label: "Erased backups", adminOnly: true },
@@ -98,12 +102,37 @@ export default async function SettingsPage({
     content = (
       <SupportSection items={await listSupportProviders()} isAdmin={isAdmin} />
     );
+  } else if (tab === "teams") {
+    const [teams, leadOptions] = await Promise.all([
+      listTeamsAdmin(),
+      listTeamLeadOptions(),
+    ]);
+    content = (
+      <TeamSection items={teams} canManage={isAdmin} leadOptions={leadOptions} />
+    );
   } else if (tab === "users") {
+    // All teams (incl. empty ones) so a new team is immediately assignable.
+    const [users, allTeams, userOptions] = await Promise.all([
+      listUsers(),
+      listTeamsAdmin(),
+      listActiveUserOptions(),
+    ]);
     content = (
       <UserSection
-        items={await listUsers()}
+        items={users.map((u) => ({
+          id: u.id,
+          fullName: u.fullName,
+          email: u.email,
+          role: u.role,
+          isActive: u.isActive,
+          teamId: u.teamId,
+          teamName: u.team?.name ?? null,
+          reportsToId: u.reportsToId,
+        }))}
         canManage={isAdmin}
         canGrantManager={canGrantManager}
+        teams={allTeams.map((t) => ({ id: t.id, name: t.name }))}
+        userOptions={userOptions}
       />
     );
   } else if (tab === "glossary") {

@@ -72,6 +72,24 @@ export function listUsers() {
       role: true,
       isActive: true,
       createdAt: true,
+      teamId: true,
+      team: { select: { name: true } },
+      reportsToId: true,
+      reportsTo: { select: { fullName: true } },
+    },
+  });
+}
+
+/** Teams for the Settings "Teams" tab: name, lead, and member count. */
+export function listTeamsAdmin() {
+  return prisma.team.findMany({
+    orderBy: { name: "asc" },
+    select: {
+      id: true,
+      name: true,
+      leadId: true,
+      lead: { select: { fullName: true } },
+      _count: { select: { members: true } },
     },
   });
 }
@@ -111,16 +129,14 @@ export async function listTeamLeadOptions(): Promise<
   return rows.map((r) => ({ id: r.id, fullName: r.fullName }));
 }
 
-/** Distinct non-empty team labels across recruiters — powers the Monthly
+/** Teams that have at least one active recruiter — powers the Monthly
  *  Performance team filter. Empty when nobody has been assigned a team yet. */
-export async function listTeamLabels(): Promise<string[]> {
-  const rows = await prisma.user.findMany({
-    where: { role: "RECRUITER", teamLabel: { not: null } },
-    distinct: ["teamLabel"],
-    select: { teamLabel: true },
-    orderBy: { teamLabel: "asc" },
+export async function listTeams(): Promise<{ id: string; name: string }[]> {
+  return prisma.team.findMany({
+    where: { members: { some: { role: "RECRUITER", isActive: true } } },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
   });
-  return rows.map((r) => r.teamLabel).filter((t): t is string => !!t);
 }
 
 export type OrgListItem = Awaited<ReturnType<typeof listVendors>>[number];
