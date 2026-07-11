@@ -184,6 +184,22 @@ export const SYSTEM_ROLE_GRANTS: Record<UserRole, PermissionKey[]> = {
   MANAGER: MANAGER_GRANTS,
 };
 
+/**
+ * The enum tier a role maps to, derived from its permissions. Keeps the legacy
+ * `UserRole` enum (still used by data-classification: PERFORMANCE_ROLES, badge
+ * tints, recruiter/team-lead pickers) meaningful for a custom role — a role with
+ * the manager tier reads as MANAGER, one with full access as TEAM_LEAD, else
+ * RECRUITER. For the three system roles this reproduces their `systemRole`.
+ */
+export function deriveEnumTier(
+  permissionKeys: Iterable<string>,
+): UserRole {
+  const s = new Set(permissionKeys);
+  if (s.has("tier:manager")) return "MANAGER";
+  if (s.has("tier:full")) return "TEAM_LEAD";
+  return "RECRUITER";
+}
+
 /** The permission set for a base enum role (the fallback when a viewer has no
  *  DB-hydrated permission set — synthetic `{ role }` viewers, or pre-backfill). */
 export function permissionsForRole(

@@ -5,7 +5,7 @@ import { passwordIssues } from "@/lib/password-policy";
 const base = z.object({
   fullName: z.string().trim().min(1, "Full name is required.").max(120),
   email: z.email("Enter a valid email address."),
-  role: z.enum(["MANAGER", "TEAM_LEAD", "RECRUITER"]),
+  roleId: z.string().min(1, "Pick a role."),
   isActive: z.boolean(),
   // Overseers/admins can be hidden from the org chart (default shown).
   showInOrgChart: z.boolean(),

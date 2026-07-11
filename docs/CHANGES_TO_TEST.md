@@ -63,8 +63,12 @@ Expand step only — the `UserRole` enum is kept; a later contract migration dro
 - [ ] Lock-out guard: unticking "Manage roles" on the last granting role is rejected. (unit logic in action; not browser-exercised)
 - [ ] NOTE: a test "Sourcer" role exists on the dev DB — cleared by the next reseed.
 
-### Known follow-up (not in this slice)
-- Assigning **custom** roles to users still uses the enum picker (needs a `Role.baseRole` enum default so custom-role users get a sensible enum for the data-classification code). Editing system-role permissions works today; assigning custom roles to people is the next step.
+### Custom-role assignment (follow-up — DONE)
+- [x] User-form Role picker reads from the roles table (system + custom) — verified on dev (lists Manager/Recruiter/Team Lead/**Sourcer**).
+- [x] `saveUser` stores `roleId` + derives the enum tier from the role's permissions (`deriveEnumTier`: tier:manager→MANAGER, tier:full→TEAM_LEAD, else RECRUITER) — no `baseRole` column needed. 2 unit tests.
+- [x] Users list shows the assigned role **name** (not just the enum tier).
+- [ ] Assign a custom role to a real user + confirm the derived enum + role name persist. (browser — picker verified; write path unit-tested)
+- [ ] Governance: a non-grant-manager actor can't assign a manager-tier role. (unit logic; not browser-exercised)
 
 ## Cross-cutting
 - [ ] `npm run build` clean; full unit suite green (currently 212).

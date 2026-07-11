@@ -8,7 +8,6 @@ import {
   canManageUsers,
   hasFullAccess,
   canGrantManagerRole,
-  roleLabel,
 } from "@/lib/permissions";
 import { logActivity } from "@/server/activity";
 import {
@@ -18,6 +17,7 @@ import {
   profileSchema,
 } from "@/lib/validation/user";
 import { toFieldErrors } from "@/lib/validation/common";
+import { deriveEnumTier } from "@/lib/permission-catalog";
 import { reportsToCreatesCycle } from "@/server/queries/org-chart";
 import { rateLimit, resetRateLimit } from "@/lib/rate-limit";
 import type { FormState } from "@/lib/form-state";
@@ -34,7 +34,7 @@ export async function saveUser(
   const raw = {
     fullName: formData.get("fullName") ?? "",
     email: formData.get("email") ?? "",
-    role: formData.get("role") ?? "RECRUITER",
+    roleId: formData.get("roleId") ?? "",
     isActive: formData.get("isActive") != null,
     showInOrgChart: formData.get("showInOrgChart") != null,
     password: formData.get("password") ?? "",
@@ -46,14 +46,23 @@ export async function saveUser(
     : userCreateSchema.safeParse(raw);
   if (!parsed.success) return { fieldErrors: toFieldErrors(parsed.error) };
 
-  // Governance: only a Manager may grant the Manager role or edit an existing
-  // Manager's account. Team leads can manage recruiters and team leads (and
-  // grant the Team Lead role) but cannot escalate anyone — including
-  // themselves — to Manager.
-  const actorIsManager = canGrantManagerRole(actor);
-  if (!actorIsManager) {
-    if (parsed.data.role === "MANAGER")
-      return { error: "Only managers can grant the Manager role." };
+  // Resolve the picked role → its permission keys → the legacy enum tier it maps
+  // to (kept in sync for data-classification: PERFORMANCE_ROLES, badge tints…).
+  const chosenRole = await prisma.role.findUnique({
+    where: { id: parsed.data.roleId },
+    select: { name: true, permissions: { select: { permissionKey: true } } },
+  });
+  if (!chosenRole) return { fieldErrors: { roleId: "Pick a valid role." } };
+  const rolePerms = chosenRole.permissions.map((p) => p.permissionKey);
+  const derivedRole = deriveEnumTier(rolePerms);
+
+  // Governance: only someone with grant-manager rights may assign a manager-tier
+  // role or edit an existing manager-tier user. Team leads can manage the rest
+  // but can't escalate anyone — including themselves — into the manager tier.
+  const actorCanGrantManager = canGrantManagerRole(actor);
+  if (!actorCanGrantManager) {
+    if (derivedRole === "MANAGER")
+      return { error: "Only managers can assign a manager-tier role." };
     if (id) {
       const target = await prisma.user.findUnique({
         where: { id },
@@ -68,7 +77,7 @@ export async function saveUser(
   if (id && id === actor.id) {
     if (!parsed.data.isActive)
       return { error: "You cannot deactivate your own account." };
-    if (!hasFullAccess({ role: parsed.data.role }))
+    if (!hasFullAccess({ permissions: rolePerms }))
       return {
         error: "You cannot remove your own manager/team-lead role.",
       };
@@ -102,22 +111,16 @@ export async function saveUser(
     if (team?.leadId && team.leadId !== id) reportsToId = team.leadId;
   }
 
-  // Keep the RBAC role assignment in sync with the enum during the transition:
-  // point roleId at the system role that mirrors the chosen enum role.
-  const systemRole = await prisma.role.findUnique({
-    where: { systemRole: parsed.data.role },
-    select: { id: true },
-  });
-
   const fields = {
     fullName: parsed.data.fullName,
     email: parsed.data.email.toLowerCase(),
-    role: parsed.data.role,
+    // `roleId` is the assignment; `role` is the enum tier it derives to.
+    roleId: parsed.data.roleId,
+    role: derivedRole,
     isActive: parsed.data.isActive,
     showInOrgChart: parsed.data.showInOrgChart,
     teamId,
     reportsToId,
-    roleId: systemRole?.id ?? null,
   };
 
   // Hash outside the transaction — bcrypt is CPU-bound and shouldn't hold the tx
@@ -138,7 +141,7 @@ export async function saveUser(
         await logActivity(tx, {
           entityType: "USER",
           action: "USER_UPDATED",
-          description: `Updated user ${fields.email} · ${roleLabel(fields.role)}${
+          description: `Updated user ${fields.email} · ${chosenRole.name}${
             passwordChanged ? " · password reset" : ""
           }`,
           performedById: actor.id,
@@ -150,7 +153,7 @@ export async function saveUser(
         await logActivity(tx, {
           entityType: "USER",
           action: "USER_CREATED",
-          description: `Created user ${fields.email} · ${roleLabel(fields.role)}`,
+          description: `Created user ${fields.email} · ${chosenRole.name}`,
           performedById: actor.id,
         });
       }

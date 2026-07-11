@@ -77,6 +77,8 @@ export function listUsers() {
       reportsToId: true,
       reportsTo: { select: { fullName: true } },
       showInOrgChart: true,
+      roleId: true,
+      assignedRole: { select: { name: true } },
     },
   });
 }

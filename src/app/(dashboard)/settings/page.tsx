@@ -3,7 +3,7 @@ import { ScrollText, FileDown } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
 import { isManagerTier, canGrantManagerRole, canManageRoles } from "@/lib/permissions";
 import { RolesSection } from "@/components/settings/roles-section";
-import { listRoles } from "@/server/queries/roles";
+import { listRoles, listRoleOptions } from "@/server/queries/roles";
 import { cn } from "@/lib/cn";
 import { PageHeader } from "@/components/ui/page-header";
 import { LinkButton } from "@/components/ui/button";
@@ -115,10 +115,11 @@ export default async function SettingsPage({
     );
   } else if (tab === "users") {
     // All teams (incl. empty ones) so a new team is immediately assignable.
-    const [users, allTeams, userOptions] = await Promise.all([
+    const [users, allTeams, userOptions, roleOptions] = await Promise.all([
       listUsers(),
       listTeamsAdmin(),
       listActiveUserOptions(),
+      listRoleOptions(),
     ]);
     content = (
       <UserSection
@@ -127,6 +128,8 @@ export default async function SettingsPage({
           fullName: u.fullName,
           email: u.email,
           role: u.role,
+          roleId: u.roleId,
+          roleName: u.assignedRole?.name ?? null,
           isActive: u.isActive,
           showInOrgChart: u.showInOrgChart,
           teamId: u.teamId,
@@ -137,6 +140,7 @@ export default async function SettingsPage({
         canGrantManager={canGrantManager}
         teams={allTeams.map((t) => ({ id: t.id, name: t.name }))}
         userOptions={userOptions}
+        roleOptions={roleOptions}
       />
     );
   } else if (tab === "roles") {
