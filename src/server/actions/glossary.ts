@@ -1,8 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/server/db";
-import { requireUser } from "@/lib/session";
+import { getScopedPrisma, requireUser } from "@/lib/session";
 import { canManageOrgEntities } from "@/lib/permissions";
 import { GLOSSARY, GLOSSARY_CATEGORIES } from "@/lib/glossary";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
@@ -22,21 +21,22 @@ export async function saveGlossaryNote(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const term = String(formData.get("term") ?? "");
   const note = String(formData.get("note") ?? "").trim();
 
   const known =
     BUILT_IN_TERMS.has(term) ||
-    (await prisma.customGlossaryTerm.count({
+    (await db.customGlossaryTerm.count({
       where: { term, deletedAt: null },
     })) > 0;
   if (!known) return { error: "Unknown glossary term." };
 
   if (note === "") {
-    await prisma.glossaryNote.deleteMany({ where: { userId: user.id, term } });
+    await db.glossaryNote.deleteMany({ where: { userId: user.id, term } });
   } else {
-    await prisma.glossaryNote.upsert({
+    await db.glossaryNote.upsert({
       where: { userId_term: { userId: user.id, term } },
       create: { userId: user.id, term, note },
       update: { note },
@@ -64,10 +64,11 @@ function slugify(s: string): string {
 /** A stable, unique `custom_…` slug (the note anchor). Never collides with a
  *  built-in slug (different prefix) or an existing custom term. */
 async function uniqueTerm(label: string): Promise<string> {
+  const db = await getScopedPrisma();
   const base = `custom_${slugify(label)}`;
   let term = base;
   let n = 2;
-  while ((await prisma.customGlossaryTerm.count({ where: { term } })) > 0) {
+  while ((await db.customGlossaryTerm.count({ where: { term } })) > 0) {
     term = `${base}_${n++}`;
   }
   return term;
@@ -86,6 +87,7 @@ export async function saveCustomGlossaryTerm(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   if (!canManageOrgEntities(user))
     return { error: "Only managers and team leads can manage glossary terms." };
@@ -109,7 +111,7 @@ export async function saveCustomGlossaryTerm(
     const low = label.toLowerCase();
     const clash =
       BUILT_IN_LABELS.has(low) ||
-      (await prisma.customGlossaryTerm.count({
+      (await db.customGlossaryTerm.count({
         where: {
           deletedAt: null,
           label: { equals: label, mode: "insensitive" },
@@ -123,12 +125,12 @@ export async function saveCustomGlossaryTerm(
 
   if (customId) {
     // Edit — keep the slug (it's the note anchor); update the rest.
-    await prisma.customGlossaryTerm.update({
+    await db.customGlossaryTerm.update({
       where: { id: customId },
       data: { label, category, definition },
     });
   } else {
-    await prisma.customGlossaryTerm.create({
+    await db.customGlossaryTerm.create({
       data: {
         term: await uniqueTerm(label),
         label,
@@ -153,6 +155,7 @@ export async function deleteCustomGlossaryTerm(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   if (!canManageOrgEntities(user))
     return { error: "Only managers and team leads can manage glossary terms." };
@@ -160,7 +163,7 @@ export async function deleteCustomGlossaryTerm(
   const customId = String(formData.get("customId") ?? "").trim();
   if (!customId) return { error: "Missing term." };
 
-  await prisma.customGlossaryTerm.update({
+  await db.customGlossaryTerm.update({
     where: { id: customId },
     data: { deletedAt: new Date() },
   });

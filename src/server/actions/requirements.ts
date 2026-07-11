@@ -2,8 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { prisma } from "@/server/db";
-import { requireUser } from "@/lib/session";
+import { getScopedPrisma, requireUser } from "@/lib/session";
 import { canManageRequirements, hasFullAccess } from "@/lib/permissions";
 import { logActivity } from "@/server/activity";
 import { deriveTeamLead } from "@/server/team-lead";
@@ -44,6 +43,7 @@ export async function createVendorRequirement(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   if (!canManageRequirements(user))
     return { error: "Only admins and team leads can create requirements." };
@@ -59,7 +59,7 @@ export async function createVendorRequirement(
     };
   const d = parsed.data;
 
-  const job = await prisma.job.findUnique({
+  const job = await db.job.findUnique({
     where: { id: d.jobId },
     select: { id: true, title: true, location: true },
   });
@@ -72,7 +72,7 @@ export async function createVendorRequirement(
   // teamLead = explicit value, else derived from the recruiter's team lead.
   const teamLead = d.teamLead ?? (await deriveTeamLead(d.recruiterId ?? null));
 
-  const created = await prisma.$transaction(async (tx) => {
+  const created = await db.$transaction(async (tx) => {
     const r = await tx.vendorRequirement.create({
       data: {
         jobId: d.jobId,
@@ -109,6 +109,7 @@ export async function updateVendorRequirement(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   if (!canManageRequirements(user))
     return { error: "Only admins and team leads can edit requirements." };
@@ -116,7 +117,7 @@ export async function updateVendorRequirement(
   const id = String(formData.get("id") ?? "").trim();
   if (!id) return { error: "Missing requirement reference." };
 
-  const existing = await prisma.vendorRequirement.findUnique({
+  const existing = await db.vendorRequirement.findUnique({
     where: { id },
     select: { id: true, status: true },
   });
@@ -137,7 +138,7 @@ export async function updateVendorRequirement(
 
   const teamLead = d.teamLead ?? (await deriveTeamLead(d.recruiterId ?? null));
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.vendorRequirement.update({
       where: { id },
       data: {
@@ -171,12 +172,13 @@ export async function updateVendorRequirement(
 /** Cancels an OPEN requirement (soft — sets CANCELLED). Converted requirements
  *  are read-only and cannot be cancelled (their submission lives on). */
 export async function cancelVendorRequirement(formData: FormData): Promise<void> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   if (!canManageRequirements(user)) return;
   const id = String(formData.get("id") ?? "").trim();
   if (!id) return;
 
-  const existing = await prisma.vendorRequirement.findUnique({
+  const existing = await db.vendorRequirement.findUnique({
     where: { id },
     select: { id: true, status: true },
   });
@@ -184,7 +186,7 @@ export async function cancelVendorRequirement(formData: FormData): Promise<void>
     redirect(`/vendor-portal/${id}`);
   }
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.vendorRequirement.update({
       where: { id },
       data: { status: "CANCELLED" },
@@ -205,12 +207,13 @@ export async function cancelVendorRequirement(formData: FormData): Promise<void>
 /** Closes an OPEN requirement once it's been fulfilled — the submissions made
  *  against it live on. Uses the (repurposed) CONVERTED status = "Closed". */
 export async function closeVendorRequirement(formData: FormData): Promise<void> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   if (!canManageRequirements(user)) return;
   const id = String(formData.get("id") ?? "").trim();
   if (!id) return;
 
-  const existing = await prisma.vendorRequirement.findUnique({
+  const existing = await db.vendorRequirement.findUnique({
     where: { id },
     select: { id: true, status: true },
   });
@@ -218,7 +221,7 @@ export async function closeVendorRequirement(formData: FormData): Promise<void> 
     redirect(`/vendor-portal/${id}`);
   }
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.vendorRequirement.update({
       where: { id },
       data: { status: "CONVERTED", convertedAt: new Date(), convertedById: user.id },
@@ -250,12 +253,13 @@ export async function closeVendorRequirement(formData: FormData): Promise<void> 
  * the parent JOB — that trail survives.
  */
 export async function deleteVendorRequirement(formData: FormData): Promise<void> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   if (!canManageRequirements(user)) return;
   const id = String(formData.get("id") ?? "").trim();
   if (!id) return;
 
-  const existing = await prisma.vendorRequirement.findUnique({
+  const existing = await db.vendorRequirement.findUnique({
     where: { id },
     select: { id: true, seq: true, jobId: true, _count: { select: { submissions: true } } },
   });
@@ -264,7 +268,7 @@ export async function deleteVendorRequirement(formData: FormData): Promise<void>
     redirect(`/vendor-portal/${id}`);
   }
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     // Delete first — this cascades the VPR's own Activity rows. Then log on the
     // job so the audit entry isn't swept away with them.
     await tx.vendorRequirement.delete({ where: { id } });
@@ -295,6 +299,7 @@ export async function convertRequirementToSubmission(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const requirementId = String(formData.get("requirementId") ?? "").trim();
   if (!requirementId) return { error: "Missing requirement reference." };
@@ -334,7 +339,7 @@ export async function convertRequirementToSubmission(
     formData.get("benchOverrideReason") ?? "",
   ).trim();
 
-  const requirement = await prisma.vendorRequirement.findUnique({
+  const requirement = await db.vendorRequirement.findUnique({
     where: { id: requirementId },
     select: { id: true, status: true },
   });
@@ -343,7 +348,7 @@ export async function convertRequirementToSubmission(
     return { error: "This requirement is closed or cancelled and no longer accepts submissions." };
 
   const [job, candidate] = await Promise.all([
-    prisma.job.findUnique({
+    db.job.findUnique({
       where: { id: d.jobId },
       select: {
         id: true,
@@ -351,7 +356,7 @@ export async function convertRequirementToSubmission(
         status: true,
       },
     }),
-    prisma.candidate.findUnique({
+    db.candidate.findUnique({
       where: { id: d.candidateId },
       select: {
         id: true,
@@ -395,7 +400,7 @@ export async function convertRequirementToSubmission(
   } | null = null;
   let pickedResumeArchived = false;
   if (d.resumeChoice === "existing" && d.candidateResumeId) {
-    const resume = await prisma.candidateResume.findUnique({
+    const resume = await db.candidateResume.findUnique({
       where: { id: d.candidateResumeId },
       select: {
         id: true,
@@ -436,7 +441,7 @@ export async function convertRequirementToSubmission(
     convertWarnings.push("Bill rate is below pay rate (negative margin).");
 
   // Pre-check duplicate (createSubmissionRecord re-checks under the lock).
-  const existingDup = await prisma.submission.findFirst({
+  const existingDup = await db.submission.findFirst({
     where: { candidateId: d.candidateId, jobId: d.jobId },
     select: { id: true },
   });
@@ -467,7 +472,7 @@ export async function convertRequirementToSubmission(
 
   let createdId: string | null = null;
   try {
-    await prisma.$transaction(async (tx) => {
+    await db.$transaction(async (tx) => {
       const res = await createSubmissionRecord(tx, {
         candidateId: d.candidateId,
         jobId: d.jobId,

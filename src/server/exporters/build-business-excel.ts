@@ -13,7 +13,7 @@
  */
 import ExcelJS from "exceljs";
 import { PassThrough, Readable } from "node:stream";
-import { prisma } from "@/server/db";
+import { getScopedPrisma } from "@/lib/session";
 import { isSensitiveCategory } from "@/lib/permissions";
 
 export type ExcelMode = "business" | "full";
@@ -48,7 +48,8 @@ function toNum(d: { toString(): string } | null | undefined): number | null {
 }
 
 async function jobsSheet(mode: ExcelMode): Promise<SheetSpec> {
-  const rows = await prisma.job.findMany({
+  const db = await getScopedPrisma();
+  const rows = await db.job.findMany({
     include: {
       client: { select: { name: true } },
       vendor: { select: { name: true } },
@@ -101,7 +102,8 @@ async function jobsSheet(mode: ExcelMode): Promise<SheetSpec> {
 }
 
 async function candidatesSheet(mode: ExcelMode): Promise<SheetSpec> {
-  const rows = await prisma.candidate.findMany({
+  const db = await getScopedPrisma();
+  const rows = await db.candidate.findMany({
     include: { createdBy: { select: { fullName: true } } },
     orderBy: { seq: "asc" },
   });
@@ -155,7 +157,8 @@ async function candidatesSheet(mode: ExcelMode): Promise<SheetSpec> {
 }
 
 async function submissionsSheet(mode: ExcelMode): Promise<SheetSpec> {
-  const rows = await prisma.submission.findMany({
+  const db = await getScopedPrisma();
+  const rows = await db.submission.findMany({
     include: {
       candidate: { select: { fullName: true, seq: true } },
       job: { select: { title: true, seq: true, client: { select: { name: true } } } },
@@ -208,7 +211,8 @@ async function submissionsSheet(mode: ExcelMode): Promise<SheetSpec> {
 }
 
 async function placementsSheet(mode: ExcelMode): Promise<SheetSpec> {
-  const rows = await prisma.placement.findMany({
+  const db = await getScopedPrisma();
+  const rows = await db.placement.findMany({
     include: {
       candidate: { select: { fullName: true } },
       job: { select: { title: true, client: { select: { name: true } } } },
@@ -262,7 +266,8 @@ async function placementsSheet(mode: ExcelMode): Promise<SheetSpec> {
 }
 
 async function interviewRoundsSheet(): Promise<SheetSpec> {
-  const rows = await prisma.interviewRound.findMany({
+  const db = await getScopedPrisma();
+  const rows = await db.interviewRound.findMany({
     include: {
       submission: {
         select: {
@@ -302,7 +307,8 @@ async function interviewRoundsSheet(): Promise<SheetSpec> {
 }
 
 async function clientsSheet(): Promise<SheetSpec> {
-  const rows = await prisma.client.findMany({ orderBy: { name: "asc" } });
+  const db = await getScopedPrisma();
+  const rows = await db.client.findMany({ orderBy: { name: "asc" } });
   return {
     name: "Clients",
     columns: [
@@ -315,7 +321,8 @@ async function clientsSheet(): Promise<SheetSpec> {
 }
 
 async function vendorsSheet(): Promise<SheetSpec> {
-  const rows = await prisma.vendor.findMany({ orderBy: { name: "asc" } });
+  const db = await getScopedPrisma();
+  const rows = await db.vendor.findMany({ orderBy: { name: "asc" } });
   return {
     name: "Vendors",
     columns: [
@@ -328,7 +335,8 @@ async function vendorsSheet(): Promise<SheetSpec> {
 }
 
 async function sourcesSheet(): Promise<SheetSpec> {
-  const rows = await prisma.sisterCompanySource.findMany({ orderBy: { name: "asc" } });
+  const db = await getScopedPrisma();
+  const rows = await db.sisterCompanySource.findMany({ orderBy: { name: "asc" } });
   return {
     name: "Sources",
     columns: [
@@ -340,7 +348,8 @@ async function sourcesSheet(): Promise<SheetSpec> {
 }
 
 async function recruitersSheet(mode: ExcelMode): Promise<SheetSpec> {
-  const rows = await prisma.user.findMany({ orderBy: { fullName: "asc" } });
+  const db = await getScopedPrisma();
+  const rows = await db.user.findMany({ orderBy: { fullName: "asc" } });
   return {
     name: "Recruiters",
     columns: [
@@ -361,7 +370,8 @@ async function recruitersSheet(mode: ExcelMode): Promise<SheetSpec> {
 }
 
 async function resumesSheet(mode: ExcelMode): Promise<SheetSpec> {
-  const rows = await prisma.candidateResume.findMany({
+  const db = await getScopedPrisma();
+  const rows = await db.candidateResume.findMany({
     include: { candidate: { select: { fullName: true } } },
     orderBy: { createdAt: "asc" },
   });
@@ -385,7 +395,8 @@ async function resumesSheet(mode: ExcelMode): Promise<SheetSpec> {
 }
 
 async function documentsSheet(mode: ExcelMode): Promise<SheetSpec> {
-  const rows = await prisma.candidateDocument.findMany({
+  const db = await getScopedPrisma();
+  const rows = await db.candidateDocument.findMany({
     include: { candidate: { select: { fullName: true } } },
     orderBy: { createdAt: "asc" },
   });
@@ -414,7 +425,8 @@ async function documentsSheet(mode: ExcelMode): Promise<SheetSpec> {
 }
 
 async function activitySheet(): Promise<SheetSpec> {
-  const rows = await prisma.activity.findMany({
+  const db = await getScopedPrisma();
+  const rows = await db.activity.findMany({
     include: { performedBy: { select: { fullName: true } } },
     orderBy: { createdAt: "desc" },
     take: 5000,

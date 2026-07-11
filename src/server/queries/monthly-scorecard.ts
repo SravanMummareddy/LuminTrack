@@ -7,7 +7,7 @@ import {
   max as dateMax,
   min as dateMin,
 } from "date-fns";
-import { prisma } from "@/server/db";
+import { getScopedPrisma } from "@/lib/session";
 import { SUBMISSION_STATUS_LABEL } from "@/lib/labels";
 
 /**
@@ -98,6 +98,7 @@ export async function getMonthlyScorecard({
   monthIndex,
   teamId,
 }: ScorecardParams): Promise<MonthlyScorecard> {
+  const db = await getScopedPrisma();
   const monthStart = startOfMonth(new Date(year, monthIndex, 1));
   const monthEnd = endOfMonth(monthStart);
   // lt-exclusive upper bound for range queries (avoids the last-ms edge case).
@@ -135,7 +136,7 @@ export async function getMonthlyScorecard({
 
   const [recruiters, submissions, rounds, statusEvents, vendorHistory] =
     await Promise.all([
-      prisma.user.findMany({
+      db.user.findMany({
         where: { ...recruiterWhere, isActive: true },
         select: {
           id: true,
@@ -146,14 +147,14 @@ export async function getMonthlyScorecard({
         // nulls-last so "Unassigned" recruiters sort after the named teams.
         orderBy: [{ team: { name: "asc" } }, { fullName: "asc" }],
       }),
-      prisma.submission.findMany({
+      db.submission.findMany({
         where: {
           submittedAt: { gte: monthStart, lt: nextMonthStart },
           submittedBy: recruiterWhere,
         },
         select: { submittedById: true, submittedAt: true },
       }),
-      prisma.interviewRound.findMany({
+      db.interviewRound.findMany({
         where: {
           scheduledAt: { gte: monthStart, lt: nextMonthStart },
           submission: { submittedBy: recruiterWhere },
@@ -167,7 +168,7 @@ export async function getMonthlyScorecard({
       // from the audit log (a change to BACKED_OUT / OFFER_ACCEPTED). Effective
       // date = eventAt when the recruiter set a real-world date, else createdAt;
       // filter on whichever applies so an event lands in the month it occurred.
-      prisma.activity.findMany({
+      db.activity.findMany({
         where: {
           newValue: { in: [BACKED_OUT_LABEL, OFFER_ACCEPTED_LABEL] },
           submission: { is: { submittedBy: recruiterWhere } },
@@ -190,7 +191,7 @@ export async function getMonthlyScorecard({
       // needed to find each vendor's *company-first* use. Small dataset, so the
       // full scan is cheap; ordered ascending so the first row per vendor is the
       // earliest submission to it by anyone.
-      prisma.submission.findMany({
+      db.submission.findMany({
         select: {
           submittedById: true,
           submittedAt: true,

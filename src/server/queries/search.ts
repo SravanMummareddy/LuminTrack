@@ -1,4 +1,4 @@
-import { prisma } from "@/server/db";
+import { getScopedPrisma } from "@/lib/session";
 import type { Prisma } from "@/generated/prisma/client";
 import type { SearchResult } from "@/lib/search-types";
 
@@ -8,6 +8,7 @@ import type { SearchResult } from "@/lib/search-types";
  * so they link to the jobs list pre-filtered by that entity.
  */
 export async function globalSearch(q: string): Promise<SearchResult[]> {
+  const db = await getScopedPrisma();
   const like = { contains: q, mode: "insensitive" as const };
 
   // Pull a seq number out of "CAND-001", "JOB-00123", or a bare number so
@@ -36,37 +37,37 @@ export async function globalSearch(q: string): Promise<SearchResult[]> {
 
   const [candidates, jobs, clients, vendors, sources, users] =
     await Promise.all([
-      prisma.candidate.findMany({
+      db.candidate.findMany({
         where: { deletedAt: null, OR: candidateOR },
         take: 6,
         orderBy: { fullName: "asc" },
         select: { id: true, fullName: true, currentCompany: true },
       }),
-      prisma.job.findMany({
+      db.job.findMany({
         where: { deletedAt: null, OR: jobOR },
         take: 6,
         orderBy: { createdAt: "desc" },
         select: { id: true, title: true, client: { select: { name: true } } },
       }),
-      prisma.client.findMany({
+      db.client.findMany({
         where: { OR: [{ name: like }, { location: like }] },
         take: 4,
         orderBy: { name: "asc" },
         select: { id: true, name: true, location: true },
       }),
-      prisma.vendor.findMany({
+      db.vendor.findMany({
         where: { name: like },
         take: 4,
         orderBy: { name: "asc" },
         select: { id: true, name: true },
       }),
-      prisma.sisterCompanySource.findMany({
+      db.sisterCompanySource.findMany({
         where: { name: like },
         take: 4,
         orderBy: { name: "asc" },
         select: { id: true, name: true },
       }),
-      prisma.user.findMany({
+      db.user.findMany({
         where: { isActive: true, OR: [{ fullName: like }, { email: like }] },
         take: 4,
         orderBy: { fullName: "asc" },

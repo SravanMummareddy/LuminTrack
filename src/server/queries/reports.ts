@@ -1,4 +1,4 @@
-import { prisma } from "@/server/db";
+import { getScopedPrisma } from "@/lib/session";
 import type { Prisma } from "@/generated/prisma/client";
 import {
   buildSubmissionWhere,
@@ -38,8 +38,9 @@ export async function getReportsData(
   filters: AnalyticsFilters,
   pages: { recruiterAging?: number } = {},
 ) {
+  const db = await getScopedPrisma();
   const [submissions, recruiters] = await Promise.all([
-    prisma.submission.findMany({
+    db.submission.findMany({
       where: buildSubmissionWhere(filters),
       select: {
         status: true,
@@ -47,7 +48,7 @@ export async function getReportsData(
         _count: { select: { interviewRounds: true } },
       },
     }),
-    prisma.user.findMany({
+    db.user.findMany({
       where: { isActive: true, role: { in: PERFORMANCE_ROLES } },
       select: { id: true, fullName: true },
       orderBy: { fullName: "asc" },
@@ -97,7 +98,7 @@ export async function getReportsData(
   // owns. "Stale" = submittedAt > 14d and status still SUBMITTED /
   // RESUME_PICKED / VENDOR_SCREENING_CALL / CLIENT_INTERVIEW.
   const STALE_DAYS = 14;
-  const staleSubs = await prisma.submission.findMany({
+  const staleSubs = await db.submission.findMany({
     // AND the filter-bar scoping with the stale conditions so this table
     // responds to the page filters (it previously queried org-wide). AND (not a
     // spread) because both sides constrain `status`/`submittedAt`.
@@ -157,7 +158,7 @@ export async function getReportsData(
     placementWhere.submission = {
       submittedById: { in: filters.recruiterId },
     };
-  const placementsForMargin = await prisma.placement.findMany({
+  const placementsForMargin = await db.placement.findMany({
     where: placementWhere,
     select: {
       billRate: true,

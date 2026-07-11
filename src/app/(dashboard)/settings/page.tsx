@@ -1,9 +1,16 @@
 import Link from "next/link";
 import { ScrollText, FileDown } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
-import { isManagerTier, canGrantManagerRole, canManageRoles } from "@/lib/permissions";
+import {
+  isManagerTier,
+  canGrantManagerRole,
+  canManageRoles,
+  canManageOrganizations,
+} from "@/lib/permissions";
 import { RolesSection } from "@/components/settings/roles-section";
+import { OrganizationsSection } from "@/components/settings/organizations-section";
 import { listRoles, listRoleOptions } from "@/server/queries/roles";
+import { listOrganizationsAdmin } from "@/server/queries/organizations";
 import { cn } from "@/lib/cn";
 import { PageHeader } from "@/components/ui/page-header";
 import { LinkButton } from "@/components/ui/button";
@@ -41,6 +48,7 @@ const TABS = [
   { key: "teams", label: "Teams" },
   { key: "users", label: "Users" },
   { key: "roles", label: "Roles" },
+  { key: "organizations", label: "Organizations", superAdminOnly: true },
   { key: "glossary", label: "Glossary" },
   { key: "deleted", label: "Erased backups", adminOnly: true },
   { key: "account", label: "My account" },
@@ -57,6 +65,7 @@ export default async function SettingsPage({
   const user = await getCurrentUser();
   const isAdmin = isManagerTier(user);
   const canGrantManager = canGrantManagerRole(user);
+  const isSuperAdmin = canManageOrganizations(user);
 
   const rawTab = Array.isArray(sp.tab) ? sp.tab[0] : sp.tab;
   // Only managers get the management tabs. Everyone else is limited to their own
@@ -147,6 +156,17 @@ export default async function SettingsPage({
     content = (
       <RolesSection roles={await listRoles()} canManage={canManageRoles(user)} />
     );
+  } else if (tab === "organizations") {
+    // Platform-super-admin only — a ?tab=organizations URL from anyone else is
+    // refused here (the tab isn't rendered for them either).
+    content = isSuperAdmin ? (
+      <OrganizationsSection
+        organizations={await listOrganizationsAdmin()}
+        canManage
+      />
+    ) : (
+      <Forbidden />
+    );
   } else if (tab === "glossary") {
     content = (
       <GlossarySection rows={await getGlossaryWithNotes()} isAdmin={isAdmin} />
@@ -209,9 +229,13 @@ export default async function SettingsPage({
         aria-label="Settings sections"
         className="flex gap-1 border-b border-slate-200"
       >
-        {TABS.filter((t) =>
-          isAdmin ? true : t.key === "account",
-        ).map((t) => {
+        {TABS.filter((t) => {
+          if (!isAdmin) return t.key === "account";
+          // The Organizations tab is platform-super-admin only.
+          if ("superAdminOnly" in t && t.superAdminOnly && !isSuperAdmin)
+            return false;
+          return true;
+        }).map((t) => {
           const selected = t.key === tab;
           return (
             <Link

@@ -1,3 +1,4 @@
+import { prisma, scopedPrisma } from "@/server/db";
 import { purgeExpiredTrash } from "@/server/candidate-erase";
 import { purgeExpiredTrashedJobs } from "@/server/job-erase";
 
@@ -14,9 +15,23 @@ export async function GET(req: Request) {
   if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) {
     return new Response("Unauthorized", { status: 401 });
   }
-  const [candidatesErased, jobsErased] = await Promise.all([
-    purgeExpiredTrash(),
-    purgeExpiredTrashedJobs(),
-  ]);
+  // System task across every tenant: iterate active orgs and purge each one with
+  // its own scoped client (there is no user session here, so we can't use
+  // getScopedPrisma). Foundation has a single org → one iteration.
+  const orgs = await prisma.organization.findMany({
+    where: { isActive: true },
+    select: { id: true },
+  });
+  let candidatesErased = 0;
+  let jobsErased = 0;
+  for (const org of orgs) {
+    const db = scopedPrisma(org.id);
+    const [c, j] = await Promise.all([
+      purgeExpiredTrash(db),
+      purgeExpiredTrashedJobs(db),
+    ]);
+    candidatesErased += c;
+    jobsErased += j;
+  }
   return Response.json({ ok: true, candidatesErased, jobsErased });
 }

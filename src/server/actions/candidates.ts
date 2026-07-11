@@ -3,8 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { del } from "@vercel/blob";
-import { prisma } from "@/server/db";
-import { requireUser } from "@/lib/session";
+import { getScopedPrisma, requireUser } from "@/lib/session";
 import { hasFullAccess } from "@/lib/permissions";
 import { logActivity } from "@/server/activity";
 import {
@@ -105,6 +104,7 @@ export async function createCandidate(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const parsed = readCandidate(formData);
   if (!parsed.success)
@@ -119,7 +119,7 @@ export async function createCandidate(
     if (dups.length) return { needsConfirm: true, error: duplicateMessage(dups) };
   }
 
-  const candidate = await prisma.$transaction(async (tx) => {
+  const candidate = await db.$transaction(async (tx) => {
     const created = await tx.candidate.create({
       data: { ...candidateData(d), createdById: user.id },
     });
@@ -131,7 +131,7 @@ export async function createCandidate(
       candidateId: created.id,
     });
     // Remember any new free-text work-auth / working-type for future dropdowns.
-    await rememberLookup(tx, "WORKING_TYPE", created.workingType);
+    await rememberLookup(tx, user.organizationId, "WORKING_TYPE", created.workingType);
     // Lifecycle bench: every available candidate is on the bench (being
     // marketed) from creation. Skip retired/non-available ones.
     if (created.status === "AVAILABLE" && created.isActive) {
@@ -158,6 +158,7 @@ export async function updateCandidate(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const candidateId = String(formData.get("id") ?? "").trim();
   if (!candidateId) return { error: "Missing candidate reference." };
@@ -170,14 +171,14 @@ export async function updateCandidate(
     };
   const d = parsed.data;
 
-  const existing = await prisma.candidate.findUnique({ where: { id: candidateId } });
+  const existing = await db.candidate.findUnique({ where: { id: candidateId } });
   if (!existing) return { error: "This candidate no longer exists." };
 
   // Guard: don't let a manual status edit clobber PLACED while the candidate
   // still has an ACTIVE/EXTENDED placement. The lifecycle helper owns PLACED ↔
   // AVAILABLE transitions; recruiters must end the placement first.
   if (existing.status === "PLACED" && d.status !== "PLACED") {
-    const activePlacements = await prisma.placement.count({
+    const activePlacements = await db.placement.count({
       where: {
         candidateId,
         status: { in: ["ACTIVE", "EXTENDED"] },
@@ -231,12 +232,12 @@ export async function updateCandidate(
   compare("working now", existing.isWorking, d.isWorking);
   compare("working type", existing.workingType, d.isWorking ? d.workingType : null);
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.candidate.update({
       where: { id: candidateId },
       data: candidateData(d),
     });
-    if (d.isWorking) await rememberLookup(tx, "WORKING_TYPE", d.workingType);
+    if (d.isWorking) await rememberLookup(tx, user.organizationId, "WORKING_TYPE", d.workingType);
     if (changed.length)
       await logActivity(tx, {
         entityType: "CANDIDATE",
@@ -259,10 +260,11 @@ export async function updateCandidate(
  * a touch without having to open the edit form.
  */
 export async function markCandidateContacted(formData: FormData): Promise<void> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const candidateId = String(formData.get("id") ?? "").trim();
   if (!candidateId) return;
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.candidate.update({
       where: { id: candidateId },
       data: { lastContactedAt: new Date() },
@@ -283,11 +285,12 @@ export async function markCandidateContacted(formData: FormData): Promise<void> 
  * Flips Candidate.isActive; keeps all data. Distinct from trashing/erasing.
  */
 export async function setCandidateArchived(formData: FormData): Promise<void> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const candidateId = String(formData.get("id") ?? "").trim();
   const archived = formData.get("archived") === "1";
   if (!candidateId) return;
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.candidate.update({
       where: { id: candidateId },
       data: { isActive: !archived },
@@ -314,12 +317,13 @@ export async function trashCandidate(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   if (!hasFullAccess(user))
     return { error: "Only managers and team leads can trash a candidate." };
 
   const candidateId = String(formData.get("id") ?? "").trim();
-  const candidate = await prisma.candidate.findUnique({
+  const candidate = await db.candidate.findUnique({
     where: { id: candidateId },
     select: { deletedAt: true, erasedAt: true, isActive: true },
   });
@@ -331,7 +335,7 @@ export async function trashCandidate(
 
   // Never trash someone who's actively placed — that would leave an active
   // placement pointing at a hidden candidate. End the placement first.
-  const activePlacements = await prisma.placement.count({
+  const activePlacements = await db.placement.count({
     where: { candidateId, status: { in: ["ACTIVE", "EXTENDED"] } },
   });
   if (activePlacements > 0)
@@ -346,7 +350,7 @@ export async function trashCandidate(
   const purgeOn = new Date(
     Date.now() + CANDIDATE_TRASH_RETENTION_DAYS * 86_400_000,
   );
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.candidate.update({
       where: { id: candidateId },
       data: { deletedAt: new Date(), isActive: false },
@@ -376,11 +380,12 @@ export async function trashCandidate(
 export async function restoreCandidateFromTrash(
   formData: FormData,
 ): Promise<void> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   if (!hasFullAccess(user)) return;
   const candidateId = String(formData.get("id") ?? "").trim();
   if (!candidateId) return;
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.candidate.update({
       where: { id: candidateId },
       data: { deletedAt: null, isActive: false },
@@ -409,13 +414,14 @@ export async function eraseCandidateNow(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   if (!hasFullAccess(user))
     return { error: "Only managers and team leads can erase a candidate." };
 
   const candidateId = String(formData.get("id") ?? "").trim();
   const confirmName = String(formData.get("confirmName") ?? "").trim();
-  const candidate = await prisma.candidate.findUnique({
+  const candidate = await db.candidate.findUnique({
     where: { id: candidateId },
     select: { fullName: true, erasedAt: true },
   });
@@ -429,7 +435,7 @@ export async function eraseCandidateNow(
       },
     };
 
-  await hardEraseCandidate(candidateId, user.id);
+  await hardEraseCandidate(db, candidateId, user.id);
   revalidatePath("/candidates");
   redirect(`/candidates/${candidateId}`);
 }
@@ -445,10 +451,11 @@ function bulkIds(formData: FormData): string[] {
 
 /** Bulk archive (soft-hide) the selected candidates. Skips trashed ones. */
 export async function bulkArchiveCandidates(formData: FormData): Promise<void> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const ids = bulkIds(formData);
   if (!ids.length) return;
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.candidate.updateMany({
       where: { id: { in: ids }, deletedAt: null },
       data: { isActive: false },
@@ -468,15 +475,16 @@ export async function bulkArchiveCandidates(formData: FormData): Promise<void> {
 
 /** Bulk add a tag to the selected candidates (deduped per candidate). */
 export async function bulkTagCandidates(formData: FormData): Promise<void> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const ids = bulkIds(formData);
   const tag = String(formData.get("tag") ?? "").trim().toLowerCase();
   if (!ids.length || !tag) return;
-  const candidates = await prisma.candidate.findMany({
+  const candidates = await db.candidate.findMany({
     where: { id: { in: ids }, deletedAt: null },
     select: { id: true, tags: true },
   });
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     for (const c of candidates) {
       if (c.tags.includes(tag)) continue;
       await tx.candidate.update({
@@ -505,6 +513,7 @@ export async function bulkTagCandidates(formData: FormData): Promise<void> {
 export async function bulkTrashCandidates(
   formData: FormData,
 ): Promise<{ moved: number; skipped: number }> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   if (!hasFullAccess(user)) return { moved: 0, skipped: 0 };
   const ids = bulkIds(formData);
@@ -513,13 +522,13 @@ export async function bulkTrashCandidates(
   // Eligible = not already trashed/erased AND no active placement.
   const placedIds = new Set(
     (
-      await prisma.placement.findMany({
+      await db.placement.findMany({
         where: { candidateId: { in: ids }, status: { in: ["ACTIVE", "EXTENDED"] } },
         select: { candidateId: true },
       })
     ).map((p) => p.candidateId),
   );
-  const eligible = await prisma.candidate.findMany({
+  const eligible = await db.candidate.findMany({
     where: { id: { in: ids }, deletedAt: null, erasedAt: null },
     select: { id: true },
   });
@@ -530,7 +539,7 @@ export async function bulkTrashCandidates(
   if (!eligibleIds.length) return { moved: 0, skipped };
 
   const now = new Date();
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.candidate.updateMany({
       where: { id: { in: eligibleIds } },
       data: { deletedAt: now, isActive: false },
@@ -563,6 +572,7 @@ export async function bulkTrashCandidates(
  * only; confined to the archive prefix so it can't be pointed at other blobs.
  */
 export async function removeCandidateArchive(formData: FormData): Promise<void> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   if (!hasFullAccess(user)) return;
 
@@ -576,7 +586,7 @@ export async function removeCandidateArchive(formData: FormData): Promise<void> 
   // rule: a Blob delete can't join a DB transaction, so the audit row is logged
   // separately after it. Worst case on a crash between the two is an orphaned
   // audit gap, not a data-integrity problem. (review IN-02)
-  await logActivity(prisma, {
+  await logActivity(db, {
     entityType: "CANDIDATE",
     action: "CANDIDATE_ERASED",
     description: `Removed personal-data backup ${pathname

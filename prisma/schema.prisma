@@ -221,74 +221,130 @@ enum BenchEngagement {
 
 // ─── Models ──────────────────────────────────────────────────────────────────
 
+// ─── Multi-tenancy (Phase C) ─────────────────────────────────────────────────
+// The tenant boundary. Every tenant-owned row carries `organizationId`, and the
+// central `scopedPrisma(orgId)` extension (src/server/db.ts) injects it on every
+// read and write so no query can cross tenants. `Permission` is the sole global
+// table (the fixed code catalog). Foundation runs as a single default org;
+// onboarding more orgs is additive. A platform super-admin (User.isPlatformAdmin)
+// manages orgs across the boundary — see canManageOrganizations in permissions.ts.
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  // Stable url-safe key (subdomain-ready). Globally unique — orgs are the apex.
+  slug      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users                User[]
+  teams                Team[]
+  roles                Role[]
+  rolePermissions      RolePermission[]
+  sisterCompanySources SisterCompanySource[]
+  clients              Client[]
+  vendors              Vendor[]
+  contacts             Contact[]
+  jobs                 Job[]
+  jobAssignments       JobAssignment[]
+  candidates           Candidate[]
+  candidateResumes     CandidateResume[]
+  candidateDocuments   CandidateDocument[]
+  benchConsultants     BenchConsultant[]
+  submissions          Submission[]
+  placements           Placement[]
+  placementExtensions  PlacementExtension[]
+  interviewRounds      InterviewRound[]
+  supportProviders     SupportProvider[]
+  notes                Note[]
+  activities           Activity[]
+  vendorRequirements   VendorRequirement[]
+  lookupOptions        LookupOption[]
+  glossaryNotes        GlossaryNote[]
+  customGlossaryTerms  CustomGlossaryTerm[]
+}
+
 model User {
-  id           String   @id @default(cuid())
-  fullName     String
-  email        String   @unique
-  passwordHash String
-  role         UserRole @default(RECRUITER)
-  isActive     Boolean  @default(true)
+  id              String       @id @default(cuid())
+  organizationId  String       @default("")
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  fullName        String
+  // Login/identity uniques stay GLOBAL for the foundation phase: they resolve
+  // before org context exists (login is by email; there is no org selector yet).
+  // Making these composite requires org-aware login — a full-multi-org concern.
+  email           String       @unique
+  passwordHash    String
+  role            UserRole     @default(RECRUITER)
+  isActive        Boolean      @default(true)
+  // Platform super-admin — an orthogonal cross-org axis (like isTeamLead), NOT a
+  // per-org role. Gates the Organizations admin surface + cross-tenant actions.
+  isPlatformAdmin Boolean      @default(false)
   // Bench-Sales — externally-assigned employee id (e.g. "INC105", "TK2090")
   // shown verbatim on the Monthly Performance scorecard. Nullable + unique
   // (Postgres treats multiple NULLs as distinct, so existing users are fine).
-  empId        String?  @unique
+  empId           String?      @unique
   // Org / reporting model (replaced the old free-text `teamLabel`, Wave 1b).
   // `team` = the named team this user belongs to (recruiters + their lead;
   // managers sit above teams → null). `reportsTo` = the self-referential
   // reporting chain: recruiter → team lead → manager → CEO (reportsTo null).
-  teamId       String?
-  team         Team?    @relation("TeamMembers", fields: [teamId], references: [id], onDelete: SetNull)
-  teamsLed     Team[]   @relation("TeamLead")
-  reportsToId  String?
-  reportsTo    User?    @relation("ReportingChain", fields: [reportsToId], references: [id], onDelete: SetNull)
-  reports      User[]   @relation("ReportingChain")
+  teamId          String?
+  team            Team?        @relation("TeamMembers", fields: [teamId], references: [id], onDelete: SetNull)
+  teamsLed        Team[]       @relation("TeamLead")
+  reportsToId     String?
+  reportsTo       User?        @relation("ReportingChain", fields: [reportsToId], references: [id], onDelete: SetNull)
+  reports         User[]       @relation("ReportingChain")
   // Dynamic RBAC (Phase B, expand-contract): the composable role this user is
   // assigned. Coexists with the `role` enum during the transition; `can()` reads
   // the role's permissions, falling back to the enum→template map when unset.
-  roleId       String?
-  assignedRole Role?    @relation("UserRoleAssignment", fields: [roleId], references: [id], onDelete: SetNull)
+  roleId          String?
+  assignedRole    Role?        @relation("UserRoleAssignment", fields: [roleId], references: [id], onDelete: SetNull)
   // Overseers/admins who sit outside the reporting hierarchy (e.g. an owner who
   // silently sees everything) are hidden from the org chart. Defaults true.
-  showInOrgChart Boolean @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  showInOrgChart  Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
+  jobsCreated                 Job[]
+  assignments                 JobAssignment[]      @relation("AssignmentRecruiter")
+  assignmentsMade             JobAssignment[]      @relation("AssignmentAssignedBy")
+  candidatesCreated           Candidate[]
+  submissionsMade             Submission[]
+  interviewUpdates            InterviewRound[]
+  notes                       Note[]
+  activities                  Activity[]
+  uploadedDocuments           CandidateDocument[]
+  benchConsultantsRecruited   BenchConsultant[]    @relation("BenchConsultantRecruiter")
+  benchConsultantsCreated     BenchConsultant[]    @relation("BenchConsultantCreatedBy")
+  vendorRequirementsRecruited VendorRequirement[]  @relation("VendorRequirementRecruiter")
+  vendorRequirementsCreated   VendorRequirement[]  @relation("VendorRequirementCreatedBy")
+  vendorRequirementsConverted VendorRequirement[]  @relation("VendorRequirementConvertedBy")
+  glossaryNotes               GlossaryNote[]
+  customGlossaryTerms         CustomGlossaryTerm[]
+  vendorsRecruited            Vendor[]             @relation("VendorRecruitedBy")
+  submissionsResumeWaived     Submission[]         @relation("SubmissionResumeWaivedBy")
+
+  @@index([organizationId])
   @@index([teamId])
   @@index([reportsToId])
   @@index([roleId])
-
-  jobsCreated        Job[]
-  assignments        JobAssignment[]  @relation("AssignmentRecruiter")
-  assignmentsMade    JobAssignment[]  @relation("AssignmentAssignedBy")
-  candidatesCreated  Candidate[]
-  submissionsMade    Submission[]
-  interviewUpdates   InterviewRound[]
-  notes              Note[]
-  activities         Activity[]
-  uploadedDocuments  CandidateDocument[]
-  benchConsultantsRecruited BenchConsultant[] @relation("BenchConsultantRecruiter")
-  benchConsultantsCreated   BenchConsultant[] @relation("BenchConsultantCreatedBy")
-  vendorRequirementsRecruited VendorRequirement[] @relation("VendorRequirementRecruiter")
-  vendorRequirementsCreated   VendorRequirement[] @relation("VendorRequirementCreatedBy")
-  vendorRequirementsConverted VendorRequirement[] @relation("VendorRequirementConvertedBy")
-  glossaryNotes      GlossaryNote[]
-  customGlossaryTerms CustomGlossaryTerm[]
-  vendorsRecruited   Vendor[]         @relation("VendorRecruitedBy")
-  submissionsResumeWaived Submission[] @relation("SubmissionResumeWaivedBy")
 }
 
 // A named team (e.g. "USEI-Sales IT") with a designated team lead. Members are
 // recruiters + the lead; the lead is a TEAM_LEAD user. Replaced the free-text
 // `User.teamLabel` (Wave 1b). All FKs SetNull so a lead leaving never cascades.
 model Team {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  leadId    String?
-  lead      User?    @relation("TeamLead", fields: [leadId], references: [id], onDelete: SetNull)
-  members   User[]   @relation("TeamMembers")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String       @id @default(cuid())
+  organizationId String       @default("")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  leadId         String?
+  lead           User?        @relation("TeamLead", fields: [leadId], references: [id], onDelete: SetNull)
+  members        User[]       @relation("TeamMembers")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
+  @@unique([organizationId, name])
+  @@index([organizationId])
   @@index([leadId])
 }
 
@@ -297,6 +353,9 @@ model Team {
 // admin edits in Settings → Roles. `isSystem` roles (Manager/Team Lead/
 // Recruiter) can't be deleted/renamed and carry `systemRole` to line up with the
 // `User.role` enum during the transition.
+//
+// Permission is the ONE global (cross-tenant) table — a fixed code catalog every
+// org's roles reference. Role/RolePermission are per-org.
 model Permission {
   key      String           @id
   label    String
@@ -305,82 +364,107 @@ model Permission {
 }
 
 model Role {
-  id          String           @id @default(cuid())
-  name        String           @unique
-  label       String
-  description String?
-  isSystem    Boolean          @default(false)
-  systemRole  UserRole?        @unique
-  permissions RolePermission[]
-  users       User[]           @relation("UserRoleAssignment")
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  id             String           @id @default(cuid())
+  organizationId String           @default("")
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  name           String
+  label          String
+  description    String?
+  isSystem       Boolean          @default(false)
+  systemRole     UserRole?
+  permissions    RolePermission[]
+  users          User[]           @relation("UserRoleAssignment")
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  // Per-org uniqueness: each org has its own role set + its own trio of system
+  // roles (one Manager/Team Lead/Recruiter per org).
+  @@unique([organizationId, name])
+  @@unique([organizationId, systemRole])
+  @@index([organizationId])
 }
 
 model RolePermission {
-  roleId        String
-  role          Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permissionKey String
-  permission    Permission @relation(fields: [permissionKey], references: [key], onDelete: Cascade)
+  organizationId String       @default("")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  roleId         String
+  role           Role         @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionKey  String
+  permission     Permission   @relation(fields: [permissionKey], references: [key], onDelete: Cascade)
 
   @@id([roleId, permissionKey])
+  @@index([organizationId])
   @@index([permissionKey])
 }
 
 model SisterCompanySource {
-  id            String   @id @default(cuid())
-  name          String   @unique
-  contactPerson String?
-  email         String?
-  phone         String?
-  location      String?
-  notes         String?
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             String       @id @default(cuid())
+  organizationId String       @default("")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  contactPerson  String?
+  email          String?
+  phone          String?
+  location       String?
+  notes          String?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   jobs     Job[]
   contacts Contact[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
 }
 
 model Client {
-  id            String   @id @default(cuid())
-  name          String   @unique
-  contactPerson String?
-  email         String?
-  phone         String?
-  location      String?
-  notes         String?
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             String       @id @default(cuid())
+  organizationId String       @default("")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  contactPerson  String?
+  email          String?
+  phone          String?
+  location       String?
+  notes          String?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   jobs     Job[]
   contacts Contact[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
 }
 
 model Vendor {
-  id            String   @id @default(cuid())
-  name          String   @unique
-  contactPerson String?
-  email         String?
-  phone         String?
-  location      String?
-  notes         String?
-  isActive      Boolean  @default(true)
+  id              String       @id @default(cuid())
+  organizationId  String       @default("")
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  name            String
+  contactPerson   String?
+  email           String?
+  phone           String?
+  location        String?
+  notes           String?
+  isActive        Boolean      @default(true)
   // "Recruited by" — our team member who owns this vendor relationship. When
   // set, it auto-fills the "Vendor recruiter" on every VPR for this vendor.
   // Either a linked user (recruitedById) OR a free-typed name (recruitedByName)
   // for someone not in the system — never both. Display = user.fullName ?? name.
   recruitedById   String?
-  recruitedBy     User?    @relation("VendorRecruitedBy", fields: [recruitedById], references: [id], onDelete: SetNull)
+  recruitedBy     User?        @relation("VendorRecruitedBy", fields: [recruitedById], references: [id], onDelete: SetNull)
   recruitedByName String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   jobs     Job[]
   contacts Contact[]
 
+  @@unique([organizationId, name])
+  @@index([organizationId])
   @@index([recruitedById])
 }
 
@@ -389,14 +473,16 @@ model Vendor {
 // the matching migration. Cascade on parent delete since contacts have no
 // independent meaning.
 model Contact {
-  id        String   @id @default(cuid())
-  name      String
-  email     String?
-  phone     String?
-  role      String?
-  isPrimary Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String       @id @default(cuid())
+  organizationId String       @default("")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  email          String?
+  phone          String?
+  role           String?
+  isPrimary      Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   clientId String?
   client   Client?              @relation(fields: [clientId], references: [id], onDelete: Cascade)
@@ -405,34 +491,37 @@ model Contact {
   sourceId String?
   source   SisterCompanySource? @relation(fields: [sourceId], references: [id], onDelete: Cascade)
 
+  @@index([organizationId])
   @@index([clientId])
   @@index([vendorId])
   @@index([sourceId])
 }
 
 model Job {
-  id            String    @id @default(cuid())
-  seq           Int       @unique @default(autoincrement())
-  title         String
-  location      String?
+  id             String       @id @default(cuid())
+  organizationId String       @default("")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  seq            Int          @unique @default(autoincrement())
+  title          String
+  location       String?
   // Rate chain (top → bottom): clientRate = what the end client releases,
   // vendorRate = the bill rate the vendor releases to us. clientRate is optional
   // ("if available" — often the client's budget isn't disclosed down the vendor
   // chain). Pay/Bill rates for a specific candidate live on the requirement and
   // submission; the Job only carries these requisition-level rates.
-  clientRate    Decimal?  @db.Decimal(12, 2)
-  vendorRate    Decimal?  @db.Decimal(12, 2)
-  status        JobStatus @default(OPEN)
-  description   String?
-  notes         String?
+  clientRate     Decimal?     @db.Decimal(12, 2)
+  vendorRate     Decimal?     @db.Decimal(12, 2)
+  status         JobStatus    @default(OPEN)
+  description    String?
+  notes          String?
   // Lifecycle trash/erase (mirrors Candidate): deletedAt = in trash (hidden,
   // restorable, auto-erases after the retention window); erasedAt = permanently
   // erased tombstone (kept so submissions/analytics survive — an empty job is
   // hard-removed instead of tombstoned). A backup zip is written to Blob first.
-  deletedAt     DateTime?
-  erasedAt      DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  deletedAt      DateTime?
+  erasedAt       DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   clientId              String
   client                Client               @relation(fields: [clientId], references: [id])
@@ -461,13 +550,14 @@ model Job {
   createdById           String
   createdBy             User                 @relation(fields: [createdById], references: [id])
 
-  assignments JobAssignment[]
-  submissions Submission[]
-  placements  Placement[]
-  noteEntries Note[]
-  activities  Activity[]
+  assignments        JobAssignment[]
+  submissions        Submission[]
+  placements         Placement[]
+  noteEntries        Note[]
+  activities         Activity[]
   vendorRequirements VendorRequirement[]
 
+  @@index([organizationId])
   @@index([status])
   @@index([deletedAt])
   @@index([clientId])
@@ -478,90 +568,96 @@ model Job {
 
 // Explicit job <-> recruiter join so assignments can be audited.
 model JobAssignment {
-  id           String   @id @default(cuid())
-  jobId        String
-  job          Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  recruiterId  String
-  recruiter    User     @relation("AssignmentRecruiter", fields: [recruiterId], references: [id])
-  assignedById String?
-  assignedBy   User?    @relation("AssignmentAssignedBy", fields: [assignedById], references: [id])
-  assignedAt   DateTime @default(now())
+  id             String       @id @default(cuid())
+  organizationId String       @default("")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  jobId          String
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  recruiterId    String
+  recruiter      User         @relation("AssignmentRecruiter", fields: [recruiterId], references: [id])
+  assignedById   String?
+  assignedBy     User?        @relation("AssignmentAssignedBy", fields: [assignedById], references: [id])
+  assignedAt     DateTime     @default(now())
 
   @@unique([jobId, recruiterId])
+  @@index([organizationId])
   @@index([recruiterId])
 }
 
 model Candidate {
-  id                  String   @id @default(cuid())
-  seq                 Int      @unique @default(autoincrement())
-  fullName            String
-  email               String?
-  phone               String?
-  currentLocation     String?
-  workAuthorization   String?
-  totalExperienceYears Decimal? @db.Decimal(4, 1)
+  id                      String          @id @default(cuid())
+  organizationId          String          @default("")
+  organization            Organization    @relation(fields: [organizationId], references: [id])
+  seq                     Int             @unique @default(autoincrement())
+  fullName                String
+  email                   String?
+  phone                   String?
+  currentLocation         String?
+  workAuthorization       String?
+  totalExperienceYears    Decimal?        @db.Decimal(4, 1)
   // Actual hands-on experience, distinct from the (often inflated) marketed
   // figure. The bench overlay reads this rather than carrying its own copy.
-  realTimeExperienceYears Decimal? @db.Decimal(4, 1)
+  realTimeExperienceYears Decimal?        @db.Decimal(4, 1)
   // Single primary focus technology (source of truth; the bench overlay reads
   // this). Usually one of the candidate's skills; free-text so an unlisted tech
   // still works.
-  technology          String?
-  currentCompany      String?
-  skills              String[]         @default([])
+  technology              String?
+  currentCompany          String?
+  skills                  String[]        @default([])
   // ≤3 starred skills shown first in list views. Subset of `skills` (enforced
   // in Zod, not at the DB level — Postgres can't express subset constraints
   // cheaply). Empty array means "fall back to first 3 of `skills`."
-  featuredSkills      String[]         @default([])
-  linkedinUrl         String?
-  resumeBlobUrl       String?
-  notes               String?
-  isActive            Boolean  @default(true)
+  featuredSkills          String[]        @default([])
+  linkedinUrl             String?
+  resumeBlobUrl           String?
+  notes                   String?
+  isActive                Boolean         @default(true)
   // §B4 — engagement state (separate from `isActive` soft-delete).
-  status              CandidateStatus @default(AVAILABLE)
+  status                  CandidateStatus @default(AVAILABLE)
   // §E2 — free-form per-candidate labels (e.g. "Hot prospect", "On vacation").
   // Distinct from `skills`. Lowercased + trimmed by the action layer; UI shows
   // as chips.
-  tags                String[]         @default([])
+  tags                    String[]        @default([])
   // §E3 — last-contact timestamp. Bumped explicitly via a "Mark contacted"
   // action; not auto-bumped on every edit (otherwise it'd just mirror
   // updatedAt and lose meaning).
-  lastContactedAt     DateTime?
+  lastContactedAt         DateTime?
   // §E4 — where this candidate originally came from. Free-text by design
   // (LinkedIn InMail / referral / job-board / inbound / etc.); a fixed enum
   // here would calcify ahead of real usage data.
-  source              String?
+  source                  String?
   // Broad IT vs Non-IT classification of the person (source of truth; the bench
   // overlay reads this rather than carrying its own copy).
-  discipline          Discipline?
+  discipline              Discipline?
   // Is the person currently working anywhere (incl. an external org not placed
   // through us)? Independent of Placement, which tracks only through-us
   // engagements. `workingType` = C2C / W2 / Full-time / free-text (learned).
-  isWorking           Boolean  @default(false)
-  workingType         String?
+  isWorking               Boolean         @default(false)
+  workingType             String?
   // Soft-delete "trash" marker. Non-null = moved to trash (hidden everywhere,
   // restorable); a scheduled job hard-erases rows past the retention window.
-  deletedAt           DateTime?
+  deletedAt               DateTime?
   // Right-to-be-forgotten marker. Non-null = personal data erased + files
   // shredded; the row is retained (anonymized) so linked submissions/placements
   // keep their history. See hardEraseCandidate.
-  erasedAt            DateTime?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  erasedAt                DateTime?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
 
   createdById String
   createdBy   User   @relation(fields: [createdById], references: [id])
 
-  submissions Submission[]
-  resumes     CandidateResume[]
-  documents   CandidateDocument[]
-  placements  Placement[]
-  noteEntries Note[]
-  activities  Activity[]
+  submissions        Submission[]
+  resumes            CandidateResume[]
+  documents          CandidateDocument[]
+  placements         Placement[]
+  noteEntries        Note[]
+  activities         Activity[]
   // Optional 1:1 back-link from the Bench-Sales roster (see BenchConsultant).
-  benchConsultant BenchConsultant?
+  benchConsultant    BenchConsultant?
   vendorRequirements VendorRequirement[]
 
+  @@index([organizationId])
   @@index([email])
   @@index([phone])
   @@index([fullName])
@@ -572,27 +668,30 @@ model Candidate {
 // A candidate's saved résumés — one candidate keeps many labelled Drive links,
 // and a submission references the one used (see Submission.candidateResume).
 model CandidateResume {
-  id          String   @id @default(cuid())
-  candidateId String
-  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  label       String
+  id             String       @id @default(cuid())
+  organizationId String       @default("")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  candidateId    String
+  candidate      Candidate    @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  label          String
   // Private Vercel Blob upload. `blobPathname` is the key we pass to
   // get(pathname, { access: 'private' }) to stream the file through our own
   // authenticated route (private blobs are never fetched directly by the browser).
-  blobPathname String?
-  blobUrl      String?
-  sizeBytes    Int?
-  contentType  String?
+  blobPathname   String?
+  blobUrl        String?
+  sizeBytes      Int?
+  contentType    String?
   // Soft-delete: archiving sets this false instead of deleting the row, so
   // submissions keep their live FK link (and their snapshot). Active résumés
   // are the only ones offered in the submit picker; the library can reveal
   // archived ones behind a toggle. True hard-delete is reserved for unused ones.
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   submissions Submission[]
 
+  @@index([organizationId])
   @@index([candidateId, isActive])
 }
 
@@ -604,28 +703,31 @@ model CandidateResume {
 // practice candidates are soft-deleted (isActive) so this only fires for true
 // admin purges (e.g. seeding cleanup).
 model CandidateDocument {
-  id           String           @id @default(cuid())
-  seq          Int              @unique @default(autoincrement())
-  candidateId  String
-  candidate    Candidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  category     DocumentCategory
-  label        String
+  id             String           @id @default(cuid())
+  organizationId String           @default("")
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  seq            Int              @unique @default(autoincrement())
+  candidateId    String
+  candidate      Candidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  category       DocumentCategory
+  label          String
   // Private Vercel Blob upload (PDF/DOCX), gzip-compressed. `blobPathname` is
   // the key we pass to get(pathname, { access: 'private' }); served via the
   // authenticated /api/documents/[id] route (which also enforces the sensitive-
   // category gate). Nullable only so the migration can add them.
-  blobPathname String?
-  blobUrl      String?
-  sizeBytes    Int?
-  contentType  String?
-  issuedAt     DateTime?
-  expiresAt    DateTime?
-  notes        String?
-  uploadedById String
-  uploadedBy   User             @relation(fields: [uploadedById], references: [id])
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  blobPathname   String?
+  blobUrl        String?
+  sizeBytes      Int?
+  contentType    String?
+  issuedAt       DateTime?
+  expiresAt      DateTime?
+  notes          String?
+  uploadedById   String
+  uploadedBy     User             @relation(fields: [uploadedById], references: [id])
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
+  @@index([organizationId])
   @@index([candidateId, category])
   @@index([expiresAt])
 }
@@ -638,58 +740,61 @@ model CandidateDocument {
 // kept in sync after linking (this row is the as-marketed snapshot; Candidate
 // is the live record) — do not add a mirror-write trigger.
 model BenchConsultant {
-  id          String   @id @default(cuid())
-  seq         Int      @unique @default(autoincrement())
-  fullName    String
-  email       String?
-  phone       String?
-  currentLocation String?
+  id                 String               @id @default(cuid())
+  organizationId     String               @default("")
+  organization       Organization         @relation(fields: [organizationId], references: [id])
+  seq                Int                  @unique @default(autoincrement())
+  fullName           String
+  email              String?
+  phone              String?
+  currentLocation    String?
   // Two visa fields per the sheet ("M Visa" / "A Visa") — free-text, since the
   // M/A semantics are unconfirmed. workAuthorization mirrors Candidate's field.
-  workAuthorization String?
-  mVisa       String?
-  aVisa       String?
+  workAuthorization  String?
+  mVisa              String?
+  aVisa              String?
   // Two experience figures per the sheet: marketed vs actual real-time.
-  marketingExpYears Decimal? @db.Decimal(4, 1)
-  realTimeExpYears  Decimal? @db.Decimal(4, 1)
-  skills      String[] @default([])
-  reference   String?
-  company     String?
-  projectType String?
+  marketingExpYears  Decimal?             @db.Decimal(4, 1)
+  realTimeExpYears   Decimal?             @db.Decimal(4, 1)
+  skills             String[]             @default([])
+  reference          String?
+  company            String?
+  projectType        String?
   // Lowest C2C rate the consultant will accept.
-  leastRateC2C Decimal? @db.Decimal(12, 2)
-  callType    String?
-  payrollType String?
-  relocation  Boolean  @default(false)
+  leastRateC2C       Decimal?             @db.Decimal(12, 2)
+  callType           String?
+  payrollType        String?
+  relocation         Boolean              @default(false)
   // When not open to relocation generally, specific cities they'd still
   // consider (free-text, e.g. "Dallas, Austin").
-  relocationCities String?
+  relocationCities   String?
   marketingStartDate DateTime?
   // Marketing credentials — gated (canViewBenchCredentials), detail-page only,
   // never a list column or business-export field.
-  marketingEmail    String?
-  marketingPassword String?
-  marketingNumber   String?
-  personalNumber    String?
-  priority        BenchPriority        @default(SECOND)
-  marketingStatus BenchMarketingStatus @default(ACTIVE)
-  notes       String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  marketingEmail     String?
+  marketingPassword  String?
+  marketingNumber    String?
+  personalNumber     String?
+  priority           BenchPriority        @default(SECOND)
+  marketingStatus    BenchMarketingStatus @default(ACTIVE)
+  notes              String?
+  isActive           Boolean              @default(true)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
 
   // Optional 1:1 link to the live ATS Candidate (created/linked on submit).
   candidateId String?    @unique
   candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
   // The marketing/sales recruiter who owns this consultant.
   recruiterId String?
-  recruiter   User?  @relation("BenchConsultantRecruiter", fields: [recruiterId], references: [id])
+  recruiter   User?      @relation("BenchConsultantRecruiter", fields: [recruiterId], references: [id])
   createdById String
-  createdBy   User   @relation("BenchConsultantCreatedBy", fields: [createdById], references: [id])
+  createdBy   User       @relation("BenchConsultantCreatedBy", fields: [createdById], references: [id])
 
   noteEntries Note[]
   activities  Activity[]
 
+  @@index([organizationId])
   @@index([priority, marketingStatus])
   @@index([recruiterId])
   @@index([marketingStatus])
@@ -698,14 +803,16 @@ model BenchConsultant {
 }
 
 model Submission {
-  id              String           @id @default(cuid())
-  seq             Int              @unique @default(autoincrement())
-  status          SubmissionStatus @default(SUBMITTED)
+  id                  String           @id @default(cuid())
+  organizationId      String           @default("")
+  organization        Organization     @relation(fields: [organizationId], references: [id])
+  seq                 Int              @unique @default(autoincrement())
+  status              SubmissionStatus @default(SUBMITTED)
   // Snapshot of the private-Blob résumé URL used at submit time, so the record
   // survives the library résumé being renamed/archived.
-  resumeBlobUrl   String?
-  submissionNotes String?
-  rejectionReason String?
+  resumeBlobUrl       String?
+  submissionNotes     String?
+  rejectionReason     String?
   // Bench-Sales fields (the "Bench Submissions" sheet). Nullable — regular
   // submissions ignore them. Company name is derived from job.client.
   engagement          BenchEngagement?
@@ -716,57 +823,58 @@ model Submission {
   // us (our revenue side). clientRate = what the end client releases (optional —
   // often not disclosed). Separate from candidateRate (the legacy single rate)
   // and nullable so non-bench submissions ignore them. teamLead = sales lead.
-  payRate    Decimal? @db.Decimal(12, 2)
-  billRate   Decimal? @db.Decimal(12, 2)
-  clientRate Decimal? @db.Decimal(12, 2)
-  teamLead   String?
+  payRate             Decimal?         @db.Decimal(12, 2)
+  billRate            Decimal?         @db.Decimal(12, 2)
+  clientRate          Decimal?         @db.Decimal(12, 2)
+  teamLead            String?
   // §C4 — set when the recruiter consciously submits a duplicate
   // (same candidate already submitted to this job). The DB-level
   // `@@unique([candidateId, jobId])` constraint was dropped so the
   // duplicate check now lives in the action and captures this reason.
-  duplicateReason String?
-  submittedAt     DateTime         @default(now())
+  duplicateReason     String?
+  submittedAt         DateTime         @default(now())
   // Pipeline tail: §C2. Recorded when the candidate accepts the offer and at
   // actual join time respectively. expectedJoinDate is nullable because not
   // every accepted offer has a confirmed date yet; actualJoinDate is set
   // when status flips to JOINED.
-  expectedJoinDate DateTime?
-  actualJoinDate   DateTime?
+  expectedJoinDate    DateTime?
+  actualJoinDate      DateTime?
   // "Résumé not required" waiver — set when a submission is intentionally made
   // without a résumé (marked by the submitter or an admin). While set, the
   // submission drops off the "missing résumé" worklist. Cleared automatically if
   // a résumé is later attached.
-  resumeWaivedAt   DateTime?
-  resumeWaivedById String?
-  resumeWaivedBy   User?     @relation("SubmissionResumeWaivedBy", fields: [resumeWaivedById], references: [id], onDelete: SetNull)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  resumeWaivedAt      DateTime?
+  resumeWaivedById    String?
+  resumeWaivedBy      User?            @relation("SubmissionResumeWaivedBy", fields: [resumeWaivedById], references: [id], onDelete: SetNull)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
 
-  candidateId   String
-  candidate     Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  jobId         String
-  job           Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  submittedById String
-  submittedBy   User      @relation(fields: [submittedById], references: [id])
+  candidateId       String
+  candidate         Candidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  jobId             String
+  job               Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  submittedById     String
+  submittedBy       User             @relation(fields: [submittedById], references: [id])
   // The library résumé chosen for this submission; resumeBlobUrl above keeps a
   // snapshot of its URL so history survives edits/deletes of the library entry.
   candidateResumeId String?
   candidateResume   CandidateResume? @relation(fields: [candidateResumeId], references: [id], onDelete: SetNull)
 
-  interviewRounds InterviewRound[]
+  interviewRounds     InterviewRound[]
   // R4.2 — the Placement auto-created when this submission moves to JOINED.
-  placement       Placement?       @relation("PlacementSubmission")
+  placement           Placement?         @relation("PlacementSubmission")
   // The reverse side of Placement.replacementSubmission — populated when *this*
   // submission was named as the replacement for a terminated placement.
-  replacementFor  Placement?       @relation("PlacementReplacement")
-  noteEntries     Note[]
-  activities      Activity[]
+  replacementFor      Placement?         @relation("PlacementReplacement")
+  noteEntries         Note[]
+  activities          Activity[]
   // The vendor requirement (VPR) this submission was made against, if any. A
   // single VPR can spawn many submissions (recruiters submit several candidates
   // against one requirement) — hence a plain many→one FK, not a 1:1 link.
   vendorRequirementId String?
   vendorRequirement   VendorRequirement? @relation("RequirementSubmissions", fields: [vendorRequirementId], references: [id], onDelete: SetNull)
 
+  @@index([organizationId])
   @@index([candidateId, jobId])
   @@index([status])
   @@index([jobId])
@@ -783,45 +891,48 @@ model Submission {
 // Decimal(12, 2) matches Submission.candidateRate / Job.vendorRate so margin math
 // doesn't truncate. The submission ↔ placement link is 1:1 (submissionId @unique).
 model Placement {
-  id           String          @id @default(cuid())
-  seq          Int             @unique @default(autoincrement())
-  submissionId String          @unique
-  submission   Submission      @relation("PlacementSubmission", fields: [submissionId], references: [id])
-  candidateId  String
-  candidate    Candidate       @relation(fields: [candidateId], references: [id])
-  jobId        String
-  job          Job             @relation(fields: [jobId], references: [id])
-  startDate    DateTime
-  endDate      DateTime?
-  billRate     Decimal         @default(0) @db.Decimal(12, 2)
-  payRate      Decimal         @default(0) @db.Decimal(12, 2)
+  id                      String               @id @default(cuid())
+  organizationId          String               @default("")
+  organization            Organization         @relation(fields: [organizationId], references: [id])
+  seq                     Int                  @unique @default(autoincrement())
+  submissionId            String               @unique
+  submission              Submission           @relation("PlacementSubmission", fields: [submissionId], references: [id])
+  candidateId             String
+  candidate               Candidate            @relation(fields: [candidateId], references: [id])
+  jobId                   String
+  job                     Job                  @relation(fields: [jobId], references: [id])
+  startDate               DateTime
+  endDate                 DateTime?
+  billRate                Decimal              @default(0) @db.Decimal(12, 2)
+  payRate                 Decimal              @default(0) @db.Decimal(12, 2)
   // What the end client releases (optional, carried from the submission). Not
   // part of margin (margin = billRate − payRate), purely informational.
-  clientRate   Decimal?        @db.Decimal(12, 2)
-  status       PlacementStatus @default(ACTIVE)
-  endReason    PlacementEndReason?
-  endNote      String?
+  clientRate              Decimal?             @db.Decimal(12, 2)
+  status                  PlacementStatus      @default(ACTIVE)
+  endReason               PlacementEndReason?
+  endNote                 String?
   // When a placement is ended early and a backfill candidate is identified,
   // we point at *that* submission (same job). Unique because one submission
   // can only be the replacement for one placement.
-  replacementSubmissionId String?     @unique
-  replacementSubmission   Submission? @relation("PlacementReplacement", fields: [replacementSubmissionId], references: [id])
-  clientPoNumber       String?
-  invoiceRef           String?
-  onsiteManagerName    String?
-  onsiteManagerEmail   String?
+  replacementSubmissionId String?              @unique
+  replacementSubmission   Submission?          @relation("PlacementReplacement", fields: [replacementSubmissionId], references: [id])
+  clientPoNumber          String?
+  invoiceRef              String?
+  onsiteManagerName       String?
+  onsiteManagerEmail      String?
   // Bench-Sales sheet fields (June-19 requirements "Placements" tab). All
   // nullable + editable on the placement edit form. `placementDate` defaults to
   // the JOINED date at auto-create; the rest are filled in by the recruiter.
-  organisation         String?   // implementation / sister company marketing the consultant
-  teamLead             String?   // "Lead" column on the sheet
-  interviewDate        DateTime? // "Date of Interview"
-  placementDate        DateTime? // "Date of Placement" (distinct from Start Date)
-  remarks              String?
-  extensions           PlacementExtension[]
-  createdAt            DateTime    @default(now())
-  updatedAt            DateTime    @updatedAt
+  organisation            String? // implementation / sister company marketing the consultant
+  teamLead                String? // "Lead" column on the sheet
+  interviewDate           DateTime? // "Date of Interview"
+  placementDate           DateTime? // "Date of Placement" (distinct from Start Date)
+  remarks                 String?
+  extensions              PlacementExtension[]
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
 
+  @@index([organizationId])
   @@index([status, endDate])
   @@index([candidateId])
   @@index([jobId])
@@ -832,22 +943,27 @@ model Placement {
 // extension. Edit-only (no delete action) per plan — overlap is blocked at the
 // Zod layer.
 model PlacementExtension {
-  id          String    @id @default(cuid())
-  placementId String
-  placement   Placement @relation(fields: [placementId], references: [id], onDelete: Cascade)
-  startDate   DateTime
-  endDate     DateTime
-  note        String?
-  createdAt   DateTime  @default(now())
+  id             String       @id @default(cuid())
+  organizationId String       @default("")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  placementId    String
+  placement      Placement    @relation(fields: [placementId], references: [id], onDelete: Cascade)
+  startDate      DateTime
+  endDate        DateTime
+  note           String?
+  createdAt      DateTime     @default(now())
 
+  @@index([organizationId])
   @@index([placementId])
 }
 
 model InterviewRound {
-  id             String          @id @default(cuid())
-  roundOrder     Int
-  roundName      String
-  interviewType  InterviewType
+  id                String           @id @default(cuid())
+  organizationId    String           @default("")
+  organization      Organization     @relation(fields: [organizationId], references: [id])
+  roundOrder        Int
+  roundName         String
+  interviewType     InterviewType
   // How the interview is conducted. `interviewMode` is one of IN_PERSON / PHONE /
   // VIDEO; `interviewPlatform` (Teams / Google Meet / Zoom / Other) is only set
   // when the mode is VIDEO. Plain strings — see INTERVIEW_MODES in src/lib/labels.ts.
@@ -857,26 +973,26 @@ model InterviewRound {
   // recruiters can hand candidates a single click-through instead of digging
   // through email threads.
   meetingLink       String?
-  interviewerName String?
-  scheduledAt    DateTime?
+  interviewerName   String?
+  scheduledAt       DateTime?
   // §D5 — IANA timezone string (e.g. "America/New_York") the interview is
   // anchored to. `scheduledAt` is UTC; this captures the interviewer's intent
   // so a Pacific scheduler doesn't ship a London candidate Pacific-local time.
   scheduledTimezone String?
-  result         InterviewResult @default(WAITING)
-  feedback       String?
-  notes          String?
+  result            InterviewResult  @default(WAITING)
+  feedback          String?
+  notes             String?
   // Whether this interview was done with external support (the sheet's
   // "Support (Y/N)"). When true, `supportProvider` + `supportMethod` capture
   // who assisted and how.
-  supportNeeded  Boolean         @default(false)
+  supportNeeded     Boolean          @default(false)
   // The external individual who provided support (SetNull so removing a provider
   // never deletes interview history) + a free-text note on how it was given.
   supportProviderId String?
   supportProvider   SupportProvider? @relation(fields: [supportProviderId], references: [id], onDelete: SetNull)
   supportMethod     String?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
   submissionId String
   submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
@@ -886,6 +1002,7 @@ model InterviewRound {
   noteEntries Note[]
   activities  Activity[]
 
+  @@index([organizationId])
   @@index([submissionId])
   @@index([supportProviderId])
 }
@@ -894,44 +1011,51 @@ model InterviewRound {
 // support). Individuals, not companies — tracked so a recruiter can find one
 // by skill and reach out. Linked from InterviewRound.supportProviderId.
 model SupportProvider {
-  id         String      @id @default(cuid())
-  name       String
-  phone      String?
-  email      String?
+  id             String       @id @default(cuid())
+  organizationId String       @default("")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  phone          String?
+  email          String?
   // Coarse IT / Non-IT bucket (mirrors Candidate/Job) — narrows the pool before
   // the specific `skills` tags. Optional: a supporter is usually one or neither.
-  discipline Discipline?
-  skills     String[]    @default([])
-  reference  String?
-  notes      String?
-  isActive   Boolean     @default(true)
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
+  discipline     Discipline?
+  skills         String[]     @default([])
+  reference      String?
+  notes          String?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   interviewRounds InterviewRound[]
+
+  @@index([organizationId])
 }
 
 // Polymorphic note — exactly one entity FK is set (matches entityType).
 model Note {
-  id          String     @id @default(cuid())
-  entityType  EntityType
-  body        String
-  createdAt   DateTime   @default(now())
+  id             String       @id @default(cuid())
+  organizationId String       @default("")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  entityType     EntityType
+  body           String
+  createdAt      DateTime     @default(now())
 
   createdById String
   createdBy   User   @relation(fields: [createdById], references: [id])
 
-  jobId            String?
-  job              Job?            @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  candidateId      String?
-  candidate        Candidate?      @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  submissionId     String?
-  submission       Submission?     @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  interviewRoundId String?
-  interviewRound   InterviewRound? @relation(fields: [interviewRoundId], references: [id], onDelete: Cascade)
+  jobId             String?
+  job               Job?             @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  candidateId       String?
+  candidate         Candidate?       @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  submissionId      String?
+  submission        Submission?      @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  interviewRoundId  String?
+  interviewRound    InterviewRound?  @relation(fields: [interviewRoundId], references: [id], onDelete: Cascade)
   benchConsultantId String?
   benchConsultant   BenchConsultant? @relation(fields: [benchConsultantId], references: [id], onDelete: Cascade)
 
+  @@index([organizationId])
   @@index([jobId])
   @@index([candidateId])
   @@index([submissionId])
@@ -941,36 +1065,39 @@ model Note {
 
 // Polymorphic audit entry — exactly one entity FK is set (matches entityType).
 model Activity {
-  id          String         @id @default(cuid())
-  entityType  EntityType
-  action      ActivityAction
-  description String
-  oldValue    String?
-  newValue    String?
+  id             String         @id @default(cuid())
+  organizationId String         @default("")
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  entityType     EntityType
+  action         ActivityAction
+  description    String
+  oldValue       String?
+  newValue       String?
   // Optional context captured on a status change: when the event really
   // happened (vs. `createdAt` = when it was recorded), a free-text note, and
   // a preset reason category.
-  eventAt     DateTime?
-  note        String?
-  reason      String?
-  createdAt   DateTime       @default(now())
+  eventAt        DateTime?
+  note           String?
+  reason         String?
+  createdAt      DateTime       @default(now())
 
   performedById String
   performedBy   User   @relation(fields: [performedById], references: [id])
 
-  jobId            String?
-  job              Job?            @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  candidateId      String?
-  candidate        Candidate?      @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  submissionId     String?
-  submission       Submission?     @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  interviewRoundId String?
-  interviewRound   InterviewRound? @relation(fields: [interviewRoundId], references: [id], onDelete: Cascade)
+  jobId             String?
+  job               Job?               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  candidateId       String?
+  candidate         Candidate?         @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  submissionId      String?
+  submission        Submission?        @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  interviewRoundId  String?
+  interviewRound    InterviewRound?    @relation(fields: [interviewRoundId], references: [id], onDelete: Cascade)
   benchConsultantId String?
-  benchConsultant   BenchConsultant? @relation(fields: [benchConsultantId], references: [id], onDelete: Cascade)
+  benchConsultant   BenchConsultant?   @relation(fields: [benchConsultantId], references: [id], onDelete: Cascade)
   requirementId     String?
   requirement       VendorRequirement? @relation(fields: [requirementId], references: [id], onDelete: Cascade)
 
+  @@index([organizationId])
   @@index([jobId])
   @@index([candidateId])
   @@index([submissionId])
@@ -997,43 +1124,45 @@ enum RequirementStatus {
 // "requisition" fields. "Company" is NOT stored — it derives from
 // candidate.currentCompany.
 model VendorRequirement {
-  id     String            @id @default(cuid())
-  seq    Int               @unique @default(autoincrement())
-  status RequirementStatus @default(OPEN)
+  id             String            @id @default(cuid())
+  organizationId String            @default("")
+  organization   Organization      @relation(fields: [organizationId], references: [id])
+  seq            Int               @unique @default(autoincrement())
+  status         RequirementStatus @default(OPEN)
 
-  jobId String
-  job   Job    @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  jobId       String
+  job         Job        @relation(fields: [jobId], references: [id], onDelete: Restrict)
   // Optional target candidate (set up front or at convert time).
   candidateId String?
   candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
   // The marketing/sales recruiter expected to work it.
   recruiterId String?
-  recruiter   User?   @relation("VendorRequirementRecruiter", fields: [recruiterId], references: [id])
+  recruiter   User?      @relation("VendorRequirementRecruiter", fields: [recruiterId], references: [id])
 
   // Commercial terms (mirror the Submission bench fields). location is explicit
   // here (the sheet's "Location" column), defaulting from the job at create time.
   location            String?
-  payRate             Decimal? @db.Decimal(12, 2)
-  billRate            Decimal? @db.Decimal(12, 2)
+  payRate             Decimal?         @db.Decimal(12, 2)
+  billRate            Decimal?         @db.Decimal(12, 2)
   // What the end client releases (optional — "if available").
-  clientRate          Decimal? @db.Decimal(12, 2)
+  clientRate          Decimal?         @db.Decimal(12, 2)
   engagement          BenchEngagement?
   vendorRecruiterName String?
   jobDuties           String?
   teamLead            String?
   submissionNotes     String?
   // Soft pointer (no FK) to the library résumé to reuse — re-validated at convert.
-  candidateResumeId String?
+  candidateResumeId   String?
 
   // Conversion link — set when moved to a real submission.
   // Submissions made against this requirement (1:many — the VPR stays OPEN and
   // accumulates candidate submissions until a team lead closes it).
-  submissions           Submission[] @relation("RequirementSubmissions")
+  submissions   Submission[] @relation("RequirementSubmissions")
   // Set when a team lead marks the requirement closed (repurposed from the old
   // 1:1 "converted" fields — CONVERTED now means "Closed").
-  convertedAt           DateTime?
-  convertedById         String?
-  convertedBy           User?       @relation("VendorRequirementConvertedBy", fields: [convertedById], references: [id])
+  convertedAt   DateTime?
+  convertedById String?
+  convertedBy   User?        @relation("VendorRequirementConvertedBy", fields: [convertedById], references: [id])
 
   createdById String
   createdBy   User     @relation("VendorRequirementCreatedBy", fields: [createdById], references: [id])
@@ -1042,6 +1171,7 @@ model VendorRequirement {
 
   activities Activity[]
 
+  @@index([organizationId])
   @@index([status])
   @@index([jobId])
   @@index([candidateId])
@@ -1052,13 +1182,18 @@ model VendorRequirement {
 /// static default list (see src/lib/lookups.ts) is unioned with these at read
 /// time, and the app upserts a new typed value on save so it reappears next
 /// time. Categories: WORK_AUTH, WORKING_TYPE, CALL_TYPE, PAYROLL_TYPE.
+/// Per-org: a value typed in one org (often a company name) must not surface in
+/// another's dropdowns.
 model LookupOption {
-  id        String   @id @default(cuid())
-  category  String
-  value     String
-  createdAt DateTime @default(now())
+  id             String       @id @default(cuid())
+  organizationId String       @default("")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  category       String
+  value          String
+  createdAt      DateTime     @default(now())
 
-  @@unique([category, value])
+  @@unique([organizationId, category, value])
+  @@index([organizationId])
   @@index([category])
 }
 
@@ -1066,15 +1201,18 @@ model LookupOption {
 /// are curated in code (src/lib/glossary.ts); this stores only the per-user
 /// personalization, keyed by the stable term slug. One note per (user, term).
 model GlossaryNote {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  term      String
-  note      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String       @id @default(cuid())
+  organizationId String       @default("")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  term           String
+  note           String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   @@unique([userId, term])
+  @@index([organizationId])
   @@index([userId])
 }
 
@@ -1083,16 +1221,20 @@ model GlossaryNote {
 /// (deletedAt) so a term with private notes hanging off its slug can be
 /// recovered. `term` is the stable slug the per-user note anchors to.
 model CustomGlossaryTerm {
-  id          String    @id @default(cuid())
-  term        String    @unique
-  label       String
-  category    String
-  definition  String
-  createdById String
-  createdBy   User      @relation(fields: [createdById], references: [id])
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
+  id             String       @id @default(cuid())
+  organizationId String       @default("")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  term           String
+  label          String
+  category       String
+  definition     String
+  createdById    String
+  createdBy      User         @relation(fields: [createdById], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?
 
+  @@unique([organizationId, term])
+  @@index([organizationId])
   @@index([createdById])
 }

@@ -1,4 +1,4 @@
-import { prisma } from "@/server/db";
+import { getScopedPrisma } from "@/lib/session";
 import type { Prisma } from "@/generated/prisma/client";
 import type { SubmissionStatus } from "@/generated/prisma/enums";
 import { OTHER_SOURCE } from "@/lib/labels";
@@ -108,8 +108,9 @@ function flattenRow(s: RawSubmissionRow) {
 async function attachDaysInStage<T extends { id: string; submittedAt: Date }>(
   rows: T[],
 ): Promise<(T & { daysInStage: number })[]> {
+  const db = await getScopedPrisma();
   if (rows.length === 0) return [];
-  const transitions = await prisma.activity.findMany({
+  const transitions = await db.activity.findMany({
     where: {
       action: { in: [...STATUS_TRANSITION_ACTIONS] },
       submissionId: { in: rows.map((r) => r.id) },
@@ -130,6 +131,7 @@ async function attachDaysInStage<T extends { id: string; submittedAt: Date }>(
 }
 
 export async function listSubmissions(filters: SubmissionListFilters) {
+  const db = await getScopedPrisma();
   const where: Prisma.SubmissionWhereInput = {};
 
   if (filters.status?.length) where.status = { in: filters.status };
@@ -188,7 +190,7 @@ export async function listSubmissions(filters: SubmissionListFilters) {
   // the full filtered set computed before paginating (in memory, like reports.ts).
   // The common case keeps efficient DB pagination + a page-scoped audit query.
   if (sortByDays || mineStale) {
-    const raw = await prisma.submission.findMany({
+    const raw = await db.submission.findMany({
       where,
       orderBy,
       include: SUBMISSION_INCLUDE,
@@ -208,11 +210,11 @@ export async function listSubmissions(filters: SubmissionListFilters) {
     return { rows, total, page };
   }
 
-  const total = await prisma.submission.count({ where });
+  const total = await db.submission.count({ where });
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
 
-  const raw = await prisma.submission.findMany({
+  const raw = await db.submission.findMany({
     where,
     orderBy,
     skip: (page - 1) * PAGE_SIZE,
@@ -228,8 +230,9 @@ export type SubmissionListRow = Awaited<
   ReturnType<typeof listSubmissions>
 >["rows"][number];
 
-export function getSubmissionDetail(id: string) {
-  return prisma.submission.findUnique({
+export async function getSubmissionDetail(id: string) {
+  const db = await getScopedPrisma();
+  return db.submission.findUnique({
     where: { id },
     include: {
       candidate: true,
@@ -267,7 +270,8 @@ export function getSubmissionDetail(id: string) {
  *  candidate's active résumés (and the currently-used one even if archived) so
  *  the form can offer the résumé picker without dropping the saved selection. */
 export async function getSubmissionForEdit(id: string) {
-  const submission = await prisma.submission.findUnique({
+  const db = await getScopedPrisma();
+  const submission = await db.submission.findUnique({
     where: { id },
     select: {
       id: true,
@@ -294,7 +298,7 @@ export async function getSubmissionForEdit(id: string) {
   // uses even if it's since been archived — otherwise the controlled <select>
   // finds no matching option and snaps to "No resume", silently dropping the
   // selection on save.
-  const resumes = await prisma.candidateResume.findMany({
+  const resumes = await db.candidateResume.findMany({
     where: {
       candidateId: submission.candidateId,
       OR: [
@@ -316,12 +320,13 @@ export async function getJobSubmissions(
   jobId: string,
   opts: { page?: number } = {},
 ) {
+  const db = await getScopedPrisma();
   const where = { jobId };
-  const total = await prisma.submission.count({ where });
+  const total = await db.submission.count({ where });
   const totalPages = Math.max(1, Math.ceil(total / SUB_PAGE_SIZE));
   const page = Math.min(Math.max(1, opts.page ?? 1), totalPages);
 
-  const rows = await prisma.submission.findMany({
+  const rows = await db.submission.findMany({
     where,
     orderBy: { submittedAt: "desc" },
     skip: (page - 1) * SUB_PAGE_SIZE,
@@ -353,10 +358,11 @@ const IN_FLIGHT_SUBMISSION_STATUSES: SubmissionStatus[] = [
 
 /** Count of a candidate's in-flight (non-terminal) submissions — drives the
  *  "still linked" summary on the trash confirm. */
-export function countActiveSubmissionsForCandidate(
+export async function countActiveSubmissionsForCandidate(
   candidateId: string,
 ): Promise<number> {
-  return prisma.submission.count({
+  const db = await getScopedPrisma();
+  return db.submission.count({
     where: { candidateId, status: { in: IN_FLIGHT_SUBMISSION_STATUSES } },
   });
 }
@@ -370,12 +376,13 @@ export async function getCandidateSubmissions(
   candidateId: string,
   opts: { page?: number } = {},
 ) {
+  const db = await getScopedPrisma();
   const where = { candidateId };
-  const total = await prisma.submission.count({ where });
+  const total = await db.submission.count({ where });
   const totalPages = Math.max(1, Math.ceil(total / SUB_PAGE_SIZE));
   const page = Math.min(Math.max(1, opts.page ?? 1), totalPages);
 
-  const rows = await prisma.submission.findMany({
+  const rows = await db.submission.findMany({
     where,
     orderBy: { submittedAt: "desc" },
     skip: (page - 1) * SUB_PAGE_SIZE,
@@ -406,7 +413,8 @@ export type CandidateSubmissionRow = Awaited<
 export async function getJobSubmittedCandidateIds(
   jobId: string,
 ): Promise<string[]> {
-  const rows = await prisma.submission.findMany({
+  const db = await getScopedPrisma();
+  const rows = await db.submission.findMany({
     where: { jobId },
     select: { candidateId: true },
   });

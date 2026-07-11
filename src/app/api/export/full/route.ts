@@ -1,6 +1,5 @@
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser, getScopedPrisma } from "@/lib/session";
 import { hasFullAccess } from "@/lib/permissions";
-import { prisma } from "@/server/db";
 import { logActivity } from "@/server/activity";
 import { buildBackupJson } from "@/server/exporters/build-backup-json";
 
@@ -11,11 +10,13 @@ export async function POST(): Promise<Response> {
   if (!user) return new Response("Unauthorized", { status: 401 });
   if (!hasFullAccess(user)) return new Response("Forbidden", { status: 403 });
 
-  const backup = await buildBackupJson();
+  const db = await getScopedPrisma();
+
+  const backup = await buildBackupJson(db);
   const json = JSON.stringify(backup, null, 2);
   const filename = `lumintrack-backup-${new Date().toISOString().slice(0, 10)}.json`;
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await logActivity(tx, {
       entityType: "JOB",
       action: "DATA_EXPORTED",

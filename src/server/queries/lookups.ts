@@ -1,4 +1,4 @@
-import { prisma } from "@/server/db";
+import { getScopedPrisma } from "@/lib/session";
 import {
   LOOKUP_DEFAULTS,
   mergeLookupValues,
@@ -9,7 +9,8 @@ import {
 export async function listLookupValues(
   category: LookupCategory,
 ): Promise<string[]> {
-  const rows = await prisma.lookupOption.findMany({
+  const db = await getScopedPrisma();
+  const rows = await db.lookupOption.findMany({
     where: { category },
     select: { value: true },
     orderBy: { value: "asc" },

@@ -1,5 +1,5 @@
 import { startOfMonth, subMonths, format } from "date-fns";
-import { prisma } from "@/server/db";
+import { getScopedPrisma } from "@/lib/session";
 import type { Prisma } from "@/generated/prisma/client";
 import type { SubmissionStatus, UserRole } from "@/generated/prisma/enums";
 import {
@@ -81,6 +81,7 @@ export async function listRecruiterPerformance(
   filters: AnalyticsFilters,
   opts: { sort?: SortState; page?: number; roles?: UserRole[] } = {},
 ) {
+  const db = await getScopedPrisma();
   const orgWhere = jobOrgWhere(filters);
   // Default to all three roles; the roster filter chip can narrow to a subset.
   const roles =
@@ -107,14 +108,14 @@ export async function listRecruiterPerformance(
     assignmentWhere.assignedAt = filters.dateRange;
 
   const [users, submissions, assignments] = await Promise.all([
-    prisma.user.findMany({
+    db.user.findMany({
       // Recruiters + team leads + managers — anyone who submits shows here,
       // narrowed by the user-type and the specific-user filters.
       where: userWhere,
       select: { id: true, fullName: true, email: true, role: true },
       orderBy: { fullName: "asc" },
     }),
-    prisma.submission.findMany({
+    db.submission.findMany({
       where: buildSubmissionWhere(filters),
       select: {
         status: true,
@@ -122,7 +123,7 @@ export async function listRecruiterPerformance(
         _count: { select: { interviewRounds: true } },
       },
     }),
-    prisma.jobAssignment.groupBy({
+    db.jobAssignment.groupBy({
       by: ["recruiterId"],
       where: assignmentWhere,
       _count: true,
@@ -190,7 +191,8 @@ export async function getRecruiterDetail(
     subStatus?: SubmissionStatus;
   } = {},
 ) {
-  const user = await prisma.user.findUnique({
+  const db = await getScopedPrisma();
+  const user = await db.user.findUnique({
     where: { id },
     select: {
       id: true,
@@ -224,13 +226,13 @@ export async function getRecruiterDetail(
     ? { ...submissionWhere, status: opts.subStatus }
     : submissionWhere;
 
-  const jobsTotalP = prisma.jobAssignment.count({ where: assignmentWhere });
-  const subsTotalP = prisma.submission.count({ where: displaySubmissionWhere });
+  const jobsTotalP = db.jobAssignment.count({ where: assignmentWhere });
+  const subsTotalP = db.submission.count({ where: displaySubmissionWhere });
 
   const [jobsTotal, subsTotal, allSubs, activity] = await Promise.all([
     jobsTotalP,
     subsTotalP,
-    prisma.submission.findMany({
+    db.submission.findMany({
       where: submissionWhere,
       select: {
         status: true,
@@ -238,7 +240,7 @@ export async function getRecruiterDetail(
         _count: { select: { interviewRounds: true } },
       },
     }),
-    prisma.activity.findMany({
+    db.activity.findMany({
       where: { performedById: id },
       orderBy: { createdAt: "desc" },
       take: 20,
@@ -258,7 +260,7 @@ export async function getRecruiterDetail(
   );
 
   const [assignments, submissions] = await Promise.all([
-    prisma.jobAssignment.findMany({
+    db.jobAssignment.findMany({
       where: assignmentWhere,
       orderBy: { assignedAt: "desc" },
       skip: (jobsPage - 1) * SUB_PAGE_SIZE,
@@ -276,7 +278,7 @@ export async function getRecruiterDetail(
         },
       },
     }),
-    prisma.submission.findMany({
+    db.submission.findMany({
       where: displaySubmissionWhere,
       orderBy: { submittedAt: "desc" },
       skip: (subsPage - 1) * SUB_PAGE_SIZE,

@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma, isUniqueConstraintError } from "@/server/db";
-import { requireUser } from "@/lib/session";
+import { isUniqueConstraintError } from "@/server/db";
+import { getScopedPrisma, requireUser } from "@/lib/session";
 import { canManageOrgEntities } from "@/lib/permissions";
 import { contactOrgSchema, clientSchema, teamSchema } from "@/lib/validation/org";
 import { toFieldErrors } from "@/lib/validation/common";
@@ -27,9 +27,10 @@ function readContactOrg(formData: FormData) {
 async function resolveRecruitedBy(
   typed: string | undefined,
 ): Promise<{ recruitedById: string | null; recruitedByName: string | null }> {
+  const db = await getScopedPrisma();
   const value = (typed ?? "").trim();
   if (!value) return { recruitedById: null, recruitedByName: null };
-  const user = await prisma.user.findFirst({
+  const user = await db.user.findFirst({
     where: { isActive: true, fullName: { equals: value, mode: "insensitive" } },
     select: { id: true },
   });
@@ -62,6 +63,7 @@ export async function saveSisterCompany(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const gate = await requireOrgManager();
   if ("error" in gate) return gate;
   const id = String(formData.get("id") ?? "").trim();
@@ -79,8 +81,8 @@ export async function saveSisterCompany(
   };
 
   try {
-    if (id) await prisma.sisterCompanySource.update({ where: { id }, data });
-    else await prisma.sisterCompanySource.create({ data });
+    if (id) await db.sisterCompanySource.update({ where: { id }, data });
+    else await db.sisterCompanySource.create({ data });
   } catch (error) {
     if (isUniqueConstraintError(error))
       return { fieldErrors: { name: "A source with this name already exists." } };
@@ -95,6 +97,7 @@ export async function saveVendor(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const gate = await requireOrgManager();
   if ("error" in gate) return gate;
   const id = String(formData.get("id") ?? "").trim();
@@ -115,8 +118,8 @@ export async function saveVendor(
   };
 
   try {
-    if (id) await prisma.vendor.update({ where: { id }, data });
-    else await prisma.vendor.create({ data });
+    if (id) await db.vendor.update({ where: { id }, data });
+    else await db.vendor.create({ data });
   } catch (error) {
     if (isUniqueConstraintError(error))
       return { fieldErrors: { name: "A vendor with this name already exists." } };
@@ -131,6 +134,7 @@ export async function saveClient(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const gate = await requireOrgManager();
   if ("error" in gate) return gate;
   const id = String(formData.get("id") ?? "").trim();
@@ -156,8 +160,8 @@ export async function saveClient(
   };
 
   try {
-    if (id) await prisma.client.update({ where: { id }, data });
-    else await prisma.client.create({ data });
+    if (id) await db.client.update({ where: { id }, data });
+    else await db.client.create({ data });
   } catch (error) {
     if (isUniqueConstraintError(error))
       return { fieldErrors: { name: "A client with this name already exists." } };
@@ -174,6 +178,7 @@ export async function saveTeam(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const gate = await requireOrgManager();
   if ("error" in gate) return gate;
   const id = String(formData.get("id") ?? "").trim();
@@ -185,8 +190,8 @@ export async function saveTeam(
 
   const data = { name: parsed.data.name, leadId: parsed.data.leadId ?? null };
   try {
-    if (id) await prisma.team.update({ where: { id }, data });
-    else await prisma.team.create({ data });
+    if (id) await db.team.update({ where: { id }, data });
+    else await db.team.create({ data });
   } catch (error) {
     if (isUniqueConstraintError(error))
       return { fieldErrors: { name: "A team with this name already exists." } };

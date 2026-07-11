@@ -10,6 +10,50 @@ short instead of long.
 
 ---
 
+## 2026-07-11 · Phase C — multi-tenancy foundation on one enforcement seam
+
+**Situation.** LuminTrack had no tenant boundary — every one of ~978 query sites read a single global
+dataset. The vision is to scale from one team to separate companies, so we needed an `organizationId`
+boundary that is *impossible* to leak across, without hand-editing 978 call sites.
+
+**Diagnosis / design.** The 90+ permission checks already funnel through one `can()` seam (Phase B), so
+the instinct was right: put enforcement in ONE place. A Prisma **client `$extends` query extension**
+(`orgScopeExtension`) injects `organizationId` into every read `where` and every create `data`. Three
+non-obvious things fell out of building it:
+
+1. **`extendedWhereUnique` (Prisma 7, GA) removes the findUnique problem.** You can add a non-unique
+   field to a unique `where`, so `findUnique({ where: { id, organizationId } })` returns `null` for
+   another tenant's id — no `findUnique→findFirst` rewrite needed. One uniform injection covers *every*
+   operation.
+2. **The extended client's `tx` is NOT assignable to `Prisma.TransactionClient`.** `$extends` produces
+   a branded client type; its transaction client is a different type. Every shared tx helper
+   (`logActivity`, `createSubmissionRecord`, the lifecycle helpers) rejected the scoped `tx` — 82 tsc
+   errors from one root cause. Fix: a single exported `Tx` type (`Omit<ScopedPrisma, control methods>`)
+   used by all of them.
+3. **Required `organizationId` would force it onto every create site** (incl. `logActivity`, called in
+   ~every transaction). A sentinel **`@default("")`** makes the column OPTIONAL in the create input, so
+   the extension can inject the real org while callers stay untouched — and a base-client create that
+   forgets it inserts `""` and fails the FK **loudly** (fail-closed). This turned a 250-site edit into a
+   mechanical `prisma`→`db` swap.
+
+**Fix.** `scopedPrisma(orgId)` + a request-memoized `getScopedPrisma()`; a mechanical sweep of 56 files
+from the base singleton to the scoped client (three parallel agents, verified by a "zero stray
+`prisma.`" grep). Base `prisma` survives at exactly **5 audited escape hatches** (health check, login +
+`getCurrentUser` bootstraps, and the two cron org-listers). The cron/backup path exposed a real trap:
+`purge`/`backup` helpers were reached by BOTH authed requests AND crons (no user session) — so they take
+an injected `db` param (authed callers pass `getScopedPrisma()`, crons iterate active orgs and pass
+`scopedPrisma(org.id)`), which is also what makes them multi-org-ready. Verified: two-org isolation
+(reads/`findUnique`/`updateMany`/`delete` all blocked cross-tenant), per-org role provisioning, the full
+demo seed org-stamped, and the whole dashboard rendering under the scoped client.
+
+**Lesson.** Enforcement belongs at a single seam, and the cheapest way to touch 978 sites is to *not*:
+make the boundary auto-injecting (extension + sentinel default) so call sites don't change, and reserve
+explicit wiring for the handful of cross-tenant system tasks. When a shared helper serves both a
+per-request and a system (cron) context, **inject the client** rather than resolving it internally —
+`getScopedPrisma()` needs a request; `scopedPrisma(orgId)` doesn't.
+
+---
+
 ## 2026-07-11 · Prod outage — schema-changing code deployed ahead of its deferred migration
 
 **Situation.** Right after Wave 1b (#79) merged to `main`, the owner reported "can't view the

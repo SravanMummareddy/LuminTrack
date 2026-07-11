@@ -1,4 +1,4 @@
-import { prisma } from "@/server/db";
+import { getScopedPrisma } from "@/lib/session";
 import type { Prisma } from "@/generated/prisma/client";
 import type {
   BenchPriority,
@@ -21,8 +21,9 @@ export type BenchListFilters = {
 
 /** Total bench consultants across every status/filter — used to show how many
  *  rows the active filters are hiding ("N hidden by filters"). */
-export function countAllBenchConsultants() {
-  return prisma.benchConsultant.count();
+export async function countAllBenchConsultants() {
+  const db = await getScopedPrisma();
+  return db.benchConsultant.count();
 }
 
 const BENCH_SORTS: Record<
@@ -65,6 +66,7 @@ function flattenBench<
 }
 
 export async function listBenchConsultants(filters: BenchListFilters) {
+  const db = await getScopedPrisma();
   const where: Prisma.BenchConsultantWhereInput = {};
   if (filters.priority) where.priority = filters.priority;
   if (filters.marketingStatuses?.length)
@@ -92,11 +94,11 @@ export async function listBenchConsultants(filters: BenchListFilters) {
       ? [sortFn(sort.dir), { id: "asc" }]
       : [sortFn(sort.dir), { fullName: "asc" }, { id: "asc" }];
 
-  const total = await prisma.benchConsultant.count({ where });
+  const total = await db.benchConsultant.count({ where });
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
 
-  const raw = await prisma.benchConsultant.findMany({
+  const raw = await db.benchConsultant.findMany({
     where,
     orderBy,
     skip: (page - 1) * PAGE_SIZE,
@@ -146,7 +148,8 @@ export async function getBenchConsultant(
   id: string,
   opts: { includeCredentials?: boolean } = {},
 ) {
-  return prisma.benchConsultant.findUnique({
+  const db = await getScopedPrisma();
+  return db.benchConsultant.findUnique({
     where: { id },
     omit: opts.includeCredentials ? {} : { marketingPassword: true },
     include: {
@@ -169,7 +172,8 @@ export async function getBenchConsultant(
 /** The linked bench row for a candidate (id + status), or null if not on the
  *  bench. Powers the "Marketing" line on the candidate detail page. */
 export async function getBenchLinkForCandidate(candidateId: string) {
-  return prisma.benchConsultant.findUnique({
+  const db = await getScopedPrisma();
+  return db.benchConsultant.findUnique({
     where: { candidateId },
     select: { id: true, marketingStatus: true },
   });
@@ -178,7 +182,8 @@ export async function getBenchLinkForCandidate(candidateId: string) {
 /** Raw row for the edit form (Decimals stringified for input defaults). The
  *  linked candidate carries technology (source of truth), so include it. */
 export async function getBenchConsultantForEdit(id: string) {
-  return prisma.benchConsultant.findUnique({
+  const db = await getScopedPrisma();
+  return db.benchConsultant.findUnique({
     where: { id },
     include: { candidate: { select: { technology: true } } },
   });

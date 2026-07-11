@@ -1,8 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/server/db";
-import { requireUser } from "@/lib/session";
+import { getScopedPrisma, requireUser } from "@/lib/session";
 import { logActivity } from "@/server/activity";
 import { interviewRoundSchema } from "@/lib/validation/interview";
 import { toFieldErrors } from "@/lib/validation/common";
@@ -49,6 +48,7 @@ export async function createInterviewRound(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const parsed = readRound(formData);
   if (!parsed.success)
@@ -58,21 +58,21 @@ export async function createInterviewRound(
     };
   const d = parsed.data;
 
-  const submission = await prisma.submission.findUnique({
+  const submission = await db.submission.findUnique({
     where: { id: d.submissionId },
     select: { id: true },
   });
   if (!submission) return { error: "This submission no longer exists." };
 
   // Rounds are unlimited and ordered — the next round continues the sequence.
-  const last = await prisma.interviewRound.findFirst({
+  const last = await db.interviewRound.findFirst({
     where: { submissionId: d.submissionId },
     orderBy: { roundOrder: "desc" },
     select: { roundOrder: true },
   });
   const roundOrder = (last?.roundOrder ?? 0) + 1;
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     const created = await tx.interviewRound.create({
       data: {
         submissionId: d.submissionId,
@@ -110,6 +110,7 @@ export async function updateInterviewRound(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const roundId = String(formData.get("id") ?? "").trim();
   if (!roundId) return { error: "Missing interview round reference." };
@@ -122,7 +123,7 @@ export async function updateInterviewRound(
     };
   const d = parsed.data;
 
-  const existing = await prisma.interviewRound.findUnique({
+  const existing = await db.interviewRound.findUnique({
     where: { id: roundId },
   });
   if (!existing) return { error: "This interview round no longer exists." };
@@ -141,7 +142,7 @@ export async function updateInterviewRound(
     : null;
   const scheduledChanged = prevSched !== nextSched;
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.interviewRound.update({
       where: { id: roundId },
       data: {
@@ -201,11 +202,12 @@ export async function updateInterviewRound(
 }
 
 export async function deleteInterviewRound(formData: FormData): Promise<void> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const roundId = String(formData.get("id") ?? "").trim();
   if (!roundId) return;
 
-  const existing = await prisma.interviewRound.findUnique({
+  const existing = await db.interviewRound.findUnique({
     where: { id: roundId },
     select: {
       id: true,
@@ -216,7 +218,7 @@ export async function deleteInterviewRound(formData: FormData): Promise<void> {
   });
   if (!existing) return;
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.interviewRound.delete({ where: { id: roundId } });
     await logActivity(tx, {
       entityType: "SUBMISSION",

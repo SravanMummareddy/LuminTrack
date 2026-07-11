@@ -1,8 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/server/db";
-import { requireUser } from "@/lib/session";
+import { getScopedPrisma, requireUser } from "@/lib/session";
 import { logActivity } from "@/server/activity";
 import {
   placementUpdateSchema,
@@ -45,6 +44,7 @@ export async function updatePlacement(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const parsed = placementUpdateSchema.safeParse({
     id: formData.get("id") ?? "",
@@ -70,7 +70,7 @@ export async function updatePlacement(
     };
   const d = parsed.data;
 
-  const existing = await prisma.placement.findUnique({
+  const existing = await db.placement.findUnique({
     where: { id: d.id },
     include: {
       submission: { select: { submittedById: true } },
@@ -160,7 +160,7 @@ export async function updatePlacement(
 
   if (!changed.length) return { ok: true };
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.placement.update({ where: { id: d.id }, data });
     await logActivity(tx, {
       entityType: "CANDIDATE",
@@ -181,6 +181,7 @@ export async function extendPlacement(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const parsed = placementExtendSchema.safeParse({
     id: formData.get("id") ?? "",
@@ -197,7 +198,7 @@ export async function extendPlacement(
     };
   const d = parsed.data;
 
-  const existing = await prisma.placement.findUnique({
+  const existing = await db.placement.findUnique({
     where: { id: d.id },
     include: {
       submission: { select: { submittedById: true } },
@@ -232,7 +233,7 @@ export async function extendPlacement(
     submittedById: existing.submission.submittedById,
   });
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.placementExtension.create({
       data: {
         placementId: d.id,
@@ -276,6 +277,7 @@ export async function endPlacement(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const parsed = placementEndSchema.safeParse({
     id: formData.get("id") ?? "",
@@ -291,7 +293,7 @@ export async function endPlacement(
     };
   const d = parsed.data;
 
-  const existing = await prisma.placement.findUnique({
+  const existing = await db.placement.findUnique({
     where: { id: d.id },
     include: {
       candidate: { select: { id: true, fullName: true, status: true } },
@@ -301,7 +303,7 @@ export async function endPlacement(
 
   // Replacement submission must exist and target the same job as this placement.
   if (d.replacementSubmissionId) {
-    const replacement = await prisma.submission.findUnique({
+    const replacement = await db.submission.findUnique({
       where: { id: d.replacementSubmissionId },
       select: { id: true, jobId: true, replacementFor: { select: { id: true } } },
     });
@@ -327,7 +329,7 @@ export async function endPlacement(
   // the bucket — only `COMPLETED` maps to ENDED, the rest are TERMINATED.
   const nextStatus = d.endReason === "COMPLETED" ? "ENDED" : "TERMINATED";
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.placement.update({
       where: { id: d.id },
       data: {

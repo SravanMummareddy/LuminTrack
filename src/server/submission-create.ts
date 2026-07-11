@@ -1,9 +1,7 @@
-import type { Prisma } from "@/generated/prisma/client";
 import type { BenchEngagement } from "@/generated/prisma/enums";
+import type { Tx } from "@/server/db";
 import { logActivity } from "@/server/activity";
 import { activateBenchOnSubmission } from "@/server/bench-lifecycle";
-
-type Tx = Prisma.TransactionClient;
 
 /**
  * Maps a `(candidateId, jobId)` pair to two signed 32-bit integers, suitable

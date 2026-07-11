@@ -10,6 +10,12 @@ import bcrypt from "bcryptjs";
 import { put } from "@vercel/blob";
 import { gzipForBlob } from "../src/server/blob-upload";
 import { seedRbac } from "../src/server/rbac-seed";
+import { orgScopeExtension } from "../src/server/db";
+import {
+  DEFAULT_ORG_ID,
+  DEFAULT_ORG_NAME,
+  DEFAULT_ORG_SLUG,
+} from "../src/lib/default-org";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, Prisma } from "../src/generated/prisma/client";
 import type {
@@ -28,7 +34,10 @@ const connectionString = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
 if (!connectionString) {
   throw new Error("DIRECT_URL / DATABASE_URL is not set. Fill in .env before seeding.");
 }
-const prisma = new PrismaClient({
+// The UNSCOPED base client — used for the wipe, creating the org, and RBAC
+// provisioning. All tenant DATA is created through `prisma` (redefined inside
+// main() as the org-scoped client), so every row is auto-stamped with the org.
+const baseDb = new PrismaClient({
   adapter: new PrismaPg({ connectionString }),
 });
 
@@ -557,36 +566,47 @@ async function main() {
   // almost everything, so they go first. Then placements → submissions → jobs/
   // candidates → org entities → users. Bench consultants reference both User and
   // Candidate, so they clear before either.
-  await prisma.activity.deleteMany();
-  await prisma.note.deleteMany();
+  await baseDb.activity.deleteMany();
+  await baseDb.note.deleteMany();
   // VendorRequirement holds Restrict FKs to Job — must go before jobs/candidates.
-  await prisma.vendorRequirement.deleteMany();
-  await prisma.placementExtension.deleteMany();
-  await prisma.placement.deleteMany();
-  await prisma.interviewRound.deleteMany();
-  await prisma.supportProvider.deleteMany();
-  await prisma.benchConsultant.deleteMany();
-  await prisma.submission.deleteMany();
-  await prisma.candidateDocument.deleteMany();
-  await prisma.candidateResume.deleteMany();
-  await prisma.jobAssignment.deleteMany();
-  await prisma.job.deleteMany();
-  await prisma.candidate.deleteMany();
-  await prisma.contact.deleteMany();
-  await prisma.vendor.deleteMany();
-  await prisma.client.deleteMany();
-  await prisma.sisterCompanySource.deleteMany();
-  await prisma.lookupOption.deleteMany();
+  await baseDb.vendorRequirement.deleteMany();
+  await baseDb.placementExtension.deleteMany();
+  await baseDb.placement.deleteMany();
+  await baseDb.interviewRound.deleteMany();
+  await baseDb.supportProvider.deleteMany();
+  await baseDb.benchConsultant.deleteMany();
+  await baseDb.submission.deleteMany();
+  await baseDb.candidateDocument.deleteMany();
+  await baseDb.candidateResume.deleteMany();
+  await baseDb.jobAssignment.deleteMany();
+  await baseDb.job.deleteMany();
+  await baseDb.candidate.deleteMany();
+  await baseDb.contact.deleteMany();
+  await baseDb.vendor.deleteMany();
+  await baseDb.client.deleteMany();
+  await baseDb.sisterCompanySource.deleteMany();
+  await baseDb.lookupOption.deleteMany();
   // Glossary: notes cascade on user delete, but custom terms Restrict — remove
   // them first so the user wipe doesn't fail.
-  await prisma.customGlossaryTerm.deleteMany();
-  await prisma.glossaryNote.deleteMany();
+  await baseDb.customGlossaryTerm.deleteMany();
+  await baseDb.glossaryNote.deleteMany();
   // Team ↔ User FKs are both SetNull, so neither delete blocks the other.
-  await prisma.team.deleteMany();
-  await prisma.rolePermission.deleteMany();
-  await prisma.role.deleteMany();
-  await prisma.permission.deleteMany();
-  await prisma.user.deleteMany();
+  await baseDb.team.deleteMany();
+  await baseDb.rolePermission.deleteMany();
+  await baseDb.role.deleteMany();
+  await baseDb.permission.deleteMany();
+  await baseDb.user.deleteMany();
+  // Organizations last — users/roles hold Restrict FKs to it, so they clear first.
+  await baseDb.organization.deleteMany();
+
+  // ── Default organization (tenant boundary) ──
+  // Every row below belongs to this one org. `prisma` is redefined here as the
+  // org-scoped client, so all the create/createMany calls that follow are
+  // auto-stamped with `organizationId` — no per-row change needed.
+  await baseDb.organization.create({
+    data: { id: DEFAULT_ORG_ID, name: DEFAULT_ORG_NAME, slug: DEFAULT_ORG_SLUG },
+  });
+  const prisma = baseDb.$extends(orgScopeExtension(DEFAULT_ORG_ID));
 
   // ── Learned dropdown values (a few non-default extras, to show the
   //    "remembered" behaviour alongside the curated defaults) ──
@@ -630,7 +650,7 @@ async function main() {
   }
   // RBAC: seed the permission catalog + system roles and backfill each user's
   // roleId from its enum role (idempotent — see src/server/rbac-seed.ts).
-  await seedRbac(prisma);
+  await seedRbac(baseDb, DEFAULT_ORG_ID);
   // Sriman is the primary manager (used as createdBy / assignedBy across the seed).
   const admin = allUsers.find((u) => u.email === ADMIN_LOGIN)!;
   const ceo = allUsers.find((u) => u.email === CEO_LOGIN)!;
@@ -1927,4 +1947,4 @@ main()
     console.error(err);
     process.exitCode = 1;
   })
-  .finally(() => prisma.$disconnect());
+  .finally(() => baseDb.$disconnect());

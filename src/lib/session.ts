@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
-import { prisma } from "@/server/db";
+import { prisma, scopedPrisma } from "@/server/db";
 import {
   SESSION_COOKIE,
   SESSION_MAX_AGE,
@@ -70,3 +70,17 @@ export async function requireUser() {
   if (!user) redirect("/api/auth/logout");
   return user;
 }
+
+/**
+ * The tenant-scoped Prisma client for the current request — the client every
+ * query and action should use instead of the unscoped `prisma` singleton. It
+ * resolves the acting user's `organizationId` once (memoized per request via
+ * React `cache`) and returns a `scopedPrisma(orgId)` that injects the org filter
+ * into every query. Start transactions from it so `tx` stays scoped too:
+ *   const db = await getScopedPrisma();
+ *   await db.$transaction(async (tx) => { ... });
+ */
+export const getScopedPrisma = cache(async () => {
+  const user = await requireUser();
+  return scopedPrisma(user.organizationId);
+});

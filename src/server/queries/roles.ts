@@ -1,4 +1,4 @@
-import { prisma } from "@/server/db";
+import { getScopedPrisma } from "@/lib/session";
 
 export type RoleRow = {
   id: string;
@@ -11,7 +11,8 @@ export type RoleRow = {
 
 /** All roles for the Settings → Roles tab: system roles first, then custom. */
 export async function listRoles(): Promise<RoleRow[]> {
-  const roles = await prisma.role.findMany({
+  const db = await getScopedPrisma();
+  const roles = await db.role.findMany({
     orderBy: [{ isSystem: "desc" }, { name: "asc" }],
     select: {
       id: true,
@@ -37,7 +38,8 @@ export type RoleOption = { id: string; name: string; isManagerTier: boolean };
 /** Roles for the user-form "Role" picker. `isManagerTier` flags roles that grant
  *  the manager tier, so only a user with grant-manager rights can assign them. */
 export async function listRoleOptions(): Promise<RoleOption[]> {
-  const roles = await prisma.role.findMany({
+  const db = await getScopedPrisma();
+  const roles = await db.role.findMany({
     orderBy: [{ isSystem: "desc" }, { name: "asc" }],
     select: {
       id: true,

@@ -1,4 +1,4 @@
-import { prisma } from "@/server/db";
+import { getScopedPrisma } from "@/lib/session";
 import type { Prisma } from "@/generated/prisma/client";
 import type {
   InterviewResult,
@@ -27,16 +27,17 @@ export async function getCandidateInterviewsGroupedByJob(
   candidateId: string,
   opts: { page?: number } = {},
 ) {
+  const db = await getScopedPrisma();
   // A submission is in the grouped view if it has at least one round.
   const where = {
     candidateId,
     interviewRounds: { some: {} },
   };
-  const total = await prisma.submission.count({ where });
+  const total = await db.submission.count({ where });
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const page = Math.min(Math.max(1, opts.page ?? 1), totalPages);
 
-  const rows = await prisma.submission.findMany({
+  const rows = await db.submission.findMany({
     where,
     // Most-recently-active submission first. We can't `orderBy: { interviewRounds: { _max: { scheduledAt: "desc" } } }`
     // directly in Prisma 7 so we fall back to the submission's own activity timestamp;
@@ -119,6 +120,7 @@ export const INTERVIEW_DEFAULT_SORT: SortState = { key: "date", dir: "desc" };
  * sheet stays clean. Each row links back to its candidate and submission.
  */
 export async function listInterviews(filters: InterviewListFilters) {
+  const db = await getScopedPrisma();
   const where: Prisma.InterviewRoundWhereInput = { scheduledAt: { not: null } };
   if (filters.scheduledRange?.gte || filters.scheduledRange?.lte)
     where.scheduledAt = { not: null, ...filters.scheduledRange };
@@ -160,11 +162,11 @@ export async function listInterviews(filters: InterviewListFilters) {
     { id: "asc" },
   ];
 
-  const total = await prisma.interviewRound.count({ where });
+  const total = await db.interviewRound.count({ where });
   const totalPages = Math.max(1, Math.ceil(total / LIST_PAGE_SIZE));
   const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
 
-  const rows = await prisma.interviewRound.findMany({
+  const rows = await db.interviewRound.findMany({
     where,
     orderBy,
     skip: (page - 1) * LIST_PAGE_SIZE,

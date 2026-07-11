@@ -1,8 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/server/db";
-import { requireUser } from "@/lib/session";
+import { getScopedPrisma, requireUser } from "@/lib/session";
 import { logActivity } from "@/server/activity";
 import { noteSchema } from "@/lib/validation/note";
 import { toFieldErrors } from "@/lib/validation/common";
@@ -12,6 +11,7 @@ export async function createNote(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const parsed = noteSchema.safeParse({
     entityType: formData.get("entityType") ?? "",
@@ -37,7 +37,7 @@ export async function createNote(
   const snippet = d.body.length > 80 ? `${d.body.slice(0, 80)}…` : d.body;
 
   try {
-    await prisma.$transaction(async (tx) => {
+    await db.$transaction(async (tx) => {
       // Verify the polymorphic target actually exists inside the same
       // transaction — without this, a forged entityId would create an orphan
       // note (the FK columns are independent nullable scalars, not enforced

@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import { prisma } from "@/server/db";
+import type { ScopedPrisma } from "@/server/db";
 
 /**
  * Builds a downloadable zip archive of a job requisition — the requisition
@@ -9,9 +9,12 @@ import { prisma } from "@/server/db";
  * Returns null if the job doesn't exist.
  */
 export async function buildJobArchive(
+  // Tenant-scoped client — authed callers pass getScopedPrisma(); the cron purge
+  // passes scopedPrisma(org.id) per org (no user session).
+  db: ScopedPrisma,
   jobId: string,
 ): Promise<{ zip: Buffer; jobTitle: string; displayId: string } | null> {
-  const j = await prisma.job.findUnique({
+  const j = await db.job.findUnique({
     where: { id: jobId },
     include: {
       client: { select: { name: true } },

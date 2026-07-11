@@ -3,8 +3,7 @@
 import { del } from "@vercel/blob";
 import { uploadPrivateFile } from "@/server/blob-upload";
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/server/db";
-import { requireUser } from "@/lib/session";
+import { getScopedPrisma, requireUser } from "@/lib/session";
 import { logActivity } from "@/server/activity";
 import { candidateDocumentSchema } from "@/lib/validation/candidate-document";
 import { uploadFileError } from "@/lib/validation/upload-file";
@@ -46,6 +45,7 @@ export async function createCandidateDocument(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const parsed = readDocument(formData);
   if (!parsed.success)
@@ -68,7 +68,7 @@ export async function createCandidateDocument(
   const fileErr = uploadFileError(file);
   if (fileErr) return { error: fileErr, fieldErrors: { file: fileErr } };
 
-  const candidate = await prisma.candidate.findUnique({
+  const candidate = await db.candidate.findUnique({
     where: { id: d.candidateId },
     select: { id: true },
   });
@@ -79,7 +79,7 @@ export async function createCandidateDocument(
     file,
   );
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     const created = await tx.candidateDocument.create({
       data: {
         candidateId: d.candidateId,
@@ -114,6 +114,7 @@ export async function updateCandidateDocument(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const docId = String(formData.get("id") ?? "").trim();
   if (!docId) return { error: "Missing document reference." };
@@ -126,7 +127,7 @@ export async function updateCandidateDocument(
     };
   const d = parsed.data;
 
-  const existing = await prisma.candidateDocument.findUnique({
+  const existing = await db.candidateDocument.findUnique({
     where: { id: docId },
     select: { id: true, category: true, candidateId: true },
   });
@@ -141,7 +142,7 @@ export async function updateCandidateDocument(
     return { error: "Only admins can edit Identity or Work Authorization documents." };
   }
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.candidateDocument.update({
       where: { id: docId },
       data: {
@@ -166,11 +167,12 @@ export async function updateCandidateDocument(
 }
 
 export async function deleteCandidateDocument(formData: FormData): Promise<void> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const docId = String(formData.get("id") ?? "").trim();
   if (!docId) return;
 
-  const existing = await prisma.candidateDocument.findUnique({
+  const existing = await db.candidateDocument.findUnique({
     where: { id: docId },
     select: {
       id: true,
@@ -186,7 +188,7 @@ export async function deleteCandidateDocument(formData: FormData): Promise<void>
     return;
   }
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.candidateDocument.delete({ where: { id: docId } });
     await logActivity(tx, {
       entityType: "CANDIDATE",

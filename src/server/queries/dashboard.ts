@@ -1,4 +1,4 @@
-import { prisma } from "@/server/db";
+import { getScopedPrisma } from "@/lib/session";
 import {
   buildJobWhere,
   buildSubmissionWhere,
@@ -14,15 +14,16 @@ import type { JobStatus, SubmissionStatus } from "@/generated/prisma/enums";
  * — fine for a small internal team's data volume.
  */
 export async function getDashboardData(filters: AnalyticsFilters) {
+  const db = await getScopedPrisma();
   const [jobs, submissions, recruiters] = await Promise.all([
-    prisma.job.findMany({
+    db.job.findMany({
       where: buildJobWhere(filters),
       select: {
         status: true,
         _count: { select: { assignments: true } },
       },
     }),
-    prisma.submission.findMany({
+    db.submission.findMany({
       where: buildSubmissionWhere(filters),
       select: {
         status: true,
@@ -30,7 +31,7 @@ export async function getDashboardData(filters: AnalyticsFilters) {
         _count: { select: { interviewRounds: true } },
       },
     }),
-    prisma.user.findMany({
+    db.user.findMany({
       // Same performer universe as the Recruiters page and Reports
       // (PERFORMANCE_ROLES) — a submitting manager/team lead is ranked too.
       where: { isActive: true, role: { in: PERFORMANCE_ROLES } },
@@ -103,10 +104,11 @@ export type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;
  * full table. Older items first so the most-stuck rows surface.
  */
 export async function getMyWork(userId: string) {
+  const db = await getScopedPrisma();
   const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000);
 
   const [staleSubmissions, pendingRounds, pendingRequirements] = await Promise.all([
-    prisma.submission.findMany({
+    db.submission.findMany({
       where: {
         submittedById: userId,
         // In-flight = not yet in a terminal state. Anything still moving
@@ -128,7 +130,7 @@ export async function getMyWork(userId: string) {
         job: { select: { title: true } },
       },
     }),
-    prisma.interviewRound.findMany({
+    db.interviewRound.findMany({
       where: {
         updatedById: userId,
         result: { in: ["WAITING", "NEED_ANOTHER_ROUND"] },
@@ -153,7 +155,7 @@ export async function getMyWork(userId: string) {
     // OPEN vendor requirements assigned to this recruiter — planning records
     // waiting to be moved to a submission. Only surface ones whose job is still
     // accepting, so the card never points the recruiter at a convert dead-end.
-    prisma.vendorRequirement.findMany({
+    db.vendorRequirement.findMany({
       where: {
         recruiterId: userId,
         status: "OPEN",
@@ -182,7 +184,8 @@ export async function getMyWork(userId: string) {
 export async function getMissingResumeSubmissions(
   opts: { scope: "me" | "org"; userId: string; limit?: number },
 ) {
-  return prisma.submission.findMany({
+  const db = await getScopedPrisma();
+  return db.submission.findMany({
     where: {
       ...(opts.scope === "me" ? { submittedById: opts.userId } : {}),
       status: { notIn: ["REJECTED", "JOINED", "BACKED_OUT"] },
@@ -216,7 +219,8 @@ export type MyWork = Awaited<ReturnType<typeof getMyWork>>;
  * `description` is already human-readable, e.g. `Jane submitted to "…"`).
  */
 export async function getMyRecentActivity(userId: string, limit = 8) {
-  const rows = await prisma.activity.findMany({
+  const db = await getScopedPrisma();
+  const rows = await db.activity.findMany({
     where: { performedById: userId },
     orderBy: { createdAt: "desc" },
     take: limit,
@@ -283,7 +287,8 @@ export type MyRecentActivity = Awaited<ReturnType<typeof getMyRecentActivity>>;
  * is pulled so the row can format JOB-00123 alongside the title.
  */
 export async function getMyAssignedJobs(userId: string) {
-  const rows = await prisma.jobAssignment.findMany({
+  const db = await getScopedPrisma();
+  const rows = await db.jobAssignment.findMany({
     where: {
       recruiterId: userId,
       job: { status: { in: ["OPEN", "ON_HOLD"] } },
@@ -320,15 +325,16 @@ export type MyAssignedJobs = Awaited<ReturnType<typeof getMyAssignedJobs>>;
  * submission exists, then the card disappears.
  */
 export async function getOnboardingStatus() {
+  const db = await getScopedPrisma();
   const exists = async (
     p: Promise<{ id: string } | null>,
   ): Promise<boolean> => Boolean(await p);
   const [hasJobs, hasCandidates, hasAssignments, hasSubmissions] =
     await Promise.all([
-      exists(prisma.job.findFirst({ select: { id: true } })),
-      exists(prisma.candidate.findFirst({ select: { id: true } })),
-      exists(prisma.jobAssignment.findFirst({ select: { id: true } })),
-      exists(prisma.submission.findFirst({ select: { id: true } })),
+      exists(db.job.findFirst({ select: { id: true } })),
+      exists(db.candidate.findFirst({ select: { id: true } })),
+      exists(db.jobAssignment.findFirst({ select: { id: true } })),
+      exists(db.submission.findFirst({ select: { id: true } })),
     ]);
   return { hasJobs, hasCandidates, hasAssignments, hasSubmissions };
 }

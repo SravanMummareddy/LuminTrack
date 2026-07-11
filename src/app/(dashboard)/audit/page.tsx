@@ -5,9 +5,8 @@ import { Forbidden, MANAGER_ONLY_FORBIDDEN } from "@/components/ui/forbidden";
 import { Table, Th, Td } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Pagination } from "@/components/ui/pagination";
-import { requireUser } from "@/lib/session";
+import { requireUser, getScopedPrisma } from "@/lib/session";
 import { isManagerTier } from "@/lib/permissions";
-import { prisma } from "@/server/db";
 import { formatDateTime, deletedSuffix } from "@/lib/format";
 import { ActivityAction } from "@/generated/prisma/enums";
 
@@ -25,6 +24,8 @@ export default async function AuditPage({
 }) {
   const user = await requireUser();
   if (!isManagerTier(user)) return <Forbidden message={MANAGER_ONLY_FORBIDDEN} />;
+
+  const db = await getScopedPrisma();
 
   const sp = await searchParams;
   const get = (k: string) =>
@@ -63,7 +64,7 @@ export default async function AuditPage({
   };
 
   const [rows, total, users] = await Promise.all([
-    prisma.activity.findMany({
+    db.activity.findMany({
       where,
       orderBy: { createdAt: "desc" },
       take: PAGE_SIZE,
@@ -110,8 +111,8 @@ export default async function AuditPage({
         requirement: { select: { job: { select: { title: true } } } },
       },
     }),
-    prisma.activity.count({ where }),
-    prisma.user.findMany({
+    db.activity.count({ where }),
+    db.user.findMany({
       where: { isActive: true },
       orderBy: { fullName: "asc" },
       select: { id: true, fullName: true },

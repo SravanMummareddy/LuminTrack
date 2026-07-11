@@ -3,8 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { del } from "@vercel/blob";
-import { prisma } from "@/server/db";
-import { requireUser } from "@/lib/session";
+import { getScopedPrisma, requireUser } from "@/lib/session";
 import {
   canQuickAddOrgEntities,
   canEditJobRatesAndAssignment,
@@ -21,19 +20,19 @@ import { jobSchema, JOB_STATUS_VALUES } from "@/lib/validation/job";
 import { toFieldErrors } from "@/lib/validation/common";
 import { JOB_STATUS_LABEL, OTHER_SOURCE, NEW_ORG_ENTITY } from "@/lib/labels";
 import type { FormState } from "@/lib/form-state";
-import type { Prisma } from "@/generated/prisma/client";
+import type { Tx } from "@/server/db";
 
 /** Resolve a "+ Add new client/vendor" sentinel to an id: reuse a case-
  *  insensitive name match if one exists, else create the record. Mirrors the
  *  iLabor importer's create-if-missing so "Acme" and "ACME" don't fork. */
-async function findOrCreateClient(tx: Prisma.TransactionClient, name: string) {
+async function findOrCreateClient(tx: Tx, name: string) {
   const existing = await tx.client.findFirst({
     where: { name: { equals: name, mode: "insensitive" } },
     select: { id: true },
   });
   return existing ?? (await tx.client.create({ data: { name }, select: { id: true } }));
 }
-async function findOrCreateVendor(tx: Prisma.TransactionClient, name: string) {
+async function findOrCreateVendor(tx: Tx, name: string) {
   const existing = await tx.vendor.findFirst({
     where: { name: { equals: name, mode: "insensitive" } },
     select: { id: true },
@@ -88,6 +87,7 @@ export async function createJob(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const parsed = readJob(formData);
   if (!parsed.success)
@@ -117,7 +117,7 @@ export async function createJob(
   if (Object.keys(orgErrors).length)
     return { error: "Please fix the highlighted fields.", fieldErrors: orgErrors };
 
-  const job = await prisma.$transaction(async (tx) => {
+  const job = await db.$transaction(async (tx) => {
     // Resolve inline-added client/vendor first (create-or-reuse by name).
     const clientId = wantNewClient
       ? (await findOrCreateClient(tx, newClientName)).id
@@ -175,6 +175,7 @@ export async function updateJob(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const jobId = String(formData.get("id") ?? "").trim();
   if (!jobId) return { error: "Missing job reference." };
@@ -190,7 +191,7 @@ export async function updateJob(
   const nextSourceId = isOtherSource ? null : d.sisterCompanySourceId;
   const nextSourceOther = isOtherSource ? (d.sourceOther ?? null) : null;
 
-  const existing = await prisma.job.findUnique({ where: { id: jobId } });
+  const existing = await db.job.findUnique({ where: { id: jobId } });
   if (!existing) return { error: "This job no longer exists." };
 
   // Recruiters may edit basic job details + status, but NOT the commercial
@@ -266,7 +267,7 @@ export async function updateJob(
   const nextSkills = parseSkillsCsv(d.skills);
   compare("skills", existing.skills.join(", "), nextSkills.join(", "));
 
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.job.update({
       where: { id: jobId },
       data: {
@@ -323,6 +324,7 @@ export async function changeJobStatus(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   const jobId = String(formData.get("id") ?? "").trim();
   const status = String(formData.get("status") ?? "");
@@ -330,7 +332,7 @@ export async function changeJobStatus(
   if (!(JOB_STATUS_VALUES as readonly string[]).includes(status))
     return { error: "That status is not valid." };
 
-  const job = await prisma.job.findUnique({ where: { id: jobId } });
+  const job = await db.job.findUnique({ where: { id: jobId } });
   if (!job) return { error: "This job no longer exists." };
   if (job.status === status)
     return { error: "Status is already set to that value." };
@@ -344,7 +346,7 @@ export async function changeJobStatus(
   const vprVerb = fulfilled ? "fulfilled" : "cancelled";
 
   let closedVprs = 0;
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.job.update({ where: { id: jobId }, data: { status: next } });
     if (closing) {
       const res = await tx.vendorRequirement.updateMany({
@@ -392,6 +394,7 @@ export async function changeJobStatus(
 export async function bulkChangeJobStatus(
   formData: FormData,
 ): Promise<{ changed: number; skipped: number }> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   // Blast radius: up to 200 jobs, each cascading its open VPRs to
   // CANCELLED/CONVERTED. Restrict to managers / team leads, mirroring
@@ -410,11 +413,11 @@ export async function bulkChangeJobStatus(
   ].slice(0, 200);
   if (!ids.length) return { changed: 0, skipped: 0 };
 
-  const jobs = await prisma.job.findMany({
+  const jobs = await db.job.findMany({
     where: { id: { in: ids }, status: { not: next } },
     select: { id: true, status: true },
   });
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     for (const j of jobs) {
       await tx.job.update({ where: { id: j.id }, data: { status: next } });
       // Same cascade as the single close/trash: retire the job's open reqs.
@@ -460,12 +463,13 @@ export async function trashJob(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   if (!hasFullAccess(user))
     return { error: "Only managers and team leads can trash a job." };
 
   const jobId = String(formData.get("id") ?? "").trim();
-  const job = await prisma.job.findUnique({
+  const job = await db.job.findUnique({
     where: { id: jobId },
     select: { status: true, deletedAt: true, erasedAt: true },
   });
@@ -473,7 +477,7 @@ export async function trashJob(
   if (job.erasedAt) return { error: "This job has already been erased." };
   if (job.deletedAt) return { error: "This job is already in trash." };
 
-  const activePlacements = await prisma.placement.count({
+  const activePlacements = await db.placement.count({
     where: { jobId, status: { in: ["ACTIVE", "EXTENDED"] } },
   });
   if (activePlacements > 0)
@@ -485,7 +489,7 @@ export async function trashJob(
   const purgeOn = new Date(
     Date.now() + JOB_TRASH_RETENTION_DAYS * 86_400_000,
   );
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.job.update({
       where: { id: jobId },
       data: {
@@ -514,11 +518,12 @@ export async function trashJob(
 
 /** Restore a trashed job before the retention window lapses (keeps its status). */
 export async function restoreJobFromTrash(formData: FormData): Promise<void> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   if (!hasFullAccess(user)) return;
   const jobId = String(formData.get("id") ?? "").trim();
   if (!jobId) return;
-  await prisma.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.job.update({
       where: { id: jobId },
       data: { deletedAt: null },
@@ -544,13 +549,14 @@ export async function eraseJobNow(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   if (!hasFullAccess(user))
     return { error: "Only managers and team leads can erase a job." };
 
   const jobId = String(formData.get("id") ?? "").trim();
   const confirmTitle = String(formData.get("confirmTitle") ?? "").trim();
-  const job = await prisma.job.findUnique({
+  const job = await db.job.findUnique({
     where: { id: jobId },
     select: { title: true, deletedAt: true, erasedAt: true },
   });
@@ -563,7 +569,7 @@ export async function eraseJobNow(
       fieldErrors: { confirmTitle: "Type the job's title exactly to confirm." },
     };
 
-  await hardEraseJob(jobId, user.id);
+  await hardEraseJob(db, jobId, user.id);
   revalidatePath("/jobs");
   // The row may be gone (empty job) — send them to the list, not a 404 detail.
   redirect("/jobs?trash=1");
@@ -574,6 +580,7 @@ export async function eraseJobNow(
  * Admin only; confined to the job-archive prefix.
  */
 export async function removeJobArchive(formData: FormData): Promise<void> {
+  const db = await getScopedPrisma();
   const user = await requireUser();
   if (!hasFullAccess(user)) return;
   const pathname = String(formData.get("pathname") ?? "").trim();
@@ -587,7 +594,7 @@ export async function removeJobArchive(formData: FormData): Promise<void> {
   // delete can't join a DB transaction, so the audit row is logged separately
   // after it (worst case is an audit gap on a crash, not a data problem).
   // (review IN-02)
-  await logActivity(prisma, {
+  await logActivity(db, {
     entityType: "JOB",
     action: "JOB_ERASED",
     description: `Removed job backup ${pathname.split("/").pop()} — no longer recoverable`,

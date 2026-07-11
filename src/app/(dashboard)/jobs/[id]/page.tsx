@@ -7,13 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { Table, Th, Td } from "@/components/ui/table";
 import { ActivityTimeline } from "@/components/timeline/activity-timeline";
 import { NotesSection } from "@/components/notes/notes-section";
-import { prisma } from "@/server/db";
 import { getJobDetail } from "@/server/queries/jobs";
 import { getJobSubmissions } from "@/server/queries/submissions";
 import { getRequirementsForJob } from "@/server/queries/requirements";
 import { getTimelineFor } from "@/server/queries/timeline";
 import { getNotesFor } from "@/server/queries/notes";
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser, getScopedPrisma } from "@/lib/session";
 import { canManageRequirements } from "@/lib/permissions";
 import { JobStatusForm } from "@/components/jobs/job-status-form";
 import { JobPipelineSteps } from "@/components/jobs/job-pipeline-steps";
@@ -84,6 +83,7 @@ export default async function JobDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  const db = await getScopedPrisma();
   const { id } = await params;
   const sp = await searchParams;
   const subsPage = parsePage(
@@ -107,7 +107,7 @@ export default async function JobDetailPage({
     getNotesFor("JOB", id),
     getRequirementsForJob(id),
     getCurrentUser(),
-    prisma.submission.count({
+    db.submission.count({
       where: {
         jobId: id,
         status: {
@@ -125,7 +125,7 @@ export default async function JobDetailPage({
       },
     }),
     // Seats actually filled right now — active placements against this job.
-    prisma.placement.count({
+    db.placement.count({
       where: { jobId: id, status: { in: ["ACTIVE", "EXTENDED"] } },
     }),
   ]);

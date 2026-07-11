@@ -1,8 +1,7 @@
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser, getScopedPrisma } from "@/lib/session";
 import { isManagerTier } from "@/lib/permissions";
 import { Forbidden, MANAGER_ONLY_FORBIDDEN } from "@/components/ui/forbidden";
 import { PageHeader } from "@/components/ui/page-header";
-import { prisma } from "@/server/db";
 import { getBackupPreflight } from "@/server/exporters/build-backup-json";
 import { ExportForm } from "@/components/settings/export-form";
 import { formatDateTime } from "@/lib/format";
@@ -12,9 +11,11 @@ export default async function ExportPage() {
   if (!user) return <Forbidden message="Sign in required." />;
   if (!isManagerTier(user)) return <Forbidden message={MANAGER_ONLY_FORBIDDEN} />;
 
+  const db = await getScopedPrisma();
+
   const [{ totals }, history] = await Promise.all([
     getBackupPreflight(),
-    prisma.activity.findMany({
+    db.activity.findMany({
       where: { action: "DATA_EXPORTED" },
       include: { performedBy: { select: { fullName: true } } },
       orderBy: { createdAt: "desc" },
