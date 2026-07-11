@@ -38,8 +38,36 @@ No schema/migration. No new dep.
 - [ ] Keyboard: ↑↓/Enter/Esc/Home/End + type-ahead; click-outside closes. (partially exercised)
 - [ ] Native `required` no longer enforced client-side on hidden input — Zod server validation still gates required selects (confirm a required select left blank is rejected server-side).
 
+## Phase B — Dynamic RBAC
+
+Migration `20260711160000_rbac_roles_permissions` (Permission/Role/RolePermission + User.roleId).
+**Dev-applied + seeded. PROD NOT APPLIED** — coordinate with the code deploy, then run `seedRbac`.
+Expand step only — the `UserRole` enum is kept; a later contract migration drops it.
+
+### Refactor (parity — no behavior change)
+- [x] `permissions.ts` predicates now shim over `can(viewer, key)`; `{role:x}` literals still work via the enum→template fallback.
+- [x] Unit: `permissions.test.ts` (40) unchanged-green + `permission-catalog.test.ts` (8 new) lock the catalog↔template map + the can() bridge.
+- [x] Inline authz migrated: placements rate-mask → `canViewFinancials`; user governance → `canGrantManagerRole`.
+- [ ] Smoke every tier still sees exactly what it did before (recruiter / team-lead / manager) — nav, financials, VPR, sensitive docs, settings. (browser)
+
+### Seed + hydration
+- [x] `seedRbac` idempotent: catalog + 3 system roles (Manager 14 / Team Lead 9 / Recruiter 2) + backfill roleId (0 users unassigned). Wired into `seed-demo.ts`.
+- [x] `getCurrentUser` hydrates `permissions` from the assigned role; `saveUser` syncs `roleId` from the enum role.
+- [ ] Reseed (`npx tsx prisma/seed-demo.ts`) still succeeds end-to-end with the RBAC step. (needs run)
+
+### Roles admin UI (Settings → Roles)
+- [x] Roles tab lists Manager/Team Lead/Recruiter with permission + user counts — verified on dev (14/2, 2/8, 9/2).
+- [x] Edit a system role: name locked ("System roles can't be renamed"), permission grid shows correct grants — verified on dev (Team Lead: 9 boxes, no "Analytics/reports").
+- [x] Create a custom role ("Sourcer", 2 perms) via real saveRole → appears as Custom in list — verified on dev.
+- [ ] Delete guard: custom role with 0 users deletes; system role / role-with-users blocked. (unit logic in action; not browser-exercised)
+- [ ] Lock-out guard: unticking "Manage roles" on the last granting role is rejected. (unit logic in action; not browser-exercised)
+- [ ] NOTE: a test "Sourcer" role exists on the dev DB — cleared by the next reseed.
+
+### Known follow-up (not in this slice)
+- Assigning **custom** roles to users still uses the enum picker (needs a `Role.baseRole` enum default so custom-role users get a sensible enum for the data-classification code). Editing system-role permissions works today; assigning custom roles to people is the next step.
+
 ## Cross-cutting
-- [ ] `npm run build` clean; full unit suite green (currently 204).
+- [ ] `npm run build` clean; full unit suite green (currently 212).
 - [ ] Coordinated prod deploy: apply migration → promote code in one window; smoke-test login + `/org-chart`.
 </content>
 </invoke>

@@ -1,6 +1,7 @@
 import { prisma } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
-import type { PlacementStatus } from "@/generated/prisma/enums";
+import type { PlacementStatus, UserRole } from "@/generated/prisma/enums";
+import { canViewFinancials } from "@/lib/permissions";
 import {
   PAGE_SIZE,
   SUB_PAGE_SIZE,
@@ -94,7 +95,7 @@ function maskRatesForViewer<
   },
 >(row: T, viewer: PlacementViewer) {
   const canSee =
-    viewer.role !== "RECRUITER" ||
+    canViewFinancials({ role: viewer.role as UserRole }) ||
     row.submission.submittedBy.id === viewer.id;
   return {
     ...row,

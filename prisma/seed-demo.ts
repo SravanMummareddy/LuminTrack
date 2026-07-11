@@ -9,6 +9,7 @@ import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { put } from "@vercel/blob";
 import { gzipForBlob } from "../src/server/blob-upload";
+import { seedRbac } from "../src/server/rbac-seed";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, Prisma } from "../src/generated/prisma/client";
 import type {
@@ -582,6 +583,9 @@ async function main() {
   await prisma.glossaryNote.deleteMany();
   // Team ↔ User FKs are both SetNull, so neither delete blocks the other.
   await prisma.team.deleteMany();
+  await prisma.rolePermission.deleteMany();
+  await prisma.role.deleteMany();
+  await prisma.permission.deleteMany();
   await prisma.user.deleteMany();
 
   // ── Learned dropdown values (a few non-default extras, to show the
@@ -624,6 +628,9 @@ async function main() {
     });
     allUsers.push({ ...created, teamKey: u.teamKey });
   }
+  // RBAC: seed the permission catalog + system roles and backfill each user's
+  // roleId from its enum role (idempotent — see src/server/rbac-seed.ts).
+  await seedRbac(prisma);
   // Sriman is the primary manager (used as createdBy / assignedBy across the seed).
   const admin = allUsers.find((u) => u.email === ADMIN_LOGIN)!;
   const ceo = allUsers.find((u) => u.email === CEO_LOGIN)!;
