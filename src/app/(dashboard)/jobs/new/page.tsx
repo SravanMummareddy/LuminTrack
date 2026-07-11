@@ -7,7 +7,7 @@ import {
   listSisterCompanies,
 } from "@/server/queries/org";
 import { getCurrentUser } from "@/lib/session";
-import { hasFullAccess } from "@/lib/permissions";
+import { canQuickAddOrgEntities, hasFullAccess } from "@/lib/permissions";
 
 export default async function NewJobPage() {
   const [clients, vendors, sources, user] = await Promise.all([
@@ -27,7 +27,7 @@ export default async function NewJobPage() {
           vendors={vendors}
           sources={sources}
           submitLabel="Create job"
-          canCreateOrgEntities={hasFullAccess(user)}
+          canCreateOrgEntities={canQuickAddOrgEntities(user)}
           canManageRatesAndAssignment={hasFullAccess(user)}
         />
       </div>

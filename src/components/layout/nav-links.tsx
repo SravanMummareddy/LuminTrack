@@ -68,11 +68,30 @@ const NAV_GROUPS: NavGroup[] = [
   { divider: true, items: [{ href: "/settings", label: "Settings", icon: Settings }] },
 ];
 
-export function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+// The restricted tier (recruiter + team lead) sees the operational surface only:
+// the Insights group (Recruiters/Reports) and Settings are dropped, and the "/"
+// home is relabelled from the analytics "Dashboard" to their personal "My Work"
+// task view. Managers get the full NAV_GROUPS.
+function navGroupsFor(isManager: boolean): NavGroup[] {
+  if (isManager) return NAV_GROUPS;
+  return NAV_GROUPS.filter((g) => g.label !== "Insights" && !g.divider).map((g) =>
+    g.items[0]?.href === "/"
+      ? { ...g, items: [{ ...g.items[0], label: "My Work" }] }
+      : g,
+  );
+}
+
+export function NavLinks({
+  onNavigate,
+  isManager,
+}: {
+  onNavigate?: () => void;
+  isManager: boolean;
+}) {
   const pathname = usePathname();
   const nodes: React.ReactNode[] = [];
 
-  for (const group of NAV_GROUPS) {
+  for (const group of navGroupsFor(isManager)) {
     if (group.divider) {
       nodes.push(
         <div

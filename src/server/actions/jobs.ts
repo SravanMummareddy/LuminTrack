@@ -6,7 +6,7 @@ import { del } from "@vercel/blob";
 import { prisma } from "@/server/db";
 import { requireUser } from "@/lib/session";
 import {
-  canManageOrgEntities,
+  canQuickAddOrgEntities,
   canEditJobRatesAndAssignment,
   hasFullAccess,
 } from "@/lib/permissions";
@@ -98,16 +98,16 @@ export async function createJob(
   const d = parsed.data;
   const isOtherSource = d.sisterCompanySourceId === OTHER_SOURCE;
 
-  // Inline "+ Add new client/vendor" — full-access only (matches Settings org
-  // writes). Recruiters may create jobs, but not new org entities.
-  const canCreateOrg = canManageOrgEntities(user);
+  // Inline "+ Add new client/vendor" — any signed-in user may quick-add while
+  // working (curation/rename/deactivate stays manager-only, in Settings).
+  const canCreateOrg = canQuickAddOrgEntities(user);
   const newClientName = String(formData.get("newClientName") ?? "").trim();
   const newVendorName = String(formData.get("newVendorName") ?? "").trim();
   const wantNewClient = d.clientId === NEW_ORG_ENTITY;
   const wantNewVendor = d.vendorId === NEW_ORG_ENTITY;
   if ((wantNewClient || wantNewVendor) && !canCreateOrg)
     return {
-      error: "Only managers and team leads can add a new client or vendor.",
+      error: "You must be signed in to add a new client or vendor.",
     };
   const orgErrors: Record<string, string> = {};
   if (wantNewClient && !newClientName)

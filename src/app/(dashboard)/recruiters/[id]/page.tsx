@@ -12,7 +12,9 @@ import {
   CirclePause,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { roleLabel } from "@/lib/permissions";
+import { Forbidden, MANAGER_ONLY_FORBIDDEN } from "@/components/ui/forbidden";
+import { requireUser } from "@/lib/session";
+import { isManagerTier, roleLabel } from "@/lib/permissions";
 import { Table, Th, Td } from "@/components/ui/table";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
 import { StatCard } from "@/components/dashboard/stat-card";
@@ -60,6 +62,9 @@ export default async function RecruiterDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  const viewer = await requireUser();
+  if (!isManagerTier(viewer)) return <Forbidden message={MANAGER_ONLY_FORBIDDEN} />;
+
   const { id } = await params;
   const sp = await searchParams;
   const { filters } = parseAnalyticsParams(sp);

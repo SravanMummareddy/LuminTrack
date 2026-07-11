@@ -1,17 +1,26 @@
 // Permissions seam.
 //
-// Roles (see `UserRole`): MANAGER and TEAM_LEAD both have full access; RECRUITER
-// is the limited day-to-day role. Every "can this user do the privileged thing?"
-// question routes through a helper here rather than inlining `role === "…"` at
-// call sites, so the policy can evolve in one place.
+// Every "can this user do the privileged thing?" question routes through a helper
+// here rather than inlining `role === "…"` at call sites, so the policy lives in
+// one place.
 //
-// Today's policy:
-//   • Manager / Team Lead  → full access (org entities, users, exports, audit,
-//     sensitive docs, bench credentials, job rates + recruiter assignment, VPR
-//     management, submission re-attribution, placement rate edits).
-//   • Recruiter            → create jobs, edit basic job fields + status, submit
-//     candidates, manage their own work. NOT: job rates, recruiter assignment,
-//     org/user admin, exports, audit, sensitive docs.
+// There are now TWO distinct boundaries — don't conflate them:
+//
+//   1. NAV / FINANCIAL / ANALYTICS tier → `isManagerTier` (MANAGER only).
+//      Gates the Dashboard analytics, Reports, Recruiters, Settings, audit, and
+//      org-wide financials. Team Leads are OUTSIDE this tier (owner decision
+//      2026-07-11: recruiters + team leads get the operational surface only).
+//
+//   2. MANAGEMENT tier → `hasFullAccess` (MANAGER || TEAM_LEAD). Gates the powers
+//      a Team Lead legitimately keeps inside their own operational nav — chiefly
+//      VPR management (Vendor Portal is in their nav). Also currently sensitive
+//      docs and job-rate/assignment editing (the latter is financial-adjacent and
+//      will move to `isManagerTier` once the rate-masking follow-up lands).
+//
+// Settings-only powers (org-entity curation, user admin) are Manager-only because
+// Team Leads lose the Settings page. Recruiters/TL can still *quick-add* a client
+// or vendor inline while working via `canQuickAddOrgEntities`.
+//
 // (Recruiter job-edit policy is intentionally loose — "we can always change it".)
 
 import type { DocumentCategory, UserRole } from "@/generated/prisma/enums";
@@ -35,6 +44,24 @@ export function roleLabel(role: UserRole): string {
  */
 export function hasFullAccess(viewer: Viewer | null | undefined): boolean {
   return viewer?.role === "MANAGER" || viewer?.role === "TEAM_LEAD";
+}
+
+/**
+ * The Manager-only tier: the nav / financial / analytics boundary. Narrower than
+ * `hasFullAccess` — Team Leads are excluded. Use this for Dashboard analytics,
+ * Reports, Recruiters, Settings, audit, and org-wide financial visibility.
+ */
+export function isManagerTier(viewer: Viewer | null | undefined): boolean {
+  return viewer?.role === "MANAGER";
+}
+
+/**
+ * May *create* a client/vendor inline (quick-add) while working, but not curate
+ * (rename/deactivate) them — that stays `canManageOrgEntities`. Any signed-in
+ * user qualifies (owner decision 2026-07-11).
+ */
+export function canQuickAddOrgEntities(viewer: Viewer | null | undefined): boolean {
+  return Boolean(viewer?.role);
 }
 
 const SENSITIVE: ReadonlySet<DocumentCategory> = new Set<DocumentCategory>([
@@ -70,14 +97,15 @@ export function canManageRequirements(viewer: Viewer | null | undefined): boolea
   return hasFullAccess(viewer);
 }
 
-// Org entities (clients, vendors, sources) + user administration + data export
-// + the audit log + iLabor import — all privileged.
+// Org-entity curation (clients, vendors, sources) + user administration + data
+// export + the audit log — all live behind Settings, so Manager-only. (Recruiters
+// and team leads can still quick-add an entity inline — see `canQuickAddOrgEntities`.)
 export function canManageOrgEntities(viewer: Viewer | null | undefined): boolean {
-  return hasFullAccess(viewer);
+  return isManagerTier(viewer);
 }
 
 export function canManageUsers(viewer: Viewer | null | undefined): boolean {
-  return hasFullAccess(viewer);
+  return isManagerTier(viewer);
 }
 
 // Job commercial fields (client/vendor rates) and recruiter assignment on the

@@ -10,7 +10,7 @@ import {
   CirclePause,
 } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
-import { hasFullAccess } from "@/lib/permissions";
+import { hasFullAccess, isManagerTier } from "@/lib/permissions";
 import {
   getDashboardData,
   getMyWork,
@@ -121,12 +121,13 @@ export default async function DashboardPage({
   const { current, filters } = parseAnalyticsParams(sp);
   const user = await getCurrentUser();
 
-  // Default scope: non-admin recruiters land on "me" so they see their own
-  // queue at standup; admins default to "org". A `?scope=` URL toggle lets
-  // either user flip. When scope === "me" we force `recruiterId` to the
-  // acting user (overrides any explicit recruiter filter from the bar).
-  const scope: "me" | "org" =
-    current.scope ?? (hasFullAccess(user) ? "org" : "me");
+  // Dashboard tiers: only Managers get the org-wide analytics view (and the
+  // toggle to reach it). The restricted tier (recruiter + team lead) is locked
+  // to their personal "My Work" task view — a `?scope=org` URL won't flip them.
+  // When scope === "me" we force `recruiterId` to the acting user (overrides any
+  // explicit recruiter filter from the bar).
+  const isManager = isManagerTier(user);
+  const scope: "me" | "org" = isManager ? (current.scope ?? "org") : "me";
   const effectiveFilters =
     scope === "me" && user ? { ...filters, recruiterId: [user.id] } : filters;
 
@@ -196,7 +197,9 @@ export default async function DashboardPage({
     <div className="mx-auto max-w-6xl space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Dashboard</h1>
+          <h1 className="text-xl font-semibold text-slate-900">
+            {isManager ? "Dashboard" : "My Work"}
+          </h1>
           <p className="mt-1 text-sm text-slate-500">
             Welcome back{user ? `, ${user.fullName}` : ""}.{" "}
             {scope === "me"
@@ -204,7 +207,7 @@ export default async function DashboardPage({
               : "Org-wide recruiting overview."}
           </p>
         </div>
-        <ScopeToggle scope={scope} sp={sp} />
+        {isManager && <ScopeToggle scope={scope} sp={sp} />}
       </div>
 
       {!onboarding.hasSubmissions && (

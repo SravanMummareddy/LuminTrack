@@ -5,7 +5,7 @@ import { Menu, X } from "lucide-react";
 import { NavLinks } from "@/components/layout/nav-links";
 import { useFocusTrap } from "@/lib/use-focus-trap";
 
-export function MobileNav() {
+export function MobileNav({ isManager }: { isManager: boolean }) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLElement>(null);
   // Focus trap + Escape + body-scroll lock + focus return-to-burger come
@@ -60,7 +60,7 @@ export function MobileNav() {
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-          <NavLinks onNavigate={() => setOpen(false)} />
+          <NavLinks isManager={isManager} onNavigate={() => setOpen(false)} />
         </nav>
       </aside>
     </>

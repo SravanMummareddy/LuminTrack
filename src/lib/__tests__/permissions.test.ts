@@ -7,6 +7,10 @@ import {
   canManageRequirements,
   canEditJobRatesAndAssignment,
   hasFullAccess,
+  isManagerTier,
+  canManageOrgEntities,
+  canManageUsers,
+  canQuickAddOrgEntities,
 } from "@/lib/permissions";
 import { DocumentCategory, UserRole } from "@/generated/prisma/enums";
 
@@ -81,5 +85,54 @@ describe("permissions — gates default to deny", () => {
       // @ts-expect-error — exercising a malformed viewer at runtime
       expect(canViewBenchCredentials({})).toBe(false);
     });
+  });
+});
+
+// Wave 1a (owner 2026-07-11): the nav/financial/analytics boundary is narrower
+// than hasFullAccess — team leads are RESTRICTED here alongside recruiters. The
+// Settings-only powers (org-entity curation, user admin) move to this tier too.
+describe("permissions — manager-tier gates DENY team leads", () => {
+  const managerOnly = { isManagerTier, canManageOrgEntities, canManageUsers };
+  for (const [name, gate] of Object.entries(managerOnly)) {
+    describe(name, () => {
+      it("allows managers", () => {
+        expect(gate(MANAGER)).toBe(true);
+      });
+      it("DENIES team leads (the key Wave 1a shift)", () => {
+        expect(gate(TEAM_LEAD)).toBe(false);
+      });
+      it("denies recruiters", () => {
+        expect(gate(RECRUITER)).toBe(false);
+      });
+      it("denies null / undefined / role-less viewers", () => {
+        expect(gate(null)).toBe(false);
+        expect(gate(undefined)).toBe(false);
+        // @ts-expect-error — exercising a malformed viewer at runtime
+        expect(gate({})).toBe(false);
+      });
+    });
+  }
+
+  // A team lead stays in the restricted nav tier but KEEPS its operational
+  // powers — chiefly VPR management (Vendor Portal is in their nav).
+  it("team leads keep canManageRequirements despite losing the manager tier", () => {
+    expect(isManagerTier(TEAM_LEAD)).toBe(false);
+    expect(canManageRequirements(TEAM_LEAD)).toBe(true);
+  });
+});
+
+// Quick-add is the escape hatch: recruiters/TL can CREATE a client/vendor inline
+// while working, even though curation is manager-only.
+describe("canQuickAddOrgEntities", () => {
+  it("allows managers, team leads, AND recruiters", () => {
+    expect(canQuickAddOrgEntities(MANAGER)).toBe(true);
+    expect(canQuickAddOrgEntities(TEAM_LEAD)).toBe(true);
+    expect(canQuickAddOrgEntities(RECRUITER)).toBe(true);
+  });
+  it("denies null / undefined / role-less viewers", () => {
+    expect(canQuickAddOrgEntities(null)).toBe(false);
+    expect(canQuickAddOrgEntities(undefined)).toBe(false);
+    // @ts-expect-error — exercising a malformed viewer at runtime
+    expect(canQuickAddOrgEntities({})).toBe(false);
   });
 });

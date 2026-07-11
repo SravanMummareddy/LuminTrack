@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
-import { Forbidden } from "@/components/ui/forbidden";
+import { Forbidden, MANAGER_ONLY_FORBIDDEN } from "@/components/ui/forbidden";
 import { Table, Th, Td } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Pagination } from "@/components/ui/pagination";
 import { requireUser } from "@/lib/session";
-import { hasFullAccess } from "@/lib/permissions";
+import { isManagerTier } from "@/lib/permissions";
 import { prisma } from "@/server/db";
 import { formatDateTime, deletedSuffix } from "@/lib/format";
 import { ActivityAction } from "@/generated/prisma/enums";
@@ -24,7 +24,7 @@ export default async function AuditPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const user = await requireUser();
-  if (!hasFullAccess(user)) return <Forbidden />;
+  if (!isManagerTier(user)) return <Forbidden message={MANAGER_ONLY_FORBIDDEN} />;
 
   const sp = await searchParams;
   const get = (k: string) =>
