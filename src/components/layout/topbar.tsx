@@ -2,7 +2,7 @@ import { GlobalSearch } from "@/components/search/global-search";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { RecentlyViewedMenu } from "@/components/layout/recently-viewed";
 import { UserMenu } from "@/components/layout/user-menu";
-import { roleLabel } from "@/lib/permissions";
+import { isManagerTier, roleLabel } from "@/lib/permissions";
 import type { UserRole } from "@/generated/prisma/enums";
 
 type TopbarProps = {
@@ -13,7 +13,7 @@ type TopbarProps = {
 export function Topbar({ name, role }: TopbarProps) {
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 md:gap-4 md:px-6">
-      <MobileNav />
+      <MobileNav isManager={isManagerTier({ role })} />
       <div className="min-w-0 max-w-xs flex-1 sm:max-w-md">
         <GlobalSearch />
       </div>

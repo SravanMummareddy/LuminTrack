@@ -10,6 +10,40 @@ short instead of long.
 
 ---
 
+## 2026-07-11 · Wave 1a access tiers — and two report pages that were never guarded
+
+**Situation.** Owner wants recruiters **and team leads** restricted to the operational surface
+(no Dashboard analytics, Reports, Settings, financials); Managers keep everything. While mapping
+the enforcement surface for the nav restriction, the real find was that `/reports` and
+`/recruiters` (org-wide analytics + every recruiter's performance detail) had **no role guard at
+all** — `reports/page.tsx` didn't even call `requireUser`. Any signed-in recruiter could load
+them by URL; only the *nav link* implied they were privileged.
+
+**Diagnosis.** The codebase had exactly one privileged-tier predicate, `hasFullAccess` =
+`MANAGER || TEAM_LEAD`, used for ~26 call sites. But the owner's new boundary puts **TEAM_LEAD on
+the restricted side** for nav/financials — so `hasFullAccess` is the *wrong* predicate to reuse
+here: extending it would still let team leads see Reports/Settings. Two boundaries now exist that
+were previously one: **management authority** (VPR, still Mgr+TL) vs **nav/financial tier**
+(Manager-only). Conflating them was the trap.
+
+**Fix.** Added a *narrower* `isManagerTier` (`role === "MANAGER"`) alongside `hasFullAccess`
+rather than changing it; repointed the Settings-only powers (`canManageOrgEntities`,
+`canManageUsers`) to it; added `<Forbidden>` guards to the two unguarded pages (+ `/recruiters/[id]`);
+tightened `/settings`, `/audit`, `/settings/export` from `hasFullAccess` → `isManagerTier`. Nav
+filters by tier; the dashboard reused the existing `?scope=me|org` seam (non-managers locked to
+`scope=me`); quick-add got its own `canQuickAddOrgEntities` (any signed-in). Restricted `/settings`
+collapses to the My-account tab so password change still works. Per-record rate-column masking
+deferred (owner decision D13: hide pay vs bill vs margin). tsc clean, **193 tests** (was 178),
+browser-verified all three tiers.
+
+**Lesson.** "Restrict the nav" is a UI job; "restrict access" is a route-guard job — and hiding a
+nav link is security theater if the page underneath is unguarded. The audit that matters isn't
+"what's in the sidebar" but "which `page.tsx` files call a role predicate" — that's how the two
+never-guarded report pages surfaced. And when a role boundary *splits*, add a new predicate; don't
+widen the old one, or you silently regrant the very tier you meant to restrict.
+
+---
+
 ## 2026-07-10 · Removed the iLabor / Randstad requisition-import feature entirely
 
 **Situation.** The owner decided jobs will only ever be added manually and asked to

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ScrollText, FileDown } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
-import { hasFullAccess } from "@/lib/permissions";
+import { isManagerTier } from "@/lib/permissions";
 import { cn } from "@/lib/cn";
 import { PageHeader } from "@/components/ui/page-header";
 import { LinkButton } from "@/components/ui/button";
@@ -47,14 +47,19 @@ export default async function SettingsPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const sp = await searchParams;
-  const rawTab = Array.isArray(sp.tab) ? sp.tab[0] : sp.tab;
-  const tab: TabKey = TABS.some((t) => t.key === rawTab)
-    ? (rawTab as TabKey)
-    : "sister-companies";
-
   const user = await getCurrentUser();
-  const isAdmin = hasFullAccess(user);
+  const isAdmin = isManagerTier(user);
   const canGrantManager = user?.role === "MANAGER";
+
+  const rawTab = Array.isArray(sp.tab) ? sp.tab[0] : sp.tab;
+  // Only managers get the management tabs. Everyone else is limited to their own
+  // account (reached via the user-menu "Change password" link) — a `?tab=users`
+  // URL from a restricted user still lands on account.
+  const tab: TabKey = !isAdmin
+    ? "account"
+    : TABS.some((t) => t.key === rawTab)
+      ? (rawTab as TabKey)
+      : "sister-companies";
 
   let content: React.ReactNode;
   if (tab === "sister-companies") {
@@ -136,7 +141,7 @@ export default async function SettingsPage({
         description={
           isAdmin
             ? "Manage sources, clients, vendors, and app users."
-            : "Reference data — sources, clients, vendors, and team (read-only)."
+            : "Your account."
         }
       />
 
@@ -163,7 +168,9 @@ export default async function SettingsPage({
         aria-label="Settings sections"
         className="flex gap-1 border-b border-slate-200"
       >
-        {TABS.filter((t) => isAdmin || !("adminOnly" in t && t.adminOnly)).map((t) => {
+        {TABS.filter((t) =>
+          isAdmin ? true : t.key === "account",
+        ).map((t) => {
           const selected = t.key === tab;
           return (
             <Link

@@ -1,6 +1,6 @@
 import { getCurrentUser } from "@/lib/session";
-import { hasFullAccess } from "@/lib/permissions";
-import { Forbidden } from "@/components/ui/forbidden";
+import { isManagerTier } from "@/lib/permissions";
+import { Forbidden, MANAGER_ONLY_FORBIDDEN } from "@/components/ui/forbidden";
 import { PageHeader } from "@/components/ui/page-header";
 import { prisma } from "@/server/db";
 import { getBackupPreflight } from "@/server/exporters/build-backup-json";
@@ -10,7 +10,7 @@ import { formatDateTime } from "@/lib/format";
 export default async function ExportPage() {
   const user = await getCurrentUser();
   if (!user) return <Forbidden message="Sign in required." />;
-  if (!hasFullAccess(user)) return <Forbidden />;
+  if (!isManagerTier(user)) return <Forbidden message={MANAGER_ONLY_FORBIDDEN} />;
 
   const [{ totals }, history] = await Promise.all([
     getBackupPreflight(),

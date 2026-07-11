@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { ShieldAlert } from "lucide-react";
 
+// For the narrower Manager-only tier (Dashboard analytics, Reports, Recruiters,
+// Settings management, audit, export) — where team leads are ALSO blocked. Pass
+// this so the copy doesn't wrongly tell a team lead the page is open to them.
+export const MANAGER_ONLY_FORBIDDEN =
+  "This page is limited to managers. If you need access, ask a manager to update your role.";
+
 // Shown when a signed-in recruiter tries to load a manager/team-lead-gated
 // route. Replaces the previous `notFound()` redirect, which produced a generic
 // 404 with no explanation. Audit finding H4 (2026-05-26).

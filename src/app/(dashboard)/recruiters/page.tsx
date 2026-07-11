@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
+import { Forbidden, MANAGER_ONLY_FORBIDDEN } from "@/components/ui/forbidden";
 import { Badge } from "@/components/ui/badge";
-import { roleLabel } from "@/lib/permissions";
+import { requireUser } from "@/lib/session";
+import { isManagerTier, roleLabel } from "@/lib/permissions";
 import { Table, Td, cardLink } from "@/components/ui/table";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { MobileSort } from "@/components/ui/mobile-sort";
@@ -34,6 +36,9 @@ export default async function RecruitersPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  const user = await requireUser();
+  if (!isManagerTier(user)) return <Forbidden message={MANAGER_ONLY_FORBIDDEN} />;
+
   const sp = await searchParams;
   const { filters } = parseAnalyticsParams(sp);
 
