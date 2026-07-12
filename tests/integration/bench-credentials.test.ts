@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { testPrisma } from "./db";
-import { truncateAll } from "./helpers";
+import { truncateAll, seedOrg } from "./helpers";
 
 // Real bench actions → test DB; stub the Next.js request couplings.
 vi.mock("@/server/db", async () => {
   const real = await import("./db");
   return { prisma: real.testPrisma, isUniqueConstraintError: real.isUniqueConstraintError };
 });
-vi.mock("@/lib/session", () => ({ requireUser: vi.fn(), getCurrentUser: vi.fn() }));
+vi.mock("@/lib/session", () => ({ requireUser: vi.fn(), getCurrentUser: vi.fn(), getScopedPrisma: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
 // updateBenchConsultant / createBenchConsultant end in redirect(); make it a no-op.
 vi.mock("next/navigation", () => ({ redirect: vi.fn(), notFound: vi.fn() }));
@@ -16,7 +16,7 @@ import {
   updateBenchConsultant,
   createBenchConsultant,
 } from "@/server/actions/bench-consultants";
-import { requireUser } from "@/lib/session";
+import { requireUser, getScopedPrisma } from "@/lib/session";
 
 let dbReachable = false;
 try {
@@ -45,13 +45,15 @@ describe.skipIf(!dbReachable)("bench credentials — admin gate (regression)", (
 
   beforeEach(async () => {
     await truncateAll(testPrisma);
-    admin = await testPrisma.user.create({
+    const { db } = await seedOrg(testPrisma);
+    vi.mocked(getScopedPrisma).mockResolvedValue(db as never);
+    admin = await db.user.create({
       data: { fullName: "Admin", email: "admin@test.local", passwordHash: "x", role: "MANAGER" },
     });
-    recruiter = await testPrisma.user.create({
+    recruiter = await db.user.create({
       data: { fullName: "Recruiter", email: "rec@test.local", passwordHash: "x", role: "RECRUITER" },
     });
-    const c = await testPrisma.benchConsultant.create({
+    const c = await db.benchConsultant.create({
       data: {
         fullName: "Marketed Consultant",
         createdById: admin.id,

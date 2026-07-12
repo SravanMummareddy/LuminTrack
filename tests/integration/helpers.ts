@@ -61,7 +61,7 @@ export async function seedBasics(base: PrismaClient) {
       submittedById: user.id,
     },
   });
-  return { org, user, client, vendor, candidate, job, submission };
+  return { org, db: prisma, user, client, vendor, candidate, job, submission };
 }
 
 /** Loose actors for the createSubmission gate tests: an admin, an unassigned
@@ -84,7 +84,7 @@ export async function seedSubmissionScenario(base: PrismaClient) {
   const candidate = await prisma.candidate.create({
     data: { fullName: "Bench Candidate", status: "AVAILABLE", createdById: admin.id },
   });
-  return { org, admin, recruiter, client, vendor, candidate };
+  return { org, db: prisma, admin, recruiter, client, vendor, candidate };
 }
 
 /** A live SUBMITTED submission owned by `recruiterA`, plus an admin, a
@@ -138,7 +138,7 @@ export async function seedSubmissionEditScenario(base: PrismaClient) {
       submittedById: recruiterA.id,
     },
   });
-  return { org, admin, recruiterA, recruiterB, client, vendor, candidate, job, resume, submission };
+  return { org, db: prisma, admin, recruiterA, recruiterB, client, vendor, candidate, job, resume, submission };
 }
 
 /** A placement owned by `recruiterA` (recruiter-of-record), plus an admin and an
@@ -189,5 +189,5 @@ export async function seedPlacementScenario(base: PrismaClient) {
       jobId: job.id,
     },
   });
-  return { org, admin, recruiterA, recruiterB, client, vendor, candidate, job, submission, placement };
+  return { org, db: prisma, admin, recruiterA, recruiterB, client, vendor, candidate, job, submission, placement };
 }

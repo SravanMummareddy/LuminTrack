@@ -1,18 +1,18 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { testPrisma } from "./db";
-import { truncateAll } from "./helpers";
+import { truncateAll, seedOrg } from "./helpers";
 import { NEW_ORG_ENTITY, OTHER_SOURCE } from "@/lib/labels";
 
 vi.mock("@/server/db", async () => {
   const real = await import("./db");
   return { prisma: real.testPrisma, isUniqueConstraintError: real.isUniqueConstraintError };
 });
-vi.mock("@/lib/session", () => ({ requireUser: vi.fn(), getCurrentUser: vi.fn() }));
+vi.mock("@/lib/session", () => ({ requireUser: vi.fn(), getCurrentUser: vi.fn(), getScopedPrisma: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn(), notFound: vi.fn() }));
 
 import { createJob } from "@/server/actions/jobs";
-import { requireUser } from "@/lib/session";
+import { requireUser, getScopedPrisma } from "@/lib/session";
 
 let dbReachable = false;
 try {
@@ -23,16 +23,17 @@ try {
 }
 
 async function seed() {
+  const { org, db } = await seedOrg(testPrisma);
   const [admin, recruiter] = await Promise.all([
-    testPrisma.user.create({
+    db.user.create({
       data: { fullName: "Admin", email: "admin@test.local", passwordHash: "x", role: "MANAGER" },
     }),
-    testPrisma.user.create({
+    db.user.create({
       data: { fullName: "Rec", email: "rec@test.local", passwordHash: "x", role: "RECRUITER" },
     }),
   ]);
-  const vendor = await testPrisma.vendor.create({ data: { name: "Existing Vendor" } });
-  return { admin, recruiter, vendor };
+  const vendor = await db.vendor.create({ data: { name: "Existing Vendor" } });
+  return { org, db, admin, recruiter, vendor };
 }
 type Ctx = Awaited<ReturnType<typeof seed>>;
 
@@ -55,6 +56,7 @@ describe.skipIf(!dbReachable)("createJob — inline add client/vendor", () => {
   beforeEach(async () => {
     await truncateAll(testPrisma);
     ctx = await seed();
+    vi.mocked(getScopedPrisma).mockResolvedValue(ctx.db as never);
   });
 
   it("creates a new client inline and links the job to it (admin)", async () => {
@@ -68,7 +70,7 @@ describe.skipIf(!dbReachable)("createJob — inline add client/vendor", () => {
   });
 
   it("reuses an existing client by case-insensitive name (no duplicate)", async () => {
-    await testPrisma.client.create({ data: { name: "Acme Corp" } });
+    await ctx.db.client.create({ data: { name: "Acme Corp" } });
     mockedRequireUser.mockResolvedValue(ctx.admin as never);
     await createJob({}, jobForm(ctx, { clientId: NEW_ORG_ENTITY, newClientName: "acme corp" }));
 

@@ -7,7 +7,7 @@ vi.mock("@/server/db", async () => {
   const real = await import("./db");
   return { prisma: real.testPrisma, isUniqueConstraintError: real.isUniqueConstraintError };
 });
-vi.mock("@/lib/session", () => ({ requireUser: vi.fn(), getCurrentUser: vi.fn() }));
+vi.mock("@/lib/session", () => ({ requireUser: vi.fn(), getCurrentUser: vi.fn(), getScopedPrisma: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
 // createSubmission ends in redirect() on success — make it a no-op so the action
 // returns undefined instead of throwing NEXT_REDIRECT. Gate paths return a
@@ -15,7 +15,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }
 vi.mock("next/navigation", () => ({ redirect: vi.fn(), notFound: vi.fn() }));
 
 import { createSubmission } from "@/server/actions/submissions";
-import { requireUser } from "@/lib/session";
+import { requireUser, getScopedPrisma } from "@/lib/session";
 
 let dbReachable = false;
 try {
@@ -31,11 +31,12 @@ describe.skipIf(!dbReachable)("createSubmission — gate flows", () => {
   beforeEach(async () => {
     await truncateAll(testPrisma);
     ctx = await seedSubmissionScenario(testPrisma);
+    vi.mocked(getScopedPrisma).mockResolvedValue(ctx.db as never);
   });
 
   /** Create a job, optionally with extra fields. */
   function makeJob(extra: Record<string, unknown> = {}) {
-    return testPrisma.job.create({
+    return ctx.db.job.create({
       data: {
         title: "Senior Engineer",
         clientId: ctx.client.id,

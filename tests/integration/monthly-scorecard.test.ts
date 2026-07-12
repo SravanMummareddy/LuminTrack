@@ -1,15 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { testPrisma } from "./db";
-import { truncateAll } from "./helpers";
+import { truncateAll, seedOrg } from "./helpers";
 
-// getMonthlyScorecard reads the `prisma` singleton — point it at the test DB.
-// It's a pure read (no auth), so no session/cache/navigation mocks are needed.
+// getMonthlyScorecard reads through getScopedPrisma — point the base client at the
+// test DB and hand the query an org-scoped client bound to the seeded test org.
 vi.mock("@/server/db", async () => {
   const real = await import("./db");
   return { prisma: real.testPrisma, isUniqueConstraintError: real.isUniqueConstraintError };
 });
+vi.mock("@/lib/session", () => ({ requireUser: vi.fn(), getScopedPrisma: vi.fn() }));
 
 import { getMonthlyScorecard } from "@/server/queries/monthly-scorecard";
+import { getScopedPrisma } from "@/lib/session";
 
 let dbReachable = false;
 try {
@@ -40,30 +42,31 @@ const JUNE = { year: 2026, monthIndex: 5 }; // June 2026 — Jun 1 is a Monday �
  *  admin: role ADMIN — never appears.
  */
 async function seedScorecard() {
-  const admin = await testPrisma.user.create({
+  const { org, db } = await seedOrg(testPrisma);
+  const admin = await db.user.create({
     data: { fullName: "Admin", email: "admin@s.local", passwordHash: "x", role: "MANAGER" },
   });
-  const teamAlpha = await testPrisma.team.create({ data: { name: "Alpha" } });
-  const teamBeta = await testPrisma.team.create({ data: { name: "Beta" } });
-  const recA = await testPrisma.user.create({
+  const teamAlpha = await db.team.create({ data: { name: "Alpha" } });
+  const teamBeta = await db.team.create({ data: { name: "Beta" } });
+  const recA = await db.user.create({
     data: { fullName: "Rec A", email: "a@s.local", passwordHash: "x", role: "RECRUITER", empId: "EMP-101", teamId: teamAlpha.id },
   });
-  const recB = await testPrisma.user.create({
+  const recB = await db.user.create({
     data: { fullName: "Rec B", email: "b@s.local", passwordHash: "x", role: "RECRUITER", empId: "EMP-102", teamId: teamBeta.id },
   });
-  const recC = await testPrisma.user.create({
+  const recC = await db.user.create({
     data: { fullName: "Rec C", email: "c@s.local", passwordHash: "x", role: "RECRUITER", empId: "EMP-103", teamId: teamAlpha.id, isActive: false },
   });
 
-  const client = await testPrisma.client.create({ data: { name: "Client" } });
-  const v1 = await testPrisma.vendor.create({ data: { name: "Vendor One" } });
-  const v2 = await testPrisma.vendor.create({ data: { name: "Vendor Two" } });
-  const cand = await testPrisma.candidate.create({
+  const client = await db.client.create({ data: { name: "Client" } });
+  const v1 = await db.vendor.create({ data: { name: "Vendor One" } });
+  const v2 = await db.vendor.create({ data: { name: "Vendor Two" } });
+  const cand = await db.candidate.create({
     data: { fullName: "Cand", status: "AVAILABLE", createdById: admin.id },
   });
 
   const mkJob = (vendorId: string) =>
-    testPrisma.job.create({
+    db.job.create({
       data: {
         title: "Role",
         clientId: client.id,
@@ -75,7 +78,7 @@ async function seedScorecard() {
   const jobV2 = await mkJob(v2.id);
 
   const mkSub = (jobId: string, by: string, when: Date, status: string) =>
-    testPrisma.submission.create({
+    db.submission.create({
       data: {
         status: status as never,
         submittedAt: when,
@@ -90,13 +93,13 @@ async function seedScorecard() {
   await mkSub(jobV1.id, recA.id, new Date(2026, 5, 3, 12), "SUBMITTED"); // week0
   await mkSub(jobV1.id, recA.id, new Date(2026, 5, 10, 12), "BACKED_OUT"); // week1
   const aV2 = await mkSub(jobV2.id, recA.id, new Date(2026, 5, 10, 12), "SELECTED"); // week1, new vendor
-  await testPrisma.interviewRound.create({
+  await db.interviewRound.create({
     data: { roundOrder: 1, roundName: "Tech", interviewType: "CLIENT_INTERVIEW", scheduledAt: new Date(2026, 5, 12, 9), submissionId: aV2.id },
   });
-  await testPrisma.interviewRound.create({
+  await db.interviewRound.create({
     data: { roundOrder: 1, roundName: "Old", interviewType: "VENDOR_SCREENING", scheduledAt: new Date(2026, 4, 30, 9), submissionId: aV2.id }, // May — ignored
   });
-  await testPrisma.placement.create({
+  await db.placement.create({
     data: { startDate: new Date(2026, 5, 15, 9), submissionId: aV2.id, candidateId: cand.id, jobId: jobV2.id },
   });
 
@@ -106,7 +109,7 @@ async function seedScorecard() {
   // recruiterC (inactive) — must be dropped
   await mkSub(jobV1.id, recC.id, new Date(2026, 5, 4, 12), "SUBMITTED");
 
-  return { recA, recB, teamAlpha };
+  return { recA, recB, teamAlpha, org, db };
 }
 
 describe.skipIf(!dbReachable)("getMonthlyScorecard — metric bucketing", () => {
@@ -115,6 +118,7 @@ describe.skipIf(!dbReachable)("getMonthlyScorecard — metric bucketing", () => 
   beforeEach(async () => {
     await truncateAll(testPrisma);
     ids = await seedScorecard();
+    vi.mocked(getScopedPrisma).mockResolvedValue(ids.db as never);
   });
 
   it("shapes the month: label, 5 Mon-start weeks, only active recruiters", async () => {
