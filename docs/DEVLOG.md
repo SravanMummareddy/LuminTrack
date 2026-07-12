@@ -10,6 +10,56 @@ short instead of long.
 
 ---
 
+## 2026-07-12 · CI was red for weeks — a whole test job silently dead since the tenancy migration
+
+**Situation.** `main`'s CI had two jobs (`unit` = lint + tsc + unit tests; `integration` = real
+Postgres). Both had shown `failure` on **every commit for weeks** — back past several merged PRs — yet
+nobody noticed, because Vercel deploys `main` on its own pipeline (independent of GitHub CI) and prod
+was healthy the whole time. The red X was pure background noise until we went looking.
+
+**Diagnosis.** Two independent rots, peeled one layer at a time from the CI logs:
+- **Lint (5 errors, `unit` job):** the #86 org-entity components tripped `react-hooks/set-state-in-effect`
+  (a `useEffect` that synced a prop into state) and one `<a>`-to-an-internal-page.
+- **Integration (52 failures → really one systemic break at a time):** the suite had been **dead since
+  Phase C (#83)** — the multi-tenancy migration — and the failures came in *layers*, each hidden behind
+  the previous:
+  1. `Unknown argument organizationId` — the org-scope extension stamps a **scalar** `organizationId`
+     onto `create` data, which only coexists with Prisma's *unchecked* create input (all scalar FKs).
+     The seeds used nested-relation syntax (`createdBy: { connect }`), forcing the *checked* input,
+     which rejects the scalar. The app always writes scalar FKs, so prod was fine — only the tests were
+     in the wrong style.
+  2. `User_organizationId_fkey` violations — actions were re-rooted onto `getScopedPrisma()` in Phase C,
+     but the tests still mocked only the old `@/server/db` singleton, so the scoped client was
+     `undefined` and setup rows got `organizationId = ""` (the column default).
+  3. `No "orgScopeExtension" export on the @/server/db mock` — the seed helper imported the extension
+     from the *mocked* module.
+  4. Once it finally *ran*, the remaining 21 failures were **stale assertions**, not bugs: they encoded
+     behaviour three later phases deliberately changed — a removed feature (#86 dropped `createJob`'s
+     inline org-add), a changed permission model (Phase B granted recruiters `bench:view_credentials`),
+     a refactored return shape (#84: `needsConfirm` string → `pendingGates[]` array + new soft gates),
+     and a redefined metric (`newVendors` = company-wide first-use, not per-recruiter).
+
+**Fix.** Lint: derive the `?edit=` open state with a lazy `useState` initializer instead of a mount
+effect (which also removed a latent re-open-on-revalidate bug); scoped-disable the one legitimate SSR
+portal-mount effect; `<a>` → `next/link`. Integration: rewrite 47 seeds to scalar FKs; mock
+`getScopedPrisma` to a client scoped to a seeded test org and route all setup writes through it; import
+`orgScopeExtension` from the pure `@/server/org-scope`. Then reconcile the 21 stale assertions against
+the shipped behaviour — **delete** the two files whose features/gates were intentionally removed, and
+update the rest to the new APIs — confirming the two genuine product questions (recruiter credential
+access; company-wide new-vendor semantics) with the owner rather than re-baselining a security/reporting
+test on a guess. Result: lint 0 errors, 247 unit, **44/44 integration**, both CI jobs green.
+
+**Lesson.** A CI job that deploy doesn't gate on will rot invisibly — if Vercel ships `main` regardless,
+a red `integration` check reads as "someone else's problem" until it's weeks stale. Wire the deploy to
+the check, or at least alert on `main` going red. And when a long-dead test suite finally runs, its
+failures are *layered*: fix the top error, re-run, repeat — each infra break masks the next, and only
+after the plumbing is sound do the *real* signal (stale-vs-intentional assertions) surface. Distinguish
+"the test is stale" from "the test caught a regression" by the source of truth (a documenting comment +
+its own unit test = intended change); on a security or reporting metric where that's ambiguous, ask the
+owner — don't flip the assertion to match possibly-buggy code.
+
+---
+
 ## 2026-07-12 · Card section `overflow-hidden` clipped the job-form dropdowns
 
 **Situation.** After wrapping the Job form's sections in cards (the new `FormSection` in
