@@ -597,6 +597,11 @@ model Job {
   // hard-removed instead of tombstoned). A backup zip is written to Blob first.
   deletedAt      DateTime?
   erasedAt       DateTime?
+  // D3/V-5: when the requirement actually arrived (email/referral), which is
+  // often days before it was logged. `createdAt` = logged; `receivedAt` = the
+  // real start of the clock for time-to-submit. Defaults to now(); backdatable
+  // on the form. Backfilled to createdAt for pre-existing jobs.
+  receivedAt     DateTime     @default(now())
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 

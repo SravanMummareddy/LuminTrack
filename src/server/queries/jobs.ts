@@ -178,6 +178,12 @@ export async function getJobDetail(id: string) {
         include: { recruiter: { select: { id: true, fullName: true } } },
         orderBy: { assignedAt: "asc" },
       },
+      // D3/V-5: the earliest submission drives time-to-first-submission.
+      submissions: {
+        orderBy: { submittedAt: "asc" },
+        take: 1,
+        select: { submittedAt: true },
+      },
     },
   });
 }
