@@ -1,63 +1,112 @@
 import { describe, it, expect } from "vitest";
 import { benchConsultantSchema } from "@/lib/validation/bench";
 
-describe("benchConsultantSchema", () => {
-  it("requires a full name", () => {
-    expect(benchConsultantSchema.safeParse({}).success).toBe(false);
-    expect(
-      benchConsultantSchema.safeParse({ fullName: "   " }).success,
-      "whitespace-only name should fail",
-    ).toBe(false);
+// A complete, valid consultant. Tests knock one field out to prove each rule.
+const full = {
+  fullName: "Ravi Kumar",
+  email: "ravi@example.com",
+  phone: "+1 469 555 0100",
+  currentLocation: "Dallas, TX",
+  workAuthorization: "Green Card",
+  mVisa: "H1B",
+  aVisa: "GC-EAD",
+  marketingExpYears: "10",
+  skills: ["Java", "AWS"],
+  reference: "LinkedIn",
+  company: "Infosys",
+  projectType: "Contract",
+  leastRateC2C: "70",
+  callType: "C2C",
+  payrollType: "W2",
+  relocationMode: "ANYWHERE",
+};
+
+describe("benchConsultantSchema — required fields", () => {
+  it("accepts a fully-filled consultant", () => {
+    expect(benchConsultantSchema.safeParse(full).success).toBe(true);
   });
 
-  it("applies sensible defaults for an otherwise-bare consultant", () => {
-    const r = benchConsultantSchema.safeParse({ fullName: "Ravi Kumar" });
+  it.each([
+    "fullName",
+    "phone",
+    "currentLocation",
+    "workAuthorization",
+    "mVisa",
+    "reference",
+    "company",
+    "projectType",
+    "callType",
+    "payrollType",
+  ] as const)("requires %s", (field) => {
+    expect(benchConsultantSchema.safeParse({ ...full, [field]: "" }).success).toBe(false);
+  });
+
+  it("requires a valid email", () => {
+    expect(benchConsultantSchema.safeParse({ ...full, email: "" }).success).toBe(false);
+    expect(benchConsultantSchema.safeParse({ ...full, email: "nope" }).success).toBe(false);
+  });
+
+  it("requires at least one skill and a marketing-experience value", () => {
+    expect(benchConsultantSchema.safeParse({ ...full, skills: [] }).success).toBe(false);
+    expect(benchConsultantSchema.safeParse({ ...full, marketingExpYears: "" }).success).toBe(false);
+  });
+
+  it("keeps priority / marketing-status defaults + rejects unknown values", () => {
+    const r = benchConsultantSchema.safeParse(full);
     expect(r.success).toBe(true);
     if (r.success) {
       expect(r.data.priority).toBe("SECOND");
       expect(r.data.marketingStatus).toBe("ACTIVE");
-      expect(r.data.relocation).toBe(false);
-      expect(r.data.isActive).toBe(true);
-      expect(r.data.skills).toEqual([]);
     }
+    expect(benchConsultantSchema.safeParse({ ...full, priority: "URGENT" }).success).toBe(false);
+    expect(benchConsultantSchema.safeParse({ ...full, marketingStatus: "COLD" }).success).toBe(false);
   });
 
-  it("bounds experience years to a sane 0–80 range", () => {
-    expect(
-      benchConsultantSchema.safeParse({ fullName: "X", marketingExpYears: "81" })
-        .success,
-    ).toBe(false);
-    expect(
-      benchConsultantSchema.safeParse({ fullName: "X", marketingExpYears: "12" })
-        .success,
-    ).toBe(true);
-    expect(
-      benchConsultantSchema.safeParse({ fullName: "X", realTimeExpYears: "-1" })
-        .success,
-    ).toBe(false);
+  it("bounds experience years to 0–80", () => {
+    expect(benchConsultantSchema.safeParse({ ...full, marketingExpYears: "81" }).success).toBe(false);
+    expect(benchConsultantSchema.safeParse({ ...full, realTimeExpYears: "-1" }).success).toBe(false);
+  });
+});
+
+describe("benchConsultantSchema — required-or-N/A fields", () => {
+  it("A Visa: blank fails, blank+N/A passes", () => {
+    expect(benchConsultantSchema.safeParse({ ...full, aVisa: "" }).success).toBe(false);
+    expect(benchConsultantSchema.safeParse({ ...full, aVisa: "", aVisaNa: "1" }).success).toBe(true);
   });
 
-  it("validates marketing email format but allows it to be blank", () => {
+  it("Least rate on C2C: blank fails, blank+N/A passes", () => {
+    expect(benchConsultantSchema.safeParse({ ...full, leastRateC2C: "" }).success).toBe(false);
     expect(
-      benchConsultantSchema.safeParse({ fullName: "X", marketingEmail: "" })
-        .success,
+      benchConsultantSchema.safeParse({ ...full, leastRateC2C: "", leastRateC2CNa: "1" }).success,
     ).toBe(true);
+  });
+});
+
+describe("benchConsultantSchema — relocation", () => {
+  it("requires a relocation option", () => {
+    expect(benchConsultantSchema.safeParse({ ...full, relocationMode: "" }).success).toBe(false);
+    expect(benchConsultantSchema.safeParse({ ...full, relocationMode: "MAYBE" }).success).toBe(false);
+  });
+
+  it("requires cities when 'Specific'", () => {
+    expect(benchConsultantSchema.safeParse({ ...full, relocationMode: "SPECIFIC" }).success).toBe(false);
     expect(
       benchConsultantSchema.safeParse({
-        fullName: "X",
-        marketingEmail: "not-an-email",
+        ...full,
+        relocationMode: "SPECIFIC",
+        relocationCities: "Austin, Dallas",
       }).success,
-    ).toBe(false);
+    ).toBe(true);
   });
 
-  it("rejects an unknown priority / marketing status", () => {
-    expect(
-      benchConsultantSchema.safeParse({ fullName: "X", priority: "URGENT" })
-        .success,
-    ).toBe(false);
-    expect(
-      benchConsultantSchema.safeParse({ fullName: "X", marketingStatus: "COLD" })
-        .success,
-    ).toBe(false);
+  it("does not need cities for Anywhere / No", () => {
+    expect(benchConsultantSchema.safeParse({ ...full, relocationMode: "NO" }).success).toBe(true);
+  });
+});
+
+describe("benchConsultantSchema — marketing email format", () => {
+  it("allows blank but validates format when present", () => {
+    expect(benchConsultantSchema.safeParse({ ...full, marketingEmail: "" }).success).toBe(true);
+    expect(benchConsultantSchema.safeParse({ ...full, marketingEmail: "nope" }).success).toBe(false);
   });
 });

@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { BenchConsultantForm } from "@/components/bench/bench-consultant-form";
 import { createBenchConsultant } from "@/server/actions/bench-consultants";
 import { listActiveRecruiterOptions } from "@/server/queries/org";
-import { listCandidateOptions } from "@/server/queries/candidates";
+import { listCandidatesForBench } from "@/server/queries/candidates";
 import { listLookupValues } from "@/server/queries/lookups";
 import { requireUser } from "@/lib/session";
 import { canViewBenchCredentials } from "@/lib/permissions";
@@ -12,7 +12,7 @@ export default async function NewBenchConsultantPage() {
   const [recruiters, candidates, callTypeOptions, payrollTypeOptions] =
     await Promise.all([
       listActiveRecruiterOptions(),
-      listCandidateOptions(),
+      listCandidatesForBench(),
       listLookupValues("CALL_TYPE"),
       listLookupValues("PAYROLL_TYPE"),
     ]);

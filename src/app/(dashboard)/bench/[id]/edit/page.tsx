@@ -7,7 +7,7 @@ import {
 import { updateBenchConsultant } from "@/server/actions/bench-consultants";
 import { getBenchConsultantForEdit } from "@/server/queries/bench-consultants";
 import { listActiveRecruiterOptions } from "@/server/queries/org";
-import { listCandidateOptions } from "@/server/queries/candidates";
+import { listCandidatesForBench } from "@/server/queries/candidates";
 import { listLookupValues } from "@/server/queries/lookups";
 import { requireUser } from "@/lib/session";
 import { canViewBenchCredentials } from "@/lib/permissions";
@@ -30,13 +30,14 @@ export default async function EditBenchConsultantPage({
     await Promise.all([
       getBenchConsultantForEdit(id),
       listActiveRecruiterOptions(),
-      listCandidateOptions(),
+      listCandidatesForBench(),
       listLookupValues("CALL_TYPE"),
       listLookupValues("PAYROLL_TYPE"),
     ]);
   if (!c) notFound();
 
   const canCreds = canViewBenchCredentials(user);
+  const linkedCandidate = candidates.find((x) => x.id === c.candidateId);
 
   const values: BenchConsultantFormValues = {
     id: c.id,
@@ -86,6 +87,7 @@ export default async function EditBenchConsultantPage({
           submitLabel="Save changes"
           recruiters={recruiters}
           candidates={candidates}
+          linkedCandidate={linkedCandidate}
           canEditCredentials={canCreds}
           callTypeOptions={callTypeOptions}
           payrollTypeOptions={payrollTypeOptions}
