@@ -38,9 +38,9 @@ describe.skipIf(!dbReachable)("createSubmission — gate flows", () => {
     return testPrisma.job.create({
       data: {
         title: "Senior Engineer",
-        client: { connect: { id: ctx.client.id } },
-        vendor: { connect: { id: ctx.vendor.id } },
-        createdBy: { connect: { id: ctx.admin.id } },
+        clientId: ctx.client.id,
+        vendorId: ctx.vendor.id,
+        createdById: ctx.admin.id,
         ...extra,
       },
     });

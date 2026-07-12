@@ -137,8 +137,8 @@ describe.skipIf(!dbReachable)("changeSubmissionStatus — real DB cascades", () 
       data: {
         fullName: "Test Candidate",
         marketingStatus: "ACTIVE",
-        candidate: { connect: { id: ctx.candidate.id } },
-        createdBy: { connect: { id: ctx.user.id } },
+        candidateId: ctx.candidate.id,
+        createdById: ctx.user.id,
       },
     });
   }

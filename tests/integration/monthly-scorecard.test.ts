@@ -59,16 +59,16 @@ async function seedScorecard() {
   const v1 = await testPrisma.vendor.create({ data: { name: "Vendor One" } });
   const v2 = await testPrisma.vendor.create({ data: { name: "Vendor Two" } });
   const cand = await testPrisma.candidate.create({
-    data: { fullName: "Cand", status: "AVAILABLE", createdBy: { connect: { id: admin.id } } },
+    data: { fullName: "Cand", status: "AVAILABLE", createdById: admin.id },
   });
 
   const mkJob = (vendorId: string) =>
     testPrisma.job.create({
       data: {
         title: "Role",
-        client: { connect: { id: client.id } },
-        vendor: { connect: { id: vendorId } },
-        createdBy: { connect: { id: admin.id } },
+        clientId: client.id,
+        vendorId: vendorId,
+        createdById: admin.id,
       },
     });
   const jobV1 = await mkJob(v1.id);
@@ -79,9 +79,9 @@ async function seedScorecard() {
       data: {
         status: status as never,
         submittedAt: when,
-        candidate: { connect: { id: cand.id } },
-        job: { connect: { id: jobId } },
-        submittedBy: { connect: { id: by } },
+        candidateId: cand.id,
+        jobId: jobId,
+        submittedById: by,
       },
     });
 

@@ -60,14 +60,14 @@ async function seed() {
     testPrisma.vendor.create({ data: { name: "Vendor" } }),
   ]);
   const candidate = await testPrisma.candidate.create({
-    data: { fullName: "Cand", status: "AVAILABLE", createdBy: { connect: { id: admin.id } } },
+    data: { fullName: "Cand", status: "AVAILABLE", createdById: admin.id },
   });
   const job = await testPrisma.job.create({
     data: {
       title: "Senior Engineer",
-      client: { connect: { id: client.id } },
-      vendor: { connect: { id: vendor.id } },
-      createdBy: { connect: { id: admin.id } },
+      clientId: client.id,
+      vendorId: vendor.id,
+      createdById: admin.id,
     },
   });
   return { admin, lead, recruiter, client, vendor, candidate, job };
@@ -79,10 +79,10 @@ type Ctx = Awaited<ReturnType<typeof seed>>;
 function makeRequirement(ctx: Ctx, extra: Record<string, unknown> = {}) {
   return testPrisma.vendorRequirement.create({
     data: {
-      job: { connect: { id: ctx.job.id } },
-      candidate: { connect: { id: ctx.candidate.id } },
-      recruiter: { connect: { id: ctx.recruiter.id } },
-      createdBy: { connect: { id: ctx.lead.id } },
+      jobId: ctx.job.id,
+      candidateId: ctx.candidate.id,
+      recruiterId: ctx.recruiter.id,
+      createdById: ctx.lead.id,
       payRate: 70,
       billRate: 100,
       ...extra,
@@ -166,7 +166,7 @@ describe.skipIf(!dbReachable)("vendor requirement actions", () => {
       data: {
         fullName: "Cand Two",
         status: "AVAILABLE",
-        createdBy: { connect: { id: ctx.admin.id } },
+        createdById: ctx.admin.id,
       },
     });
 
