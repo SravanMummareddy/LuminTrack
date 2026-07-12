@@ -10,6 +10,35 @@ short instead of long.
 
 ---
 
+## 2026-07-12 · Placement forms-discipline (PR-6) — a non-nullable column can't have a TBD toggle
+
+**Situation.** Final form of the rollout: placement edit, "required-or-TBD everywhere." The
+plan listed every field — start date, both rates, dates, PO/invoice/manager/org/lead — under
+one rule.
+
+**Diagnosis.** "Everywhere" doesn't survive contact with the schema. `startDate` is
+**non-nullable** — the placement is auto-created on JOINED *because* someone joined on a date;
+a TBD toggle would have to store null into a NOT-NULL column. The rates are the sharper trap:
+also non-nullable, and the action deliberately treats a blank rate as "don't touch" (empty →
+undefined → skipped) so a non-rate edit can't zero a live rate. Bolting a TBD toggle on them
+would either fight that semantic or risk nulling a real rate. Only the genuinely nullable
+fields (end date, PO#, invoice, onsite manager/email, org, lead, the two extra dates) can
+honestly be TBD.
+
+**Fix.** Required-or-TBD on the nullable set only; `startDate` stays hard-required; rates stay
+gated + preserve-on-blank with a "blank keeps the current rate" hint instead of a toggle. The
+write path already did `?? null` for the nullable fields and `!== undefined` for the rates, so
+it needed **zero** changes — the whole PR is validation + the controlled-component conversion.
+On this edit-only form, a field blank on the record opens pre-marked TBD (browser-verified:
+exactly the six null fields posted `__na`, the value-bearing ones didn't, start date had none).
+
+**Lesson.** A blanket "required-or-N/A everywhere" is a starting proposal, not a spec — the
+column's nullability and the write semantics decide which fields can actually take the escape.
+Map the rule onto the storage before writing UI: a non-nullable column wants a hard-required
+or a preserve-on-blank field, never a "store null" toggle.
+
+---
+
 ## 2026-07-12 · Interview forms-discipline (PR-5) — uncontrolled `defaultValue` inputs can't do N/A
 
 **Situation.** Applying required-or-N/A to the interview-round dialog. The existing form used
