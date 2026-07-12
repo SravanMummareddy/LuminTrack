@@ -127,6 +127,16 @@ describe.skipIf(!dbReachable)("vendor requirement actions", () => {
   it("gates create behind canManageRequirements", async () => {
     const fd = new FormData();
     fd.set("jobId", ctx.job.id);
+    // Forms-discipline (PR-1): these are now required to create a requirement.
+    // The recruiter is still denied up front on permission, before validation.
+    fd.set("location", "Remote");
+    fd.set("engagement", "C2C");
+    fd.set("vendorRecruiterName", "Vendor Rec");
+    fd.set("teamLead", "Lead Person");
+    fd.set("recruiterId__na", "1");
+    fd.set("payRate__na", "1");
+    fd.set("billRate__na", "1");
+    fd.set("clientRate__na", "1");
 
     mockedRequireUser.mockResolvedValue(ctx.recruiter as never);
     const denied = await createVendorRequirement({}, fd);

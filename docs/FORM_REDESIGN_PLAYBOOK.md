@@ -34,7 +34,9 @@ owner — those are product calls, not mechanical ones.
 
 | Piece | Where | What it does |
 |---|---|---|
-| `FormSection` | `src/components/jobs/job-form.tsx:79` | Numbered card: `rounded-xl` body + `rounded-t-xl` tinted header. **Never `overflow-hidden`** (it clips dropdowns — see DEVLOG 2026-07-12). Consider promoting it to `src/components/ui/` when the 2nd form needs it. |
+| `FormSection` | `src/components/ui/form-section.tsx` | Numbered card: `rounded-xl` body + `rounded-t-xl` tinted header. **Never `overflow-hidden`** (it clips dropdowns — see DEVLOG 2026-07-12). Promoted to `ui/` in PR-1 (VPR) — import it, don't re-declare. |
+| Quick-add-in-dropdown | `SearchSelect` `actionOption` + a `__add__`-style sentinel | "+ Add new…" is the **last row of the dropdown**, not a button beside the label (owner-confirmed). Selecting it opens a dialog; on success append the option + select it. Org entities → `org-quick-add.ts`; a **user** → `quickAddUser` (`actions/users.ts`, managers only, temp password) (VPR PR-1). |
+| Read-only "From the X" panel | inline `<dl>` (VPR PR-1) | When fields prefill from a parent (job → VPR, candidate → bench), show a tinted read-only reference panel of the source values above the editable prefilled fields, so the source is always visible even after edits. |
 | `NullableField` + `NaToggle` | `src/components/ui/nullable-field.tsx` | The required-or-N/A wrapper. Renders a hidden `{name}__na="1"` when N/A is toggled; caller disables/clears the control. `required` prop draws the `*`. |
 | `enumRequired(values, msg)` | `src/lib/validation/job.ts:36` | Zod preprocess: empty string → a required error on an enum. Copy into the target's schema (or lift to `validation/common.ts`). |
 | value-or-N/A `superRefine` | `src/lib/validation/job.ts:83` | The `if (!val.x && !val.xNa) ctx.addIssue(...)` rule per N/A field. |
@@ -102,13 +104,23 @@ derived/read-only fields, any close-gate. Owner approves grouping + the required
   *form*, not the gates.
 - **Don't rebuild what exists.** Bench/candidate/submission forms already have full field
   sets + schemas; this is a *restructure*, not a rewrite. Reuse the primitives above.
+- **A custom `<Select>` needs a `name`.** `ui/select-menu.tsx` submits via a hidden input keyed
+  on `name` — `value`/`onChange` drive only the UI. A `<Select>` with no `name` renders fine but
+  posts nothing (the VPR Engagement field silently dropped its value this way — DEVLOG 2026-07-12).
+- **Inline enum arrays need `as const`.** `enumRequired(["C2C","W2"], …)` widens to `string[]`
+  (output type `string`); pass `["C2C","W2"] as const` (or a `VALUES` tuple) so the literals survive.
 
 ---
 
-## Order of attack (suggested)
-1. **Submissions** (task #31) — already scoped + planned (5 sections + N/A). Highest value.
-2. **Candidates** — `candidate-form.tsx` + `validation/candidate.ts`.
-3. **Bench** — `bench-consultant-form.tsx` + `validation/bench.ts` (largest field set;
-   from the stakeholder spreadsheet).
+## Order of attack (owner's sequence, 2026-07-12)
+1. ✅ **VPR** (PR-1, shipped) — `requirement-form.tsx` + `validation/requirement.ts`. Job panel +
+   required/N-A + add-user picker. FormSection promoted to `ui/`.
+2. **Candidates** — `candidate-form.tsx` + `validation/candidate.ts`. **Migration:** first/last name
+   (fullName derived) + `Candidate.referrerId` FK; reference → Referrer picker.
+3. **Bench** — `bench-consultant-form.tsx` + `validation/bench.ts` (largest field set; prefill from
+   the linked candidate).
+4. **Submissions** (task #31) — 5 sections + N/A; **gate engine untouched**.
+5. **Interview round** — `interview-round-form.tsx`; required-or-N/A.
+6. **Placement** — `placement-edit-form.tsx`; required-or-TBD (edit form only).
 
 Each is one PR, mock-gated, following the recipe above.
