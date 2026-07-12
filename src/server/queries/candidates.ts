@@ -166,6 +166,9 @@ export async function getCandidateDetail(id: string) {
     where: { id },
     include: {
       createdBy: { select: { fullName: true } },
+      // Reference links to the Referrer entity when set; falls back to legacy
+      // free-text `source`.
+      referrer: { select: { name: true } },
       resumes: {
         orderBy: { createdAt: "asc" },
         include: { _count: { select: { submissions: true } } },

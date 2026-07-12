@@ -6,12 +6,14 @@
  *   WORKING_TYPE  — "working now" engagement type (candidate)
  *   CALL_TYPE     — bench call type
  *   PAYROLL_TYPE  — bench payroll type
+ *   PROJECT_TYPE  — bench project type (nature / duration of the engagement)
  */
 export const LOOKUP_CATEGORIES = [
   "WORK_AUTH",
   "WORKING_TYPE",
   "CALL_TYPE",
   "PAYROLL_TYPE",
+  "PROJECT_TYPE",
 ] as const;
 
 export type LookupCategory = (typeof LOOKUP_CATEGORIES)[number];
@@ -33,8 +35,9 @@ export const LOOKUP_DEFAULTS: Record<LookupCategory, string[]> = {
     "E-3",
   ],
   WORKING_TYPE: ["C2C", "W2", "Full-time"],
-  CALL_TYPE: ["C2C", "W2", "Any"],
+  CALL_TYPE: ["C2C", "W2", "1099", "Any"],
   PAYROLL_TYPE: ["W2", "C2C", "1099"],
+  PROJECT_TYPE: ["Contract", "Contract-to-Hire", "Full-time", "Part-time"],
 };
 
 /** Curated defaults first, then learned values (not already in defaults),

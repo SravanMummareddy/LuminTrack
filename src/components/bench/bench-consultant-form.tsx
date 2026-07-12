@@ -158,6 +158,7 @@ export function BenchConsultantForm({
   canEditCredentials,
   callTypeOptions = [],
   payrollTypeOptions = [],
+  projectTypeOptions = [],
 }: {
   action: BenchAction;
   values?: BenchConsultantFormValues;
@@ -169,6 +170,7 @@ export function BenchConsultantForm({
   canEditCredentials: boolean;
   callTypeOptions?: string[];
   payrollTypeOptions?: string[];
+  projectTypeOptions?: string[];
 }) {
   const [state, formAction, pending] = useActionState(action, EMPTY_FORM_STATE);
   const [fields, setFields] = useState<Fields>(() => initialFields(values));
@@ -386,8 +388,8 @@ export function BenchConsultantForm({
           <Field label="Marketing start date" htmlFor="marketingStartDate" hint="Optional." error={errors.marketingStartDate}>
             <Input id="marketingStartDate" name="marketingStartDate" type="date" value={fields.marketingStartDate} onChange={set("marketingStartDate")} />
           </Field>
-          <Field label="Project type" htmlFor="projectType" required error={errors.projectType}>
-            <Input id="projectType" name="projectType" value={fields.projectType} onChange={set("projectType")} placeholder="Contract / C2H / Full-time" />
+          <Field label="Project type" htmlFor="projectType" required hint="Nature / duration of the engagement." error={errors.projectType}>
+            <SuggestInput id="projectType" name="projectType" value={fields.projectType} suggestions={projectTypeOptions} onChange={set("projectType")} placeholder="Contract / Contract-to-Hire / Full-time" />
           </Field>
           <Field label="Call type" htmlFor="callType" required hint="Engagement types you'll take calls for." error={errors.callType}>
             <SuggestInput id="callType" name="callType" value={fields.callType} suggestions={callTypeOptions} onChange={set("callType")} placeholder="C2C / W2 / Any" />
