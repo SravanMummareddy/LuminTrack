@@ -5,6 +5,8 @@ import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, Input, Textarea } from "@/components/ui/field";
+import { FormSection } from "@/components/ui/form-section";
+import { NullableField } from "@/components/ui/nullable-field";
 import { updatePlacement } from "@/server/actions/placements";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
 
@@ -73,169 +75,126 @@ function EditForm({
     if (state.ok) onDone();
   }, [state.ok, onDone]);
   const errors = state.fieldErrors ?? {};
+
+  // Controlled so the TBD toggle can clear + disable a field. This is always an
+  // edit (the placement is auto-created on JOINED), so a field left blank on the
+  // record opens pre-marked TBD — an explicit "not known yet", editable by
+  // un-toggling — rather than forcing the editor to fill every gap.
+  const [fields, setFields] = useState({
+    startDate: toDateInput(placement.startDate),
+    billRate: String(placement.billRate),
+    payRate: String(placement.payRate),
+    endDate: toDateInput(placement.endDate),
+    endDateNa: placement.endDate == null,
+    clientPoNumber: placement.clientPoNumber ?? "",
+    clientPoNumberNa: !placement.clientPoNumber,
+    invoiceRef: placement.invoiceRef ?? "",
+    invoiceRefNa: !placement.invoiceRef,
+    onsiteManagerName: placement.onsiteManagerName ?? "",
+    onsiteManagerNameNa: !placement.onsiteManagerName,
+    onsiteManagerEmail: placement.onsiteManagerEmail ?? "",
+    onsiteManagerEmailNa: !placement.onsiteManagerEmail,
+    organisation: placement.organisation ?? "",
+    organisationNa: !placement.organisation,
+    teamLead: placement.teamLead ?? "",
+    teamLeadNa: !placement.teamLead,
+    interviewDate: toDateInput(placement.interviewDate),
+    interviewDateNa: placement.interviewDate == null,
+    placementDate: toDateInput(placement.placementDate),
+    placementDateNa: placement.placementDate == null,
+    remarks: placement.remarks ?? "",
+  });
+
+  type Fields = typeof fields;
+  const set =
+    (name: keyof Fields) =>
+    (
+      e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+    ) =>
+      setFields((f) => ({ ...f, [name]: e.target.value }));
+  // Toggling TBD on clears the paired value; off leaves it for re-entry.
+  const naToggle =
+    (field: keyof Fields, naField: keyof Fields) => (v: boolean) =>
+      setFields((f) => ({ ...f, [naField]: v, ...(v ? { [field]: "" } : {}) }));
+
   const negativeWarn =
     canManageRates &&
     placement.billRate > 0 &&
-    placement.payRate > placement.billRate;
+    Number(fields.payRate) > Number(fields.billRate);
 
   return (
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="id" value={placement.id} />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field
-          label="Start date"
-          htmlFor="startDate"
-          required
-          error={errors.startDate}
-        >
-          <Input
-            id="startDate"
-            name="startDate"
-            type="date"
-            defaultValue={toDateInput(placement.startDate)}
-            required
-          />
-        </Field>
-        <Field label="End date" htmlFor="endDate" error={errors.endDate}>
-          <Input
-            id="endDate"
-            name="endDate"
-            type="date"
-            defaultValue={toDateInput(placement.endDate)}
-          />
-        </Field>
-      </div>
-
-      {canManageRates ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Bill rate" htmlFor="billRate" error={errors.billRate}>
-            <Input
-              id="billRate"
-              name="billRate"
-              type="number"
-              step="0.01"
-              min="0"
-              defaultValue={placement.billRate}
-            />
+      <FormSection n={1} title="Dates">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Start date" htmlFor="startDate" required error={errors.startDate} hint="Always known — it's why the placement exists.">
+            <Input id="startDate" name="startDate" type="date" value={fields.startDate} onChange={set("startDate")} required />
           </Field>
-          <Field label="Pay rate" htmlFor="payRate" error={errors.payRate}>
-            <Input
-              id="payRate"
-              name="payRate"
-              type="number"
-              step="0.01"
-              min="0"
-              defaultValue={placement.payRate}
-            />
-          </Field>
-          {negativeWarn && (
-            <p className="sm:col-span-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              Heads-up: pay rate is currently above bill rate — margin is negative.
-            </p>
-          )}
+          <NullableField label="End date" naLabel="TBD" htmlFor="endDate" name="endDate" na={fields.endDateNa} onToggleNa={naToggle("endDate", "endDateNa")} error={errors.endDate}>
+            <Input id="endDate" name="endDate" type="date" value={fields.endDate} onChange={set("endDate")} disabled={fields.endDateNa} />
+          </NullableField>
+          <NullableField label="Date of interview" naLabel="TBD" htmlFor="interviewDate" name="interviewDate" na={fields.interviewDateNa} onToggleNa={naToggle("interviewDate", "interviewDateNa")} error={errors.interviewDate}>
+            <Input id="interviewDate" name="interviewDate" type="date" value={fields.interviewDate} onChange={set("interviewDate")} disabled={fields.interviewDateNa} />
+          </NullableField>
+          <NullableField label="Date of placement" naLabel="TBD" htmlFor="placementDate" name="placementDate" na={fields.placementDateNa} onToggleNa={naToggle("placementDate", "placementDateNa")} error={errors.placementDate}>
+            <Input id="placementDate" name="placementDate" type="date" value={fields.placementDate} onChange={set("placementDate")} disabled={fields.placementDateNa} />
+          </NullableField>
         </div>
-      ) : (
-        <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
-          Only admins or the submitting recruiter can edit rates.
-        </p>
-      )}
+      </FormSection>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="Client PO #" htmlFor="clientPoNumber" error={errors.clientPoNumber}>
-          <Input
-            id="clientPoNumber"
-            name="clientPoNumber"
-            defaultValue={placement.clientPoNumber ?? ""}
-          />
-        </Field>
-        <Field label="Invoice ref" htmlFor="invoiceRef" error={errors.invoiceRef}>
-          <Input
-            id="invoiceRef"
-            name="invoiceRef"
-            defaultValue={placement.invoiceRef ?? ""}
-          />
-        </Field>
-      </div>
+      <FormSection n={2} title="Commercials">
+        {canManageRates ? (
+          <>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Bill rate" htmlFor="billRate" error={errors.billRate}>
+                <Input id="billRate" name="billRate" type="number" step="0.01" min="0" value={fields.billRate} onChange={set("billRate")} />
+              </Field>
+              <Field label="Pay rate" htmlFor="payRate" error={errors.payRate}>
+                <Input id="payRate" name="payRate" type="number" step="0.01" min="0" value={fields.payRate} onChange={set("payRate")} />
+              </Field>
+            </div>
+            {negativeWarn && (
+              <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                Heads-up: pay rate is currently above bill rate — margin is negative.
+              </p>
+            )}
+            <p className="text-xs text-slate-500">
+              Blank keeps the current rate — a placement rate is never blanked to zero.
+            </p>
+          </>
+        ) : (
+          <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            Only admins or the submitting recruiter can edit rates.
+          </p>
+        )}
+      </FormSection>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field
-          label="Onsite manager"
-          htmlFor="onsiteManagerName"
-          error={errors.onsiteManagerName}
-        >
-          <Input
-            id="onsiteManagerName"
-            name="onsiteManagerName"
-            defaultValue={placement.onsiteManagerName ?? ""}
-          />
+      <FormSection n={3} title="Client, delivery & remarks">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <NullableField label="Client PO #" naLabel="TBD" htmlFor="clientPoNumber" name="clientPoNumber" na={fields.clientPoNumberNa} onToggleNa={naToggle("clientPoNumber", "clientPoNumberNa")} error={errors.clientPoNumber}>
+            <Input id="clientPoNumber" name="clientPoNumber" value={fields.clientPoNumber} onChange={set("clientPoNumber")} disabled={fields.clientPoNumberNa} />
+          </NullableField>
+          <NullableField label="Invoice ref" naLabel="TBD" htmlFor="invoiceRef" name="invoiceRef" na={fields.invoiceRefNa} onToggleNa={naToggle("invoiceRef", "invoiceRefNa")} error={errors.invoiceRef}>
+            <Input id="invoiceRef" name="invoiceRef" value={fields.invoiceRef} onChange={set("invoiceRef")} disabled={fields.invoiceRefNa} />
+          </NullableField>
+          <NullableField label="Onsite manager" naLabel="TBD" htmlFor="onsiteManagerName" name="onsiteManagerName" na={fields.onsiteManagerNameNa} onToggleNa={naToggle("onsiteManagerName", "onsiteManagerNameNa")} error={errors.onsiteManagerName}>
+            <Input id="onsiteManagerName" name="onsiteManagerName" value={fields.onsiteManagerName} onChange={set("onsiteManagerName")} disabled={fields.onsiteManagerNameNa} />
+          </NullableField>
+          <NullableField label="Onsite manager email" naLabel="TBD" htmlFor="onsiteManagerEmail" name="onsiteManagerEmail" na={fields.onsiteManagerEmailNa} onToggleNa={naToggle("onsiteManagerEmail", "onsiteManagerEmailNa")} error={errors.onsiteManagerEmail}>
+            <Input id="onsiteManagerEmail" name="onsiteManagerEmail" type="email" value={fields.onsiteManagerEmail} onChange={set("onsiteManagerEmail")} disabled={fields.onsiteManagerEmailNa} />
+          </NullableField>
+          <NullableField label="Organisation" naLabel="TBD" htmlFor="organisation" name="organisation" na={fields.organisationNa} onToggleNa={naToggle("organisation", "organisationNa")} error={errors.organisation}>
+            <Input id="organisation" name="organisation" value={fields.organisation} onChange={set("organisation")} disabled={fields.organisationNa} />
+          </NullableField>
+          <NullableField label="Lead" naLabel="TBD" htmlFor="teamLead" name="teamLead" na={fields.teamLeadNa} onToggleNa={naToggle("teamLead", "teamLeadNa")} error={errors.teamLead}>
+            <Input id="teamLead" name="teamLead" value={fields.teamLead} onChange={set("teamLead")} disabled={fields.teamLeadNa} />
+          </NullableField>
+        </div>
+        <Field label="Remarks" htmlFor="remarks" error={errors.remarks} hint="Optional.">
+          <Textarea id="remarks" name="remarks" rows={2} value={fields.remarks} onChange={set("remarks")} />
         </Field>
-        <Field
-          label="Onsite manager email"
-          htmlFor="onsiteManagerEmail"
-          error={errors.onsiteManagerEmail}
-        >
-          <Input
-            id="onsiteManagerEmail"
-            name="onsiteManagerEmail"
-            type="email"
-            defaultValue={placement.onsiteManagerEmail ?? ""}
-          />
-        </Field>
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="Organisation" htmlFor="organisation" error={errors.organisation}>
-          <Input
-            id="organisation"
-            name="organisation"
-            defaultValue={placement.organisation ?? ""}
-          />
-        </Field>
-        <Field label="Lead" htmlFor="teamLead" error={errors.teamLead}>
-          <Input
-            id="teamLead"
-            name="teamLead"
-            defaultValue={placement.teamLead ?? ""}
-          />
-        </Field>
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field
-          label="Date of interview"
-          htmlFor="interviewDate"
-          error={errors.interviewDate}
-        >
-          <Input
-            id="interviewDate"
-            name="interviewDate"
-            type="date"
-            defaultValue={toDateInput(placement.interviewDate)}
-          />
-        </Field>
-        <Field
-          label="Date of placement"
-          htmlFor="placementDate"
-          error={errors.placementDate}
-        >
-          <Input
-            id="placementDate"
-            name="placementDate"
-            type="date"
-            defaultValue={toDateInput(placement.placementDate)}
-          />
-        </Field>
-      </div>
-
-      <Field label="Remarks" htmlFor="remarks" error={errors.remarks}>
-        <Textarea
-          id="remarks"
-          name="remarks"
-          rows={2}
-          defaultValue={placement.remarks ?? ""}
-        />
-      </Field>
+      </FormSection>
 
       {state.error && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">

@@ -127,6 +127,12 @@ derived/read-only fields, any close-gate. Owner approves grouping + the required
    (round name/type/result hard-required; notes optional). Converted uncontrolled `defaultValue` inputs
    to controlled `NullableField`s; edit pre-marks existing blanks N/A. Conditional (video platform,
    support pair) required-or-N/A only while shown. No migration. See DEVLOG 2026-07-12.
-6. **Placement** — `placement-edit-form.tsx`; required-or-TBD (edit form only).
+6. ✅ **Placement** (PR-6) — `placement-edit-form.tsx` + `validation/placement.ts`; required-or-**TBD**
+   (edit form only). TBD on the nullable set; `startDate` hard-required + rates gated/preserve-on-blank
+   (non-nullable columns — can't take a store-null toggle). Controlled conversion; edit pre-marks blanks
+   TBD. No migration. See DEVLOG 2026-07-12.
+
+**Rollout complete (2026-07-12):** all six forms carry the numbered `FormSection` cards + required-or-N/A
+(TBD on Placement); the submission gate engine is untouched. Merge the six-PR stack bottom-up.
 
 Each is one PR, mock-gated, following the recipe above.

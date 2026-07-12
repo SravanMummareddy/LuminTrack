@@ -6,17 +6,49 @@ import {
 } from "@/lib/validation/placement";
 
 describe("placementUpdateSchema", () => {
-  const base = { id: "p1", startDate: "2026-06-01" };
+  // Every nullable field is required-or-TBD; a minimal update marks them all TBD.
+  const base = {
+    id: "p1",
+    startDate: "2026-06-01",
+    endDateNa: "1",
+    clientPoNumberNa: "1",
+    invoiceRefNa: "1",
+    onsiteManagerNameNa: "1",
+    onsiteManagerEmailNa: "1",
+    organisationNa: "1",
+    teamLeadNa: "1",
+    interviewDateNa: "1",
+    placementDateNa: "1",
+  };
 
-  it("accepts the minimal update (id + start date)", () => {
+  it("accepts the minimal update (id + start date, rest TBD)", () => {
     expect(placementUpdateSchema.safeParse(base).success).toBe(true);
   });
 
-  it("requires an id and a start date", () => {
+  it("requires an id and a start date (no TBD escape)", () => {
     expect(placementUpdateSchema.safeParse({ ...base, id: "" }).success).toBe(false);
     expect(
       placementUpdateSchema.safeParse({ ...base, startDate: "" }).success,
     ).toBe(false);
+  });
+
+  it("a nullable field blank without its TBD flag fails", () => {
+    expect(
+      placementUpdateSchema.safeParse({ ...base, clientPoNumberNa: "" }).success,
+    ).toBe(false);
+    expect(
+      placementUpdateSchema.safeParse({ ...base, endDateNa: "" }).success,
+    ).toBe(false);
+  });
+
+  it("a real value satisfies a field without its TBD flag", () => {
+    expect(
+      placementUpdateSchema.safeParse({
+        ...base,
+        teamLeadNa: "",
+        teamLead: "Sriman Udugula",
+      }).success,
+    ).toBe(true);
   });
 
   it("leaves empty rates undefined so a non-rate edit can't zero them", () => {
