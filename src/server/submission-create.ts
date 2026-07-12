@@ -47,6 +47,13 @@ export type SubmissionRecordInput = {
   /** Free-text reason logged when submitting a Not-interested / Do-not-contact
    *  candidate. The gate lives in the calling action; this only records it. */
   candidateStatusOverrideReason?: string;
+  /** Free-text reason logged when submitting a candidate whose work
+   *  authorization has expired. The gate lives in the calling action; this only
+   *  records it. */
+  workAuthOverrideReason?: string;
+  /** Free-text reason logged (C-1) when submitting a candidate with no authentic
+   *  (Original) résumé on file. The gate lives in the calling action. */
+  originalResumeOverrideReason?: string;
   /** Free-text reason logged when submitting an Off-bench candidate. The gate
    *  lives in the calling action; this only records it. */
   benchOverrideReason?: string;
@@ -161,6 +168,10 @@ export async function createSubmissionRecord(
     notes.push(`rate-override:${input.rateOverrideReason}`);
   if (input.candidateStatusOverrideReason)
     notes.push(`candidate-override:${input.candidateStatusOverrideReason}`);
+  if (input.workAuthOverrideReason)
+    notes.push(`work-auth-override:${input.workAuthOverrideReason}`);
+  if (input.originalResumeOverrideReason)
+    notes.push(`original-resume-override:${input.originalResumeOverrideReason}`);
   if (input.benchOverrideReason)
     notes.push(`bench-override:${input.benchOverrideReason}`);
   const description = existing

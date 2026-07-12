@@ -409,13 +409,19 @@ export type CandidateSubmissionRow = Awaited<
   ReturnType<typeof getCandidateSubmissions>
 >["rows"][number];
 
-/** Candidate IDs already submitted to a job — lets the new-submission form flag duplicates. */
+/**
+ * Candidate IDs with a still-standing submission to a job — used to grey them
+ * out in the submit picker so one candidate isn't submitted to the same job
+ * twice. REJECTED submissions are excluded: a rejected candidate is out of the
+ * running for that job, so they stay selectable and can be re-submitted. (The
+ * duplicate gate on submit — the dedup model — is unchanged.)
+ */
 export async function getJobSubmittedCandidateIds(
   jobId: string,
 ): Promise<string[]> {
   const db = await getScopedPrisma();
   const rows = await db.submission.findMany({
-    where: { jobId },
+    where: { jobId, status: { not: "REJECTED" } },
     select: { candidateId: true },
   });
   return rows.map((r) => r.candidateId);

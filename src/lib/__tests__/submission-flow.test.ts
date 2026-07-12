@@ -4,6 +4,7 @@ import {
   branchActions,
   isTerminal,
   resumeFlag,
+  isForwardAdvance,
 } from "@/lib/submission-flow";
 
 describe("primaryAdvance", () => {
@@ -115,5 +116,24 @@ describe("resumeFlag", () => {
     expect(
       resumeFlag({ candidateResumeId: "r1", resumeBlobUrl: null, resumeWaivedAt: new Date() }),
     ).toBe("attached");
+  });
+});
+
+describe("isForwardAdvance", () => {
+  it("is true for a forward pipeline move", () => {
+    expect(isForwardAdvance("SUBMITTED", "RESUME_PICKED")).toBe(true);
+    expect(isForwardAdvance("CLIENT_INTERVIEW", "SELECTED")).toBe(true);
+    expect(isForwardAdvance("OFFER_ACCEPTED", "JOINED")).toBe(true);
+  });
+
+  it("is false for branch outcomes (Hold / Reject / Backed out)", () => {
+    expect(isForwardAdvance("CLIENT_INTERVIEW", "REJECTED")).toBe(false);
+    expect(isForwardAdvance("SUBMITTED", "ON_HOLD")).toBe(false);
+    expect(isForwardAdvance("SELECTED", "BACKED_OUT")).toBe(false);
+  });
+
+  it("is false for a backward correction to an earlier stage", () => {
+    expect(isForwardAdvance("CLIENT_INTERVIEW", "SUBMITTED")).toBe(false);
+    expect(isForwardAdvance("OFFER_RELEASED", "SELECTED")).toBe(false);
   });
 });

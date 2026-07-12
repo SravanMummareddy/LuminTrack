@@ -1,9 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { collectSubmissionGates } from "@/server/submission-gates";
+import {
+  collectSubmissionGates,
+  workAuthExpiredOn,
+} from "@/server/submission-gates";
 
 const NO_REASONS = {
   rate: "",
   candidateStatus: "",
+  workAuth: "",
+  originalResume: "",
   bench: "",
   convert: "",
   duplicate: "",
@@ -14,6 +19,8 @@ const clean = {
   assignmentOk: true,
   rateWarnings: [] as string[],
   candidateStatusLabel: null as string | null,
+  workAuthExpiredOn: null as string | null,
+  missingOriginalResume: false,
   notMarketed: false,
   convertWarnings: [] as string[],
   duplicateExistingId: null as string | null,
@@ -31,6 +38,8 @@ describe("collectSubmissionGates", () => {
       assignmentOk: false,
       rateWarnings: ["pay > bill"],
       candidateStatusLabel: "Do not contact",
+      workAuthExpiredOn: "Jan 1, 2026",
+      missingOriginalResume: true,
       notMarketed: true,
       duplicateExistingId: "sub_1",
     });
@@ -38,9 +47,37 @@ describe("collectSubmissionGates", () => {
       "not_assigned",
       "rate_chain",
       "candidate_status",
+      "work_auth",
+      "no_original_resume",
       "not_marketing",
       "duplicate",
     ]);
+  });
+
+  it("fires the no_original_resume gate, cleared by a reason", () => {
+    const base = { ...clean, missingOriginalResume: true };
+    expect(collectSubmissionGates(base).map((g) => g.kind)).toEqual([
+      "no_original_resume",
+    ]);
+    expect(
+      collectSubmissionGates({
+        ...base,
+        reasons: { ...NO_REASONS, originalResume: "client waived it" },
+      }),
+    ).toEqual([]);
+  });
+
+  it("fires the work_auth gate with a dated message, cleared by a reason", () => {
+    const base = { ...clean, workAuthExpiredOn: "Jan 1, 2026" };
+    const [gate] = collectSubmissionGates(base);
+    expect(gate.kind).toBe("work_auth");
+    expect(gate.message).toContain("Jan 1, 2026");
+    expect(
+      collectSubmissionGates({
+        ...base,
+        reasons: { ...NO_REASONS, workAuth: "renewal pending" },
+      }),
+    ).toEqual([]);
   });
 
   it("drops a gate once its reason is supplied", () => {
@@ -98,5 +135,33 @@ describe("collectSubmissionGates", () => {
         reasons: { ...NO_REASONS, convert: "why" },
       }),
     ).toEqual([]);
+  });
+});
+
+describe("workAuthExpiredOn", () => {
+  const now = new Date("2026-06-01T00:00:00Z");
+  const past = new Date("2026-01-01T00:00:00Z");
+  const future = new Date("2027-01-01T00:00:00Z");
+
+  it("returns null when there are no work-auth documents", () => {
+    expect(workAuthExpiredOn([], now)).toBeNull();
+  });
+
+  it("returns null when a doc has no expiry (permanent authorization)", () => {
+    expect(workAuthExpiredOn([{ expiresAt: null }], now)).toBeNull();
+  });
+
+  it("returns null when at least one doc is still valid (renewed)", () => {
+    // Old expired doc still in the library + a valid new one → covered.
+    expect(
+      workAuthExpiredOn([{ expiresAt: past }, { expiresAt: future }], now),
+    ).toBeNull();
+  });
+
+  it("returns the latest expiry when every doc has expired", () => {
+    const earlier = new Date("2025-06-01T00:00:00Z");
+    expect(
+      workAuthExpiredOn([{ expiresAt: earlier }, { expiresAt: past }], now),
+    ).toEqual(past);
   });
 });
