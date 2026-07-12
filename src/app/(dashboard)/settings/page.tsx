@@ -18,6 +18,7 @@ import {
   listSisterCompanies,
   listClients,
   listVendors,
+  listReferrersAdmin,
   listUsers,
   listActiveUserOptions,
   listTeamsAdmin,
@@ -29,6 +30,7 @@ import { listSupportProviders } from "@/server/queries/support";
 import { ContactOrgSection } from "@/components/settings/contact-org-section";
 import { SupportSection } from "@/components/settings/support-section";
 import { ClientSection } from "@/components/settings/client-section";
+import { ReferrerSection } from "@/components/settings/referrer-section";
 import { UserSection } from "@/components/settings/user-section";
 import { AccountSection } from "@/components/settings/account-section";
 import { DeletedCandidatesSection } from "@/components/settings/deleted-candidates-section";
@@ -44,6 +46,7 @@ const TABS = [
   { key: "sister-companies", label: "Sources" },
   { key: "clients", label: "Clients" },
   { key: "vendors", label: "Vendors" },
+  { key: "referrers", label: "Referrers" },
   { key: "support", label: "Support" },
   { key: "teams", label: "Teams" },
   { key: "users", label: "Users" },
@@ -68,6 +71,9 @@ export default async function SettingsPage({
   const isSuperAdmin = canManageOrganizations(user);
 
   const rawTab = Array.isArray(sp.tab) ? sp.tab[0] : sp.tab;
+  // `?edit=<id>` (from an org-entity detail page's Edit button) opens that row's
+  // dialog on load.
+  const editId = Array.isArray(sp.edit) ? sp.edit[0] : sp.edit;
   // Only managers get the management tabs. Everyone else is limited to their own
   // account (reached via the user-menu "Change password" link) — a `?tab=users`
   // URL from a restricted user still lands on account.
@@ -87,11 +93,12 @@ export default async function SettingsPage({
         action={saveSisterCompany}
         contactKind="source"
         isAdmin={isAdmin}
+        openEditId={editId}
       />
     );
   } else if (tab === "clients") {
     content = (
-      <ClientSection items={await listClients()} isAdmin={isAdmin} />
+      <ClientSection items={await listClients()} isAdmin={isAdmin} openEditId={editId} />
     );
   } else if (tab === "vendors") {
     const [vendors, userOptions] = await Promise.all([
@@ -108,7 +115,12 @@ export default async function SettingsPage({
         isAdmin={isAdmin}
         showRecruitedBy
         userNames={userOptions.map((u) => u.fullName)}
+        openEditId={editId}
       />
+    );
+  } else if (tab === "referrers") {
+    content = (
+      <ReferrerSection items={await listReferrersAdmin()} isAdmin={isAdmin} openEditId={editId} />
     );
   } else if (tab === "support") {
     content = (

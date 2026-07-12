@@ -14,8 +14,9 @@ import {
 import { formatDate, formatPlacementDisplayId, deletedSuffix } from "@/lib/format";
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
 import type { PlacementListRow } from "@/server/queries/placements";
+import { OrgEntityLink } from "@/components/settings/org-entity-link";
 
-type ViewerContext = { userId: string; userRole: string };
+type ViewerContext = { userId: string; userRole: string; isManager: boolean };
 
 type Column = {
   key: string;
@@ -107,9 +108,18 @@ const COLUMNS: Column[] = [
     label: "Vendor",
     sortKey: "vendor",
     defaultVisible: true,
-    render: (p) => (
+    render: (p, _n, ctx) => (
       <Td label="Vendor" secondary>
-        {p.job.vendor?.name ?? "—"}
+        {p.job.vendor ? (
+          <OrgEntityLink
+            kind="vendor"
+            id={p.job.vendorId}
+            name={p.job.vendor.name}
+            isManager={ctx.isManager}
+          />
+        ) : (
+          "—"
+        )}
       </Td>
     ),
   },
@@ -118,9 +128,14 @@ const COLUMNS: Column[] = [
     label: "Client",
     sortKey: "client",
     defaultVisible: true,
-    render: (p) => (
+    render: (p, _n, ctx) => (
       <Td label="Client" secondary>
-        {p.job.client.name}
+        <OrgEntityLink
+          kind="client"
+          id={p.job.clientId}
+          name={p.job.client.name}
+          isManager={ctx.isManager}
+        />
       </Td>
     ),
   },

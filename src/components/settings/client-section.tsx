@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Plus } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -13,14 +14,12 @@ import {
 } from "@/components/settings/settings-list-filter";
 import { useLocalPagination } from "@/components/ui/local-pager";
 import { saveClient } from "@/server/actions/org";
-import {
-  ContactsDialog,
-  type ContactRow,
-} from "@/components/settings/contacts-dialog";
+import { formatClientDisplayId } from "@/lib/format";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
 
 export type ClientRow = {
   id: string;
+  seq: number;
   name: string;
   contactPerson: string | null;
   email: string | null;
@@ -28,20 +27,29 @@ export type ClientRow = {
   location: string | null;
   notes: string | null;
   isActive: boolean;
-  contacts: ContactRow[];
+  _count: { jobs: number };
 };
 
 export function ClientSection({
   items,
   isAdmin,
+  openEditId,
 }: {
   items: ClientRow[];
   isAdmin: boolean;
+  /** When set (from `?edit=<id>`), open that row's edit dialog on load. */
+  openEditId?: string;
 }) {
   const [editing, setEditing] = useState<ClientRow | "new" | null>(null);
-  const [contactsOf, setContactsOf] = useState<ClientRow | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
+
+  useEffect(() => {
+    if (openEditId) {
+      const row = items.find((i) => i.id === openEditId);
+      if (row) setEditing(row);
+    }
+  }, [openEditId, items]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -92,36 +100,39 @@ export function ClientSection({
           <thead className="border-b border-slate-200 bg-slate-50">
             <tr>
               <Th>Name</Th>
+              <Th>ID</Th>
               <Th>Contact</Th>
               <Th>Email</Th>
-              <Th>Location</Th>
+              <Th>Phone</Th>
               <Th>Status</Th>
-              <Th>Contacts</Th>
+              <Th>Jobs</Th>
               <Th />
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {pageItems.map((item) => (
               <tr key={item.id}>
-                <Td label="Name" className="font-medium text-slate-900">
-                  {item.name}
+                <Td label="Name">
+                  <Link
+                    href={`/settings/client/${item.id}`}
+                    className="font-medium text-indigo-600 hover:underline"
+                  >
+                    {item.name}
+                  </Link>
+                </Td>
+                <Td label="ID" className="font-mono text-xs text-slate-500">
+                  {formatClientDisplayId(item)}
                 </Td>
                 <Td label="Contact">{item.contactPerson || "—"}</Td>
                 <Td label="Email">{item.email || "—"}</Td>
-                <Td label="Location">{item.location || "—"}</Td>
+                <Td label="Phone">{item.phone || "—"}</Td>
                 <Td label="Status">
                   <Badge tone={item.isActive ? "green" : "slate"}>
                     {item.isActive ? "Active" : "Inactive"}
                   </Badge>
                 </Td>
-                <Td label="Contacts">
-                  <button
-                    type="button"
-                    onClick={() => setContactsOf(item)}
-                    className="text-sm font-medium text-indigo-600 hover:underline"
-                  >
-                    Manage ({item.contacts.length})
-                  </button>
+                <Td label="Jobs" className="tabular-nums text-slate-600">
+                  {item._count.jobs}
                 </Td>
                 <Td className="text-right">
                   {isAdmin ? (
@@ -154,16 +165,6 @@ export function ClientSection({
           />
         )}
       </Dialog>
-
-      <ContactsDialog
-        open={contactsOf !== null}
-        onClose={() => setContactsOf(null)}
-        kind="client"
-        parentId={contactsOf?.id ?? ""}
-        parentName={contactsOf?.name ?? ""}
-        contacts={contactsOf?.contacts ?? []}
-        readOnly={!isAdmin}
-      />
     </section>
   );
 }
@@ -203,12 +204,7 @@ function ClientForm({
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Email" htmlFor="email" error={state.fieldErrors?.email}>
-          <Input
-            id="email"
-            name="email"
-            type="email"
-            defaultValue={entity?.email ?? ""}
-          />
+          <Input id="email" name="email" type="email" defaultValue={entity?.email ?? ""} />
         </Field>
         <Field label="Phone" htmlFor="phone" error={state.fieldErrors?.phone}>
           <Input id="phone" name="phone" defaultValue={entity?.phone ?? ""} />

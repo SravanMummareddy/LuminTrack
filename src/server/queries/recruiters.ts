@@ -296,6 +296,8 @@ export async function getRecruiterDetail(
             id: true,
             title: true,
             status: true,
+            clientId: true,
+            vendorId: true,
             client: { select: { name: true } },
             vendor: { select: { name: true } },
             _count: { select: { submissions: true } },

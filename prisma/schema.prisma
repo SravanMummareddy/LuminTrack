@@ -87,6 +87,18 @@ enum JobStatus {
   CANCELLED
 }
 
+// Where a job came from. Drives the "Where we found it" section: JOB_BOARD
+// carries a board name (learned lookup) + posting URL; REFERRAL points at a
+// Referrer; SISTER_COMPANY uses the SisterCompanySource FK; OTHER carries
+// free-text `sourceOther`; DIRECT needs no extra detail.
+enum JobSourceType {
+  JOB_BOARD
+  REFERRAL
+  SISTER_COMPANY
+  DIRECT
+  OTHER
+}
+
 // Broad discipline of a requisition / bench consultant — IT vs everything else.
 // Nullable on both models (existing rows are unclassified until set).
 enum Discipline {
@@ -252,6 +264,7 @@ model Organization {
   sisterCompanySources SisterCompanySource[]
   clients              Client[]
   vendors              Vendor[]
+  referrers            Referrer[]
   contacts             Contact[]
   jobs                 Job[]
   jobAssignments       JobAssignment[]
@@ -330,6 +343,14 @@ model User {
   customGlossaryTerms         CustomGlossaryTerm[]
   vendorsRecruited            Vendor[]             @relation("VendorRecruitedBy")
   submissionsResumeWaived     Submission[]         @relation("SubmissionResumeWaivedBy")
+  clientsCreated              Client[]              @relation("ClientCreatedBy")
+  clientsUpdated              Client[]              @relation("ClientUpdatedBy")
+  vendorsCreated              Vendor[]              @relation("VendorCreatedBy")
+  vendorsUpdated              Vendor[]              @relation("VendorUpdatedBy")
+  sourcesCreated              SisterCompanySource[] @relation("SourceCreatedBy")
+  sourcesUpdated              SisterCompanySource[] @relation("SourceUpdatedBy")
+  referrersCreated            Referrer[]            @relation("ReferrerCreatedBy")
+  referrersUpdated            Referrer[]            @relation("ReferrerUpdatedBy")
 
   @@index([organizationId])
   @@index([teamId])
@@ -409,6 +430,7 @@ model SisterCompanySource {
   id             String       @id @default(cuid())
   organizationId String       @default("")
   organization   Organization @relation(fields: [organizationId], references: [id])
+  seq            Int          @unique @default(autoincrement())
   name           String
   contactPerson  String?
   email          String?
@@ -416,6 +438,10 @@ model SisterCompanySource {
   location       String?
   notes          String?
   isActive       Boolean      @default(true)
+  createdById    String?
+  createdBy      User?        @relation("SourceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById    String?
+  updatedBy      User?        @relation("SourceUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
@@ -430,6 +456,7 @@ model Client {
   id             String       @id @default(cuid())
   organizationId String       @default("")
   organization   Organization @relation(fields: [organizationId], references: [id])
+  seq            Int          @unique @default(autoincrement())
   name           String
   contactPerson  String?
   email          String?
@@ -437,6 +464,10 @@ model Client {
   location       String?
   notes          String?
   isActive       Boolean      @default(true)
+  createdById    String?
+  createdBy      User?        @relation("ClientCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById    String?
+  updatedBy      User?        @relation("ClientUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
@@ -451,6 +482,7 @@ model Vendor {
   id              String       @id @default(cuid())
   organizationId  String       @default("")
   organization    Organization @relation(fields: [organizationId], references: [id])
+  seq             Int          @unique @default(autoincrement())
   name            String
   contactPerson   String?
   email           String?
@@ -465,6 +497,10 @@ model Vendor {
   recruitedById   String?
   recruitedBy     User?        @relation("VendorRecruitedBy", fields: [recruitedById], references: [id], onDelete: SetNull)
   recruitedByName String?
+  createdById     String?
+  createdBy       User?        @relation("VendorCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById     String?
+  updatedBy       User?        @relation("VendorUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
@@ -505,6 +541,34 @@ model Contact {
   @@index([sourceId])
 }
 
+// A reusable directory of people who refer jobs to us (source rework). A job
+// with sourceType REFERRAL points at one Referrer; recruiters pick an existing
+// one (contact auto-fills) or quick-add a new one inline, and managers curate
+// the full list in Settings › Referrers.
+model Referrer {
+  id             String       @id @default(cuid())
+  organizationId String       @default("")
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  seq            Int          @unique @default(autoincrement())
+  name           String
+  email          String?
+  phone          String?
+  company        String?
+  notes          String?
+  isActive       Boolean      @default(true)
+  createdById    String?
+  createdBy      User?        @relation("ReferrerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById    String?
+  updatedBy      User?        @relation("ReferrerUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  jobs Job[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
 model Job {
   id             String       @id @default(cuid())
   organizationId String       @default("")
@@ -535,19 +599,25 @@ model Job {
   client                Client               @relation(fields: [clientId], references: [id])
   vendorId              String
   vendor                Vendor               @relation(fields: [vendorId], references: [id])
-  // Either a managed source (FK) or a free-text source typed on the job — see
-  // `sourceOther`. Exactly one is set; `jobSourceLabel()` resolves the display name.
+  // Where this job came from (source rework). `sourceType` selects which detail
+  // field applies: JOB_BOARD → `jobBoard` name + `postingUrl`; REFERRAL →
+  // `referrerId`; SISTER_COMPANY → `sisterCompanySourceId`; OTHER → `sourceOther`;
+  // DIRECT → none. `jobSourceLabel()` resolves the display name.
+  sourceType            JobSourceType        @default(OTHER)
+  jobBoard              String?
+  referrerId            String?
+  referrer              Referrer?            @relation(fields: [referrerId], references: [id])
   sisterCompanySourceId String?
   sisterCompanySource   SisterCompanySource? @relation(fields: [sisterCompanySourceId], references: [id])
   sourceOther           String?
   // ─── Optional job-detail fields (all nullable) ──────────────────────────────
-  atsId                 String?
   startDate             DateTime?
+  // When `startDate` is a recruiter's estimate rather than confirmed. A
+  // non-estimated start is required before the job can be Filled/Closed or a
+  // placement is created (the estimated-start close-gate).
+  startDateEstimated    Boolean              @default(false)
   endDate               DateTime?
-  durationLabel         String?
   positions             Int?
-  reqType               String?
-  department            String?
   workMode              WorkMode?
   priority              JobPriority?
   discipline            Discipline?
@@ -571,6 +641,7 @@ model Job {
   @@index([clientId])
   @@index([vendorId])
   @@index([sisterCompanySourceId])
+  @@index([referrerId])
   @@index([createdAt])
 }
 

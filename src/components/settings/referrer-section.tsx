@@ -7,70 +7,41 @@ import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Field, Input, Textarea } from "@/components/ui/field";
-import { SuggestInput } from "@/components/ui/suggest-input";
 import { Table, Th, Td } from "@/components/ui/table";
 import {
   SettingsListFilter,
   type StatusFilter,
 } from "@/components/settings/settings-list-filter";
 import { useLocalPagination } from "@/components/ui/local-pager";
-import type { ContactKind } from "@/lib/contact-kinds";
-import { formatVendorDisplayId, formatSourceDisplayId } from "@/lib/format";
-import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
+import { saveReferrer } from "@/server/actions/org";
+import { formatReferrerDisplayId } from "@/lib/format";
+import { EMPTY_FORM_STATE } from "@/lib/form-state";
 
-export type ContactOrg = {
+export type ReferrerRow = {
   id: string;
   seq: number;
   name: string;
-  contactPerson: string | null;
   email: string | null;
   phone: string | null;
-  location: string | null;
+  company: string | null;
   notes: string | null;
   isActive: boolean;
   _count: { jobs: number };
-  // Vendors only: the owning team member. `recruitedBy` is the linked user;
-  // `recruitedByName` is the free-text fallback when nobody is linked.
-  recruitedBy?: { fullName: string } | null;
-  recruitedByName?: string | null;
 };
 
-/** Display label for a vendor's "Recruited by" — the linked user's name, else
- *  the free-typed name, else null. */
-function recruitedByLabel(org: ContactOrg): string | null {
-  return org.recruitedBy?.fullName ?? org.recruitedByName ?? null;
-}
-
-type SaveAction = (prev: FormState, formData: FormData) => Promise<FormState>;
-
-/** Settings table for the two contact-style org entities: sources and vendors. */
-export function ContactOrgSection({
-  title,
-  singular,
+/** Settings › Referrers — the reusable directory of people who refer jobs. */
+export function ReferrerSection({
   items,
-  action,
-  contactKind,
   isAdmin,
-  showRecruitedBy = false,
-  userNames = [],
   openEditId,
 }: {
-  title: string;
-  singular: string;
-  items: ContactOrg[];
-  action: SaveAction;
-  contactKind: ContactKind;
+  items: ReferrerRow[];
   isAdmin: boolean;
-  /** Vendors only — reveal the "Recruited by" column + form field. */
-  showRecruitedBy?: boolean;
-  /** Active user names that seed the "Recruited by" suggestion list. */
-  userNames?: string[];
   openEditId?: string;
 }) {
-  const [editing, setEditing] = useState<ContactOrg | "new" | null>(null);
+  const [editing, setEditing] = useState<ReferrerRow | "new" | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
-  const fmtId = contactKind === "vendor" ? formatVendorDisplayId : formatSourceDisplayId;
 
   useEffect(() => {
     if (openEditId) {
@@ -95,16 +66,20 @@ export function ContactOrgSection({
     <section className="space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-slate-700">
-          {title}{" "}
+          Referrers{" "}
           <span className="font-normal text-slate-400">({items.length})</span>
         </h2>
         {isAdmin && (
           <Button size="sm" onClick={() => setEditing("new")}>
             <Plus className="h-4 w-4" />
-            Add {singular}
+            Add referrer
           </Button>
         )}
       </div>
+      <p className="text-xs text-slate-500">
+        People who refer jobs to us. Recruiters can quick-add one while creating a
+        job; managers curate the directory here.
+      </p>
 
       {items.length > 0 && (
         <SettingsListFilter
@@ -112,17 +87,17 @@ export function ContactOrgSection({
           onSearchChange={setSearch}
           status={status}
           onStatusChange={setStatus}
-          searchPlaceholder={`Search ${title.toLowerCase()}…`}
+          searchPlaceholder="Search referrers…"
         />
       )}
 
       {items.length === 0 ? (
         <p className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-400">
-          No {title.toLowerCase()} yet.
+          No referrers yet.
         </p>
       ) : filtered.length === 0 ? (
         <p className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-400">
-          No {title.toLowerCase()} match these filters.
+          No referrers match these filters.
         </p>
       ) : (
         <Table>
@@ -130,8 +105,7 @@ export function ContactOrgSection({
             <tr>
               <Th>Name</Th>
               <Th>ID</Th>
-              <Th>Contact</Th>
-              {showRecruitedBy && <Th>Recruited by</Th>}
+              <Th>Company</Th>
               <Th>Email</Th>
               <Th>Phone</Th>
               <Th>Status</Th>
@@ -144,19 +118,16 @@ export function ContactOrgSection({
               <tr key={item.id}>
                 <Td label="Name">
                   <Link
-                    href={`/settings/${contactKind}/${item.id}`}
+                    href={`/settings/referrer/${item.id}`}
                     className="font-medium text-indigo-600 hover:underline"
                   >
                     {item.name}
                   </Link>
                 </Td>
                 <Td label="ID" className="font-mono text-xs text-slate-500">
-                  {fmtId(item)}
+                  {formatReferrerDisplayId(item)}
                 </Td>
-                <Td label="Contact">{item.contactPerson || "—"}</Td>
-                {showRecruitedBy && (
-                  <Td label="Recruited by">{recruitedByLabel(item) || "—"}</Td>
-                )}
+                <Td label="Company">{item.company || "—"}</Td>
                 <Td label="Email">{item.email || "—"}</Td>
                 <Td label="Phone">{item.phone || "—"}</Td>
                 <Td label="Status">
@@ -189,15 +160,12 @@ export function ContactOrgSection({
       <Dialog
         open={editing !== null}
         onClose={() => setEditing(null)}
-        title={editing === "new" ? `Add ${singular}` : `Edit ${singular}`}
+        title={editing === "new" ? "Add referrer" : "Edit referrer"}
       >
         {editing !== null && (
-          <ContactOrgForm
-            action={action}
+          <ReferrerForm
             entity={editing === "new" ? null : editing}
             onDone={() => setEditing(null)}
-            showRecruitedBy={showRecruitedBy}
-            userNames={userNames}
           />
         )}
       </Dialog>
@@ -205,20 +173,14 @@ export function ContactOrgSection({
   );
 }
 
-function ContactOrgForm({
-  action,
+function ReferrerForm({
   entity,
   onDone,
-  showRecruitedBy,
-  userNames,
 }: {
-  action: SaveAction;
-  entity: ContactOrg | null;
+  entity: ReferrerRow | null;
   onDone: () => void;
-  showRecruitedBy: boolean;
-  userNames: string[];
 }) {
-  const [state, formAction, pending] = useActionState(action, EMPTY_FORM_STATE);
+  const [state, formAction, pending] = useActionState(saveReferrer, EMPTY_FORM_STATE);
 
   useEffect(() => {
     if (state.ok) onDone();
@@ -232,56 +194,18 @@ function ContactOrgForm({
         <Input id="name" name="name" defaultValue={entity?.name ?? ""} required />
       </Field>
 
-      <Field
-        label="Contact person"
-        htmlFor="contactPerson"
-        error={state.fieldErrors?.contactPerson}
-      >
-        <Input
-          id="contactPerson"
-          name="contactPerson"
-          defaultValue={entity?.contactPerson ?? ""}
-        />
+      <Field label="Company" htmlFor="company" error={state.fieldErrors?.company}>
+        <Input id="company" name="company" defaultValue={entity?.company ?? ""} placeholder="e.g. ex-TCS, LinkedIn contact" />
       </Field>
-
-      {showRecruitedBy && (
-        <Field
-          label="Recruited by"
-          htmlFor="recruitedBy"
-          hint="Your team member who owns this vendor. Auto-fills the Vendor recruiter on every VPR for this vendor. Pick a name or type one."
-        >
-          <SuggestInput
-            id="recruitedBy"
-            name="recruitedBy"
-            defaultValue={entity ? recruitedByLabel(entity) ?? "" : ""}
-            suggestions={userNames}
-            maxResults={userNames.length}
-            placeholder="Sriman Udugula"
-          />
-        </Field>
-      )}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Email" htmlFor="email" error={state.fieldErrors?.email}>
-          <Input
-            id="email"
-            name="email"
-            type="email"
-            defaultValue={entity?.email ?? ""}
-          />
+          <Input id="email" name="email" type="email" defaultValue={entity?.email ?? ""} />
         </Field>
         <Field label="Phone" htmlFor="phone" error={state.fieldErrors?.phone}>
           <Input id="phone" name="phone" defaultValue={entity?.phone ?? ""} />
         </Field>
       </div>
-
-      <Field label="Location" htmlFor="location" error={state.fieldErrors?.location}>
-        <Input
-          id="location"
-          name="location"
-          defaultValue={entity?.location ?? ""}
-        />
-      </Field>
 
       <Field label="Notes" htmlFor="notes" error={state.fieldErrors?.notes}>
         <Textarea id="notes" name="notes" rows={3} defaultValue={entity?.notes ?? ""} />

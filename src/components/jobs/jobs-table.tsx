@@ -13,6 +13,7 @@ import {
   jobSourceLabel,
 } from "@/lib/labels";
 import { DisciplineBadge } from "@/components/ui/discipline-badge";
+import { OrgEntityLink } from "@/components/settings/org-entity-link";
 import { formatDate, formatJobDisplayId } from "@/lib/format";
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
 import type { JobListRow } from "@/server/queries/jobs";
@@ -34,8 +35,9 @@ type Column = {
   sortDefaultDir?: "asc" | "desc";
   align?: "right";
   defaultVisible: boolean;
-  /** Receives the row and its 1-based page-offset row number. */
-  render: (job: JobListRow, rowNumber: number) => React.ReactNode;
+  /** Receives the row, its 1-based page-offset row number, and whether the
+   *  viewer is a manager (managers get linked org-entity names). */
+  render: (job: JobListRow, rowNumber: number, isManager: boolean) => React.ReactNode;
 };
 
 const COLUMNS: Column[] = [
@@ -83,16 +85,30 @@ const COLUMNS: Column[] = [
     label: "Client",
     sortKey: "client",
     defaultVisible: true,
-    render: (job) => <Td label="Client">{job.client.name}</Td>,
+    render: (job, _n, isManager) => (
+      <Td label="Client">
+        <OrgEntityLink
+          kind="client"
+          id={job.clientId}
+          name={job.client.name}
+          isManager={isManager}
+        />
+      </Td>
+    ),
   },
   {
     key: "vendor",
     label: "Vendor",
     sortKey: "vendor",
     defaultVisible: true,
-    render: (job) => (
+    render: (job, _n, isManager) => (
       <Td label="Vendor" secondary>
-        {job.vendor.name}
+        <OrgEntityLink
+          kind="vendor"
+          id={job.vendorId}
+          name={job.vendor.name}
+          isManager={isManager}
+        />
       </Td>
     ),
   },
@@ -101,11 +117,35 @@ const COLUMNS: Column[] = [
     label: "Source",
     sortKey: "source",
     defaultVisible: true,
-    render: (job) => (
-      <Td label="Source" secondary>
-        {jobSourceLabel(job)}
-      </Td>
-    ),
+    render: (job, _n, isManager) => {
+      if (job.sourceType === "SISTER_COMPANY" && job.sisterCompanySource)
+        return (
+          <Td label="Source" secondary>
+            <OrgEntityLink
+              kind="source"
+              id={job.sisterCompanySourceId}
+              name={job.sisterCompanySource.name}
+              isManager={isManager}
+            />
+          </Td>
+        );
+      if (job.sourceType === "REFERRAL" && job.referrer)
+        return (
+          <Td label="Source" secondary>
+            <OrgEntityLink
+              kind="referrer"
+              id={job.referrerId}
+              name={job.referrer.name}
+              isManager={isManager}
+            />
+          </Td>
+        );
+      return (
+        <Td label="Source" secondary>
+          {jobSourceLabel(job)}
+        </Td>
+      );
+    },
   },
   {
     key: "location",
@@ -249,12 +289,15 @@ const DEFAULTS: ColumnPrefs = {
 
 export function JobsTable({
   rows,
+  isManager,
   pageOffset = 0,
   countLabel,
   storageKey = STORAGE_KEY,
   columnDefaults = DEFAULTS,
 }: {
   rows: JobListRow[];
+  /** Managers get linked Client/Vendor/Source names → org-entity detail pages. */
+  isManager: boolean;
   /** Row count preceding the first row on this page (e.g. (page-1)*pageSize). */
   pageOffset?: number;
   /** e.g. "53 jobs" — shown before the column count. */
@@ -379,6 +422,7 @@ export function JobsTable({
                   column={c}
                   job={job}
                   rowNumber={pageOffset + idx + 1}
+                  isManager={isManager}
                 />
               ))}
             </tr>
@@ -394,11 +438,13 @@ function RenderCell({
   column,
   job,
   rowNumber,
+  isManager,
 }: {
   column: Column;
   job: JobListRow;
   rowNumber: number;
+  isManager: boolean;
 }) {
-  return <>{column.render(job, rowNumber)}</>;
+  return <>{column.render(job, rowNumber, isManager)}</>;
 }
 

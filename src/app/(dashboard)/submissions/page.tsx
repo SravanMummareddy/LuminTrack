@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { LinkButton } from "@/components/ui/button";
 import { Pagination } from "@/components/ui/pagination";
 import { requireUser } from "@/lib/session";
-import { hasFullAccess } from "@/lib/permissions";
+import { isManagerTier } from "@/lib/permissions";
 import { SubmissionFilters } from "@/components/submissions/submission-filters";
 import { SubmissionsTable } from "@/components/submissions/submissions-table";
 import {
@@ -152,7 +152,8 @@ export default async function SubmissionsPage({
             countLabel={`${total} submission${total === 1 ? "" : "s"}`}
             pageOffset={(page - 1) * PAGE_SIZE}
             storageKey="lumintrack.submissions.columns"
-            canBulk={hasFullAccess(user)}
+            canBulk={isManagerTier(user)}
+            isManager={isManagerTier(user)}
           />
           <Pagination page={page} totalPages={totalPages} total={total} />
         </div>

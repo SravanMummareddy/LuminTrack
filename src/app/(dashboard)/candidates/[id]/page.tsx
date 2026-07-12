@@ -20,7 +20,8 @@ import {
   getCandidateDocuments,
 } from "@/server/queries/candidates";
 import { requireUser } from "@/lib/session";
-import { canManageSensitiveDocs, hasFullAccess } from "@/lib/permissions";
+import { canManageSensitiveDocs, hasFullAccess, isManagerTier } from "@/lib/permissions";
+import { OrgEntityLink } from "@/components/settings/org-entity-link";
 import { CandidateDangerZone } from "@/components/candidates/candidate-danger-zone";
 import { CandidateTrashBanner } from "@/components/candidates/candidate-trash-banner";
 import { setCandidateArchived } from "@/server/actions/candidates";
@@ -153,6 +154,7 @@ export default async function CandidateDetailPage({
   ]);
   if (!candidate) notFound();
   const isAdmin = hasFullAccess(user);
+  const isManager = isManagerTier(user);
   const isErased = Boolean(candidate.erasedAt);
   const isTrashed = Boolean(candidate.deletedAt) && !isErased;
   const submissionsTotalPages = Math.max(
@@ -269,7 +271,13 @@ export default async function CandidateDetailPage({
                 >
                   {formatPlacementDisplayId(activePlacement)}
                 </Link>{" "}
-                — {activePlacement.job.title} · {activePlacement.job.client.name}
+                — {activePlacement.job.title} ·{" "}
+                <OrgEntityLink
+                  kind="client"
+                  id={activePlacement.job.clientId}
+                  name={activePlacement.job.client.name}
+                  isManager={isManager}
+                />
               </p>
               <p className="mt-0.5 text-xs text-slate-600">
                 Since {formatDate(activePlacement.startDate)}
@@ -515,8 +523,22 @@ export default async function CandidateDetailPage({
                       {s.job.title}
                     </Link>
                   </Td>
-                  <Td label="Client">{s.job.client.name}</Td>
-                  <Td label="Vendor">{s.job.vendor.name}</Td>
+                  <Td label="Client">
+                    <OrgEntityLink
+                      kind="client"
+                      id={s.job.clientId}
+                      name={s.job.client.name}
+                      isManager={isManager}
+                    />
+                  </Td>
+                  <Td label="Vendor">
+                    <OrgEntityLink
+                      kind="vendor"
+                      id={s.job.vendorId}
+                      name={s.job.vendor.name}
+                      isManager={isManager}
+                    />
+                  </Td>
                   <Td label="Source">{jobSourceLabel(s.job)}</Td>
                   <Td label="Submitted by">{s.submittedBy.fullName}</Td>
                   <Td label="Submitted" className="whitespace-nowrap">
@@ -570,7 +592,14 @@ export default async function CandidateDetailPage({
                     </Link>
                   </Td>
                   <Td label="Job">{p.job.title}</Td>
-                  <Td label="Client">{p.job.client.name}</Td>
+                  <Td label="Client">
+                    <OrgEntityLink
+                      kind="client"
+                      id={p.job.clientId}
+                      name={p.job.client.name}
+                      isManager={isManager}
+                    />
+                  </Td>
                   <Td label="Start" className="whitespace-nowrap">
                     {formatDate(p.startDate)}
                   </Td>
@@ -606,7 +635,7 @@ export default async function CandidateDetailPage({
             No interviews recorded for this candidate yet.
           </p>
         ) : (
-          <CandidateInterviewsGrouped rows={interviews} />
+          <CandidateInterviewsGrouped rows={interviews} isManager={isManager} />
         )}
         {interviewsTotal > PAGE_SIZE && (
           <div className="mt-3">

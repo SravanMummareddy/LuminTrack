@@ -5,7 +5,6 @@ import {
   optionalPositiveInt,
   optionalDateTime,
 } from "./common";
-import { OTHER_SOURCE } from "@/lib/labels";
 
 export const JOB_STATUS_VALUES = [
   "OPEN",
@@ -23,67 +22,83 @@ export const JOB_PRIORITY_VALUES = [
   "CRITICAL",
 ] as const;
 export const DISCIPLINE_VALUES = ["IT", "NON_IT"] as const;
+export const JOB_SOURCE_TYPE_VALUES = [
+  "JOB_BOARD",
+  "REFERRAL",
+  "SISTER_COMPANY",
+  "OTHER",
+] as const;
+
+// Forms-discipline (Wave 3): most fields are required, and a few carry an
+// explicit "N-A / Don't know" escape — the form posts `<field>__na="1"` when the
+// recruiter consciously marks it unknown, which satisfies the requirement while
+// storing null. `enumRequired` and `naOr` build those two rules.
+const enumRequired = <T extends readonly [string, ...string[]]>(
+  values: T,
+  message: string,
+) =>
+  z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.enum(values, { message }),
+  );
 
 export const jobSchema = z
   .object({
     title: z.string().trim().min(1, "Job title is required.").max(200),
     clientId: z.string().min(1, "Select a client."),
     vendorId: z.string().min(1, "Select a vendor."),
-    // Either a managed source FK, or the OTHER_SOURCE sentinel — in which case
-    // `sourceOther` carries the free-text name (see the superRefine below).
-    sisterCompanySourceId: z.string().default(""),
+    // Source rework: `sourceType` selects which detail field applies.
+    sourceType: enumRequired(JOB_SOURCE_TYPE_VALUES, "Select a source type."),
+    jobBoard: optionalText,
+    referrerId: optionalText,
+    sisterCompanySourceId: optionalText,
     sourceOther: optionalText,
     status: z.enum(JOB_STATUS_VALUES),
-    location: optionalText,
+    location: z.string().trim().min(1, "Enter a location (or Remote)."),
     clientRate: optionalNonNegativeNumber,
     vendorRate: optionalNonNegativeNumber,
-    description: optionalText,
+    description: z.string().trim().min(1, "A job description is required."),
     notes: optionalText,
     recruiterIds: z.array(z.string().min(1)).default([]),
-    // Optional planning fields — recruiters can leave them blank. iLabor
-    // imports already populate the underlying columns; surfacing them on the
-    // manual form means manual jobs reach parity with imported ones.
     positions: optionalPositiveInt,
-    reqType: optionalText,
-    department: optionalText,
-    durationLabel: optionalText,
-    atsId: optionalText,
     startDate: optionalDateTime,
+    startDateEstimated: z.preprocess(
+      (v) => v === "1" || v === "true" || v === true,
+      z.boolean().default(false),
+    ),
     endDate: optionalDateTime,
-    // §A2: LuminTrack-native planning fields. Enum strings come from a
-    // <select>; the empty string means "not set" and is preprocessed away.
-    workMode: z.preprocess(
-      (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
-      z.enum(WORK_MODE_VALUES).optional(),
-    ),
-    priority: z.preprocess(
-      (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
-      z.enum(JOB_PRIORITY_VALUES).optional(),
-    ),
-    discipline: z.preprocess(
-      (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
-      z.enum(DISCIPLINE_VALUES).optional(),
-    ),
+    // Required-by-default enums (empty string → a required error, not "not set").
+    workMode: enumRequired(WORK_MODE_VALUES, "Select a work mode."),
+    priority: enumRequired(JOB_PRIORITY_VALUES, "Select a priority."),
+    discipline: enumRequired(DISCIPLINE_VALUES, "Select IT or Non-IT."),
+    // Required-with-N/A fields + their escape flags.
     targetCloseDate: optionalDateTime,
-    postingUrl: optionalText,
+    targetCloseDateNa: z.preprocess((v) => v === "1", z.boolean().default(false)),
     workAuthRequirement: optionalText,
+    workAuthRequirementNa: z.preprocess((v) => v === "1", z.boolean().default(false)),
+    postingUrl: optionalText,
     // Comma-separated free text on the form; split + trimmed below.
-    skills: optionalText,
+    skills: z.string().trim().min(1, "Add at least one skill."),
   })
   .superRefine((val, ctx) => {
-    if (!val.sisterCompanySourceId) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["sisterCompanySourceId"],
-        message: "Select a source.",
-      });
-    } else if (val.sisterCompanySourceId === OTHER_SOURCE && !val.sourceOther) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["sourceOther"],
-        message: "Enter the source name.",
-      });
+    // Source-type-conditional required detail.
+    if (val.sourceType === "JOB_BOARD") {
+      if (!val.jobBoard)
+        ctx.addIssue({ code: "custom", path: ["jobBoard"], message: "Pick or type a job board." });
+      if (!val.postingUrl)
+        ctx.addIssue({ code: "custom", path: ["postingUrl"], message: "Add the posting URL." });
+    } else if (val.sourceType === "REFERRAL" && !val.referrerId) {
+      ctx.addIssue({ code: "custom", path: ["referrerId"], message: "Pick a referrer, or add one." });
+    } else if (val.sourceType === "SISTER_COMPANY" && !val.sisterCompanySourceId) {
+      ctx.addIssue({ code: "custom", path: ["sisterCompanySourceId"], message: "Choose a sister company." });
+    } else if (val.sourceType === "OTHER" && !val.sourceOther) {
+      ctx.addIssue({ code: "custom", path: ["sourceOther"], message: "Describe where it came from." });
     }
+    // Required-with-N/A: satisfied by a value OR the explicit N/A flag.
+    if (!val.targetCloseDate && !val.targetCloseDateNa)
+      ctx.addIssue({ code: "custom", path: ["targetCloseDate"], message: "Enter a date, or mark N/A." });
+    if (!val.workAuthRequirement && !val.workAuthRequirementNa)
+      ctx.addIssue({ code: "custom", path: ["workAuthRequirement"], message: "Fill this in, or mark N/A." });
   });
 
 export type JobInput = z.infer<typeof jobSchema>;
