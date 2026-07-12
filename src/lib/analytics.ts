@@ -125,6 +125,54 @@ export function buildJobWhere(f: AnalyticsFilters): Prisma.JobWhereInput {
   return where;
 }
 
+// ─── SRC-2: source analytics ─────────────────────────────────────────────────
+
+export type SourceStatRow = {
+  /** sourceType enum value (bySource) or job-board name (byJobBoard). */
+  key: string;
+  jobs: number;
+  submissions: number;
+  placements: number;
+  /** placements ÷ jobs, 0..1 (can exceed 1 for multi-hire jobs). */
+  fillRate: number;
+};
+
+/**
+ * SRC-2: roll jobs up by where the requisition came from. Each job contributes
+ * its submission count and its placements (submissions that reached JOINED).
+ * `bySource` groups by `sourceType`; `byJobBoard` drills the job-board channel
+ * by the specific board (the spend-decision view). Fill rate = placements ÷ jobs.
+ * Pure so the aggregation is unit-tested apart from the query.
+ */
+export function sourceBreakdown(
+  jobs: {
+    sourceType: string;
+    jobBoard: string | null;
+    submissions: { status: string }[];
+  }[],
+): { bySource: SourceStatRow[]; byJobBoard: SourceStatRow[] } {
+  const add = (m: Map<string, SourceStatRow>, key: string, job: (typeof jobs)[number]) => {
+    const r =
+      m.get(key) ?? { key, jobs: 0, submissions: 0, placements: 0, fillRate: 0 };
+    r.jobs += 1;
+    r.submissions += job.submissions.length;
+    r.placements += job.submissions.filter((s) => s.status === "JOINED").length;
+    m.set(key, r);
+  };
+  const bySrc = new Map<string, SourceStatRow>();
+  const byBoard = new Map<string, SourceStatRow>();
+  for (const job of jobs) {
+    add(bySrc, job.sourceType, job);
+    if (job.sourceType === "JOB_BOARD")
+      add(byBoard, job.jobBoard?.trim() || "Unspecified", job);
+  }
+  const finalize = (m: Map<string, SourceStatRow>) =>
+    [...m.values()]
+      .map((r) => ({ ...r, fillRate: r.jobs ? r.placements / r.jobs : 0 }))
+      .sort((a, b) => b.jobs - a.jobs || b.placements - a.placements);
+  return { bySource: finalize(bySrc), byJobBoard: finalize(byBoard) };
+}
+
 /** Builds a Prisma `where` for submissions from the shared analytics filters. */
 export function buildSubmissionWhere(
   f: AnalyticsFilters,

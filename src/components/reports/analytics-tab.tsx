@@ -12,7 +12,8 @@ import {
 } from "@/server/queries/org";
 import { parseAnalyticsParams } from "@/lib/analytics";
 import { parsePage } from "@/lib/filters";
-import { SUBMISSION_STATUS_LABEL } from "@/lib/labels";
+import { SUBMISSION_STATUS_LABEL, JOB_SOURCE_TYPE_LABEL } from "@/lib/labels";
+import type { SourceStatRow } from "@/lib/analytics";
 
 const REPORTS_PAGE_SIZE = 10;
 
@@ -45,6 +46,60 @@ function pct(value: number): string {
 /** V-5: an avg-days value (or null when there's nothing to average). */
 function fmtDays(value: number | null): string {
   return value == null ? "—" : `${value} day${value === 1 ? "" : "s"}`;
+}
+
+/** SRC-2: a channel scoreboard table — jobs → submissions → placements → fill. */
+function SourceStatTable({
+  rows,
+  labelFor,
+  firstHeader,
+  emptyLabel,
+}: {
+  rows: SourceStatRow[];
+  labelFor: (key: string) => string;
+  firstHeader: string;
+  emptyLabel: string;
+}) {
+  if (rows.length === 0)
+    return (
+      <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
+        {emptyLabel}
+      </p>
+    );
+  return (
+    <Table>
+      <thead>
+        <tr>
+          <Th>{firstHeader}</Th>
+          <Th className="text-right">Jobs</Th>
+          <Th className="text-right">Submissions</Th>
+          <Th className="text-right">Placements</Th>
+          <Th className="text-right">Fill rate</Th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.key} className="hover:bg-slate-50">
+            <Td label={firstHeader} className="font-medium text-slate-800">
+              {labelFor(r.key)}
+            </Td>
+            <Td label="Jobs" className="text-right tabular-nums">
+              {r.jobs}
+            </Td>
+            <Td label="Submissions" className="text-right tabular-nums">
+              {r.submissions}
+            </Td>
+            <Td label="Placements" className="text-right tabular-nums">
+              {r.placements}
+            </Td>
+            <Td label="Fill rate" className="text-right font-medium tabular-nums">
+              {pct(r.fillRate)}
+            </Td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
+  );
 }
 
 function ConversionCard({
@@ -178,6 +233,31 @@ export async function AnalyticsTab({
               No recruiter submissions for the selected filters.
             </p>
           }
+        />
+      </Card>
+
+      {/* SRC-2: which channels bring jobs that convert. */}
+      <Card
+        title="By source"
+        description="Jobs and their outcomes grouped by where the requisition came from. Fill rate = placements ÷ jobs."
+      >
+        <SourceStatTable
+          rows={data.bySource}
+          labelFor={(k) => JOB_SOURCE_TYPE_LABEL[k] ?? k}
+          firstHeader="Source"
+          emptyLabel="No jobs match the selected filters."
+        />
+      </Card>
+
+      <Card
+        title="By job board"
+        description="Job-board sources split by the specific board — which subscription actually returns placements."
+      >
+        <SourceStatTable
+          rows={data.byJobBoard}
+          labelFor={(k) => k}
+          firstHeader="Board"
+          emptyLabel="No job-board jobs match the selected filters."
         />
       </Card>
 
