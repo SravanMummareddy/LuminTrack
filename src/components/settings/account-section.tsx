@@ -1,20 +1,28 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import { Lock, Eye, EyeOff, User } from "lucide-react";
+import { Lock, Eye, EyeOff, User, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
 import { PasswordRequirements } from "@/components/ui/password-requirements";
 import { useToast } from "@/components/ui/toast";
-import { changeOwnPassword, updateOwnProfile } from "@/server/actions/users";
+import {
+  changeOwnPassword,
+  updateOwnProfile,
+  updateOwnNotifications,
+} from "@/server/actions/users";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
 
 export function AccountSection({
   fullName,
   email,
+  notifyDigest,
+  notifyEvents,
 }: {
   fullName: string;
   email: string;
+  notifyDigest: boolean;
+  notifyEvents: boolean;
 }) {
   // Remount the password form on success so the (uncontrolled) inputs clear —
   // React 19 doesn't auto-reset a form after a server action resolves.
@@ -22,8 +30,85 @@ export function AccountSection({
   return (
     <div className="space-y-8">
       <ProfileForm fullName={fullName} email={email} />
+      <NotificationsForm notifyDigest={notifyDigest} notifyEvents={notifyEvents} />
       <PasswordForm key={formKey} onDone={() => setFormKey((k) => k + 1)} />
     </div>
+  );
+}
+
+function NotificationsForm({
+  notifyDigest,
+  notifyEvents,
+}: {
+  notifyDigest: boolean;
+  notifyEvents: boolean;
+}) {
+  const [state, formAction, pending] = useActionState(
+    updateOwnNotifications,
+    EMPTY_FORM_STATE,
+  );
+  const { toast } = useToast();
+  useEffect(() => {
+    if (state.ok)
+      toast({ tone: "success", title: state.toast?.title ?? "Preferences saved" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.ok]);
+
+  return (
+    <section className="max-w-md space-y-4">
+      <div>
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+          <Bell className="h-4 w-4 text-slate-400" />
+          Email notifications
+        </h2>
+        <p className="mt-0.5 text-xs text-slate-500">
+          Control which emails LuminTrack sends you.
+        </p>
+      </div>
+
+      <form action={formAction} className="space-y-3">
+        <label className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            name="notifyDigest"
+            defaultChecked={notifyDigest}
+            className="mt-0.5 h-4 w-4 accent-green-600"
+          />
+          <span>
+            <span className="block text-sm font-medium text-slate-800">
+              Daily digest
+            </span>
+            <span className="block text-xs text-slate-500">
+              One weekday-morning email with your pending action items. Nothing
+              sent on empty days.
+            </span>
+          </span>
+        </label>
+        <label className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            name="notifyEvents"
+            defaultChecked={notifyEvents}
+            className="mt-0.5 h-4 w-4 accent-green-600"
+          />
+          <span>
+            <span className="block text-sm font-medium text-slate-800">
+              Immediate emails
+            </span>
+            <span className="block text-xs text-slate-500">
+              Sent as they happen — e.g. a new submission on a requirement you
+              lead.
+            </span>
+          </span>
+        </label>
+
+        <div className="pt-1">
+          <Button type="submit" disabled={pending}>
+            {pending ? "Saving…" : "Save preferences"}
+          </Button>
+        </div>
+      </form>
+    </section>
   );
 }
 

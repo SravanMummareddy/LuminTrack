@@ -332,3 +332,29 @@ export async function updateOwnProfile(
   revalidatePath("/settings");
   return { ok: true, toast: { title: "Profile updated" } };
 }
+
+/** Wave 7 — the acting user toggles their own email preferences. Unchecked
+ *  checkboxes are simply absent from the form data, so `=== "on"` reads them. */
+export async function updateOwnNotifications(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const db = await getScopedPrisma();
+  const actor = await requireUser();
+  const notifyDigest = formData.get("notifyDigest") === "on";
+  const notifyEvents = formData.get("notifyEvents") === "on";
+  await db.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: actor.id },
+      data: { notifyDigest, notifyEvents },
+    });
+    await logActivity(tx, {
+      entityType: "USER",
+      action: "USER_UPDATED",
+      description: `Updated email preferences (digest: ${notifyDigest ? "on" : "off"}, events: ${notifyEvents ? "on" : "off"})`,
+      performedById: actor.id,
+    });
+  });
+  revalidatePath("/settings");
+  return { ok: true, toast: { title: "Preferences saved" } };
+}

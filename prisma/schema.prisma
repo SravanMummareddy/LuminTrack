@@ -326,6 +326,11 @@ model User {
   // Overseers/admins who sit outside the reporting hierarchy (e.g. an owner who
   // silently sees everything) are hidden from the org chart. Defaults true.
   showInOrgChart  Boolean      @default(true)
+  // Wave 7 — email opt-outs (per-user). `notifyDigest` = the weekday-morning
+  // action-item digest; `notifyEvents` = immediate emails (e.g. a new submission
+  // on a requirement you lead). Both default on; the cron/actions skip anyone off.
+  notifyDigest    Boolean      @default(true)
+  notifyEvents    Boolean      @default(true)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 

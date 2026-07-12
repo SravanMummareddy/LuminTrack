@@ -10,6 +10,38 @@ short instead of long.
 
 ---
 
+## 2026-07-13 · Wave 7 notifications — the feature the owner asked for had no event to hook
+
+**Situation.** Wave 7 asks for email notifications, with the owner explicitly wanting *"email when
+a VPR/candidate is assigned to a recruiter"* and *"when a team-lead is assigned a VPR"* (NT-1) plus
+low-submission / expiry / upcoming-interview triggers and a digest. The obvious read is "wire an
+email into the assign action."
+
+**Diagnosis.** There *is* no assign action. Grounding the code before mocking: `JobAssignment` is
+auto-`upsert`ed only when a recruiter **submits** (`submission-create.ts` — a self-assignment, not a
+manager handing out work), and VPR `teamLead` is a **free-text string**, not a `User` FK — so there's
+literally no email address to route an "assignment" email to. Building NT-1 as imagined needs a
+prerequisite that doesn't exist yet (a real "assign to &lt;user&gt;" control + a user link on VPR
+team-lead). Meanwhile the *other* three triggers are all **state/time-based**, not events — perfect
+for a batched digest, and noisy/expensive as individual real-time emails.
+
+**Fix.** Split the wave by what the data actually supports, and surfaced the gap in the mock rather
+than papering over it. Shipped (a) a **weekday-morning digest** — one Vercel Cron reusing the existing
+"Needs attention" query logic, one email per recruiter, skipped when empty (covers low-subs, expiry,
+upcoming interview, missing résumé — 4 of the triggers, zero new schema); and (b) the **one immediate
+event that resolves to a real address** — a new submission notifies the submitter's **team lead via
+`User.team.lead.email`** (a real routable user, unlike VPR.teamLead). Provider = Resend over a plain
+`fetch` (no SDK dep), failing *safe* when `RESEND_API_KEY` is unset so dev/preview never emails real
+people. NT-1's two assignment emails are deferred behind the owner-visible "needs a real assign
+action" note. Per-user opt-out = two booleans on `User`.
+
+**Lesson.** "Build notifications" is a data-availability question before it's an email question. The
+honest mock names the trigger you *can't* build and why, so the owner scopes the prerequisite
+deliberately instead of discovering mid-build that the field they meant is free text. And time/state
+triggers belong in a digest, not a barrage — batching was both less plumbing (no change-detection)
+and better UX. The cron runs with no session, so it can't use `getScopedPrisma()` — it iterates
+active orgs and scopes per-org with `scopedPrisma(org.id)`, exactly like the purge cron.
+
 ## 2026-07-12 · D3 received-date — a client effect is the wrong place for a form default
 
 **Situation.** D3 adds a "received date" to the job (defaults to today, backdatable) so
