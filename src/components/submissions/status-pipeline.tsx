@@ -25,10 +25,17 @@ export function StatusPipeline({
   status,
   onStageClick,
   nextStageIndex = null,
+  prevStageIndex = null,
+  stageDates,
 }: {
   status: SubmissionStatus;
   onStageClick?: (index: number) => void;
   nextStageIndex?: number | null;
+  /** SB-6: the one stage a correction can step back to — the only clickable
+   *  dot behind the current one (controlled transitions, no free jumps). */
+  prevStageIndex?: number | null;
+  /** SB-4: pre-formatted "when this stage was reached" label per stage index. */
+  stageDates?: Record<number, string>;
 }) {
   const currentIndex = SUBMISSION_STAGE_INDEX[status];
   const interactive = typeof onStageClick === "function";
@@ -39,6 +46,9 @@ export function StatusPipeline({
         const reached = i <= currentIndex;
         const isCurrent = i === currentIndex;
         const isNext = interactive && i === nextStageIndex;
+        const isPrev = interactive && i === prevStageIndex;
+        // SB-6: only the immediate next / previous stage is actionable.
+        const actionable = isNext || isPrev;
         // Full label drives the tooltip + the Decision-branch live status; the
         // stepper renders the compact label so all 8 stages fit one row.
         const fullLabel =
@@ -83,6 +93,11 @@ export function StatusPipeline({
           </div>
         );
 
+        // SB-4: the date this stage was reached, shown under the label. Blank
+        // for stages never entered (keeps the row honest — a skipped stage has
+        // no date rather than a borrowed one).
+        const when = stageDates?.[i];
+
         const stageBody = (
           <>
             {dot}
@@ -99,6 +114,9 @@ export function StatusPipeline({
               )}
             >
               {label}
+            </span>
+            <span className="text-center font-mono text-[10px] leading-tight text-slate-400">
+              {when ?? " "}
             </span>
           </>
         );
@@ -119,16 +137,19 @@ export function StatusPipeline({
               <button
                 type="button"
                 onClick={() => onStageClick(i)}
+                disabled={!actionable}
                 title={
                   isCurrent
                     ? fullLabel
                     : isNext
                       ? `Advance to ${fullLabel.toLowerCase()}`
-                      : reached
+                      : isPrev
                         ? `Move back to ${fullLabel.toLowerCase()}`
-                        : `Skip ahead to ${fullLabel.toLowerCase()}`
+                        : reached
+                          ? "Corrections move back one stage at a time — use “Correct” below"
+                          : "Advance one stage at a time"
                 }
-                className="group flex w-16 shrink-0 flex-col items-center gap-1.5 rounded-md p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                className="group flex w-16 shrink-0 flex-col items-center gap-1.5 rounded-md p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-default"
               >
                 {stageBody}
               </button>

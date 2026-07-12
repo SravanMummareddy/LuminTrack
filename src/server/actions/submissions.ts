@@ -37,6 +37,8 @@ import {
   branchActions,
   resumeFlag,
   isForwardAdvance,
+  isBackwardCorrection,
+  advanceBlock,
 } from "@/lib/submission-flow";
 
 function readSubmission(formData: FormData) {
@@ -498,6 +500,11 @@ export async function changeSubmissionStatus(
       candidate: { select: { id: true, fullName: true, status: true } },
       job: { select: { title: true } },
       placement: { select: { id: true, status: true } },
+      // SB-5 strict gate reads the interview/screening records to decide whether
+      // a forward advance is allowed.
+      interviewRounds: {
+        select: { interviewType: true, result: true, roundOrder: true },
+      },
     },
   });
   if (!submission) return { error: "This submission no longer exists." };
@@ -505,6 +512,15 @@ export async function changeSubmissionStatus(
     return { error: "Status is already set to that value." };
   const next = d.status as SubmissionStatus;
   const prev = submission.status;
+
+  // SB-5: a stage can't be reached without its interview/screening record, an
+  // outcome, or the required join date — the owner's "be strict" rule. Branch
+  // outcomes and corrections are exempt (advanceBlock only gates forward moves).
+  const block = advanceBlock(prev, next, submission.interviewRounds, {
+    hasExpectedJoinDate: Boolean(d.expectedJoinDate),
+    hasActualJoinDate: Boolean(d.actualJoinDate),
+  });
+  if (block) return { error: block };
 
   // SB-3: a résumé — or an explicit "not required" waiver — is required to
   // advance a submission to a later pipeline stage. Branch outcomes (Hold /
@@ -516,6 +532,13 @@ export async function changeSubmissionStatus(
       error:
         'This submission has no résumé. Attach one — or mark it "not required" — before advancing it.',
     };
+
+  // SB-6: a backward correction must carry a written reason — who/when/why then
+  // lands on the activity timeline. Branch outcomes and the on-hold resume are
+  // exempt (they capture their own reason / are legitimate re-entries).
+  const backward = isBackwardCorrection(prev, next);
+  if (backward && !d.note?.trim())
+    return { error: "Add a reason to move this submission back a stage." };
 
   // The reason category only applies to the Rejected / On Hold outcomes.
   const reason =
@@ -561,7 +584,7 @@ export async function changeSubmissionStatus(
     await logActivity(tx, {
       entityType: "SUBMISSION",
       action,
-      description: `${submission.candidate.fullName} on "${submission.job.title}": status changed from ${SUBMISSION_STATUS_LABEL[submission.status]} to ${SUBMISSION_STATUS_LABEL[next]}`,
+      description: `${submission.candidate.fullName} on "${submission.job.title}": status ${backward ? "corrected back" : "changed"} from ${SUBMISSION_STATUS_LABEL[submission.status]} to ${SUBMISSION_STATUS_LABEL[next]}`,
       oldValue: SUBMISSION_STATUS_LABEL[submission.status],
       newValue: SUBMISSION_STATUS_LABEL[next],
       eventAt: d.eventAt ?? null,

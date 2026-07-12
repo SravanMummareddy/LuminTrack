@@ -14,6 +14,7 @@ import { listSupportProviderOptions } from "@/server/queries/support";
 import { getTimelineFor } from "@/server/queries/timeline";
 import { getNotesFor } from "@/server/queries/notes";
 import { getCurrentUser } from "@/lib/session";
+import { deriveStageDates } from "@/lib/submission-flow";
 import { hasFullAccess, isManagerTier } from "@/lib/permissions";
 import { OrgEntityLink } from "@/components/settings/org-entity-link";
 import {
@@ -73,6 +74,18 @@ export default async function SubmissionDetailPage({
 
   const { candidate, job } = submission;
   const isManager = isManagerTier(user);
+  // SB-4: compact "when each stage was reached" under the stepper dots, derived
+  // from the status-change activity log (stage 0 = the submitted date).
+  const stageDateFmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    month: "short",
+    day: "numeric",
+  });
+  const stageDates = Object.fromEntries(
+    Object.entries(deriveStageDates(timeline, submission.submittedAt)).map(
+      ([idx, d]) => [idx, stageDateFmt.format(d)],
+    ),
+  );
   // Waiving the résumé requirement is allowed for the submitter or any admin.
   const canWaiveResume = Boolean(
     user && (hasFullAccess(user) || user.id === submission.submittedById),
@@ -144,6 +157,12 @@ export default async function SubmissionDetailPage({
         <SubmissionStatusForm
           submissionId={submission.id}
           status={submission.status}
+          stageDates={stageDates}
+          rounds={submission.interviewRounds.map((r) => ({
+            interviewType: r.interviewType,
+            result: r.result,
+            roundOrder: r.roundOrder,
+          }))}
         />
       </Card>
 
@@ -327,11 +346,15 @@ export default async function SubmissionDetailPage({
         )}
       </Card>
 
-      <InterviewRoundsManager
-        submissionId={submission.id}
-        rounds={submission.interviewRounds}
-        supportProviders={supportProviders}
-      />
+      {/* Anchor: the strict status control scrolls here when an advance needs
+          an interview/screening record first. */}
+      <div id="interview-rounds" className="scroll-mt-4">
+        <InterviewRoundsManager
+          submissionId={submission.id}
+          rounds={submission.interviewRounds}
+          supportProviders={supportProviders}
+        />
+      </div>
 
       <NotesSection
         entityType="SUBMISSION"

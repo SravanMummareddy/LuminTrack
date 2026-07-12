@@ -1,10 +1,16 @@
 import { describe, it, expect } from "vitest";
+import type { InterviewResult } from "@/generated/prisma/enums";
+import type { RoundLite } from "@/lib/submission-flow";
 import {
   primaryAdvance,
   branchActions,
   isTerminal,
   resumeFlag,
   isForwardAdvance,
+  deriveStageDates,
+  previousStage,
+  isBackwardCorrection,
+  advanceBlock,
 } from "@/lib/submission-flow";
 
 describe("primaryAdvance", () => {
@@ -135,5 +141,152 @@ describe("isForwardAdvance", () => {
   it("is false for a backward correction to an earlier stage", () => {
     expect(isForwardAdvance("CLIENT_INTERVIEW", "SUBMITTED")).toBe(false);
     expect(isForwardAdvance("OFFER_RELEASED", "SELECTED")).toBe(false);
+  });
+});
+
+describe("deriveStageDates", () => {
+  const submittedAt = new Date("2026-06-24T09:00:00Z");
+
+  it("seeds stage 0 from submittedAt and maps status labels to stages", () => {
+    const dates = deriveStageDates(
+      [
+        { newValue: "Resume Picked", eventAt: new Date("2026-06-26T10:00:00Z"), createdAt: new Date("2026-06-26T11:00:00Z") },
+        { newValue: "Client Interview", eventAt: new Date("2026-07-08T10:00:00Z"), createdAt: new Date("2026-07-08T10:00:00Z") },
+      ],
+      submittedAt,
+    );
+    expect(dates[0]).toEqual(submittedAt);
+    expect(dates[1]).toEqual(new Date("2026-06-26T10:00:00Z")); // eventAt wins over createdAt
+    expect(dates[3]).toEqual(new Date("2026-07-08T10:00:00Z"));
+    expect(dates[2]).toBeUndefined(); // vendor screen never reached
+  });
+
+  it("keeps the earliest time when a stage is entered more than once", () => {
+    const dates = deriveStageDates(
+      [
+        { newValue: "Client Interview", eventAt: new Date("2026-07-10T10:00:00Z"), createdAt: new Date("2026-07-10T10:00:00Z") },
+        { newValue: "Client Interview", eventAt: new Date("2026-07-08T10:00:00Z"), createdAt: new Date("2026-07-08T10:00:00Z") },
+      ],
+      submittedAt,
+    );
+    expect(dates[3]).toEqual(new Date("2026-07-08T10:00:00Z"));
+  });
+
+  it("falls back to createdAt when eventAt is null and ignores unknown labels", () => {
+    const dates = deriveStageDates(
+      [
+        { newValue: "Resume Picked", eventAt: null, createdAt: new Date("2026-06-26T11:00:00Z") },
+        { newValue: "Note added", eventAt: null, createdAt: new Date("2026-06-27T11:00:00Z") },
+      ],
+      submittedAt,
+    );
+    expect(dates[1]).toEqual(new Date("2026-06-26T11:00:00Z"));
+    expect(Object.keys(dates)).toEqual(["0", "1"]);
+  });
+});
+
+describe("previousStage", () => {
+  it("steps back one visual stage on the linear path", () => {
+    expect(previousStage("CLIENT_INTERVIEW")).toBe("VENDOR_SCREENING_CALL");
+    expect(previousStage("JOINED")).toBe("OFFER_ACCEPTED");
+  });
+
+  it("reopens a decision-branch outcome to client interview", () => {
+    expect(previousStage("REJECTED")).toBe("CLIENT_INTERVIEW");
+    expect(previousStage("BACKED_OUT")).toBe("CLIENT_INTERVIEW");
+  });
+
+  it("returns null at the first stage", () => {
+    expect(previousStage("SUBMITTED")).toBeNull();
+  });
+});
+
+describe("isBackwardCorrection", () => {
+  it("is true for a genuine step back", () => {
+    expect(isBackwardCorrection("CLIENT_INTERVIEW", "VENDOR_SCREENING_CALL")).toBe(true);
+    expect(isBackwardCorrection("REJECTED", "CLIENT_INTERVIEW")).toBe(true);
+    expect(isBackwardCorrection("JOINED", "OFFER_ACCEPTED")).toBe(true);
+  });
+
+  it("is false for the on-hold resume (re-enters earlier legitimately)", () => {
+    expect(isBackwardCorrection("ON_HOLD", "CLIENT_INTERVIEW")).toBe(false);
+  });
+
+  it("is false for branch outcomes and forward moves", () => {
+    expect(isBackwardCorrection("CLIENT_INTERVIEW", "REJECTED")).toBe(false);
+    expect(isBackwardCorrection("SUBMITTED", "RESUME_PICKED")).toBe(false);
+  });
+});
+
+describe("advanceBlock (SB-5 strict gate)", () => {
+  const vs = (
+    result: InterviewResult = "COMPLETED",
+    roundOrder = 1,
+  ): RoundLite => ({ interviewType: "VENDOR_SCREENING", result, roundOrder });
+  const ci = (
+    result: InterviewResult = "WAITING",
+    roundOrder = 2,
+  ): RoundLite => ({ interviewType: "CLIENT_INTERVIEW", result, roundOrder });
+
+  it("blocks reaching vendor screening without a screening round", () => {
+    expect(advanceBlock("RESUME_PICKED", "VENDOR_SCREENING_CALL", [])).toMatch(
+      /vendor screening call first/i,
+    );
+    expect(
+      advanceBlock("RESUME_PICKED", "VENDOR_SCREENING_CALL", [vs("WAITING")]),
+    ).toBeNull();
+  });
+
+  it("blocks reaching client interview without an interview round (incl. the vendor-screen skip)", () => {
+    expect(advanceBlock("VENDOR_SCREENING_CALL", "CLIENT_INTERVIEW", [vs()])).toMatch(
+      /schedule the client interview/i,
+    );
+    // The vendor-screen skip is a Resume-picked → Client-interview advance, so it
+    // hits the same gate — no orphan state.
+    expect(advanceBlock("RESUME_PICKED", "CLIENT_INTERVIEW", [])).toMatch(
+      /schedule the client interview/i,
+    );
+    expect(
+      advanceBlock("RESUME_PICKED", "CLIENT_INTERVIEW", [ci("WAITING")]),
+    ).toBeNull();
+  });
+
+  it("won't leave a stage whose scheduled interview is still WAITING", () => {
+    expect(
+      advanceBlock("VENDOR_SCREENING_CALL", "CLIENT_INTERVIEW", [vs("WAITING"), ci("WAITING")]),
+    ).toMatch(/vendor screening outcome/i);
+    // A "didn't happen" outcome counts as recorded — clears the leave-gate.
+    expect(
+      advanceBlock("VENDOR_SCREENING_CALL", "CLIENT_INTERVIEW", [vs("NO_SHOW"), ci("WAITING")]),
+    ).toBeNull();
+  });
+
+  it("requires a passing interview result to mark Selected", () => {
+    // WAITING is caught by the leave-gate first; NEED_ANOTHER_ROUND falls to the
+    // Selected pass-check. Either way Selected is blocked.
+    expect(advanceBlock("CLIENT_INTERVIEW", "SELECTED", [ci("WAITING")])).toMatch(
+      /interview result/i,
+    );
+    expect(
+      advanceBlock("CLIENT_INTERVIEW", "SELECTED", [ci("NEED_ANOTHER_ROUND")]),
+    ).toMatch(/passing interview result/i);
+    expect(advanceBlock("CLIENT_INTERVIEW", "SELECTED", [ci("SELECTED")])).toBeNull();
+  });
+
+  it("requires join dates for offer-accepted and joined", () => {
+    expect(advanceBlock("OFFER_RELEASED", "OFFER_ACCEPTED", [])).toMatch(/expected join date/i);
+    expect(
+      advanceBlock("OFFER_RELEASED", "OFFER_ACCEPTED", [], { hasExpectedJoinDate: true }),
+    ).toBeNull();
+    expect(advanceBlock("OFFER_ACCEPTED", "JOINED", [])).toMatch(/actual join date/i);
+    expect(
+      advanceBlock("OFFER_ACCEPTED", "JOINED", [], { hasActualJoinDate: true }),
+    ).toBeNull();
+  });
+
+  it("never gates branch outcomes or backward corrections", () => {
+    expect(advanceBlock("CLIENT_INTERVIEW", "REJECTED", [])).toBeNull();
+    expect(advanceBlock("CLIENT_INTERVIEW", "ON_HOLD", [])).toBeNull();
+    expect(advanceBlock("CLIENT_INTERVIEW", "VENDOR_SCREENING_CALL", [])).toBeNull();
   });
 });

@@ -322,6 +322,8 @@ export const INTERVIEW_RESULTS: InterviewResult[] = [
   "REJECTED",
   "ON_HOLD",
   "COMPLETED",
+  "NO_SHOW",
+  "CANCELLED",
 ];
 
 export const INTERVIEW_RESULT_LABEL: Record<InterviewResult, string> = {
@@ -331,6 +333,8 @@ export const INTERVIEW_RESULT_LABEL: Record<InterviewResult, string> = {
   REJECTED: "Rejected",
   ON_HOLD: "On Hold",
   COMPLETED: "Completed",
+  NO_SHOW: "Didn't happen — no-show",
+  CANCELLED: "Didn't happen — cancelled",
 };
 
 export const INTERVIEW_RESULT_TONE: Record<InterviewResult, BadgeTone> = {
@@ -340,6 +344,8 @@ export const INTERVIEW_RESULT_TONE: Record<InterviewResult, BadgeTone> = {
   REJECTED: "red",
   ON_HOLD: "amber",
   COMPLETED: "blue",
+  NO_SHOW: "red",
+  CANCELLED: "red",
 };
 
 /**
