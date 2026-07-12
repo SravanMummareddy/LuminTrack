@@ -40,14 +40,17 @@ function readBenchConsultant(formData: FormData) {
     company: formData.get("company") ?? "",
     projectType: formData.get("projectType") ?? "",
     leastRateC2C: formData.get("leastRateC2C") ?? "",
+    leastRateC2CNa: formData.get("leastRateC2C__na") ?? "",
+    aVisaNa: formData.get("aVisa__na") ?? "",
     callType: formData.get("callType") ?? "",
     payrollType: formData.get("payrollType") ?? "",
-    relocation: formData.get("relocation") != null,
+    relocationMode: formData.get("relocationMode") ?? "",
     relocationCities: formData.get("relocationCities") ?? "",
     marketingStartDate: formData.get("marketingStartDate") ?? "",
     marketingEmail: formData.get("marketingEmail") ?? "",
     marketingPassword: formData.get("marketingPassword") ?? "",
     marketingNumber: formData.get("marketingNumber") ?? "",
+    credentialsNa: formData.get("credentials__na") ?? "",
     personalNumber: formData.get("personalNumber") ?? "",
     priority: formData.get("priority") ?? "SECOND",
     marketingStatus: formData.get("marketingStatus") ?? "ACTIVE",
@@ -80,9 +83,11 @@ function benchData(d: BenchConsultantInput) {
     leastRateC2C: d.leastRateC2C ?? null,
     callType: d.callType ?? null,
     payrollType: d.payrollType ?? null,
-    relocation: d.relocation,
-    // Specific cities only matter when NOT open to relocating generally.
-    relocationCities: d.relocation ? null : d.relocationCities ?? null,
+    // 3-way relocation (Anywhere / Specific / No) mapped onto the boolean + cities:
+    // open unless "No"; cities kept only for "Specific".
+    relocation: d.relocationMode !== "NO",
+    relocationCities:
+      d.relocationMode === "SPECIFIC" ? d.relocationCities ?? null : null,
     marketingStartDate: d.marketingStartDate ?? null,
     marketingEmail: d.marketingEmail ?? null,
     marketingPassword: d.marketingPassword ?? null,
@@ -115,6 +120,20 @@ function stripCredentials(data: ReturnType<typeof benchData>): void {
   for (const k of CREDENTIAL_FIELDS) delete rec[k];
 }
 
+/** Credentials are required-or-N/A, but only for users who can edit them (the
+ *  form hides the card for everyone else). Returns field errors, or null. */
+function credentialErrors(
+  d: BenchConsultantInput,
+  canCreds: boolean,
+): Record<string, string> | null {
+  if (!canCreds || d.credentialsNa) return null;
+  const e: Record<string, string> = {};
+  if (!d.marketingEmail) e.marketingEmail = "Add the login email, or mark not set up.";
+  if (!d.marketingPassword) e.marketingPassword = "Add the password, or mark not set up.";
+  if (!d.marketingNumber) e.marketingNumber = "Add the number, or mark not set up.";
+  return Object.keys(e).length ? e : null;
+}
+
 export async function createBenchConsultant(
   _prev: FormState,
   formData: FormData,
@@ -129,14 +148,16 @@ export async function createBenchConsultant(
     };
   const d = parsed.data;
 
+  const canCreds = canViewBenchCredentials(user);
+  const credErr = credentialErrors(d, canCreds);
+  if (credErr)
+    return { error: "Please fix the highlighted fields.", fieldErrors: credErr };
+
   const data = benchData(d);
-  // A Visa = the actual visa = the work authorization. Prefill it when blank so
-  // the bench mirrors the candidate.
-  if (!data.aVisa) data.aVisa = d.workAuthorization ?? null;
   // Only credential-cleared users (admins) may set the gated marketing
   // credentials. For everyone else the form never renders those inputs, so we
   // strip them rather than persist blanks.
-  if (!canViewBenchCredentials(user)) stripCredentials(data);
+  if (!canCreds) stripCredentials(data);
 
   // Every bench consultant IS a candidate. Either an existing candidate was
   // picked (link it), or the "➕ Create new candidate" sentinel means we create
@@ -283,6 +304,11 @@ export async function updateBenchConsultant(
     };
   const d = parsed.data;
 
+  const canCreds = canViewBenchCredentials(user);
+  const credErr = credentialErrors(d, canCreds);
+  if (credErr)
+    return { error: "Please fix the highlighted fields.", fieldErrors: credErr };
+
   const existing = await db.benchConsultant.findUnique({
     where: { id },
     include: { candidate: { select: { id: true, technology: true } } },
@@ -307,7 +333,6 @@ export async function updateBenchConsultant(
   compare("notes", existing.notes, d.notes);
 
   const data = benchData(d);
-  const canCreds = canViewBenchCredentials(user);
   // Non-admins can't see or edit credentials — their form omits those inputs, so
   // strip the (blank) credential fields here. Omitting them from the Prisma
   // update leaves the admin-set values untouched instead of wiping them.

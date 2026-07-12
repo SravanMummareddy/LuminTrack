@@ -309,6 +309,59 @@ export async function listCandidateOptions() {
 }
 
 
+export type BenchCandidateOption = {
+  id: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  currentLocation: string;
+  workAuthorization: string;
+  skills: string[];
+  technology: string;
+  currentCompany: string;
+  reference: string;
+  realTimeExpYears: string;
+};
+
+/** Candidates for the bench form's picker, carrying the fields the bench
+ *  "get from candidate" prefill needs (email/phone/location/company/reference/
+ *  skills/work-auth/technology). `reference` prefers the linked Referrer's name,
+ *  falling back to the legacy free-text source. */
+export async function listCandidatesForBench(): Promise<BenchCandidateOption[]> {
+  const db = await getScopedPrisma();
+  const rows = await db.candidate.findMany({
+    where: { deletedAt: null, isActive: true },
+    orderBy: { fullName: "asc" },
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+      phone: true,
+      currentLocation: true,
+      workAuthorization: true,
+      skills: true,
+      technology: true,
+      currentCompany: true,
+      source: true,
+      realTimeExperienceYears: true,
+      referrer: { select: { name: true } },
+    },
+  });
+  return rows.map((c) => ({
+    id: c.id,
+    fullName: c.fullName,
+    email: c.email ?? "",
+    phone: c.phone ?? "",
+    currentLocation: c.currentLocation ?? "",
+    workAuthorization: c.workAuthorization ?? "",
+    skills: c.skills,
+    technology: c.technology ?? "",
+    currentCompany: c.currentCompany ?? "",
+    reference: c.referrer?.name ?? c.source ?? "",
+    realTimeExpYears: c.realTimeExperienceYears?.toString() ?? "",
+  }));
+}
+
 export type CandidateDuplicate = {
   id: string;
   fullName: string;
