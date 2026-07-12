@@ -951,6 +951,8 @@ async function main() {
 
     const candidate = await prisma.candidate.create({
       data: {
+        firstName: first,
+        lastName: last,
         fullName,
         email: `${first}.${last}${i}`.toLowerCase() + "@example.com",
         phone: `+1 ${randInt(200, 989)}-${randInt(200, 989)}-${randInt(
@@ -1601,6 +1603,8 @@ async function main() {
 
     const consultant = await prisma.benchConsultant.create({
       data: {
+        firstName: first,
+        lastName: last,
         fullName: c.fullName,
         email: `${first}.${last}.bench`.toLowerCase().replace(/\s+/g, "") + "@example.com",
         phone: `+1 ${randInt(200, 989)}-${randInt(200, 989)}-${randInt(1000, 9999)}`,
