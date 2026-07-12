@@ -12,6 +12,8 @@ import {
   type InterviewListFilters,
 } from "@/server/queries/interviews";
 import { listActiveRecruiterOptions } from "@/server/queries/org";
+import { getCurrentUser } from "@/lib/session";
+import { isManagerTier } from "@/lib/permissions";
 import {
   parseSort,
   parsePage,
@@ -70,11 +72,13 @@ export default async function InterviewsPage({
 
   const view = clean(sp.view) === "schedule" ? "schedule" : "list";
 
-  const [schedule, list, recruiters] = await Promise.all([
+  const [schedule, list, recruiters, user] = await Promise.all([
     view === "schedule" ? listInterviewsSchedule(filters) : null,
     view === "list" ? listInterviews(filters) : null,
     listActiveRecruiterOptions(),
+    getCurrentUser(),
   ]);
+  const isManager = isManagerTier(user);
 
   const total = view === "schedule" ? schedule!.total : list!.total;
 
@@ -104,6 +108,7 @@ export default async function InterviewsPage({
           rows={schedule!.rows}
           now={new Date()}
           capped={schedule!.capped}
+          isManager={isManager}
         />
       ) : (
         <div className="space-y-3">
@@ -111,6 +116,7 @@ export default async function InterviewsPage({
             rows={list!.rows}
             pageOffset={(list!.page - 1) * PAGE_SIZE}
             countLabel={`${total} interview${total === 1 ? "" : "s"}`}
+            isManager={isManager}
           />
           <Pagination
             page={list!.page}

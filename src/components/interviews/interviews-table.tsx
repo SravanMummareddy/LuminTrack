@@ -18,6 +18,7 @@ import {
   deletedSuffix,
 } from "@/lib/format";
 import { useColumnPrefs, type ColumnPrefs } from "@/lib/use-column-prefs";
+import { OrgEntityLink } from "@/components/settings/org-entity-link";
 import type { InterviewListRow } from "@/server/queries/interviews";
 
 function technology(c: InterviewListRow["submission"]["candidate"]): string {
@@ -31,7 +32,11 @@ type Column = {
   sortDefaultDir?: "asc" | "desc";
   align?: "right";
   defaultVisible: boolean;
-  render: (row: InterviewListRow, rowNumber: number) => React.ReactNode;
+  render: (
+    row: InterviewListRow,
+    rowNumber: number,
+    isManager: boolean,
+  ) => React.ReactNode;
 };
 
 const COLUMNS: Column[] = [
@@ -95,9 +100,14 @@ const COLUMNS: Column[] = [
     label: "Client",
     sortKey: "client",
     defaultVisible: true,
-    render: (r) => (
+    render: (r, _n, isManager) => (
       <Td label="Client" secondary>
-        {r.submission.job.client.name}
+        <OrgEntityLink
+          kind="client"
+          id={r.submission.job.client.id}
+          name={r.submission.job.client.name}
+          isManager={isManager}
+        />
       </Td>
     ),
   },
@@ -253,11 +263,13 @@ export function InterviewsTable({
   rows,
   pageOffset = 0,
   countLabel,
+  isManager,
 }: {
   rows: InterviewListRow[];
   pageOffset?: number;
   /** e.g. "30 interviews" — shown before the column count. */
   countLabel?: string;
+  isManager: boolean;
 }) {
   const [prefs, setPrefs] = useColumnPrefs(
     STORAGE_KEY,
@@ -329,6 +341,7 @@ export function InterviewsTable({
                   column={c}
                   row={row}
                   rowNumber={pageOffset + idx + 1}
+                  isManager={isManager}
                 />
               ))}
             </tr>
@@ -343,10 +356,12 @@ function RenderCell({
   column,
   row,
   rowNumber,
+  isManager,
 }: {
   column: Column;
   row: InterviewListRow;
   rowNumber: number;
+  isManager: boolean;
 }) {
-  return <>{column.render(row, rowNumber)}</>;
+  return <>{column.render(row, rowNumber, isManager)}</>;
 }

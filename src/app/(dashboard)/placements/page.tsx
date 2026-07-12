@@ -12,6 +12,7 @@ import { PlacementsFilters } from "@/components/placements/placements-filters";
 import { parseSort, parsePage, parseDateRange, parseList, PAGE_SIZE } from "@/lib/filters";
 import { PLACEMENT_STATUSES } from "@/lib/labels";
 import { requireUser } from "@/lib/session";
+import { isManagerTier } from "@/lib/permissions";
 import type { PlacementStatus } from "@/generated/prisma/enums";
 
 function clean(value: string | string[] | undefined): string | undefined {
@@ -96,7 +97,7 @@ export default async function PlacementsPage({
             rows={rows}
             countLabel={`${total} placement${total === 1 ? "" : "s"}`}
             pageOffset={(page - 1) * PAGE_SIZE}
-            viewer={{ userId: user.id, userRole: user.role }}
+            viewer={{ userId: user.id, userRole: user.role, isManager: isManagerTier(user) }}
           />
           <Pagination page={page} totalPages={totalPages} total={total} />
         </div>

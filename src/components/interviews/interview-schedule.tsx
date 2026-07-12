@@ -16,6 +16,7 @@ import {
   bucketInterviews,
   type ScheduleBucketKey,
 } from "@/lib/interview-schedule";
+import { OrgEntityLink } from "@/components/settings/org-entity-link";
 import type { InterviewListRow } from "@/server/queries/interviews";
 
 // Per-bucket accent: awaiting is the actionable amber group, today is live
@@ -46,9 +47,11 @@ const BUCKET_ACCENT: Record<
 function ScheduleRow({
   row,
   bucket,
+  isManager,
 }: {
   row: InterviewListRow;
   bucket: ScheduleBucketKey;
+  isManager: boolean;
 }) {
   const c = row.submission.candidate;
   const done = bucket === "completed";
@@ -87,8 +90,13 @@ function ScheduleRow({
           </Link>
         </div>
         <p className="mt-0.5 truncate text-xs text-slate-500">
-          {row.submission.job.client.name} ·{" "}
-          {INTERVIEW_TYPE_LABEL[row.interviewType]} · R{row.roundOrder}
+          <OrgEntityLink
+            kind="client"
+            id={row.submission.job.client.id}
+            name={row.submission.job.client.name}
+            isManager={isManager}
+          />{" "}
+          · {INTERVIEW_TYPE_LABEL[row.interviewType]} · R{row.roundOrder}
           <Link
             href={`/submissions/${row.submission.id}`}
             className="ml-1.5 font-mono text-[11px] text-slate-400 hover:underline"
@@ -125,10 +133,12 @@ export function InterviewSchedule({
   rows,
   now,
   capped,
+  isManager,
 }: {
   rows: InterviewListRow[];
   now: Date;
   capped: boolean;
+  isManager: boolean;
 }) {
   const buckets = bucketInterviews(rows, now).filter((b) => b.items.length > 0);
 
@@ -157,7 +167,12 @@ export function InterviewSchedule({
           </div>
           <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 bg-white">
             {b.items.map((row) => (
-              <ScheduleRow key={row.id} row={row} bucket={b.key} />
+              <ScheduleRow
+                key={row.id}
+                row={row}
+                bucket={b.key}
+                isManager={isManager}
+              />
             ))}
           </div>
         </section>

@@ -16,6 +16,7 @@ import { Forbidden, MANAGER_ONLY_FORBIDDEN } from "@/components/ui/forbidden";
 import { requireUser } from "@/lib/session";
 import { isManagerTier, roleLabel } from "@/lib/permissions";
 import { Table, Th, Td } from "@/components/ui/table";
+import { OrgEntityLink } from "@/components/settings/org-entity-link";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
 import { StatCard } from "@/components/dashboard/stat-card";
@@ -277,8 +278,22 @@ export default async function RecruiterDetailPage({
                       {a.job.title}
                     </Link>
                   </Td>
-                  <Td label="Client">{a.job.client.name}</Td>
-                  <Td label="Vendor">{a.job.vendor.name}</Td>
+                  <Td label="Client">
+                    <OrgEntityLink
+                      kind="client"
+                      id={a.job.clientId}
+                      name={a.job.client.name}
+                      isManager
+                    />
+                  </Td>
+                  <Td label="Vendor">
+                    <OrgEntityLink
+                      kind="vendor"
+                      id={a.job.vendorId}
+                      name={a.job.vendor.name}
+                      isManager
+                    />
+                  </Td>
                   <Td label="Status">
                     <Badge tone={JOB_STATUS_TONE[a.job.status]}>
                       {JOB_STATUS_LABEL[a.job.status]}

@@ -154,6 +154,8 @@ export async function listPlacements(
           title: true,
           deletedAt: true,
           erasedAt: true,
+          clientId: true,
+          vendorId: true,
           client: { select: { name: true } },
           vendor: { select: { name: true } },
         },
@@ -190,6 +192,7 @@ export async function getPlacement(id: string) {
           id: true,
           seq: true,
           title: true,
+          clientId: true,
           client: { select: { name: true } },
         },
       },
@@ -313,6 +316,7 @@ export async function getCandidatePlacements(
         select: {
           id: true,
           title: true,
+          clientId: true,
           client: { select: { name: true } },
         },
       },
@@ -340,6 +344,7 @@ export async function getActivePlacementForCandidate(candidateId: string) {
         select: {
           id: true,
           title: true,
+          clientId: true,
           client: { select: { name: true } },
         },
       },

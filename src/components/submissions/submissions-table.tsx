@@ -14,6 +14,7 @@ import { STALE_STAGE_DAYS } from "@/lib/analytics";
 import { resumeFlag } from "@/lib/submission-flow";
 import type { SubmissionListRow } from "@/server/queries/submissions";
 import { SubmissionBulkBar } from "@/components/submissions/submission-bulk-bar";
+import { OrgEntityLink } from "@/components/settings/org-entity-link";
 
 type Column = {
   key: string;
@@ -22,7 +23,11 @@ type Column = {
   sortDefaultDir?: "asc" | "desc";
   align?: "right";
   defaultVisible: boolean;
-  render: (row: SubmissionListRow, rowNumber: number) => React.ReactNode;
+  render: (
+    row: SubmissionListRow,
+    rowNumber: number,
+    isManager: boolean,
+  ) => React.ReactNode;
 };
 
 const COLUMNS: Column[] = [
@@ -112,9 +117,14 @@ const COLUMNS: Column[] = [
     label: "Client",
     sortKey: "client",
     defaultVisible: true,
-    render: (s) => (
+    render: (s, _n, isManager) => (
       <Td label="Client" secondary>
-        {s.job.client.name}
+        <OrgEntityLink
+          kind="client"
+          id={s.job.clientId}
+          name={s.job.client.name}
+          isManager={isManager}
+        />
       </Td>
     ),
   },
@@ -123,9 +133,14 @@ const COLUMNS: Column[] = [
     label: "Vendor",
     sortKey: "vendor",
     defaultVisible: true,
-    render: (s) => (
+    render: (s, _n, isManager) => (
       <Td label="Vendor" secondary>
-        {s.job.vendor.name}
+        <OrgEntityLink
+          kind="vendor"
+          id={s.job.vendorId}
+          name={s.job.vendor.name}
+          isManager={isManager}
+        />
       </Td>
     ),
   },
@@ -328,6 +343,7 @@ export function SubmissionsTable({
   countLabel,
   storageKey = STORAGE_KEY,
   canBulk = false,
+  isManager = false,
 }: {
   rows: SubmissionListRow[];
   pageOffset?: number;
@@ -339,6 +355,9 @@ export function SubmissionsTable({
   /** Whether the viewer can bulk-change status (admin / team lead). When false,
    *  the selection checkboxes + bulk bar are hidden entirely. */
   canBulk?: boolean;
+  /** Managers get client/vendor names linked to their detail pages; recruiters
+   *  get plain text. */
+  isManager?: boolean;
 }) {
   const [prefs, setPrefs] = useColumnPrefs(
     storageKey,
@@ -462,6 +481,7 @@ export function SubmissionsTable({
                   column={c}
                   row={row}
                   rowNumber={pageOffset + idx + 1}
+                  isManager={isManager}
                 />
               ))}
             </tr>
@@ -476,11 +496,13 @@ function RenderCell({
   column,
   row,
   rowNumber,
+  isManager,
 }: {
   column: Column;
   row: SubmissionListRow;
   rowNumber: number;
+  isManager: boolean;
 }) {
-  return <>{column.render(row, rowNumber)}</>;
+  return <>{column.render(row, rowNumber, isManager)}</>;
 }
 

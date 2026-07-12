@@ -3,7 +3,7 @@ import { Plus, Trash2, ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { LinkButton } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/session";
-import { hasFullAccess } from "@/lib/permissions";
+import { hasFullAccess, isManagerTier } from "@/lib/permissions";
 import { JOB_TRASH_RETENTION_DAYS } from "@/server/job-erase";
 import { Pagination } from "@/components/ui/pagination";
 import { JobFilters } from "@/components/jobs/job-filters";
@@ -180,6 +180,7 @@ export default async function JobsPage({
         <div className="space-y-3">
           <JobsTable
             rows={jobs}
+            isManager={isManagerTier(currentUser)}
             countLabel={`${total} job${total === 1 ? "" : "s"}`}
             pageOffset={(page - 1) * PAGE_SIZE}
           />

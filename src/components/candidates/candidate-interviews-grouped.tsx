@@ -9,6 +9,7 @@ import {
   INTERVIEW_RESULT_TONE,
 } from "@/lib/labels";
 import { formatDate, formatDateTime } from "@/lib/format";
+import { OrgEntityLink } from "@/components/settings/org-entity-link";
 import type { CandidateInterviewGroup } from "@/server/queries/interviews";
 
 const PIP_CAP = 5;
@@ -20,8 +21,10 @@ const PIP_CAP = 5;
  */
 export function CandidateInterviewsGrouped({
   rows,
+  isManager,
 }: {
   rows: CandidateInterviewGroup[];
+  isManager: boolean;
 }) {
   return (
     <ul className="space-y-2">
@@ -47,7 +50,12 @@ export function CandidateInterviewsGrouped({
                   </Link>
                   <span className="inline-flex items-baseline gap-2 text-sm text-slate-600">
                     <span aria-hidden className="text-slate-300">·</span>
-                    {sub.job.client.name}
+                    <OrgEntityLink
+                      kind="client"
+                      id={sub.job.client.id}
+                      name={sub.job.client.name}
+                      isManager={isManager}
+                    />
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">

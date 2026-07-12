@@ -26,7 +26,8 @@ import {
   formatSubmissionDisplayId,
 } from "@/lib/format";
 import { requireUser } from "@/lib/session";
-import { hasFullAccess } from "@/lib/permissions";
+import { hasFullAccess, isManagerTier } from "@/lib/permissions";
+import { OrgEntityLink } from "@/components/settings/org-entity-link";
 
 function SummaryItem({
   label,
@@ -145,7 +146,13 @@ export default async function PlacementDetailPage({
             >
               {placement.job.title}
             </Link>{" "}
-            · {placement.job.client.name}
+            ·{" "}
+            <OrgEntityLink
+              kind="client"
+              id={placement.job.clientId}
+              name={placement.job.client.name}
+              isManager={isManagerTier(user)}
+            />
           </p>
           {predecessor && (
             <p className="mt-2 text-xs text-slate-600">

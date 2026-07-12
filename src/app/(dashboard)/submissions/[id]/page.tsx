@@ -14,7 +14,8 @@ import { listSupportProviderOptions } from "@/server/queries/support";
 import { getTimelineFor } from "@/server/queries/timeline";
 import { getNotesFor } from "@/server/queries/notes";
 import { getCurrentUser } from "@/lib/session";
-import { hasFullAccess } from "@/lib/permissions";
+import { hasFullAccess, isManagerTier } from "@/lib/permissions";
+import { OrgEntityLink } from "@/components/settings/org-entity-link";
 import {
   SUBMISSION_STATUS_LABEL,
   SUBMISSION_STATUS_TONE,
@@ -71,6 +72,7 @@ export default async function SubmissionDetailPage({
   if (!submission) notFound();
 
   const { candidate, job } = submission;
+  const isManager = isManagerTier(user);
   // Waiving the résumé requirement is allowed for the submitter or any admin.
   const canWaiveResume = Boolean(
     user && (hasFullAccess(user) || user.id === submission.submittedById),
@@ -111,7 +113,20 @@ export default async function SubmissionDetailPage({
             >
               {job.title}
             </Link>{" "}
-            · {job.client.name} · {job.vendor.name}
+            ·{" "}
+            <OrgEntityLink
+              kind="client"
+              id={job.clientId}
+              name={job.client.name}
+              isManager={isManager}
+            />{" "}
+            ·{" "}
+            <OrgEntityLink
+              kind="vendor"
+              id={job.vendorId}
+              name={job.vendor.name}
+              isManager={isManager}
+            />
           </p>
         </div>
         <LinkButton href={`/submissions/${submission.id}/edit`} variant="secondary">
@@ -150,8 +165,22 @@ export default async function SubmissionDetailPage({
               {job.title}
             </Link>
           </SummaryItem>
-          <SummaryItem label="Client">{job.client.name}</SummaryItem>
-          <SummaryItem label="Vendor">{job.vendor.name}</SummaryItem>
+          <SummaryItem label="Client">
+            <OrgEntityLink
+              kind="client"
+              id={job.clientId}
+              name={job.client.name}
+              isManager={isManager}
+            />
+          </SummaryItem>
+          <SummaryItem label="Vendor">
+            <OrgEntityLink
+              kind="vendor"
+              id={job.vendorId}
+              name={job.vendor.name}
+              isManager={isManager}
+            />
+          </SummaryItem>
           <SummaryItem label="Source">{jobSourceLabel(job)}</SummaryItem>
           <SummaryItem label="Submitted by">
             {submission.submittedBy.fullName}

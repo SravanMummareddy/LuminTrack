@@ -153,6 +153,7 @@ export default async function SubmissionsPage({
             pageOffset={(page - 1) * PAGE_SIZE}
             storageKey="lumintrack.submissions.columns"
             canBulk={isManagerTier(user)}
+            isManager={isManagerTier(user)}
           />
           <Pagination page={page} totalPages={totalPages} total={total} />
         </div>

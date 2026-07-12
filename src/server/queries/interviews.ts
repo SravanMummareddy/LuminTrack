@@ -52,7 +52,11 @@ export async function getCandidateInterviewsGroupedByJob(
       status: true,
       submittedAt: true,
       job: {
-        select: { id: true, title: true, client: { select: { name: true } } },
+        select: {
+          id: true,
+          title: true,
+          client: { select: { id: true, name: true } },
+        },
       },
       interviewRounds: {
         orderBy: { roundOrder: "asc" },
@@ -191,7 +195,7 @@ const INTERVIEW_LIST_SELECT = {
           location: true,
           deletedAt: true,
           erasedAt: true,
-          client: { select: { name: true } },
+          client: { select: { id: true, name: true } },
           vendor: { select: { name: true } },
         },
       },

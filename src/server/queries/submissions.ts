@@ -78,6 +78,8 @@ const SUBMISSION_INCLUDE = {
       title: true,
       deletedAt: true,
       erasedAt: true,
+      clientId: true,
+      vendorId: true,
       client: { select: { name: true } },
       vendor: { select: { name: true } },
     },
@@ -392,6 +394,8 @@ export async function getCandidateSubmissions(
         select: {
           id: true,
           title: true,
+          clientId: true,
+          vendorId: true,
           client: { select: { name: true } },
           vendor: { select: { name: true } },
           sisterCompanySource: { select: { name: true } },
