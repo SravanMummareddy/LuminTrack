@@ -75,10 +75,11 @@ from all code. Do not reintroduce it.
 
 - **`main` is live on prod** (`lumin-track.vercel.app`); org/roles/tenancy foundation (Phases A/B/C,
   PRs #79–#83) + the independent backlog (#84) shipped. tsc clean, 247 unit tests.
-- **In flight: PR #86** (branch `feat/job-form-redesign`, 8 commits) — **Job form redesign + org-entity
-  records**. Both migrations (`20260712120000_job_source_and_org_audit`, `20260712140000_org_entity_seq`)
-  **applied to dev + PROD**; **awaiting owner squash-merge** → Vercel auto-deploys (schema already ahead
-  of code). What it ships: 4-card Job form (required + N/A toggle), source rework (Job board / Referral /
+- **Just shipped: PR #86 MERGED to `main`** (`4de1139`) — **Job form redesign + org-entity records**.
+  Both migrations (`20260712120000_job_source_and_org_audit`, `20260712140000_org_entity_seq`) were
+  **applied to dev + PROD before the merge** (schema ahead of code); Vercel auto-deploys `main`. Verify
+  the prod deploy is READY + smoke as a manager. What it ships: 4-card Job form (required + N/A toggle),
+  source rework (Job board / Referral /
   Sister company / Other — **"Direct" removed**), a **Referrer** directory, derived duration +
   estimated-start close-gate, quick-add dialog; org entities (Client/Vendor/Source/Referrer) now have
   **display IDs** (CLI-/VEN-/SRC-/REF-), **manager-only detail pages** (`/settings/[entity]/[id]`), slim
