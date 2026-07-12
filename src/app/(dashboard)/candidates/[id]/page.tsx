@@ -346,7 +346,18 @@ export default async function CandidateDetailPage({
           <DescItem label="Last updated">
             {formatDate(candidate.updatedAt)}
           </DescItem>
-          <DescItem label="Reference">{candidate.source || "—"}</DescItem>
+          <DescItem label="Reference">
+            {candidate.referrerId && candidate.referrer ? (
+              <OrgEntityLink
+                kind="referrer"
+                id={candidate.referrerId}
+                name={candidate.referrer.name}
+                isManager={isManager}
+              />
+            ) : (
+              candidate.source || "—"
+            )}
+          </DescItem>
           <DescItem label="Working now">
             {candidate.isWorking
               ? `Yes${candidate.workingType ? ` — ${candidate.workingType}` : ""}`

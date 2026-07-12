@@ -26,14 +26,21 @@ export default async function EditBenchConsultantPage({
 }) {
   const { id } = await params;
   const user = await requireUser();
-  const [c, recruiters, candidates, callTypeOptions, payrollTypeOptions] =
-    await Promise.all([
-      getBenchConsultantForEdit(id),
-      listActiveRecruiterOptions(),
-      listCandidatesForBench(),
-      listLookupValues("CALL_TYPE"),
-      listLookupValues("PAYROLL_TYPE"),
-    ]);
+  const [
+    c,
+    recruiters,
+    candidates,
+    callTypeOptions,
+    payrollTypeOptions,
+    projectTypeOptions,
+  ] = await Promise.all([
+    getBenchConsultantForEdit(id),
+    listActiveRecruiterOptions(),
+    listCandidatesForBench(),
+    listLookupValues("CALL_TYPE"),
+    listLookupValues("PAYROLL_TYPE"),
+    listLookupValues("PROJECT_TYPE"),
+  ]);
   if (!c) notFound();
 
   const canCreds = canViewBenchCredentials(user);
@@ -91,6 +98,7 @@ export default async function EditBenchConsultantPage({
           canEditCredentials={canCreds}
           callTypeOptions={callTypeOptions}
           payrollTypeOptions={payrollTypeOptions}
+          projectTypeOptions={projectTypeOptions}
         />
       </div>
     </div>
