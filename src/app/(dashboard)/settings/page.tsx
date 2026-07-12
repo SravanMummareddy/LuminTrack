@@ -203,6 +203,8 @@ export default async function SettingsPage({
       <AccountSection
         fullName={user?.fullName ?? ""}
         email={user?.email ?? ""}
+        notifyDigest={user?.notifyDigest ?? true}
+        notifyEvents={user?.notifyEvents ?? true}
       />
     );
   }

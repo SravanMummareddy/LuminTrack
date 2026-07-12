@@ -28,6 +28,7 @@ import {
   terminatePlacementOnRevert,
 } from "@/server/placement-lifecycle";
 import { createSubmissionRecord } from "@/server/submission-create";
+import { notifyNewSubmission } from "@/server/notify";
 import {
   collectSubmissionGates,
   gatesFromCreateResult,
@@ -280,6 +281,9 @@ export async function createSubmission(
       error: "Resolve the item below, then submit.",
     };
   const submissionId = result.submissionId;
+
+  // Wave 7 — email the submitter's team lead (fire-and-forget; safe + bounded).
+  await notifyNewSubmission(db, submissionId);
 
   revalidatePath("/submissions");
   revalidatePath(`/jobs/${d.jobId}`);
