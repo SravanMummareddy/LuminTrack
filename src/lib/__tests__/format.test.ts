@@ -3,6 +3,8 @@ import {
   deletedSuffix,
   formatDate,
   jobDuration,
+  daysToFirstSubmission,
+  timeToFirstSubmissionLabel,
   formatClientDisplayId,
   formatVendorDisplayId,
   formatSourceDisplayId,
@@ -69,5 +71,29 @@ describe("formatDate", () => {
   it("renders a fixed UTC date regardless of runtime zone", () => {
     // A near-midnight UTC instant must not shift a day (hydration determinism).
     expect(formatDate("2026-01-01T00:30:00Z")).toBe("Jan 1, 2026");
+  });
+});
+
+describe("daysToFirstSubmission (D3/V-5)", () => {
+  it("measures whole days from received to first submission", () => {
+    expect(daysToFirstSubmission("2026-07-08", "2026-07-14")).toBe(6);
+    expect(daysToFirstSubmission("2026-07-08", "2026-07-08")).toBe(0);
+  });
+
+  it("is null when there's no submission yet", () => {
+    expect(daysToFirstSubmission("2026-07-08", null)).toBeNull();
+    expect(daysToFirstSubmission(null, "2026-07-14")).toBeNull();
+  });
+
+  it("clamps a pre-logged submission (negative) to 0", () => {
+    // Résumé submitted before the job was received — owner's edge case.
+    expect(daysToFirstSubmission("2026-07-14", "2026-07-08")).toBe(0);
+  });
+
+  it("labels the number", () => {
+    expect(timeToFirstSubmissionLabel("2026-07-08", "2026-07-14")).toBe("6 days");
+    expect(timeToFirstSubmissionLabel("2026-07-08", "2026-07-09")).toBe("1 day");
+    expect(timeToFirstSubmissionLabel("2026-07-08", "2026-07-08")).toBe("Same day");
+    expect(timeToFirstSubmissionLabel("2026-07-08", null)).toBe("—");
   });
 });

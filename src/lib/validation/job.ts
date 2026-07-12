@@ -67,6 +67,9 @@ export const jobSchema = z
       z.boolean().default(false),
     ),
     endDate: optionalDateTime,
+    // D3/V-5: required received date — when the requirement actually arrived.
+    // Defaults to today on the form; can't be in the future (checked below).
+    receivedAt: z.coerce.date({ message: "Enter the date the requirement was received." }),
     // Required-by-default enums (empty string → a required error, not "not set").
     workMode: enumRequired(WORK_MODE_VALUES, "Select a work mode."),
     priority: enumRequired(JOB_PRIORITY_VALUES, "Select a priority."),
@@ -94,6 +97,13 @@ export const jobSchema = z
     } else if (val.sourceType === "OTHER" && !val.sourceOther) {
       ctx.addIssue({ code: "custom", path: ["sourceOther"], message: "Describe where it came from." });
     }
+    // D3: a received date in the future is a typo, not a real intake date.
+    if (
+      val.receivedAt instanceof Date &&
+      !Number.isNaN(val.receivedAt.getTime()) &&
+      val.receivedAt.getTime() > Date.now()
+    )
+      ctx.addIssue({ code: "custom", path: ["receivedAt"], message: "Received date can't be in the future." });
     // Required-with-N/A: satisfied by a value OR the explicit N/A flag.
     if (!val.targetCloseDate && !val.targetCloseDateNa)
       ctx.addIssue({ code: "custom", path: ["targetCloseDate"], message: "Enter a date, or mark N/A." });

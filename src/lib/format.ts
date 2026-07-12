@@ -34,6 +34,36 @@ export function formatTime(date: Date | string): string {
  * "~N months". Appends " (est.)" when the start date is a recruiter's estimate.
  * Pure + unit-tested.
  */
+/**
+ * D3/V-5: whole days from when a requirement was *received* to its first
+ * submission. Measured from `receivedAt` (not the logged `createdAt`) so the
+ * turnaround reflects the real clock. Returns null when there's no submission
+ * yet. Clamped at 0 — a résumé logged before the job existed (owner's edge case)
+ * would otherwise read negative. Pure, so it's unit-testable apart from the UI.
+ */
+export function daysToFirstSubmission(
+  receivedAt: Date | string | null | undefined,
+  firstSubmittedAt: Date | string | null | undefined,
+): number | null {
+  if (!receivedAt || !firstSubmittedAt) return null;
+  const r = new Date(receivedAt);
+  const f = new Date(firstSubmittedAt);
+  if (Number.isNaN(r.getTime()) || Number.isNaN(f.getTime())) return null;
+  const days = Math.round((f.getTime() - r.getTime()) / 86_400_000);
+  return Math.max(0, days);
+}
+
+/** Label for `daysToFirstSubmission`: "—" (no submission), "Same day", or "N days". */
+export function timeToFirstSubmissionLabel(
+  receivedAt: Date | string | null | undefined,
+  firstSubmittedAt: Date | string | null | undefined,
+): string {
+  const d = daysToFirstSubmission(receivedAt, firstSubmittedAt);
+  if (d == null) return "—";
+  if (d === 0) return "Same day";
+  return `${d} day${d === 1 ? "" : "s"}`;
+}
+
 export function jobDuration(
   start: Date | string | null | undefined,
   end: Date | string | null | undefined,

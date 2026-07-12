@@ -10,6 +10,34 @@ short instead of long.
 
 ---
 
+## 2026-07-12 · D3 received-date — a client effect is the wrong place for a form default
+
+**Situation.** D3 adds a "received date" to the job (defaults to today, backdatable) so
+time-to-first-submission measures from when the requirement *arrived*, not when it was logged. I
+defaulted the field to today with a client-only `useEffect` — the standard trick to avoid a
+hydration mismatch from computing `new Date()` during SSR.
+
+**Diagnosis.** In the browser the field stayed **blank** on load, and the "logged N days later"
+flag only appeared after I poked the input. The job form sits below the fold, and **Next 16 / React
+19 defer hydration of an off-screen client component until the user interacts with it** — so the
+mount effect that set today didn't run until first interaction. A field that's blank until touched
+is worse than useless here: it's *required*, so a user who never scrolled to notice it would submit
+and hit a validation error for a value the form was supposed to pre-fill.
+
+**Fix.** Moved the default off the client entirely. The server pages (`jobs/new`, `jobs/[id]/edit`)
+compute `todayIso` and pass it as a prop; the form seeds its state from `values?.receivedAt ??
+todayIso` and uses it for the `max` cap. No effect, present from SSR, and — because it's a
+serialized prop, identical on server and client — **no hydration mismatch either**. The very thing
+the effect was avoiding, solved more simply by not computing the date in the component at all.
+
+**Lesson.** An effect is for reacting to something, not for producing a value you already know at
+render. A form's initial default is known before the component mounts — so compute it on the server
+and pass it down. Deferred/selective hydration makes "I'll set it in `useEffect`" quietly
+unreliable for anything a user must see without interacting first; the robust default is always the
+server-rendered one.
+
+---
+
 ## 2026-07-12 · Wave 4 strict pipeline — lenient gates defeat the whole point (reverses the entry below)
 
 **Situation.** The first Wave 4 cut (entry below) built the pipeline restructure *migration-free*

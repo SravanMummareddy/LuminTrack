@@ -62,6 +62,8 @@ export type JobFormValues = {
   startDate: string;
   startDateEstimated: boolean;
   endDate: string;
+  /** D3: YYYY-MM-DD — when the requirement was received. Defaults to today. */
+  receivedAt: string;
   workMode: string;
   priority: string;
   discipline: string;
@@ -85,6 +87,7 @@ export function JobForm({
   referrers,
   jobBoards,
   values,
+  todayIso,
   submitLabel,
   canQuickAdd = true,
   canManageRatesAndAssignment = true,
@@ -97,6 +100,8 @@ export function JobForm({
   /** Seeded + learned job-board names for the source picker's datalist. */
   jobBoards: string[];
   values?: JobFormValues;
+  /** D3: server-computed today (YYYY-MM-DD) — default + max for received date. */
+  todayIso: string;
   submitLabel: string;
   /** Allow adding a new client/vendor/referrer inline (any signed-in user). */
   canQuickAdd?: boolean;
@@ -128,6 +133,17 @@ export function JobForm({
     values?.startDateEstimated ?? false,
   );
   const [endDate, setEndDate] = useState(values?.endDate ?? "");
+  // D3: received date. Defaults to `todayIso` (server-provided, so it's present
+  // from SSR with no hydration mismatch and no reliance on an effect firing).
+  // Controlled so the "logged N days later" flag updates live; `todayIso` also
+  // caps the input so a future date can't be picked.
+  const [receivedAt, setReceivedAt] = useState(values?.receivedAt ?? todayIso);
+  const receivedLagDays = receivedAt
+    ? Math.round(
+        (new Date(todayIso).getTime() - new Date(receivedAt).getTime()) /
+          86_400_000,
+      )
+    : 0;
   const duration = jobDuration(startDate || null, endDate || null, startEstimated);
 
   // Job description word count + short nudge.
@@ -314,6 +330,31 @@ export function JobForm({
             <Input id="sourceOther" name="sourceOther" defaultValue={values?.sourceOther ?? ""} placeholder="Describe the source" />
           </Field>
         )}
+
+        {/* D3: received date — when the requirement actually arrived (email /
+            referral), often before it's logged. Starts the time-to-submit clock. */}
+        <Field
+          label="Received date"
+          htmlFor="receivedAt"
+          required
+          error={errors.receivedAt}
+          hint="When the requirement actually arrived — not today. The time-to-submit clock starts here."
+        >
+          <Input
+            id="receivedAt"
+            name="receivedAt"
+            type="date"
+            value={receivedAt}
+            max={todayIso}
+            onChange={(e) => setReceivedAt(e.target.value)}
+            required
+          />
+          {receivedLagDays > 0 && (
+            <span className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+              ⚑ logged {receivedLagDays} day{receivedLagDays === 1 ? "" : "s"} later
+            </span>
+          )}
+        </Field>
 
         {/* ── 3. Requirement details ──────────────────────────────── */}
         </FormSection>

@@ -30,6 +30,7 @@ export default async function NewJobPage() {
         sources={sources}
         referrers={referrers}
         jobBoards={[...JOB_BOARD_SEED]}
+        todayIso={new Date().toISOString().slice(0, 10)}
         submitLabel="Create job"
         canQuickAdd={canQuickAddOrgEntities(user)}
         canManageRatesAndAssignment={hasFullAccess(user)}

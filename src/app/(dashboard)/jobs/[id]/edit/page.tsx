@@ -50,6 +50,7 @@ export default async function EditJobPage({
     description: job.description ?? "",
     notes: job.notes ?? "",
     positions: job.positions?.toString() ?? "",
+    receivedAt: toDateInput(job.receivedAt),
     startDate: toDateInput(job.startDate),
     startDateEstimated: job.startDateEstimated,
     endDate: toDateInput(job.endDate),
@@ -73,6 +74,7 @@ export default async function EditJobPage({
         referrers={referrers}
         jobBoards={[...JOB_BOARD_SEED]}
         values={values}
+        todayIso={new Date().toISOString().slice(0, 10)}
         submitLabel="Save changes"
         canManageRatesAndAssignment={canRates}
       />

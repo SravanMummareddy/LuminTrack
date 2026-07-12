@@ -846,6 +846,9 @@ async function main() {
         // Optional job-detail fields — populated on a subset so the columns have data.
         positions: chance(0.5) ? randInt(1, 4) : null,
         createdById: creator.id,
+        // D3: requirements arrive 0–5 days before they're logged — so the
+        // demo's time-to-first-submission reflects the real gap.
+        receivedAt: new Date(createdAt.getTime() - randInt(0, 5) * 86_400_000),
         createdAt,
         updatedAt: createdAt,
       },

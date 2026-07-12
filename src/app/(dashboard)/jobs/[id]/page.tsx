@@ -43,6 +43,7 @@ import {
   formatVendorRequirementDisplayId,
   deletedSuffix,
   jobDuration,
+  timeToFirstSubmissionLabel,
 } from "@/lib/format";
 import { RecentlyViewedTracker } from "@/components/layout/recently-viewed";
 
@@ -240,7 +241,17 @@ export default async function JobDetailPage({
           <SummaryItem label="Client rate">{formatRate(job.clientRate, "Undisclosed")}</SummaryItem>
           <SummaryItem label="Vendor rate">{formatRate(job.vendorRate)}</SummaryItem>
           <SummaryItem label="Created by">{job.createdBy.fullName}</SummaryItem>
-          <SummaryItem label="Created">{formatDate(job.createdAt)}</SummaryItem>
+          {/* D3: received = when the requirement arrived (the clock start);
+              created = when it was logged. Time-to-1st-submission measures from
+              received, not created. */}
+          <SummaryItem label="Received">{formatDate(job.receivedAt)}</SummaryItem>
+          <SummaryItem label="Logged">{formatDate(job.createdAt)}</SummaryItem>
+          <SummaryItem label="Time to 1st submission">
+            {timeToFirstSubmissionLabel(
+              job.receivedAt,
+              job.submissions[0]?.submittedAt ?? null,
+            )}
+          </SummaryItem>
           <SummaryItem label="Last updated">{formatDate(job.updatedAt)}</SummaryItem>
           {/* Optional planning fields — only render the ones the recruiter
               actually filled in. */}
