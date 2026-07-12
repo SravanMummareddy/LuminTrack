@@ -10,6 +10,34 @@ short instead of long.
 
 ---
 
+## 2026-07-13 · Wave 7.1 — the deferred "NT-1" turned out to be mostly built already
+
+**Situation.** In Wave 7 I deferred "email the recruiter when a VPR is assigned" (NT-1), flagging it as
+needing a prerequisite: "no real assign-to-user action exists." The owner came back wanting exactly
+that — a team lead assigns a VPR to a recruiter, with an *option* to email them.
+
+**Diagnosis.** Re-grounding the code (3 parallel Explore agents) corrected my earlier read. The
+prerequisite I'd worried about **already exists**: `VendorRequirement.recruiterId` is a real `User` FK,
+set by the VPR form's "Marketing recruiter" picker on create *and* edit, gated to team-leads/managers
+via `requirement:manage`. My Wave 7 caveat had conflated two different fields — `teamLead` (a free-text
+string, genuinely not routable) and `recruiterId` (a real user relation with a reachable `email`). The
+assignment half was done; only the *send* was missing.
+
+**Fix.** A small feature on top of the Wave 7 email stack — no VPR schema change. One new template
+(`recruiterAssignedEmail`, with an optional note block), one notify helper (`notifyRecruiterAssigned`,
+a 1:1 mirror of `notifyNewSubmission`), two entry points the owner asked for (a detail-page "Email
+recruiter" button with an optional-note dialog + a compact link by the recruiter's name, and a
+"Notify recruiter by email" checkbox on the assign form), and one additive `ActivityAction` enum value
+(`REQUIREMENT_RECRUITER_EMAILED`) for the audit line. Design call: a team lead's **explicit** send
+**ignores the recruiter's `notifyEvents` opt-out** — that flag governs *automatic* system emails (the
+digest, the submission→TL event); a person clicking "email this recruiter" is a direct, intended
+message, not a notification they can mute.
+
+**Lesson.** A "deferred, needs a prerequisite" note is a claim worth re-checking before the next wave —
+mine was wrong because I'd tarred a real FK (`recruiterId`) with the same brush as a look-alike
+free-text field (`teamLead`). Ten minutes of grounding turned a "large NT-1 prerequisite build" into a
+one-template, one-helper feature. Name the exact field, not the feeling.
+
 ## 2026-07-13 · Wave 7 notifications — the feature the owner asked for had no event to hook
 
 **Situation.** Wave 7 asks for email notifications, with the owner explicitly wanting *"email when

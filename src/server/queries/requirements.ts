@@ -70,7 +70,7 @@ const REQUIREMENT_INCLUDE = {
       status: true,
     },
   },
-  recruiter: { select: { id: true, fullName: true } },
+  recruiter: { select: { id: true, fullName: true, email: true } },
   // How many candidates have been submitted against this requirement (VPR-first:
   // the point of the list is which requirements have real submissions) + the
   // first couple of names for the list's "Candidates" chips (+N for the rest).

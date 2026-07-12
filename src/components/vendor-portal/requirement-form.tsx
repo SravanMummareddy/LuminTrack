@@ -410,6 +410,26 @@ export function RequirementForm({
               />
             )}
           </NullableField>
+
+          {!na.recruiterId && fields.recruiterId && (
+            <label className="flex items-start gap-2.5">
+              <input
+                type="checkbox"
+                name="notifyRecruiter"
+                defaultChecked={mode === "create"}
+                className="mt-0.5 h-4 w-4 accent-green-600"
+              />
+              <span>
+                <span className="block text-sm font-medium text-slate-800">
+                  Notify recruiter by email
+                </span>
+                <span className="block text-xs text-slate-500">
+                  Sends the assignment email when you save (note-less — use the
+                  Email recruiter button to add a message).
+                </span>
+              </span>
+            </label>
+          )}
         </FormSection>
 
         <FormSection n={2} title="Rates">
