@@ -1,5 +1,8 @@
 import type { PrismaClient } from "@/generated/prisma/client";
-import { orgScopeExtension } from "@/server/db";
+// Import from the pure org-scope module, NOT `@/server/db` (which the test files
+// mock, dropping this export and constructing the Neon client). org-scope.ts has
+// no client construction, so the real extension is always available here.
+import { orgScopeExtension } from "@/server/org-scope";
 
 /** Wipe every table (except the migration ledger) between tests. Discovered
  *  dynamically so new models never need to be added here by hand. */
