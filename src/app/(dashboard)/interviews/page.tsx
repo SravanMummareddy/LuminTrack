@@ -2,8 +2,11 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Pagination } from "@/components/ui/pagination";
 import { InterviewsTable } from "@/components/interviews/interviews-table";
 import { InterviewsFilters } from "@/components/interviews/interviews-filters";
+import { InterviewSchedule } from "@/components/interviews/interview-schedule";
+import { InterviewViewToggle } from "@/components/interviews/interview-view-toggle";
 import {
   listInterviews,
+  listInterviewsSchedule,
   INTERVIEW_SORT_KEYS,
   INTERVIEW_DEFAULT_SORT,
   type InterviewListFilters,
@@ -65,12 +68,23 @@ export default async function InterviewsPage({
     page: parsePage(clean(sp.page)),
   };
 
-  const [{ rows, total, page }, recruiters] = await Promise.all([
-    listInterviews(filters),
+  const view = clean(sp.view) === "schedule" ? "schedule" : "list";
+
+  const [schedule, list, recruiters] = await Promise.all([
+    view === "schedule" ? listInterviewsSchedule(filters) : null,
+    view === "list" ? listInterviews(filters) : null,
     listActiveRecruiterOptions(),
   ]);
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const total = view === "schedule" ? schedule!.total : list!.total;
+
+  const emptyState = (
+    <div className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">
+      <p className="text-sm text-slate-500">
+        No scheduled interviews match these filters. Interviews appear here once a round has a scheduled date.
+      </p>
+    </div>
+  );
 
   return (
     <div className="space-y-5">
@@ -79,22 +93,30 @@ export default async function InterviewsPage({
         description="Every scheduled interview round across all submissions. Read-only — manage rounds on each submission."
       />
 
+      <InterviewViewToggle currentView={view} searchParams={sp} />
+
       <InterviewsFilters recruiters={recruiters} />
 
       {total === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">
-          <p className="text-sm text-slate-500">
-            No scheduled interviews match these filters. Interviews appear here once a round has a scheduled date.
-          </p>
-        </div>
+        emptyState
+      ) : view === "schedule" ? (
+        <InterviewSchedule
+          rows={schedule!.rows}
+          now={new Date()}
+          capped={schedule!.capped}
+        />
       ) : (
         <div className="space-y-3">
           <InterviewsTable
-            rows={rows}
-            pageOffset={(page - 1) * PAGE_SIZE}
+            rows={list!.rows}
+            pageOffset={(list!.page - 1) * PAGE_SIZE}
             countLabel={`${total} interview${total === 1 ? "" : "s"}`}
           />
-          <Pagination page={page} totalPages={totalPages} total={total} />
+          <Pagination
+            page={list!.page}
+            totalPages={Math.max(1, Math.ceil(total / PAGE_SIZE))}
+            total={total}
+          />
         </div>
       )}
     </div>
