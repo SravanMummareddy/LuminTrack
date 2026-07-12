@@ -7,6 +7,7 @@ import { updateVendorRequirement } from "@/server/actions/requirements";
 import { getVendorRequirement } from "@/server/queries/requirements";
 import { listUsers, listTeamLeadOptions } from "@/server/queries/org";
 import { listRoleOptions } from "@/server/queries/roles";
+import { teamLeadByRecruiter } from "@/server/team-lead";
 import { getCurrentUser, getScopedPrisma } from "@/lib/session";
 import {
   canManageRequirements,
@@ -35,7 +36,7 @@ export default async function EditRequirementPage({
 
   const db = await getScopedPrisma();
   const canAddUser = canManageUsers(user ?? undefined);
-  const [jobExtra, recruiters, teamLeads, roles] = await Promise.all([
+  const [jobExtra, recruiters, teamLeads, roles, recruiterLead] = await Promise.all([
     db.job.findUnique({
       where: { id: requirement.job.id },
       select: { clientRate: true, vendorRate: true, description: true },
@@ -43,6 +44,7 @@ export default async function EditRequirementPage({
     listUsers(),
     listTeamLeadOptions(),
     canAddUser ? listRoleOptions() : Promise.resolve([]),
+    teamLeadByRecruiter(),
   ]);
 
   return (
@@ -81,6 +83,7 @@ export default async function EditRequirementPage({
           roles={roles}
           canAddUser={canAddUser}
           canGrantManager={canGrantManagerRole(user ?? undefined)}
+          recruiterLead={recruiterLead}
           defaults={{
             candidateId: requirement.candidateId ?? "",
             recruiterId: requirement.recruiterId ?? "",

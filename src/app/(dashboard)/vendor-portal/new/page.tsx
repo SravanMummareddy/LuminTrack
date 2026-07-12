@@ -8,6 +8,7 @@ import { createVendorRequirement } from "@/server/actions/requirements";
 import { listJobOptions } from "@/server/queries/jobs";
 import { listUsers, listTeamLeadOptions } from "@/server/queries/org";
 import { listRoleOptions } from "@/server/queries/roles";
+import { teamLeadByRecruiter } from "@/server/team-lead";
 import { getCurrentUser, getScopedPrisma } from "@/lib/session";
 import {
   canManageRequirements,
@@ -67,7 +68,7 @@ export default async function NewRequirementPage({
 
   // Step 2 — job chosen: the requirement form.
   const canAddUser = canManageUsers(user ?? undefined);
-  const [job, recruiters, teamLeads, roles] = await Promise.all([
+  const [job, recruiters, teamLeads, roles, recruiterLead] = await Promise.all([
     db.job.findUnique({
       where: { id: jobId },
       select: {
@@ -90,6 +91,7 @@ export default async function NewRequirementPage({
     listUsers(),
     listTeamLeadOptions(),
     canAddUser ? listRoleOptions() : Promise.resolve([]),
+    teamLeadByRecruiter(),
   ]);
   if (!job) redirect("/vendor-portal/new");
 
@@ -129,6 +131,7 @@ export default async function NewRequirementPage({
           roles={roles}
           canAddUser={canAddUser}
           canGrantManager={canGrantManagerRole(user ?? undefined)}
+          recruiterLead={recruiterLead}
           defaults={{
             location: job.location ?? "",
             // Carry the job's Client rate into the requirement (editable) so it

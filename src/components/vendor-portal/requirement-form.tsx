@@ -79,6 +79,7 @@ export function RequirementForm({
   roles = [],
   canAddUser = false,
   canGrantManager = false,
+  recruiterLead = {},
   defaults,
   cancelHref,
 }: {
@@ -105,6 +106,8 @@ export function RequirementForm({
   canAddUser?: boolean;
   /** May the viewer grant a manager-tier role (filters the dialog's role list)? */
   canGrantManager?: boolean;
+  /** userId → their team's active-lead name, for the Team-lead auto-fill. */
+  recruiterLead?: Record<string, string>;
   defaults?: Partial<Fields>;
   cancelHref: string;
 }) {
@@ -130,6 +133,24 @@ export function RequirementForm({
     teamLeads.map((t) => t.fullName),
   );
   const [addUserFor, setAddUserFor] = useState<AddTarget | null>(null);
+  // Team lead follows the picked marketing recruiter until it's set by hand —
+  // restores the old "leave blank → derive from the recruiter" convenience while
+  // keeping the field required + editable. A saved value starts as "manual".
+  const [teamLeadAuto, setTeamLeadAuto] = useState(!defaults?.teamLead);
+
+  function onRecruiterChange(v: string) {
+    if (v === ADD_USER) return setAddUserFor("recruiterId");
+    const lead = recruiterLead[v];
+    const takeLead = !!lead && (teamLeadAuto || !fields.teamLead);
+    setFields((f) => ({ ...f, recruiterId: v, ...(takeLead ? { teamLead: lead } : {}) }));
+    if (takeLead) setTeamLeadAuto(true);
+  }
+
+  function onTeamLeadChange(v: string) {
+    if (v === ADD_USER) return setAddUserFor("teamLead");
+    setTeamLeadAuto(false); // a manual pick pins it — recruiter changes won't override
+    setFields((f) => ({ ...f, teamLead: v }));
+  }
 
   // Re-key the plain <Select>s after React 19's post-action <form> reset so they
   // re-apply their controlled value (same fix as the submission form).
@@ -191,6 +212,7 @@ export function RequirementForm({
       setFields((f) => ({ ...f, vendorRecruiterName: row.fullName }));
     else if (addUserFor === "teamLead") {
       setLeadNames((l) => (l.includes(row.fullName) ? l : [row.fullName, ...l]));
+      setTeamLeadAuto(false); // explicitly-added lead is a manual pick
       setFields((f) => ({ ...f, teamLead: row.fullName }));
     } else if (addUserFor === "recruiterId") {
       setNa((s) => ({ ...s, recruiterId: false }));
@@ -354,11 +376,7 @@ export function RequirementForm({
                 id="teamLead"
                 name="teamLead"
                 value={fields.teamLead}
-                onChange={(v) =>
-                  v === ADD_USER
-                    ? setAddUserFor("teamLead")
-                    : setFields((f) => ({ ...f, teamLead: v }))
-                }
+                onChange={onTeamLeadChange}
                 placeholder="Search team leads…"
                 options={teamLeadOpts}
                 actionOption={addOpt}
@@ -385,11 +403,7 @@ export function RequirementForm({
                 id="recruiterId"
                 name="recruiterId"
                 value={fields.recruiterId}
-                onChange={(v) =>
-                  v === ADD_USER
-                    ? setAddUserFor("recruiterId")
-                    : setFields((f) => ({ ...f, recruiterId: v }))
-                }
+                onChange={onRecruiterChange}
                 placeholder="Search recruiters…"
                 options={recruiterOpts}
                 actionOption={addOpt}
