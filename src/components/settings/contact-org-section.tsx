@@ -67,17 +67,15 @@ export function ContactOrgSection({
   userNames?: string[];
   openEditId?: string;
 }) {
-  const [editing, setEditing] = useState<ContactOrg | "new" | null>(null);
+  // `?edit=<id>` (from a detail page's Edit button) opens that row on mount —
+  // items + openEditId are known at first render, so derive the initial state
+  // instead of syncing via an effect (which also re-opened on every revalidate).
+  const [editing, setEditing] = useState<ContactOrg | "new" | null>(
+    () => (openEditId ? items.find((i) => i.id === openEditId) ?? null : null),
+  );
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
   const fmtId = contactKind === "vendor" ? formatVendorDisplayId : formatSourceDisplayId;
-
-  useEffect(() => {
-    if (openEditId) {
-      const row = items.find((i) => i.id === openEditId);
-      if (row) setEditing(row);
-    }
-  }, [openEditId, items]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();

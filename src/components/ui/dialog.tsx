@@ -27,6 +27,10 @@ export function Dialog({
   // otherwise double-paint an inline fixed overlay, leaving a duplicate/ghost
   // dialog until the next reload. `mounted` guards SSR (no document on first render).
   const [mounted, setMounted] = useState(false);
+  // Client-mount flag for the SSR portal guard: `document` doesn't exist
+  // server-side, so we render null until after first paint. Setting state once
+  // in a mount effect is the intended pattern here, not a cascading render.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
   useFocusTrap(open, panelRef, onClose);
 
