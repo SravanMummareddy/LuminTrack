@@ -74,19 +74,25 @@ from all code. Do not reintroduce it.
 ## Current state (2026-07-12)
 
 - **`main` is live on prod** (`lumin-track.vercel.app`); org/roles/tenancy foundation (Phases A/B/C,
-  PRs #79–#83) + the independent backlog (#84) shipped. tsc clean, 247 unit tests.
-- **Just shipped: PR #86 MERGED to `main`** (`4de1139`) — **Job form redesign + org-entity records**.
-  Both migrations (`20260712120000_job_source_and_org_audit`, `20260712140000_org_entity_seq`) were
-  **applied to dev + PROD before the merge** (schema ahead of code); Vercel auto-deploys `main`. Verify
-  the prod deploy is READY + smoke as a manager. What it ships: 4-card Job form (required + N/A toggle),
-  source rework (Job board / Referral /
-  Sister company / Other — **"Direct" removed**), a **Referrer** directory, derived duration +
-  estimated-start close-gate, quick-add dialog; org entities (Client/Vendor/Source/Referrer) now have
-  **display IDs** (CLI-/VEN-/SRC-/REF-), **manager-only detail pages** (`/settings/[entity]/[id]`), slim
-  lists, `createdById/updatedById`, and app-wide `OrgEntityLink` (names link for managers, plain text for
-  recruiters). See DEVLOG 2026-07-12 + the plan file RESUME-HERE block.
-- **Deferred:** submission-form restructure (5 sections + N/A, same pattern); two skipped link surfaces
-  (dashboard-home, candidate-detail source).
+  PRs #79–#83) + independent backlog (#84) + Job-form/org-entity redesign (#86) all shipped.
+- **Forms-discipline rollout COMPLETE (6 forms MERGED to `main`)** — the numbered `FormSection` +
+  required-or-explicitly-N/A pattern across VPR (#90), Candidates (#96, +name-split/referrer migration),
+  Bench (#92), Submissions (#93), Interview Round (#94), Placement (#95). Primitives:
+  `src/components/ui/{form-section,nullable-field}.tsx`.
+- **Just built: PR #97 — Wave 4 strict submission-pipeline discipline** (`feat/wave4-pipeline-discipline`,
+  **migration `20260712200000_interview_didnt_happen` applied to dev + PROD**; awaiting merge/deploy).
+  Ships: per-stage dates on the stepper (SB-4, derived from the status log); controlled transitions —
+  no free jumps, one-step-back **corrections require a reason** logged who/when/why (SB-6); **strict
+  advance gate** `advanceBlock` (`src/lib/submission-flow.ts`) — can't reach Vendor-screening/Client-
+  interview without the matching `InterviewRound`, can't leave a `WAITING` stage, can't mark Selected
+  without a passing result, join dates required for Offer-accepted/Joined (SB-5); the round form's
+  mode/interviewer/date are now **hard-required** (no N/A escape) so an empty round can't slip the gate;
+  new `InterviewResult` **NO_SHOW/CANCELLED** for "scheduled but didn't happen"; round-tracking hint
+  (IV-2); soft per-requirement min-submissions nudge (V-6). tsc clean, 332 unit tests. See DEVLOG
+  2026-07-12 (the strict-pipeline entry supersedes the earlier lenient one).
+- **⚠ Known debt:** the **integration suite is red on `main`** (12 pre-existing failures in
+  requirement-convert / submission-create-gates / placement-edit; `unit` + Vercel are green). It's a
+  non-blocking check — untangle separately.
 - **Open owner decisions** (gate the remaining waves): D3 received-date · D5 referrer entity · D7
   dashboards/forms · D9 new-vendors/closures · D13 rate masking · D14 VPR-dedup scope. See
   `docs/WORKLIST.md` §A + the work-tracker artifact.
