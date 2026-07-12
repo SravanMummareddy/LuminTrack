@@ -137,6 +137,10 @@ enum InterviewResult {
   REJECTED
   ON_HOLD
   COMPLETED
+  // Wave 4: a scheduled interview/screening that did not take place — so the
+  // funnel records reality instead of leaving the round WAITING forever.
+  NO_SHOW
+  CANCELLED
 }
 
 // Discriminator for the polymorphic Note and Activity tables.

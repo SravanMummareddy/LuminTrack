@@ -27,6 +27,9 @@ export const INTERVIEW_RESULT_VALUES = [
   "REJECTED",
   "ON_HOLD",
   "COMPLETED",
+  // Wave 4: a scheduled interview/screening that did not take place.
+  "NO_SHOW",
+  "CANCELLED",
 ] as const;
 
 export const interviewRoundSchema = z
@@ -85,8 +88,15 @@ export const interviewRoundSchema = z
       });
     }
 
-    // Forms-discipline (Wave 3, PR-5): required-or-N/A everywhere except the
-    // hard-required identity/outcome (roundName/interviewType/result) + notes.
+    // Wave 4 (strict): the fields that mean "an interview is actually set up" —
+    // mode, interviewer, date/time — are HARD-required (no N/A escape), so a
+    // recruiter can't slip an empty round past the pipeline's advance gate. A
+    // video call additionally needs its platform + join link. The rest stay
+    // required-or-N/A (they don't exist until the interview happens): feedback,
+    // time zone, and the support pair.
+    const hard = (blank: boolean, path: string, message: string) => {
+      if (blank) ctx.addIssue({ code: "custom", path: [path], message });
+    };
     const req = (
       blank: boolean,
       na: boolean,
@@ -95,16 +105,17 @@ export const interviewRoundSchema = z
     ) => {
       if (blank && !na) ctx.addIssue({ code: "custom", path: [path], message });
     };
-    req(!d.interviewMode, d.interviewModeNa, "interviewMode", "Pick a mode, or mark N/A.");
-    req(!d.interviewerName, d.interviewerNameNa, "interviewerName", "Enter the interviewer, or mark N/A.");
-    req(!d.meetingLink, d.meetingLinkNa, "meetingLink", "Enter a link, or mark N/A.");
-    req(d.scheduledAt == null, d.scheduledAtNa, "scheduledAt", "Set a date/time, or mark N/A.");
+    hard(!d.interviewMode, "interviewMode", "Pick how the interview is held.");
+    hard(!d.interviewerName, "interviewerName", "Enter who is interviewing.");
+    hard(d.scheduledAt == null, "scheduledAt", "Set the interview date & time.");
     req(!d.scheduledTimezone, d.scheduledTimezoneNa, "scheduledTimezone", "Enter a time zone, or mark N/A.");
     req(!d.feedback, d.feedbackNa, "feedback", "Enter feedback, or mark N/A.");
 
-    // Conditional-required: video platform only when the mode is a video call.
-    if (d.interviewMode === "VIDEO")
-      req(!d.interviewPlatform, d.interviewPlatformNa, "interviewPlatform", "Pick a platform, or mark N/A.");
+    // A video call must carry its platform + a join link (no N/A escape).
+    if (d.interviewMode === "VIDEO") {
+      hard(!d.interviewPlatform, "interviewPlatform", "Pick the video platform.");
+      hard(!d.meetingLink, "meetingLink", "Add the join link for the video call.");
+    }
 
     // Conditional-required: the support pair only when support was used.
     if (d.supportNeeded) {

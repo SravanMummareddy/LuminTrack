@@ -1,5 +1,42 @@
-import type { SubmissionStatus } from "@/generated/prisma/enums";
+import type {
+  SubmissionStatus,
+  InterviewType,
+  InterviewResult,
+} from "@/generated/prisma/enums";
 import { SUBMISSION_STAGE_INDEX, SUBMISSION_STATUS_LABEL } from "@/lib/labels";
+
+/** Reverse of SUBMISSION_STATUS_LABEL — status labels back to their status, so
+ *  the activity log's `newValue` (a label string) can be mapped to a stage. */
+const LABEL_TO_STATUS = new Map(
+  (Object.entries(SUBMISSION_STATUS_LABEL) as [SubmissionStatus, string][]).map(
+    ([status, label]) => [label, status],
+  ),
+);
+
+/**
+ * SB-4: the date each visual pipeline stage was first reached, derived from the
+ * status-change activity log (no dedicated stage-history table). Each
+ * status-change row carries the new status *label* in `newValue` and the
+ * real-world time in `eventAt` (falling back to `createdAt`); we map label →
+ * status → stage index and keep the earliest time per stage. Stage 0 is seeded
+ * from `submittedAt` since the initial SUBMITTED status logs no change row.
+ * Pure so the stepper's dates can be unit-tested apart from the query.
+ */
+export function deriveStageDates(
+  entries: { newValue: string | null; eventAt: Date | null; createdAt: Date }[],
+  submittedAt: Date,
+): Record<number, Date> {
+  const dates: Record<number, Date> = { 0: submittedAt };
+  for (const e of entries) {
+    if (!e.newValue) continue;
+    const status = LABEL_TO_STATUS.get(e.newValue);
+    if (!status) continue;
+    const idx = SUBMISSION_STAGE_INDEX[status];
+    const when = e.eventAt ?? e.createdAt;
+    if (!dates[idx] || when < dates[idx]) dates[idx] = when;
+  }
+  return dates;
+}
 
 /**
  * Submission pipeline transitions for the "advance status" action bar.
@@ -34,6 +71,110 @@ const STAGE_STATUS: Record<number, SubmissionStatus> = {
  *  undefined out of range. Stage 4 ("Decision") resolves to SELECTED. */
 export function stageStatus(index: number): SubmissionStatus | undefined {
   return STAGE_STATUS[index];
+}
+
+/**
+ * SB-6: the single stage a submission moves back to for a correction. Controlled
+ * transitions mean corrections step back exactly one visual stage (never an
+ * arbitrary jump); the Decision-branch statuses (Rejected / Hold / Backed-out,
+ * all stage 4) reopen to Client interview. Returns null at the first stage.
+ */
+export function previousStage(status: SubmissionStatus): SubmissionStatus | null {
+  const idx = SUBMISSION_STAGE_INDEX[status];
+  if (idx <= 0) return null;
+  return stageStatus(idx - 1) ?? null;
+}
+
+/**
+ * SB-6: whether a status move is a backward *correction* that must carry a
+ * reason. A lower stage index than the current one, excluding the On-hold resume
+ * (which legitimately re-enters at an earlier stage) and the branch outcomes
+ * (Reject / Hold / Backed-out capture their own reason). Pure so the
+ * reason-required rule can be unit-tested apart from the action.
+ */
+export function isBackwardCorrection(
+  prev: SubmissionStatus,
+  next: SubmissionStatus,
+): boolean {
+  if (prev === "ON_HOLD") return false;
+  if (next === "REJECTED" || next === "ON_HOLD" || next === "BACKED_OUT")
+    return false;
+  return SUBMISSION_STAGE_INDEX[next] < SUBMISSION_STAGE_INDEX[prev];
+}
+
+export type RoundLite = {
+  interviewType: InterviewType;
+  result: InterviewResult;
+  roundOrder: number;
+};
+
+/** Client-interview results that count as "passed" — the only ones that let a
+ *  submission be marked Selected. */
+const PASS_RESULTS: InterviewResult[] = ["SELECTED", "COMPLETED"];
+
+/** The latest round of a given type (highest roundOrder), or undefined. */
+function latestOfType(
+  rounds: RoundLite[],
+  type: InterviewType,
+): RoundLite | undefined {
+  return rounds
+    .filter((r) => r.interviewType === type)
+    .sort((a, b) => a.roundOrder - b.roundOrder)
+    .at(-1);
+}
+
+/**
+ * SB-5 strict gate: the reason a forward advance is blocked, or `null` if it's
+ * allowed. The owner's rule — "if it's lenient, recruiters won't do the job" —
+ * so a stage can't be reached without its record:
+ *   • Vendor screening / Client interview require the matching InterviewRound.
+ *   • You can't progress past a stage whose scheduled interview is still WAITING
+ *     — record an outcome first (a "didn't happen" No-show / Cancelled counts).
+ *   • Selected requires a *passing* client-interview result (WAITING /
+ *     NEED_ANOTHER_ROUND / No-show block it — the latter enforces IV-2).
+ *   • Offer accepted needs an expected join date; Joined needs an actual one.
+ * Branch outcomes (Hold / Reject / Backed-out) and corrections never gate.
+ * Pure so every rule is unit-tested apart from the action.
+ */
+export function advanceBlock(
+  prev: SubmissionStatus,
+  next: SubmissionStatus,
+  rounds: RoundLite[],
+  opts: { hasExpectedJoinDate?: boolean; hasActualJoinDate?: boolean } = {},
+): string | null {
+  if (!isForwardAdvance(prev, next)) return null;
+
+  // Enter-gates: the stage's record must exist.
+  if (next === "VENDOR_SCREENING_CALL" && !latestOfType(rounds, "VENDOR_SCREENING"))
+    return "Record the vendor screening call first — or skip it as client-waived.";
+  if (next === "CLIENT_INTERVIEW" && !latestOfType(rounds, "CLIENT_INTERVIEW"))
+    return "Schedule the client interview first.";
+
+  // Leave-gates: no progressing past a scheduled event with no outcome yet.
+  if (prev === "VENDOR_SCREENING_CALL") {
+    const vs = latestOfType(rounds, "VENDOR_SCREENING");
+    if (vs && vs.result === "WAITING")
+      return "Record the vendor screening outcome before moving on.";
+  }
+  if (prev === "CLIENT_INTERVIEW") {
+    const ci = latestOfType(rounds, "CLIENT_INTERVIEW");
+    if (ci && ci.result === "WAITING")
+      return "Record the interview result before moving on.";
+  }
+
+  // Selected must mean the interview passed (also blocks "needs another round").
+  if (next === "SELECTED") {
+    const ci = latestOfType(rounds, "CLIENT_INTERVIEW");
+    if (!ci || !PASS_RESULTS.includes(ci.result))
+      return "Record a passing interview result — or add the next round — before marking the candidate selected.";
+  }
+
+  if (next === "OFFER_ACCEPTED" && !opts.hasExpectedJoinDate)
+    return "Add the expected join date before marking the offer accepted.";
+  if (next === "JOINED" && !opts.hasActualJoinDate)
+    return "Add the actual join date before marking the candidate joined.";
+
+  return null;
 }
 
 /** Statuses with nowhere further to advance. */

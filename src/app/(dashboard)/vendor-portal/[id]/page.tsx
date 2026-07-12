@@ -200,6 +200,17 @@ export default async function RequirementDetailPage({
         </div>
       )}
 
+      {/* V-6: soft per-requirement coverage nudge — an open requirement with a
+          single candidate is one short of the 2-submission target. Fires at
+          exactly one (zero already has the empty-state CTA); never blocks. */}
+      {isOpen && submissions.length === 1 && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <strong>Only 1 candidate submitted against this requirement.</strong>{" "}
+          Aim for at least 2 to give the client a real choice
+          {jobAccepting ? ' — use "Submit a candidate" above to add another.' : "."}
+        </div>
+      )}
+
       <Card title={`Submissions (${submissions.length})`}>
         {submissions.length === 0 ? (
           <p className="text-sm text-slate-500">

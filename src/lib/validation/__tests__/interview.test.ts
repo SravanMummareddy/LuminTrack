@@ -1,17 +1,17 @@
 import { describe, it, expect } from "vitest";
 import { interviewRoundSchema } from "@/lib/validation/interview";
 
-// Minimal valid round — hard-required identity/outcome, every other field marked
-// N/A. Individual tests knock a flag out or supply a real value instead.
+// Minimal valid round (Wave 4 strict): mode / interviewer / date are now HARD
+// required, so the base fills them with a non-video interview; time zone,
+// feedback and the support pair stay required-or-N/A and are marked N/A here.
 const base = {
   submissionId: "sub_1",
   roundName: "Technical round",
   interviewType: "OTHER" as const,
   result: "WAITING" as const,
-  interviewModeNa: "1",
-  interviewerNameNa: "1",
-  meetingLinkNa: "1",
-  scheduledAtNa: "1",
+  interviewMode: "PHONE",
+  interviewerName: "Meghan Carter",
+  scheduledAt: "2026-07-15T10:00",
   scheduledTimezoneNa: "1",
   feedbackNa: "1",
   supportProviderIdNa: "1",
@@ -43,62 +43,84 @@ describe("interviewRoundSchema.supportNeeded (WR-12)", () => {
   });
 });
 
-describe("interviewRoundSchema — required fields", () => {
-  it("requires roundName, interviewType, result (no N/A escape)", () => {
+describe("interviewRoundSchema — the minimal valid round parses", () => {
+  it("accepts the strict base (mode/interviewer/date filled)", () => {
+    expect(interviewRoundSchema.safeParse(base).success).toBe(true);
+  });
+});
+
+describe("interviewRoundSchema — hard-required fields (no N/A escape)", () => {
+  it("requires roundName, interviewType, result", () => {
     expect(interviewRoundSchema.safeParse({ ...base, roundName: "" }).success).toBe(false);
     expect(interviewRoundSchema.safeParse({ ...base, interviewType: "" }).success).toBe(false);
     expect(interviewRoundSchema.safeParse({ ...base, result: "" }).success).toBe(false);
   });
+
+  it("requires mode, interviewer and date — an N/A flag no longer satisfies them", () => {
+    expect(
+      interviewRoundSchema.safeParse({ ...base, interviewMode: "", interviewModeNa: "1" }).success,
+    ).toBe(false);
+    expect(
+      interviewRoundSchema.safeParse({ ...base, interviewerName: "", interviewerNameNa: "1" }).success,
+    ).toBe(false);
+    expect(
+      interviewRoundSchema.safeParse({ ...base, scheduledAt: "", scheduledAtNa: "1" }).success,
+    ).toBe(false);
+  });
+
+  it("accepts the new didn't-happen outcomes", () => {
+    expect(interviewRoundSchema.safeParse({ ...base, result: "NO_SHOW" }).success).toBe(true);
+    expect(interviewRoundSchema.safeParse({ ...base, result: "CANCELLED" }).success).toBe(true);
+  });
 });
 
 describe("interviewRoundSchema — required-or-N/A fields", () => {
-  it("the all-N/A base is valid", () => {
-    expect(interviewRoundSchema.safeParse(base).success).toBe(true);
-  });
+  it.each(["scheduledTimezoneNa", "feedbackNa"] as const)(
+    "blank without %s fails",
+    (naField) => {
+      expect(interviewRoundSchema.safeParse({ ...base, [naField]: "" }).success).toBe(false);
+    },
+  );
 
-  it.each([
-    "interviewModeNa",
-    "interviewerNameNa",
-    "meetingLinkNa",
-    "scheduledAtNa",
-    "scheduledTimezoneNa",
-    "feedbackNa",
-  ] as const)("blank without %s fails", (naField) => {
-    expect(interviewRoundSchema.safeParse({ ...base, [naField]: "" }).success).toBe(false);
-  });
-
-  it("a real value satisfies a field without its N/A flag", () => {
-    const r = interviewRoundSchema.safeParse({
-      ...base,
-      interviewerNameNa: "",
-      interviewerName: "Meghan Carter",
-    });
-    expect(r.success).toBe(true);
-  });
-});
-
-describe("interviewRoundSchema — conditional required-or-N/A", () => {
-  it("VIDEO mode requires a platform or its N/A flag", () => {
-    const video = { ...base, interviewModeNa: "", interviewMode: "VIDEO" };
-    expect(interviewRoundSchema.safeParse(video).success).toBe(false);
-    expect(
-      interviewRoundSchema.safeParse({ ...video, interviewPlatformNa: "1" }).success,
-    ).toBe(true);
-    expect(
-      interviewRoundSchema.safeParse({ ...video, interviewPlatform: "ZOOM" }).success,
-    ).toBe(true);
-  });
-
-  it("a non-video mode does not require a platform", () => {
+  it("a real value satisfies a required-or-N/A field without its flag", () => {
     expect(
       interviewRoundSchema.safeParse({
         ...base,
-        interviewModeNa: "",
-        interviewMode: "PHONE",
+        feedbackNa: "",
+        feedback: "Strong on system design.",
+      }).success,
+    ).toBe(true);
+  });
+});
+
+describe("interviewRoundSchema — video needs platform + link (hard)", () => {
+  it("VIDEO mode requires a platform and a meeting link — N/A does not help", () => {
+    const video = { ...base, interviewMode: "VIDEO" };
+    expect(interviewRoundSchema.safeParse(video).success).toBe(false);
+    // N/A flags no longer satisfy the video requirements.
+    expect(
+      interviewRoundSchema.safeParse({
+        ...video,
+        interviewPlatformNa: "1",
+        meetingLinkNa: "1",
+      }).success,
+    ).toBe(false);
+    // Real platform + link passes.
+    expect(
+      interviewRoundSchema.safeParse({
+        ...video,
+        interviewPlatform: "ZOOM",
+        meetingLink: "https://zoom.us/j/123",
       }).success,
     ).toBe(true);
   });
 
+  it("a non-video mode needs neither platform nor link", () => {
+    expect(interviewRoundSchema.safeParse({ ...base, interviewMode: "PHONE" }).success).toBe(true);
+  });
+});
+
+describe("interviewRoundSchema — support pair required-or-N/A", () => {
   it("support requires provider + method or their N/A flags", () => {
     const withSupport = {
       ...base,

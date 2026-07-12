@@ -183,6 +183,8 @@ const IRESULT_LABEL: Record<InterviewResult, string> = {
   REJECTED: "Rejected",
   ON_HOLD: "On Hold",
   COMPLETED: "Completed",
+  NO_SHOW: "Didn't happen — no-show",
+  CANCELLED: "Didn't happen — cancelled",
 };
 
 // ─── Data pools ──────────────────────────────────────────────────────────────

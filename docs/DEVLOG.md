@@ -10,6 +10,81 @@ short instead of long.
 
 ---
 
+## 2026-07-12 · Wave 4 strict pipeline — lenient gates defeat the whole point (reverses the entry below)
+
+**Situation.** The first Wave 4 cut (entry below) built the pipeline restructure *migration-free*
+and treated per-stage detail as an **optional** note: advancing to "Client interview" captured a
+note and moved on. On review the owner's rule surfaced — *"if the system is lenient, recruiters
+won't do the job properly."* My build let a submission reach Client Interview with **zero**
+interview data and let Selected be marked with no result. That's precisely the leniency the rule
+forbids.
+
+**Diagnosis.** Two misses. (1) I under-used the schema: a vendor screening and a client interview
+are already the *same* structured record — an `InterviewRound` with `interviewType` =
+`VENDOR_SCREENING` / `CLIENT_INTERVIEW` — so "record the details" didn't need a note field, it
+needed the advance **gated on that record existing and being complete**. (2) I let my own
+tooling-constraint (a migration forces a dev restart that logs me out, and I can't re-login) drive
+the *product*: I avoided the `InterviewResult` enum change that "scheduled but didn't happen"
+genuinely needs, leaving that state unrepresentable.
+
+**Fix.** Rebuilt strict. A pure `advanceBlock(prev, next, rounds, joinDates)` gate: you can't reach
+Vendor screening / Client interview without the matching round, can't leave a stage whose interview
+is still `WAITING`, can't mark Selected without a *passing* result — enforced in the action and
+pre-empted in the UI (blocked advance → "Go to interview rounds" instead of a silent note). The
+round form's mode / interviewer / date/time became **hard-required** (no N/A escape) so an empty
+round can't slip past the gate. And the migration I'd dodged got made — `InterviewResult +=
+NO_SHOW, CANCELLED` — so a no-show is recorded, not left `WAITING` forever. The restart-logout risk
+that scared me off? The JWT session actually survived the restart, so verification was never really
+blocked.
+
+**Lesson.** A tooling constraint is an input to *how you verify*, never to *what you build* — I let
+it quietly lower the product bar, and an owner rule I already knew ("be strict") had to pull it back
+up. When a domain already has the structured record (here `InterviewRound`), "make the user fill in
+the details" means **gate the transition on that record**, not bolt on a parallel note. Strictness
+isn't friction to minimize; for a discipline tool it *is* the feature.
+
+---
+
+## 2026-07-12 · Wave 4 pipeline discipline — the migration you don't take pays for itself in verifiability
+> **Superseded by the entry above.** The "zero migrations, note-based detail" decision here was too
+> lenient for the owner's discipline requirement and was rebuilt strict (with the enum migration it
+> avoided). Kept as the record of the initial call and why it was wrong.
+
+**Situation.** Wave 4 tightens the submission pipeline: per-stage dates (SB-4), controlled
+transitions with reason-required corrections (SB-6), stage-detail-on-advance + "didn't happen"
+skip (SB-5), round-tracking guidance (IV-2), min-submissions nudge (V-6). The obvious design
+adds two `ActivityAction` enum values — `SUBMISSION_STATUS_CORRECTED`, `SUBMISSION_STAGE_SKIPPED` —
+so corrections and skips get first-class audit rows, and the stepper can paint an amber "N-A"
+marker on a skipped stage.
+
+**Diagnosis.** `ActivityAction` is a **Postgres enum**, so a new value is a migration → `prisma
+generate` → **dev-server restart**, which (per CLAUDE.md) drops the session cookie and logs you
+out. In this session I can't re-login (password entry is prohibited), so a migration would have
+**blinded the in-browser verification loop** for the rest of Wave 4 — exactly when the changes
+are behavior, not cosmetics, and most need eyes on them. The enum values were also *not load-
+bearing*: every fact they'd carry (who/when/why, old→new stage) already lives on the existing
+`SUBMISSION_STATUS_CHANGED` activity row via `performedById` / `eventAt` / `note` / `oldValue` /
+`newValue`.
+
+**Fix.** Climbed the ladder to "reuse what's here." Corrections and skips reuse
+`SUBMISSION_STATUS_CHANGED`; a backward move is detected purely from stage order
+(`isBackwardCorrection`, a pure helper), the action requires a `note`, and the audit description
+reads "status **corrected back** from X to Y." Per-stage dates are *derived* from the same log
+(`deriveStageDates` reverse-maps the status label in `newValue` to a stage) — no stage-history
+table. The one mockup flourish that genuinely needed persistence — the amber "N-A skipped"
+stepper marker — was dropped; a skipped stage simply shows no date (honest) and its reason lands
+on the timeline. Net: five pipeline behaviors, **zero migrations**, every one browser-verified
+in the same logged-in session.
+
+**Lesson.** A constraint on your *tools* (can't re-login → can't verify after a restart) is a
+first-class input to the *design*, not an annoyance to route around. The schema change felt
+principled but bought nothing the activity log didn't already hold, and it would have cost the
+tight verify loop that catches the real bugs. When the added column carries no fact you can't
+already derive, the lazy path (reuse the audit row, derive the rest) is also the more verifiable
+one — and verifiability beats a prettier enum.
+
+---
+
 ## 2026-07-12 · Placement forms-discipline (PR-6) — a non-nullable column can't have a TBD toggle
 
 **Situation.** Final form of the rollout: placement edit, "required-or-TBD everywhere." The

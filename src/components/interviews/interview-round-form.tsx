@@ -172,42 +172,31 @@ export function InterviewRoundForm({
       </FormSection>
 
       <FormSection n={2} title="Schedule & support">
+        {/* Wave 4 (strict): mode, interviewer and date/time mean "an interview
+            is really set up" — hard-required, no N/A escape, so an empty round
+            can't slip past the pipeline's advance gate. Video adds platform +
+            link. Time zone / feedback / support stay required-or-N/A. */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <NullableField label="Interview mode" htmlFor="interviewMode" name="interviewMode" na={fields.interviewModeNa} onToggleNa={naToggle("interviewMode", "interviewModeNa")} error={errors.interviewMode}>
-            <Select id="interviewMode" name="interviewMode" value={fields.interviewMode} onChange={set("interviewMode")} disabled={fields.interviewModeNa}>
-              <option value="">Not specified</option>
+          <Field label="Interview mode" htmlFor="interviewMode" required error={errors.interviewMode}>
+            <Select id="interviewMode" name="interviewMode" value={fields.interviewMode} onChange={set("interviewMode")} required>
+              <option value="" disabled>
+                Select a mode…
+              </option>
               {INTERVIEW_MODES.map((m) => (
                 <option key={m} value={m}>
                   {INTERVIEW_MODE_LABEL[m]}
                 </option>
               ))}
             </Select>
-          </NullableField>
+          </Field>
 
-          {isVideo && (
-            <NullableField label="Video platform" htmlFor="interviewPlatform" name="interviewPlatform" na={fields.interviewPlatformNa} onToggleNa={naToggle("interviewPlatform", "interviewPlatformNa")} error={errors.interviewPlatform}>
-              <Select id="interviewPlatform" name="interviewPlatform" value={fields.interviewPlatform} onChange={set("interviewPlatform")} disabled={fields.interviewPlatformNa}>
-                <option value="">Not specified</option>
-                {INTERVIEW_PLATFORMS.map((p) => (
-                  <option key={p} value={p}>
-                    {INTERVIEW_PLATFORM_LABEL[p]}
-                  </option>
-                ))}
-              </Select>
-            </NullableField>
-          )}
+          <Field label="Interviewer name" htmlFor="interviewerName" required error={errors.interviewerName}>
+            <Input id="interviewerName" name="interviewerName" value={fields.interviewerName} onChange={set("interviewerName")} placeholder="Who is interviewing" required />
+          </Field>
 
-          <NullableField label="Interviewer name" htmlFor="interviewerName" name="interviewerName" na={fields.interviewerNameNa} onToggleNa={naToggle("interviewerName", "interviewerNameNa")} error={errors.interviewerName}>
-            <Input id="interviewerName" name="interviewerName" value={fields.interviewerName} onChange={set("interviewerName")} disabled={fields.interviewerNameNa} />
-          </NullableField>
-
-          <NullableField label="Meeting link" htmlFor="meetingLink" name="meetingLink" na={fields.meetingLinkNa} onToggleNa={naToggle("meetingLink", "meetingLinkNa")} error={errors.meetingLink}>
-            <Input id="meetingLink" name="meetingLink" type="url" inputMode="url" placeholder="https://…" value={fields.meetingLink} onChange={set("meetingLink")} disabled={fields.meetingLinkNa} />
-          </NullableField>
-
-          <NullableField label="Interview date & time" htmlFor="scheduledAt" name="scheduledAt" na={fields.scheduledAtNa} onToggleNa={naToggle("scheduledAt", "scheduledAtNa")} error={errors.scheduledAt}>
-            <Input id="scheduledAt" name="scheduledAt" type="datetime-local" value={fields.scheduledAt} onChange={set("scheduledAt")} disabled={fields.scheduledAtNa} />
-          </NullableField>
+          <Field label="Interview date & time" htmlFor="scheduledAt" required error={errors.scheduledAt}>
+            <Input id="scheduledAt" name="scheduledAt" type="datetime-local" value={fields.scheduledAt} onChange={set("scheduledAt")} required />
+          </Field>
 
           <NullableField label="Time zone" htmlFor="scheduledTimezone" name="scheduledTimezone" na={fields.scheduledTimezoneNa} onToggleNa={naToggle("scheduledTimezone", "scheduledTimezoneNa")} error={errors.scheduledTimezone} hint="IANA name — e.g. America/New_York, Asia/Kolkata.">
             <Input
@@ -223,6 +212,27 @@ export function InterviewRoundForm({
               disabled={fields.scheduledTimezoneNa}
             />
           </NullableField>
+
+          {isVideo && (
+            <Field label="Video platform" htmlFor="interviewPlatform" required error={errors.interviewPlatform}>
+              <Select id="interviewPlatform" name="interviewPlatform" value={fields.interviewPlatform} onChange={set("interviewPlatform")} required>
+                <option value="" disabled>
+                  Select a platform…
+                </option>
+                {INTERVIEW_PLATFORMS.map((p) => (
+                  <option key={p} value={p}>
+                    {INTERVIEW_PLATFORM_LABEL[p]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
+
+          {isVideo && (
+            <Field label="Meeting link" htmlFor="meetingLink" required error={errors.meetingLink}>
+              <Input id="meetingLink" name="meetingLink" type="url" inputMode="url" placeholder="https://…" value={fields.meetingLink} onChange={set("meetingLink")} required />
+            </Field>
+          )}
         </div>
 
         <div className="space-y-2">

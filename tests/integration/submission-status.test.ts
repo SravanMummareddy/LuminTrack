@@ -44,7 +44,7 @@ describe.skipIf(!dbReachable)("changeSubmissionStatus — real DB cascades", () 
   it("JOINED creates a placement and flips the candidate to PLACED", async () => {
     const res = await changeSubmissionStatus(
       undefined as never,
-      form({ id: ctx.submission.id, status: "JOINED" }),
+      form({ id: ctx.submission.id, status: "JOINED", actualJoinDate: "2026-07-20" }),
     );
     expect(res.ok).toBe(true);
 
@@ -72,11 +72,11 @@ describe.skipIf(!dbReachable)("changeSubmissionStatus — real DB cascades", () 
   it("reverting JOINED → SELECTED terminates the placement and frees the candidate", async () => {
     await changeSubmissionStatus(
       undefined as never,
-      form({ id: ctx.submission.id, status: "JOINED" }),
+      form({ id: ctx.submission.id, status: "JOINED", actualJoinDate: "2026-07-20" }),
     );
     await changeSubmissionStatus(
       undefined as never,
-      form({ id: ctx.submission.id, status: "SELECTED" }),
+      form({ id: ctx.submission.id, status: "SELECTED", note: "correcting a mistaken join" }),
     );
 
     const placement = await testPrisma.placement.findUnique({
@@ -92,9 +92,9 @@ describe.skipIf(!dbReachable)("changeSubmissionStatus — real DB cascades", () 
   });
 
   it("re-JOINING reactivates the same placement (no duplicate row)", async () => {
-    await changeSubmissionStatus(undefined as never, form({ id: ctx.submission.id, status: "JOINED" }));
-    await changeSubmissionStatus(undefined as never, form({ id: ctx.submission.id, status: "SELECTED" }));
-    await changeSubmissionStatus(undefined as never, form({ id: ctx.submission.id, status: "JOINED" }));
+    await changeSubmissionStatus(undefined as never, form({ id: ctx.submission.id, status: "JOINED", actualJoinDate: "2026-07-20" }));
+    await changeSubmissionStatus(undefined as never, form({ id: ctx.submission.id, status: "SELECTED", note: "correcting a mistaken join" }));
+    await changeSubmissionStatus(undefined as never, form({ id: ctx.submission.id, status: "JOINED", actualJoinDate: "2026-07-20" }));
 
     const placements = await testPrisma.placement.findMany({
       where: { submissionId: ctx.submission.id },
@@ -124,7 +124,7 @@ describe.skipIf(!dbReachable)("changeSubmissionStatus — real DB cascades", () 
   it("rejects a no-op status change to the same value", async () => {
     const res = await changeSubmissionStatus(
       undefined as never,
-      form({ id: ctx.submission.id, status: "SELECTED" }), // already SELECTED
+      form({ id: ctx.submission.id, status: "SELECTED", note: "correcting a mistaken join" }), // already SELECTED
     );
     expect(res.ok).toBeUndefined();
     expect(res.error).toMatch(/already set/i);
@@ -148,7 +148,7 @@ describe.skipIf(!dbReachable)("changeSubmissionStatus — real DB cascades", () 
     const bench = await putOnBench();
     await changeSubmissionStatus(
       undefined as never,
-      form({ id: ctx.submission.id, status: "JOINED" }),
+      form({ id: ctx.submission.id, status: "JOINED", actualJoinDate: "2026-07-20" }),
     );
 
     const after = await testPrisma.benchConsultant.findUnique({ where: { id: bench.id } });
@@ -162,8 +162,8 @@ describe.skipIf(!dbReachable)("changeSubmissionStatus — real DB cascades", () 
 
   it("reverting JOINED puts the consultant back on the active bench (→ ACTIVE)", async () => {
     const bench = await putOnBench();
-    await changeSubmissionStatus(undefined as never, form({ id: ctx.submission.id, status: "JOINED" }));
-    await changeSubmissionStatus(undefined as never, form({ id: ctx.submission.id, status: "SELECTED" }));
+    await changeSubmissionStatus(undefined as never, form({ id: ctx.submission.id, status: "JOINED", actualJoinDate: "2026-07-20" }));
+    await changeSubmissionStatus(undefined as never, form({ id: ctx.submission.id, status: "SELECTED", note: "correcting a mistaken join" }));
 
     const after = await testPrisma.benchConsultant.findUnique({ where: { id: bench.id } });
     expect(after!.marketingStatus).toBe("ACTIVE");
@@ -173,7 +173,7 @@ describe.skipIf(!dbReachable)("changeSubmissionStatus — real DB cascades", () 
     // ctx.candidate has no linked bench consultant here.
     const res = await changeSubmissionStatus(
       undefined as never,
-      form({ id: ctx.submission.id, status: "JOINED" }),
+      form({ id: ctx.submission.id, status: "JOINED", actualJoinDate: "2026-07-20" }),
     );
     expect(res.ok).toBe(true);
     expect(await testPrisma.benchConsultant.count()).toBe(0);

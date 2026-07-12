@@ -204,6 +204,15 @@ export function InterviewRoundsManager({
         </ul>
       )}
 
+      {rounds.length > 0 && (
+        <p className="mt-3 rounded-md border border-dashed border-slate-200 px-3 py-2 text-xs text-slate-500">
+          <strong className="text-slate-600">After this round:</strong> another
+          round coming up? <em>Add round</em> above. Interviews done? Set the
+          outcome in the <em>Status pipeline</em> — mark the candidate{" "}
+          <strong>Selected</strong>, or reject / hold.
+        </p>
+      )}
+
       <Dialog
         open={editing !== null}
         onClose={() => setEditing(null)}
