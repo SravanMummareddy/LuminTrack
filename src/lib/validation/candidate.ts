@@ -1,10 +1,5 @@
 import { z } from "zod";
-import {
-  optionalText,
-  optionalEmail,
-  optionalUrl,
-  emptyToUndefined,
-} from "./common";
+import { optionalText, emptyToUndefined } from "./common";
 import { CANDIDATE_STATUSES } from "@/lib/labels";
 
 const CANDIDATE_STATUS_VALUES = CANDIDATE_STATUSES as unknown as readonly [
@@ -12,10 +7,16 @@ const CANDIDATE_STATUS_VALUES = CANDIDATE_STATUSES as unknown as readonly [
   ...(typeof CANDIDATE_STATUSES)[number][],
 ];
 
-const optionalDate = z.preprocess(
-  emptyToUndefined,
-  z.coerce.date().optional(),
-);
+const enumRequired = <T extends readonly [string, ...string[]]>(
+  values: T,
+  message: string,
+) =>
+  z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.enum(values, { message }),
+  );
+
+const optionalDate = z.preprocess(emptyToUndefined, z.coerce.date().optional());
 
 const optionalExperience = z.preprocess(
   emptyToUndefined,
@@ -26,42 +27,79 @@ const optionalExperience = z.preprocess(
     .optional(),
 );
 
+// Forms-discipline (Wave 3): most candidate fields are required. A few are
+// conditionally required (company + engagement type only when "Working now?"),
+// enforced in the superRefine. Featured skills stay a subset of Skills.
 export const candidateSchema = z
   .object({
-    fullName: z.string().trim().min(1, "Candidate name is required.").max(160),
-    email: optionalEmail,
-    phone: optionalText,
-    currentLocation: optionalText,
-    workAuthorization: optionalText,
+    firstName: z.string().trim().min(1, "First name is required.").max(80),
+    lastName: z.string().trim().min(1, "Last name is required.").max(80),
+    email: z
+      .string()
+      .trim()
+      .min(1, "Email is required.")
+      .pipe(z.email("Enter a valid email address.")),
+    phone: z.string().trim().min(1, "Phone is required.").max(60),
+    currentLocation: z.string().trim().min(1, "Current location is required."),
+    workAuthorization: z.string().trim().min(1, "Work authorization is required."),
     totalExperienceYears: optionalExperience,
     realTimeExperienceYears: optionalExperience,
-    technology: optionalText,
+    technology: z.string().trim().min(1, "Technology is required."),
     currentCompany: optionalText,
-    skills: z.array(z.string().trim().min(1)).max(60).default([]),
+    skills: z.array(z.string().trim().min(1)).min(1, "Add at least one skill.").max(60),
     featuredSkills: z.array(z.string().trim().min(1)).max(3).default([]),
-    linkedinUrl: optionalUrl,
+    linkedinUrl: z
+      .string()
+      .trim()
+      .min(1, "LinkedIn URL is required.")
+      .pipe(z.url("Enter a valid URL.")),
     notes: optionalText,
     isActive: z.boolean(),
     status: z.enum(CANDIDATE_STATUS_VALUES).default("AVAILABLE"),
     tags: z.array(z.string().trim().min(1)).max(30).default([]),
     lastContactedAt: optionalDate,
+    referrerId: z.string().trim().min(1, "Pick a reference, or add one."),
+    // Legacy free-text source — kept, read-only, for rows that predate referrerId.
     source: optionalText,
     isWorking: z.boolean().default(false),
     workingType: optionalText,
-    discipline: z.preprocess(
-      (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
-      z.enum(["IT", "NON_IT"]).optional(),
-    ),
+    discipline: enumRequired(["IT", "NON_IT"] as const, "Select IT or Non-IT."),
   })
-  .refine((d) => Boolean(d.email || d.phone), {
-    // Surface as a form-level error (no path) so it shows in the top-of-form
-    // banner — pinning it to `email` falsely implied the email field itself
-    // was the problem when in practice either field can satisfy the rule.
-    message: "Enter at least an email address or a phone number.",
-  })
-  .refine((d) => d.featuredSkills.every((s) => d.skills.includes(s)), {
-    message: "Starred skills must come from the Skills list.",
-    path: ["featuredSkills"],
+  .superRefine((d, ctx) => {
+    if (!d.featuredSkills.every((s) => d.skills.includes(s)))
+      ctx.addIssue({
+        code: "custom",
+        path: ["featuredSkills"],
+        message: "Starred skills must come from the Skills list.",
+      });
+    if (d.totalExperienceYears == null)
+      ctx.addIssue({
+        code: "custom",
+        path: ["totalExperienceYears"],
+        message: "Total experience is required.",
+      });
+    if (d.lastContactedAt == null)
+      ctx.addIssue({
+        code: "custom",
+        path: ["lastContactedAt"],
+        message: "Enter when they were last contacted.",
+      });
+    // Company + engagement type are required only while the candidate is working
+    // (owner: "required, if not working → on-bench tag").
+    if (d.isWorking) {
+      if (!d.currentCompany)
+        ctx.addIssue({
+          code: "custom",
+          path: ["currentCompany"],
+          message: "Enter the current company, or turn off Working now.",
+        });
+      if (!d.workingType)
+        ctx.addIssue({
+          code: "custom",
+          path: ["workingType"],
+          message: "Enter the engagement type.",
+        });
+    }
   });
 
 export type CandidateInput = z.infer<typeof candidateSchema>;

@@ -563,7 +563,8 @@ model Referrer {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  jobs Job[]
+  jobs       Job[]
+  candidates Candidate[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -668,6 +669,11 @@ model Candidate {
   organizationId          String          @default("")
   organization            Organization    @relation(fields: [organizationId], references: [id])
   seq                     Int             @unique @default(autoincrement())
+  // Split name (owner-requested). `fullName` is kept as the derived display value
+  // (composed = firstName + " " + lastName on write) so every existing list,
+  // search, submission and placement keeps working untouched.
+  firstName               String?
+  lastName                String?
   fullName                String
   email                   String?
   phone                   String?
@@ -705,6 +711,11 @@ model Candidate {
   // (LinkedIn InMail / referral / job-board / inbound / etc.); a fixed enum
   // here would calcify ahead of real usage data.
   source                  String?
+  // §D5 — the reference/source as a managed entity, reusing the Jobs Referrer
+  // directory (#86). New candidates pick/add a referrer here; the legacy
+  // free-text `source` above is kept read-only for old rows.
+  referrerId              String?
+  referrer                Referrer?       @relation(fields: [referrerId], references: [id], onDelete: SetNull)
   // Broad IT vs Non-IT classification of the person (source of truth; the bench
   // overlay reads this rather than carrying its own copy).
   discipline              Discipline?
@@ -827,6 +838,10 @@ model BenchConsultant {
   organizationId     String               @default("")
   organization       Organization         @relation(fields: [organizationId], references: [id])
   seq                Int                  @unique @default(autoincrement())
+  // Split name mirrors Candidate; `fullName` stays the derived display value.
+  // Wired into the bench form in a later PR — columns added now with Candidate's.
+  firstName          String?
+  lastName           String?
   fullName           String
   email              String?
   phone              String?

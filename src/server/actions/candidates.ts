@@ -42,7 +42,8 @@ function parseTags(raw: FormDataEntryValue | null): string[] {
 
 function readCandidate(formData: FormData) {
   return candidateSchema.safeParse({
-    fullName: formData.get("fullName") ?? "",
+    firstName: formData.get("firstName") ?? "",
+    lastName: formData.get("lastName") ?? "",
     email: formData.get("email") ?? "",
     phone: formData.get("phone") ?? "",
     currentLocation: formData.get("currentLocation") ?? "",
@@ -60,6 +61,7 @@ function readCandidate(formData: FormData) {
     status: formData.get("status") ?? "AVAILABLE",
     tags: parseTags(formData.get("tags")),
     lastContactedAt: formData.get("lastContactedAt") ?? "",
+    referrerId: formData.get("referrerId") ?? "",
     source: formData.get("source") ?? "",
     isWorking: formData.get("isWorking") != null,
     workingType: formData.get("workingType") ?? "",
@@ -70,7 +72,11 @@ function readCandidate(formData: FormData) {
 /** Maps validated input to a Prisma data object (undefined optionals become explicit nulls). */
 function candidateData(d: CandidateInput) {
   return {
-    fullName: d.fullName,
+    firstName: d.firstName,
+    lastName: d.lastName,
+    // fullName is the derived display value — composed from first + last so every
+    // existing list/search/submission/placement keeps working unchanged.
+    fullName: `${d.firstName} ${d.lastName}`.trim(),
     email: d.email ?? null,
     phone: d.phone ?? null,
     currentLocation: d.currentLocation ?? null,
@@ -87,7 +93,9 @@ function candidateData(d: CandidateInput) {
     status: d.status,
     tags: d.tags,
     lastContactedAt: d.lastContactedAt ?? null,
-    source: d.source ?? null,
+    // Reference is now a managed Referrer entity. Legacy free-text `source` is
+    // intentionally NOT written here — it's preserved read-only for old rows.
+    referrerId: d.referrerId,
     isWorking: d.isWorking,
     // Working type only meaningful when working; blank it otherwise.
     workingType: d.isWorking ? d.workingType ?? null : null,
@@ -207,7 +215,7 @@ export async function updateCandidate(
   const compare = (label: string, before: unknown, after: unknown) => {
     if (String(before ?? "") !== String(after ?? "")) changed.push(label);
   };
-  compare("name", existing.fullName, d.fullName);
+  compare("name", existing.fullName, `${d.firstName} ${d.lastName}`.trim());
   compare("email", existing.email, d.email);
   compare("phone", existing.phone, d.phone);
   compare("location", existing.currentLocation, d.currentLocation);
@@ -228,7 +236,7 @@ export async function updateCandidate(
     existing.lastContactedAt?.toISOString() ?? "",
     d.lastContactedAt?.toISOString() ?? "",
   );
-  compare("source", existing.source, d.source);
+  compare("reference", existing.referrerId, d.referrerId);
   compare("working now", existing.isWorking, d.isWorking);
   compare("working type", existing.workingType, d.isWorking ? d.workingType : null);
 

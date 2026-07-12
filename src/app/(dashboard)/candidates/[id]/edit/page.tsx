@@ -7,6 +7,9 @@ import {
 import { updateCandidate } from "@/server/actions/candidates";
 import { getCandidateForEdit } from "@/server/queries/candidates";
 import { listLookupValues } from "@/server/queries/lookups";
+import { listReferrers } from "@/server/queries/org";
+import { getCurrentUser } from "@/lib/session";
+import { canQuickAddOrgEntities } from "@/lib/permissions";
 
 function toDateTimeLocal(value: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -26,7 +29,8 @@ export default async function EditCandidatePage({
 
   const values: CandidateFormValues = {
     id: candidate.id,
-    fullName: candidate.fullName,
+    firstName: candidate.firstName ?? "",
+    lastName: candidate.lastName ?? "",
     email: candidate.email ?? "",
     phone: candidate.phone ?? "",
     currentLocation: candidate.currentLocation ?? "",
@@ -46,13 +50,18 @@ export default async function EditCandidatePage({
     lastContactedAt: candidate.lastContactedAt
       ? toDateTimeLocal(candidate.lastContactedAt)
       : "",
+    referrerId: candidate.referrerId ?? "",
     source: candidate.source ?? "",
     isWorking: candidate.isWorking,
     workingType: candidate.workingType ?? "",
     discipline: candidate.discipline ?? "",
   };
 
-  const workingTypeOptions = await listLookupValues("WORKING_TYPE");
+  const [workingTypeOptions, referrers, user] = await Promise.all([
+    listLookupValues("WORKING_TYPE"),
+    listReferrers(),
+    getCurrentUser(),
+  ]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -63,6 +72,10 @@ export default async function EditCandidatePage({
           values={values}
           submitLabel="Save changes"
           workingTypeOptions={workingTypeOptions}
+          referrers={referrers
+            .filter((r) => r.isActive || r.id === values.referrerId)
+            .map((r) => ({ id: r.id, name: r.name }))}
+          canAddReferrer={canQuickAddOrgEntities(user ?? undefined)}
         />
       </div>
     </div>
