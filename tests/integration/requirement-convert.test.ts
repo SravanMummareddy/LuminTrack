@@ -105,6 +105,13 @@ function convertForm(
   fd.set("resumeChoice", "none");
   fd.set("payRate", "70");
   fd.set("billRate", "100");
+  // Forms-discipline (PR-4): the create schema requires each commercial term to
+  // carry a value or an explicit N/A. The convert action reads term *values*
+  // (prefilled from the VPR in the real UI, not the N/A flags), so supply them.
+  fd.set("engagement", "C2C");
+  fd.set("vendorRecruiterName", "Vendor Rec");
+  fd.set("clientRate", "120");
+  fd.set("teamLead", "Lead Person");
   // Clear the incidental soft gates (#84) so these tests isolate the convert /
   // duplicate behaviour, not the résumé/bench gates.
   fd.set("originalResumeOverrideReason", "n/a for this test");

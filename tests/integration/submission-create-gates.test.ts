@@ -58,6 +58,15 @@ describe.skipIf(!dbReachable)("createSubmission — gate flows", () => {
     // as always-on) so each test isolates its target gate (assignment / duplicate).
     fd.set("originalResumeOverrideReason", "n/a for this test");
     fd.set("benchOverrideReason", "n/a for this test");
+    // Forms-discipline (PR-4): the create schema now requires each commercial
+    // term to carry a value or an explicit N/A flag — mark them N/A so these
+    // tests isolate the gate under test, not the terms validation.
+    fd.set("engagement__na", "1");
+    fd.set("vendorRecruiterName__na", "1");
+    fd.set("payRate__na", "1");
+    fd.set("billRate__na", "1");
+    fd.set("clientRate__na", "1");
+    fd.set("teamLead__na", "1");
     for (const [k, v] of Object.entries(extra)) fd.set(k, v);
     return fd;
   }

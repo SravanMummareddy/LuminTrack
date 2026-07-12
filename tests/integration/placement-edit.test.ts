@@ -31,11 +31,27 @@ describe.skipIf(!dbReachable)("updatePlacement — rate-edit permission + bench 
   });
 
   // The placement edit form always posts startDate (required by the schema).
+  // Forms-discipline (PR-6): the update schema requires each field to carry a
+  // value or an explicit TBD (`<field>__na`). Mark TBD for every required field
+  // the test didn't supply a value for, so each test isolates the behaviour
+  // under test (rate permissions / bench fields), not the TBD validation.
+  const TBD_FIELDS = [
+    "endDate",
+    "clientPoNumber",
+    "invoiceRef",
+    "onsiteManagerName",
+    "onsiteManagerEmail",
+    "organisation",
+    "teamLead",
+    "interviewDate",
+    "placementDate",
+  ];
   function placementForm(fields: Record<string, string>): FormData {
     const fd = new FormData();
     fd.set("id", ctx.placement.id);
     fd.set("startDate", "2026-06-01");
     for (const [k, v] of Object.entries(fields)) fd.set(k, v);
+    for (const f of TBD_FIELDS) if (!(f in fields)) fd.set(`${f}__na`, "1");
     return fd;
   }
 
