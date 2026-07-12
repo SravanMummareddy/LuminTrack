@@ -2,9 +2,11 @@ import { getScopedPrisma } from "@/lib/session";
 import type { Prisma } from "@/generated/prisma/client";
 import { avgDaysToFirstSubmission } from "@/lib/format";
 import {
+  buildJobWhere,
   buildSubmissionWhere,
   daysSince,
   PERFORMANCE_ROLES,
+  sourceBreakdown,
   STALE_SUBMISSION_STATUSES,
   type AnalyticsFilters,
 } from "@/lib/analytics";
@@ -40,7 +42,7 @@ export async function getReportsData(
   pages: { recruiterAging?: number } = {},
 ) {
   const db = await getScopedPrisma();
-  const [submissions, recruiters] = await Promise.all([
+  const [submissions, recruiters, sourceJobs] = await Promise.all([
     db.submission.findMany({
       where: buildSubmissionWhere(filters),
       select: {
@@ -59,7 +61,19 @@ export async function getReportsData(
       select: { id: true, fullName: true },
       orderBy: { fullName: "asc" },
     }),
+    // SRC-2: jobs in the window with their source + submission statuses, to roll
+    // up by channel (jobs → submissions → placements → fill rate).
+    db.job.findMany({
+      where: buildJobWhere(filters),
+      select: {
+        sourceType: true,
+        jobBoard: true,
+        submissions: { select: { status: true } },
+      },
+    }),
   ]);
+
+  const { bySource, byJobBoard } = sourceBreakdown(sourceJobs);
 
   // V-5: flatten each submission to the shape avgDaysToFirstSubmission wants.
   const ttsRows = submissions.map((s) => ({
@@ -238,6 +252,9 @@ export async function getReportsData(
     conversions,
     recruiterAging: paginate(recruiterAging, pages.recruiterAging ?? 1),
     placementMargin,
+    // SRC-2: channel scoreboard.
+    bySource,
+    byJobBoard,
   };
 }
 

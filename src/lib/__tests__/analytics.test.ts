@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { daysSince, agingBucket, currentStageDays } from "@/lib/analytics";
+import {
+  daysSince,
+  agingBucket,
+  currentStageDays,
+  sourceBreakdown,
+} from "@/lib/analytics";
 
 const DAY = 86_400_000;
 const daysAgo = (n: number) => new Date(Date.now() - n * DAY);
@@ -64,5 +69,47 @@ describe("currentStageDays", () => {
     // stage clock must not run from before the submission existed.
     const transitions = [{ eventAt: daysAgo(40), createdAt: daysAgo(40) }];
     expect(currentStageDays(daysAgo(5), transitions)).toBe(5);
+  });
+});
+
+describe("sourceBreakdown (SRC-2)", () => {
+  const sub = (status: string) => ({ status });
+  const jobs = [
+    // Job board / LinkedIn: 3 subs, 1 placement
+    { sourceType: "JOB_BOARD", jobBoard: "LinkedIn", submissions: [sub("SUBMITTED"), sub("JOINED"), sub("REJECTED")] },
+    // Job board / LinkedIn again: 1 sub, 0 placements
+    { sourceType: "JOB_BOARD", jobBoard: "LinkedIn", submissions: [sub("CLIENT_INTERVIEW")] },
+    // Job board / Dice: 2 subs, 1 placement
+    { sourceType: "JOB_BOARD", jobBoard: "Dice", submissions: [sub("JOINED"), sub("SUBMITTED")] },
+    // Referral: 2 subs, 2 placements (multi-hire)
+    { sourceType: "REFERRAL", jobBoard: null, submissions: [sub("JOINED"), sub("JOINED")] },
+    // Other: no subs
+    { sourceType: "OTHER", jobBoard: null, submissions: [] },
+  ];
+
+  it("groups by source type with jobs/submissions/placements + fill rate", () => {
+    const { bySource } = sourceBreakdown(jobs);
+    const board = bySource.find((r) => r.key === "JOB_BOARD")!;
+    expect(board).toMatchObject({ jobs: 3, submissions: 6, placements: 2 });
+    expect(board.fillRate).toBeCloseTo(2 / 3);
+    const ref = bySource.find((r) => r.key === "REFERRAL")!;
+    expect(ref).toMatchObject({ jobs: 1, submissions: 2, placements: 2 });
+    expect(ref.fillRate).toBe(2); // multi-hire → >100% is allowed
+    expect(bySource.find((r) => r.key === "OTHER")).toMatchObject({ jobs: 1, submissions: 0, placements: 0, fillRate: 0 });
+  });
+
+  it("drills the job-board channel by board (job-board sources only)", () => {
+    const { byJobBoard } = sourceBreakdown(jobs);
+    expect(byJobBoard.map((r) => r.key)).toEqual(["LinkedIn", "Dice"]); // sorted by jobs desc
+    expect(byJobBoard.find((r) => r.key === "LinkedIn")).toMatchObject({ jobs: 2, submissions: 4, placements: 1 });
+    // Referral is NOT in the board drill.
+    expect(byJobBoard.some((r) => r.key === "REFERRAL")).toBe(false);
+  });
+
+  it("buckets a job board with no name as Unspecified", () => {
+    const { byJobBoard } = sourceBreakdown([
+      { sourceType: "JOB_BOARD", jobBoard: null, submissions: [sub("SUBMITTED")] },
+    ]);
+    expect(byJobBoard[0].key).toBe("Unspecified");
   });
 });

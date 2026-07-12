@@ -24,6 +24,7 @@ import type {
   InterviewType,
   InterviewResult,
   Discipline,
+  JobSourceType,
 } from "../src/generated/prisma/enums";
 
 // A bulk one-shot script: use a direct TCP connection (DIRECT_URL, the pg
@@ -236,6 +237,9 @@ const SOURCE_NAMES = [
   "Vertex Solutions",
   "Orion Group",
 ];
+
+// SRC-2: job boards for the JOB_BOARD source (the spend-decision drill).
+const JOB_BOARDS = ["LinkedIn", "Dice", "Indeed", "Monster"];
 const CLIENT_NAMES = [
   "Apple",
   "Microsoft",
@@ -706,6 +710,27 @@ async function main() {
       }),
     );
   }
+  // Referrers — for the REFERRAL job source (and SRC-2 source analytics).
+  const referrers = [];
+  for (const name of [
+    "Meghan Carter",
+    "Raj Malhotra",
+    "Elena Fox",
+    "Tomás Rivera",
+  ]) {
+    referrers.push(
+      await prisma.referrer.create({
+        data: {
+          name,
+          company: pick(CLIENT_NAMES),
+          createdById: admin.id,
+          createdAt: adminCreatedAt,
+          updatedAt: adminCreatedAt,
+        },
+        select: { id: true },
+      }),
+    );
+  }
   const clients = [];
   for (const name of CLIENT_NAMES) {
     clients.push(
@@ -821,6 +846,26 @@ async function main() {
     const creator = chance(0.7) ? admin : pick(recruiters);
     const client = pick(clients);
 
+    // SRC-2: where the requisition came from + its matching detail field, so
+    // the source-analytics tables show real channel variety.
+    const sourceType = weighted<JobSourceType>([
+      ["JOB_BOARD", 40],
+      ["REFERRAL", 18],
+      ["SISTER_COMPANY", 20],
+      ["DIRECT", 14],
+      ["OTHER", 8],
+    ]);
+    const sourceFields =
+      sourceType === "JOB_BOARD"
+        ? { jobBoard: pick(JOB_BOARDS), postingUrl: `https://jobs.example.com/${i}` }
+        : sourceType === "REFERRAL"
+          ? { referrerId: pick(referrers).id }
+          : sourceType === "SISTER_COMPANY"
+            ? { sisterCompanySourceId: pick(sources).id }
+            : sourceType === "OTHER"
+              ? { sourceOther: "Inbound email" }
+              : {};
+
     const job = await prisma.job.create({
       data: {
         title,
@@ -842,7 +887,8 @@ async function main() {
         notes: chance(0.4) ? pick(JOB_NOTES) : null,
         clientId: client.id,
         vendorId: pick(vendors).id,
-        sisterCompanySourceId: pick(sources).id,
+        sourceType,
+        ...sourceFields,
         // Optional job-detail fields — populated on a subset so the columns have data.
         positions: chance(0.5) ? randInt(1, 4) : null,
         createdById: creator.id,
