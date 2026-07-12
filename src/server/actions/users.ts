@@ -1,5 +1,6 @@
 "use server";
 
+import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { isUniqueConstraintError } from "@/server/db";
 import { getScopedPrisma, requireUser } from "@/lib/session";
@@ -167,6 +168,76 @@ export async function saveUser(
 
   revalidatePath("/settings");
   return { ok: true };
+}
+
+export type QuickAddUserResult =
+  | { ok: true; id: string; fullName: string }
+  | { ok: false; error: string };
+
+/**
+ * Quick-add a user inline from a form's people-picker (e.g. the VPR form's
+ * vendor-recruiter / team-lead dropdowns), mirroring the org-entity quick-adds.
+ * Managers/team-leads only (`canManageUsers`); a manager-tier role additionally
+ * needs grant-manager rights. The new account gets a random **temporary
+ * password** — set the real one in Settings before they sign in. Distinct from
+ * the full `saveUser` (no org placement / password entry here).
+ */
+export async function quickAddUser(fd: FormData): Promise<QuickAddUserResult> {
+  const actor = await requireUser();
+  if (!canManageUsers(actor))
+    return { ok: false, error: "You don't have permission to add users." };
+
+  const fullName = String(fd.get("fullName") ?? "").trim();
+  const email = String(fd.get("email") ?? "").trim().toLowerCase();
+  const roleId = String(fd.get("roleId") ?? "").trim();
+  if (!fullName) return { ok: false, error: "Enter a name." };
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
+    return { ok: false, error: "Enter a valid email." };
+  if (!roleId) return { ok: false, error: "Pick a role." };
+
+  const db = await getScopedPrisma();
+  const role = await db.role.findUnique({
+    where: { id: roleId },
+    select: { name: true, permissions: { select: { permissionKey: true } } },
+  });
+  if (!role) return { ok: false, error: "Pick a valid role." };
+  const derivedRole = deriveEnumTier(role.permissions.map((p) => p.permissionKey));
+  if (derivedRole === "MANAGER" && !canGrantManagerRole(actor))
+    return { ok: false, error: "Only managers can add a manager-tier user." };
+
+  // Random temp password — the account can't be signed into until a manager
+  // sets a real one in Settings. bcrypt hashing reused from saveUser.
+  const passwordHash = await hashPassword(randomBytes(9).toString("base64url"));
+
+  try {
+    const created = await db.$transaction(async (tx) => {
+      const u = await tx.user.create({
+        data: {
+          fullName,
+          email,
+          roleId,
+          role: derivedRole,
+          isActive: true,
+          showInOrgChart: true,
+          passwordHash,
+        },
+        select: { id: true, fullName: true },
+      });
+      await logActivity(tx, {
+        entityType: "USER",
+        action: "USER_CREATED",
+        description: `Quick-added user ${email} · ${role.name} (temporary password — set in Settings)`,
+        performedById: actor.id,
+      });
+      return u;
+    });
+    revalidatePath("/settings");
+    return { ok: true, ...created };
+  } catch (error) {
+    if (isUniqueConstraintError(error))
+      return { ok: false, error: "A user with this email already exists." };
+    throw error;
+  }
 }
 
 /**

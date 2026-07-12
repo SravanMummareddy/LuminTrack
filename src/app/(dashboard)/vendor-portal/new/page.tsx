@@ -5,11 +5,15 @@ import { PageHeader } from "@/components/ui/page-header";
 import { RequirementForm } from "@/components/vendor-portal/requirement-form";
 import { JobPicker } from "@/components/vendor-portal/job-picker";
 import { createVendorRequirement } from "@/server/actions/requirements";
-import { listCandidateOptions } from "@/server/queries/candidates";
 import { listJobOptions } from "@/server/queries/jobs";
 import { listUsers, listTeamLeadOptions } from "@/server/queries/org";
+import { listRoleOptions } from "@/server/queries/roles";
 import { getCurrentUser, getScopedPrisma } from "@/lib/session";
-import { canManageRequirements } from "@/lib/permissions";
+import {
+  canManageRequirements,
+  canManageUsers,
+  canGrantManagerRole,
+} from "@/lib/permissions";
 import { formatJobDisplayId } from "@/lib/format";
 
 export default async function NewRequirementPage({
@@ -62,7 +66,8 @@ export default async function NewRequirementPage({
   }
 
   // Step 2 — job chosen: the requirement form.
-  const [job, candidates, recruiters, teamLeads] = await Promise.all([
+  const canAddUser = canManageUsers(user ?? undefined);
+  const [job, recruiters, teamLeads, roles] = await Promise.all([
     db.job.findUnique({
       where: { id: jobId },
       select: {
@@ -82,9 +87,9 @@ export default async function NewRequirementPage({
         },
       },
     }),
-    listCandidateOptions(),
     listUsers(),
     listTeamLeadOptions(),
+    canAddUser ? listRoleOptions() : Promise.resolve([]),
   ]);
   if (!job) redirect("/vendor-portal/new");
 
@@ -111,14 +116,19 @@ export default async function NewRequirementPage({
             displayId: formatJobDisplayId(job),
             clientName: job.client?.name ?? null,
             location: job.location,
+            clientRate: job.clientRate != null ? Number(job.clientRate) : null,
+            billRate: job.vendorRate != null ? Number(job.vendorRate) : null,
+            description: job.description,
           }}
-          candidates={candidates.map((c) => ({ id: c.id, fullName: c.fullName }))}
           recruiters={recruiters.map((r) => ({
             id: r.id,
             fullName: r.fullName,
             isActive: r.isActive,
           }))}
           teamLeads={teamLeads}
+          roles={roles}
+          canAddUser={canAddUser}
+          canGrantManager={canGrantManagerRole(user ?? undefined)}
           defaults={{
             location: job.location ?? "",
             // Carry the job's Client rate into the requirement (editable) so it
@@ -131,7 +141,7 @@ export default async function NewRequirementPage({
             // isn't retyped (editable). Flows on to the submission via convert.
             jobDuties: job.description ?? "",
             // Prefill the Vendor recruiter from the vendor's "Recruited by"
-            // owner (set once in Settings). Editable per-VPR.
+            // owner (the user who recruited the vendor). Editable per-VPR.
             vendorRecruiterName:
               job.vendor?.recruitedBy?.fullName ??
               job.vendor?.recruitedByName ??

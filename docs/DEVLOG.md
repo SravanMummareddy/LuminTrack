@@ -10,6 +10,31 @@ short instead of long.
 
 ---
 
+## 2026-07-12 · The VPR "Engagement" dropdown never saved — a `<Select>` with no `name`
+
+**Situation.** Rolling the Jobs forms-discipline pattern onto the Vendor Portal Requirement form
+(PR-1), I was tightening `engagement` from optional → required. Reading the old form I noticed its
+Engagement `<Select>` had `id="engagement"` and a controlled `value`/`onChange`, but **no `name`
+attribute** — unlike every sibling field (Team lead had `name="teamLead"`, etc.).
+
+**Diagnosis.** The custom `Select` (`src/components/ui/select-menu.tsx`) is a styled listbox that
+submits through a hidden `<input type="hidden" name={name} value={selected} />`. With `name`
+undefined, that hidden input posts nothing. So `readRequirement`'s `formData.get("engagement")`
+always came back empty — the field rendered, the user picked C2C/W2, and it was silently dropped on
+every create/edit. A latent data-loss bug hiding behind a working-looking control, invisible because
+`engagement` was optional so nobody saw a validation error.
+
+**Fix.** The redesign gives every control an explicit `name` and makes `engagement` required
+(`enumRequired`), so a blank now errors instead of vanishing. Added a schema unit test asserting the
+required rule fires.
+
+**Lesson.** A controlled custom `<Select>` isn't a native one — `value`/`onChange` drive the *UI*, but
+only `name` drives the *form submission* (it's what the hidden input is keyed on). When a field
+"works" but its value never persists, check the `name` before the handler. And: making a field
+required surfaces the bugs that being-optional was hiding.
+
+---
+
 ## 2026-07-12 · CI was red for weeks — a whole test job silently dead since the tenancy migration
 
 **Situation.** `main`'s CI had two jobs (`unit` = lint + tsc + unit tests; `integration` = real

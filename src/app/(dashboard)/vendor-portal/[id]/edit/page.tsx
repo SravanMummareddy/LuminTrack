@@ -5,10 +5,14 @@ import { PageHeader } from "@/components/ui/page-header";
 import { RequirementForm } from "@/components/vendor-portal/requirement-form";
 import { updateVendorRequirement } from "@/server/actions/requirements";
 import { getVendorRequirement } from "@/server/queries/requirements";
-import { listCandidateOptions } from "@/server/queries/candidates";
 import { listUsers, listTeamLeadOptions } from "@/server/queries/org";
-import { getCurrentUser } from "@/lib/session";
-import { canManageRequirements } from "@/lib/permissions";
+import { listRoleOptions } from "@/server/queries/roles";
+import { getCurrentUser, getScopedPrisma } from "@/lib/session";
+import {
+  canManageRequirements,
+  canManageUsers,
+  canGrantManagerRole,
+} from "@/lib/permissions";
 import { formatJobDisplayId } from "@/lib/format";
 
 function rateStr(value: number | null): string {
@@ -29,10 +33,16 @@ export default async function EditRequirementPage({
   // Converted / cancelled requirements are read-only.
   if (requirement.status !== "OPEN") redirect(`/vendor-portal/${id}`);
 
-  const [candidates, recruiters, teamLeads] = await Promise.all([
-    listCandidateOptions(),
+  const db = await getScopedPrisma();
+  const canAddUser = canManageUsers(user ?? undefined);
+  const [jobExtra, recruiters, teamLeads, roles] = await Promise.all([
+    db.job.findUnique({
+      where: { id: requirement.job.id },
+      select: { clientRate: true, vendorRate: true, description: true },
+    }),
     listUsers(),
     listTeamLeadOptions(),
+    canAddUser ? listRoleOptions() : Promise.resolve([]),
   ]);
 
   return (
@@ -56,14 +66,21 @@ export default async function EditRequirementPage({
             displayId: formatJobDisplayId(requirement.job),
             clientName: requirement.job.client?.name ?? null,
             location: requirement.job.location,
+            clientRate:
+              jobExtra?.clientRate != null ? Number(jobExtra.clientRate) : null,
+            billRate:
+              jobExtra?.vendorRate != null ? Number(jobExtra.vendorRate) : null,
+            description: jobExtra?.description ?? null,
           }}
-          candidates={candidates.map((c) => ({ id: c.id, fullName: c.fullName }))}
           recruiters={recruiters.map((r) => ({
             id: r.id,
             fullName: r.fullName,
             isActive: r.isActive,
           }))}
           teamLeads={teamLeads}
+          roles={roles}
+          canAddUser={canAddUser}
+          canGrantManager={canGrantManagerRole(user ?? undefined)}
           defaults={{
             candidateId: requirement.candidateId ?? "",
             recruiterId: requirement.recruiterId ?? "",
