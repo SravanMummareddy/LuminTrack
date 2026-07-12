@@ -1,3 +1,4 @@
+import { gunzipSync } from "node:zlib";
 import { get } from "@vercel/blob";
 import { getCurrentUser, getScopedPrisma } from "@/lib/session";
 import { canViewSensitiveDocs, isSensitiveCategory } from "@/lib/permissions";
@@ -20,8 +21,9 @@ function downloadName(label: string, contentType: string, pathname: string): str
 /**
  * Streams a candidate document from private Blob. Identity / Work-auth documents
  * are admin-only — the same gate the query layer applies. Stored bytes are
- * gzip-compressed (see uploadPrivateFile); we set Content-Encoding: gzip so the
- * browser inflates. `?download=1` forces a download.
+ * gzip-compressed (see uploadPrivateFile); we inflate here and serve plain bytes
+ * (a manual Content-Encoding: gzip is fragile — see the résumé route).
+ * `?download=1` forces a download.
  */
 export async function GET(
   request: Request,
@@ -58,10 +60,20 @@ export async function GET(
   const download = new URL(request.url).searchParams.get("download") === "1";
   const filename = downloadName(doc.label, contentType, doc.blobPathname);
 
-  return new Response(result.stream, {
+  const stored = Buffer.from(
+    await new Response(result.stream as BodyInit).arrayBuffer(),
+  );
+  const out =
+    stored[0] === 0x1f && stored[1] === 0x8b ? gunzipSync(stored) : stored;
+  // Copy into a standalone ArrayBuffer (a concrete Response body — a Node Buffer
+  // / Uint8Array<ArrayBufferLike> isn't accepted by its type).
+  const body = new ArrayBuffer(out.byteLength);
+  new Uint8Array(body).set(out);
+
+  return new Response(body, {
     headers: {
       "Content-Type": contentType,
-      "Content-Encoding": "gzip",
+      "Content-Length": String(body.byteLength),
       // RFC 5987 `filename*` carries the (percent-encoded) name; the quoted
       // `filename` stays as an ASCII fallback. Encoding keeps the header
       // injection-safe regardless of what the label sanitizer lets through.
