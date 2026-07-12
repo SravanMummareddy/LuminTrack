@@ -40,8 +40,12 @@ export function EmailRecruiterButton({
   useEffect(() => {
     if (state.ok && state.toast) {
       toast({ tone: "success", title: state.toast.title });
+      // Reset + close once the action settles — the codebase idiom for a
+      // post-action form (see submission-status-form).
+      /* eslint-disable react-hooks/set-state-in-effect */
       setOpen(false);
       setNote("");
+      /* eslint-enable react-hooks/set-state-in-effect */
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.ok]);
