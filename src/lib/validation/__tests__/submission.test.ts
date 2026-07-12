@@ -5,11 +5,24 @@ import {
   statusChangeSchema,
 } from "@/lib/validation/submission";
 
+// Every commercial term is now required-or-N/A on create; a minimal valid
+// submission marks them all N/A. Individual tests knock a flag out or supply a
+// real value instead.
+const allTermsNa = {
+  engagementNa: "1",
+  vendorRecruiterNameNa: "1",
+  payRateNa: "1",
+  billRateNa: "1",
+  clientRateNa: "1",
+  teamLeadNa: "1",
+};
+
 const baseCreate = {
   candidateId: "cand1",
   jobId: "job1",
   submittedById: "user1",
   resumeChoice: "none",
+  ...allTermsNa,
 };
 
 describe("submissionSchema — identity fields", () => {
@@ -60,21 +73,47 @@ describe("submissionSchema — résumé choice cross-field rules", () => {
   });
 });
 
-describe("submissionSchema — bench fields", () => {
-  it("empty bench fields parse to undefined, not errors", () => {
-    const r = submissionSchema.safeParse({
-      ...baseCreate,
-      engagement: "",
-      vendorRecruiterName: "",
-      payRate: "",
-      billRate: "",
-      teamLead: "",
-    });
+describe("submissionSchema — commercial terms are required-or-N/A", () => {
+  const noTerms = {
+    candidateId: "cand1",
+    jobId: "job1",
+    submittedById: "user1",
+    resumeChoice: "none",
+  };
+
+  it("a submission with no terms and no N/A flags fails", () => {
+    expect(submissionSchema.safeParse(noTerms).success).toBe(false);
+  });
+
+  it("all-N/A is the minimal valid submission (terms parse to undefined)", () => {
+    const r = submissionSchema.safeParse(baseCreate);
     expect(r.success).toBe(true);
     if (r.success) {
       expect(r.data.engagement).toBeUndefined();
       expect(r.data.payRate).toBeUndefined();
     }
+  });
+
+  it.each([
+    ["engagement", "engagementNa"],
+    ["vendorRecruiterName", "vendorRecruiterNameNa"],
+    ["payRate", "payRateNa"],
+    ["billRate", "billRateNa"],
+    ["clientRate", "clientRateNa"],
+    ["teamLead", "teamLeadNa"],
+  ] as const)("%s: blank without its N/A flag fails", (_field, naField) => {
+    const r = submissionSchema.safeParse({ ...baseCreate, [naField]: "" });
+    expect(r.success).toBe(false);
+  });
+
+  it("a real value satisfies a term without its N/A flag", () => {
+    const r = submissionSchema.safeParse({
+      ...baseCreate,
+      engagementNa: "",
+      engagement: "C2C",
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.engagement).toBe("C2C");
   });
 
   it("engagement only accepts C2C / W2", () => {
