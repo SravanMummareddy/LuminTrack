@@ -62,6 +62,9 @@ export async function seedBasics(base: PrismaClient) {
       candidateId: candidate.id,
       jobId: job.id,
       submittedById: user.id,
+      // Waive the résumé so the SB-3 forward-advance gate (#84) doesn't block the
+      // status-cascade tests, which are about JOINED→placement, not résumés.
+      resumeWaivedAt: new Date(),
     },
   });
   return { org, db: prisma, user, client, vendor, candidate, job, submission };

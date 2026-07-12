@@ -54,6 +54,10 @@ describe.skipIf(!dbReachable)("createSubmission — gate flows", () => {
     fd.set("jobId", jobId);
     fd.set("submittedById", submittedById);
     fd.set("resumeChoice", "none");
+    // Clear the incidental soft gates (#84 added no_original_resume + not_marketing
+    // as always-on) so each test isolates its target gate (assignment / duplicate).
+    fd.set("originalResumeOverrideReason", "n/a for this test");
+    fd.set("benchOverrideReason", "n/a for this test");
     for (const [k, v] of Object.entries(extra)) fd.set(k, v);
     return fd;
   }
@@ -68,7 +72,7 @@ describe.skipIf(!dbReachable)("createSubmission — gate flows", () => {
 
     const res = await createSubmission(undefined as never, form(job.id, ctx.recruiter.id));
 
-    expect(res?.needsConfirm).toBe("not_assigned");
+    expect(res?.pendingGates?.map((g) => g.kind)).toContain("not_assigned");
     expect(await subCount(job.id)).toBe(0);
     // No phantom self-assignment when the claim flag is absent.
     expect(await testPrisma.jobAssignment.count({ where: { jobId: job.id } })).toBe(0);
@@ -116,8 +120,8 @@ describe.skipIf(!dbReachable)("createSubmission — gate flows", () => {
 
     // Second, with no reason, is gated.
     const gated = await createSubmission(undefined as never, form(job.id, ctx.admin.id));
-    expect(gated?.needsConfirm).toBe("duplicate");
-    expect(gated?.confirmData).toMatchObject({ existingSubmissionId: first!.id });
+    const dup = gated?.pendingGates?.find((g) => g.kind === "duplicate");
+    expect(dup).toMatchObject({ existingSubmissionId: first!.id });
     expect(await subCount(job.id)).toBe(1); // nothing written
 
     // Second, with a reason, overrides.

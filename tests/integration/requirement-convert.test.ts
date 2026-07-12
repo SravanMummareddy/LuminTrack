@@ -105,6 +105,10 @@ function convertForm(
   fd.set("resumeChoice", "none");
   fd.set("payRate", "70");
   fd.set("billRate", "100");
+  // Clear the incidental soft gates (#84) so these tests isolate the convert /
+  // duplicate behaviour, not the résumé/bench gates.
+  fd.set("originalResumeOverrideReason", "n/a for this test");
+  fd.set("benchOverrideReason", "n/a for this test");
   for (const [k, v] of Object.entries(extra)) fd.set(k, v);
   return fd;
 }
@@ -195,7 +199,7 @@ describe.skipIf(!dbReachable)("vendor requirement actions", () => {
 
     // The per-(candidate, job) duplicate gate fires instead of silently
     // creating a second identical submission.
-    expect(second.needsConfirm).toBe("duplicate");
+    expect(second.pendingGates?.map((g) => g.kind)).toContain("duplicate");
     expect(await testPrisma.submission.count()).toBe(1);
   });
 

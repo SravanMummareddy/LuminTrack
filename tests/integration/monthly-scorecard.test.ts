@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { testPrisma } from "./db";
 import { truncateAll, seedOrg } from "./helpers";
+import { SUBMISSION_STATUS_LABEL } from "@/lib/labels";
 
 // getMonthlyScorecard reads through getScopedPrisma — point the base client at the
 // test DB and hand the query an org-scoped client bound to the seeded test org.
@@ -88,10 +89,31 @@ async function seedScorecard() {
       },
     });
 
+  // Backouts + closures are read from the audit log (keyed on the change date),
+  // not the submission/placement row — so log the status change explicitly.
+  const logStatus = (
+    submissionId: string,
+    by: string,
+    when: Date,
+    status: keyof typeof SUBMISSION_STATUS_LABEL,
+  ) =>
+    db.activity.create({
+      data: {
+        entityType: "SUBMISSION",
+        action: "SUBMISSION_STATUS_CHANGED",
+        description: `Status → ${SUBMISSION_STATUS_LABEL[status]}`,
+        newValue: SUBMISSION_STATUS_LABEL[status],
+        eventAt: when,
+        performedById: by,
+        submissionId,
+      },
+    });
+
   // recruiterA
   await mkSub(jobV1.id, recA.id, new Date(2026, 4, 20), "SUBMITTED"); // May — prior V1 use
   await mkSub(jobV1.id, recA.id, new Date(2026, 5, 3, 12), "SUBMITTED"); // week0
-  await mkSub(jobV1.id, recA.id, new Date(2026, 5, 10, 12), "BACKED_OUT"); // week1
+  const aBackout = await mkSub(jobV1.id, recA.id, new Date(2026, 5, 10, 12), "BACKED_OUT"); // week1
+  await logStatus(aBackout.id, recA.id, new Date(2026, 5, 10, 12), "BACKED_OUT");
   const aV2 = await mkSub(jobV2.id, recA.id, new Date(2026, 5, 10, 12), "SELECTED"); // week1, new vendor
   await db.interviewRound.create({
     data: { roundOrder: 1, roundName: "Tech", interviewType: "CLIENT_INTERVIEW", scheduledAt: new Date(2026, 5, 12, 9), submissionId: aV2.id },
@@ -102,6 +124,8 @@ async function seedScorecard() {
   await db.placement.create({
     data: { startDate: new Date(2026, 5, 15, 9), submissionId: aV2.id, candidateId: cand.id, jobId: jobV2.id },
   });
+  // The closure (offer accepted) that the placement represents — Jun 15 → week2.
+  await logStatus(aV2.id, recA.id, new Date(2026, 5, 15, 9), "OFFER_ACCEPTED");
 
   // recruiterB
   await mkSub(jobV1.id, recB.id, new Date(2026, 5, 5, 12), "SUBMITTED"); // week0, B's first V1 use
