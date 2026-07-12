@@ -42,6 +42,10 @@ export function ResumeSection({
 
   const active = resumes.filter((r) => r.isActive);
   const archived = resumes.filter((r) => !r.isActive);
+  // C-1 — a candidate should have an authentic (Original) résumé on file before
+  // being submitted. Flag when they have résumés but every active one is Marketing.
+  const missingOriginal =
+    active.length > 0 && !active.some((r) => r.kind === "ORIGINAL");
 
   const renderResume = (r: ResumeItem) => {
     // Uploaded files stream from our own private route; a PDF previews inline,
@@ -60,6 +64,9 @@ export function ResumeSection({
               <span className="text-sm font-semibold text-slate-900">
                 {r.label}
               </span>
+              <Badge tone={r.kind === "ORIGINAL" ? "green" : "indigo"}>
+                {r.kind === "ORIGINAL" ? "Original" : "Marketing"}
+              </Badge>
               {!r.isActive && <Badge tone="slate">Archived</Badge>}
             </div>
             <p className="mt-0.5 text-xs text-slate-500">Used by {usedLabel}</p>
@@ -167,6 +174,16 @@ export function ResumeSection({
           Add resume
         </Button>
       </div>
+
+      {missingOriginal && (
+        <div className="mb-3 flex items-start gap-2 rounded-md border-l-2 border-amber-400 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <span className="font-medium">No original résumé on file.</span>
+          <span>
+            This candidate has only marketing résumés — add the authentic résumé
+            before submitting them.
+          </span>
+        </div>
+      )}
 
       {active.length === 0 ? (
         <p className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">

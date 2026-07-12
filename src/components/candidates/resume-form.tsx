@@ -9,10 +9,12 @@ import {
 } from "@/server/actions/resumes";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
 import { RESUME_ACCEPT, RESUME_MAX_BYTES } from "@/lib/validation/resume";
+import type { ResumeKind } from "@/generated/prisma/enums";
 
 export type ResumeData = {
   id: string;
   label: string;
+  kind: ResumeKind;
 };
 
 const MAX_MB = Math.round(RESUME_MAX_BYTES / (1024 * 1024));
@@ -56,6 +58,34 @@ export function ResumeForm({
           placeholder="e.g. Backend Engineer"
           required
         />
+      </Field>
+
+      <Field
+        label="Type"
+        hint="Original = the candidate's authentic résumé. Marketing = a reformatted version. A candidate should have an Original on file before being submitted."
+        error={errors.kind}
+      >
+        <div className="inline-flex overflow-hidden rounded-md border border-slate-300">
+          {(
+            [
+              { value: "ORIGINAL", label: "Original" },
+              { value: "MARKETING", label: "Marketing" },
+            ] as const
+          ).map((opt, i) => (
+            <label key={opt.value} className={i > 0 ? "border-l border-slate-300" : ""}>
+              <input
+                type="radio"
+                name="kind"
+                value={opt.value}
+                defaultChecked={(resume?.kind ?? "ORIGINAL") === opt.value}
+                className="peer sr-only"
+              />
+              <span className="block cursor-pointer px-4 py-1.5 text-sm text-slate-600 transition-colors hover:bg-slate-50 peer-checked:bg-indigo-50 peer-checked:font-medium peer-checked:text-indigo-700">
+                {opt.label}
+              </span>
+            </label>
+          ))}
+        </div>
       </Field>
 
       {!isEdit && (

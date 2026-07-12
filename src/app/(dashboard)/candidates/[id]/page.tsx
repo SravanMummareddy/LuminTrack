@@ -455,6 +455,7 @@ export default async function CandidateDetailPage({
         resumes={candidate.resumes.map((r) => ({
           id: r.id,
           label: r.label,
+          kind: r.kind,
           hasFile: r.blobPathname != null,
           contentType: r.contentType,
           isActive: r.isActive,
