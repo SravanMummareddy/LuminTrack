@@ -4,6 +4,8 @@ import { useActionState, useEffect, useRef, useState, useTransition } from "reac
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
+import { FormSection } from "@/components/ui/form-section";
+import { NullableField } from "@/components/ui/nullable-field";
 import { SearchSelect } from "@/components/ui/search-select";
 import { Button } from "@/components/ui/button";
 import { RateChainWarning } from "@/components/ui/rate-chain-warning";
@@ -68,12 +70,18 @@ type Fields = {
   resumeSelection: string;
   submissionNotes: string;
   engagement: string;
+  engagementNa: boolean;
   vendorRecruiterName: string;
+  vendorRecruiterNameNa: boolean;
   jobDuties: string;
   payRate: string;
+  payRateNa: boolean;
   billRate: string;
+  billRateNa: boolean;
   clientRate: string;
+  clientRateNa: boolean;
   teamLead: string;
+  teamLeadNa: boolean;
   // Every gate reason is its own field, so the whole stack of warnings can be
   // filled at once and posts together via latched hidden inputs below. The
   // duplicate preset + note pair composes into one reason string.
@@ -145,12 +153,18 @@ export function SubmissionForm({
     resumeSelection: "",
     submissionNotes: "",
     engagement: "",
+    engagementNa: false,
     vendorRecruiterName: "",
+    vendorRecruiterNameNa: false,
     jobDuties: "",
     payRate: "",
+    payRateNa: false,
     billRate: "",
+    billRateNa: false,
     clientRate: "",
+    clientRateNa: false,
     teamLead: "",
+    teamLeadNa: false,
     rateReason: "",
     convertReason: "",
     candidateStatusReason: "",
@@ -160,6 +174,20 @@ export function SubmissionForm({
     duplicatePreset: "",
     duplicateNote: "",
     ...prefill,
+    // Convert mode prefills terms from the requirement, which already enforced
+    // required-or-N/A. A blank prefilled value therefore means the requirement
+    // marked it N/A — carry that flag over so the tightened submission validates.
+    // (Placed after ...prefill so the convert page can't clobber them.)
+    ...(requirementId != null
+      ? {
+          engagementNa: !prefill?.engagement,
+          vendorRecruiterNameNa: !prefill?.vendorRecruiterName,
+          payRateNa: !prefill?.payRate,
+          billRateNa: !prefill?.billRate,
+          clientRateNa: !prefill?.clientRate,
+          teamLeadNa: !prefill?.teamLead,
+        }
+      : {}),
   });
   // Surfaced after a candidate switch clears a résumé pick, so the wipe isn't
   // silent (it used to vanish a freshly-typed Drive link with no warning).
@@ -209,6 +237,12 @@ export function SubmissionForm({
       >,
     ) =>
       setFields((f) => ({ ...f, [name]: e.target.value }));
+
+  // Toggling N/A on clears the paired value (so it stores null); toggling off
+  // leaves it for re-entry. The NullableField renders the hidden `{name}__na`.
+  const naToggle =
+    (field: keyof Fields, naField: keyof Fields) => (v: boolean) =>
+      setFields((f) => ({ ...f, [naField]: v, ...(v ? { [field]: "" } : {}) }));
 
   // Inline "upload a new résumé" — uploads eagerly to private Blob (a separate
   // action call), then adds the created résumé to the picker and selects it, so
@@ -316,11 +350,17 @@ export function SubmissionForm({
       setFields((f) => ({
         ...f,
         payRate: p.payRate,
+        payRateNa: p.payRate === "",
         billRate: p.billRate,
+        billRateNa: p.billRate === "",
         clientRate: p.clientRate,
+        clientRateNa: p.clientRate === "",
         engagement: p.engagement,
+        engagementNa: p.engagement === "",
         vendorRecruiterName: p.vendorRecruiterName,
+        vendorRecruiterNameNa: p.vendorRecruiterName === "",
         teamLead: p.teamLead,
+        teamLeadNa: p.teamLead === "",
         jobDuties: p.jobDuties,
         submissionNotes: p.submissionNotes,
       }));
@@ -392,56 +432,88 @@ export function SubmissionForm({
     fields.teamLead && !teamLeadNames.includes(fields.teamLead)
       ? [fields.teamLead, ...teamLeadNames]
       : teamLeadNames;
-  const commercialTermsFields = (
+  // Card 3 — engagement, vendor recruiter, the three rates (each required-or-N/A)
+  // + the live rate-chain warning.
+  const rateFields = (
     <>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Engagement" htmlFor="engagement" error={errors.engagement} hint="Bench/W2 — for bench-sales submissions.">
+        <NullableField
+          label="Engagement"
+          htmlFor="engagement"
+          name="engagement"
+          na={fields.engagementNa}
+          onToggleNa={naToggle("engagement", "engagementNa")}
+          error={errors.engagement}
+          hint="Bench/W2 — for bench-sales submissions."
+        >
           <Select
             key={`engagement-${selectSyncKey}`}
             id="engagement"
             name="engagement"
             value={fields.engagement}
             onChange={set("engagement")}
+            disabled={fields.engagementNa}
           >
             <option value="">—</option>
             {BENCH_ENGAGEMENTS.map((e) => (
               <option key={e} value={e}>{BENCH_ENGAGEMENT_LABEL[e]}</option>
             ))}
           </Select>
-        </Field>
-        <Field label="Vendor recruiter name" htmlFor="vendorRecruiterName" error={errors.vendorRecruiterName}>
+        </NullableField>
+        <NullableField
+          label="Vendor recruiter name"
+          htmlFor="vendorRecruiterName"
+          name="vendorRecruiterName"
+          na={fields.vendorRecruiterNameNa}
+          onToggleNa={naToggle("vendorRecruiterName", "vendorRecruiterNameNa")}
+          error={errors.vendorRecruiterName}
+        >
           <Input
             id="vendorRecruiterName"
             name="vendorRecruiterName"
             value={fields.vendorRecruiterName}
             onChange={set("vendorRecruiterName")}
+            disabled={fields.vendorRecruiterNameNa}
           />
-        </Field>
+        </NullableField>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Field label="Pay rate" htmlFor="payRate" error={errors.payRate} hint="$/hr we pay the consultant.">
-          <Input id="payRate" name="payRate" type="number" min="0" step="0.01" inputMode="decimal" value={fields.payRate} onChange={set("payRate")} />
-        </Field>
-        <Field label="Bill rate" htmlFor="billRate" error={errors.billRate} hint="$/hr the vendor releases to us.">
-          <Input id="billRate" name="billRate" type="number" min="0" step="0.01" inputMode="decimal" value={fields.billRate} onChange={set("billRate")} />
-        </Field>
-        <Field label="Client rate" htmlFor="clientRate" error={errors.clientRate} hint="$/hr the end client releases (optional).">
-          <Input id="clientRate" name="clientRate" type="number" min="0" step="0.01" inputMode="decimal" value={fields.clientRate} onChange={set("clientRate")} />
-        </Field>
-        <Field label="Team lead" htmlFor="teamLead" error={errors.teamLead}>
-          <Select key={`teamLead-${selectSyncKey}`} id="teamLead" name="teamLead" value={fields.teamLead} onChange={set("teamLead")}>
-            <option value="">—</option>
-            {teamLeadChoices.map((name) => (
-              <option key={name} value={name}>{name}</option>
-            ))}
-          </Select>
-        </Field>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <NullableField label="Pay rate" htmlFor="payRate" name="payRate" na={fields.payRateNa} onToggleNa={naToggle("payRate", "payRateNa")} error={errors.payRate} hint="$/hr we pay the consultant.">
+          <Input id="payRate" name="payRate" type="number" min="0" step="0.01" inputMode="decimal" value={fields.payRate} onChange={set("payRate")} disabled={fields.payRateNa} />
+        </NullableField>
+        <NullableField label="Bill rate" htmlFor="billRate" name="billRate" na={fields.billRateNa} onToggleNa={naToggle("billRate", "billRateNa")} error={errors.billRate} hint="$/hr the vendor releases to us.">
+          <Input id="billRate" name="billRate" type="number" min="0" step="0.01" inputMode="decimal" value={fields.billRate} onChange={set("billRate")} disabled={fields.billRateNa} />
+        </NullableField>
+        <NullableField label="Client rate" naLabel="Not disclosed" htmlFor="clientRate" name="clientRate" na={fields.clientRateNa} onToggleNa={naToggle("clientRate", "clientRateNa")} error={errors.clientRate} hint="$/hr the end client releases.">
+          <Input id="clientRate" name="clientRate" type="number" min="0" step="0.01" inputMode="decimal" value={fields.clientRate} onChange={set("clientRate")} disabled={fields.clientRateNa} />
+        </NullableField>
       </div>
 
       <RateChainWarning rates={fields} />
+    </>
+  );
 
-      <Field label="Job duties" htmlFor="jobDuties" error={errors.jobDuties}>
+  // Card 4 — team lead (required-or-N/A) + job duties (optional, from job).
+  const teamDutyFields = (
+    <>
+      <NullableField
+        label="Team lead"
+        htmlFor="teamLead"
+        name="teamLead"
+        na={fields.teamLeadNa}
+        onToggleNa={naToggle("teamLead", "teamLeadNa")}
+        error={errors.teamLead}
+      >
+        <Select key={`teamLead-${selectSyncKey}`} id="teamLead" name="teamLead" value={fields.teamLead} onChange={set("teamLead")} disabled={fields.teamLeadNa}>
+          <option value="">—</option>
+          {teamLeadChoices.map((name) => (
+            <option key={name} value={name}>{name}</option>
+          ))}
+        </Select>
+      </NullableField>
+
+      <Field label="Job duties" htmlFor="jobDuties" error={errors.jobDuties} hint="Optional — carried from the job.">
         <Textarea
           id="jobDuties"
           name="jobDuties"
@@ -534,6 +606,7 @@ export function SubmissionForm({
         value={resumeChoice === "existing" ? fields.resumeSelection : ""}
       />
 
+      <FormSection n={1} title="Job & candidate">
       {/* Job — fixed in job-locked mode, a picker otherwise. */}
       {mode === "job-locked" ? (
         <Field label="Job">
@@ -644,7 +717,9 @@ export function SubmissionForm({
         )}
 
       </div>
+      </FormSection>
 
+      <FormSection n={2} title="Résumé">
       <Field
         label="Resume"
         htmlFor="resumeSelection"
@@ -727,12 +802,16 @@ export function SubmissionForm({
             </button>
           ))}
       </Field>
+      </FormSection>
 
+      {/* Commercial terms. In convert mode they arrive prefilled from the VPR, so
+          we keep the read-only summary + "Edit terms" drawer inside one card; in
+          the other modes the two term cards render inline. */}
       {isConvert ? (
-        <div className="space-y-2">
+        <FormSection n={3} title="Commercial terms">
           <div className="rounded-md border border-slate-200 bg-slate-50/60 p-3">
             <p className="text-xs font-medium text-slate-500">
-              Commercial terms — carried from the requirement
+              Carried from the requirement
             </p>
             <dl className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-3">
               <div>
@@ -767,26 +846,34 @@ export function SubmissionForm({
             <summary className="cursor-pointer text-sm font-medium text-indigo-600">
               Edit terms
             </summary>
-            <div className="mt-3 space-y-4">{commercialTermsFields}</div>
+            <div className="mt-3 space-y-4">
+              {rateFields}
+              {teamDutyFields}
+            </div>
           </details>
-        </div>
+        </FormSection>
       ) : (
-        commercialTermsFields
+        <>
+          <FormSection n={3} title="Commercial terms">{rateFields}</FormSection>
+          <FormSection n={4} title="Team &amp; duties">{teamDutyFields}</FormSection>
+        </>
       )}
 
-      <Field
-        label="Submission notes"
-        htmlFor="submissionNotes"
-        error={errors.submissionNotes}
-      >
-        <Textarea
-          id="submissionNotes"
-          name="submissionNotes"
-          rows={3}
-          value={fields.submissionNotes}
-          onChange={set("submissionNotes")}
-        />
-      </Field>
+      <FormSection n={isConvert ? 4 : 5} title="Notes">
+        <Field
+          label="Submission notes"
+          htmlFor="submissionNotes"
+          error={errors.submissionNotes}
+        >
+          <Textarea
+            id="submissionNotes"
+            name="submissionNotes"
+            rows={3}
+            value={fields.submissionNotes}
+            onChange={set("submissionNotes")}
+          />
+        </Field>
+      </FormSection>
 
       {/* Every applicable warning, stacked into ONE review panel so the recruiter
           resolves them together and submits once. Each reason drives a latched

@@ -115,11 +115,14 @@ derived/read-only fields, any close-gate. Owner approves grouping + the required
 ## Order of attack (owner's sequence, 2026-07-12)
 1. ✅ **VPR** (PR-1, shipped) — `requirement-form.tsx` + `validation/requirement.ts`. Job panel +
    required/N-A + add-user picker. FormSection promoted to `ui/`.
-2. **Candidates** — `candidate-form.tsx` + `validation/candidate.ts`. **Migration:** first/last name
-   (fullName derived) + `Candidate.referrerId` FK; reference → Referrer picker.
-3. **Bench** — `bench-consultant-form.tsx` + `validation/bench.ts` (largest field set; prefill from
-   the linked candidate).
-4. **Submissions** (task #31) — 5 sections + N/A; **gate engine untouched**.
+2. ✅ **Candidates** (PR-2) — `candidate-form.tsx` + `validation/candidate.ts`. **Migration:** first/last
+   name (fullName derived) + `Candidate.referrerId` FK; reference → Referrer picker.
+3. ✅ **Bench** (PR-3) — `bench-consultant-form.tsx` + `validation/bench.ts` (largest field set; prefill
+   from the linked candidate).
+4. ✅ **Submissions** (PR-4, task #31) — 5 cards + required-or-N/A on all commercial terms; **gate engine
+   untouched**. Tightening scoped to the *create* schema only (edit stays lenient for legacy blank-term
+   rows). Reachable only via the VPR convert path → terms auto-inherit the requirement's N/A state on
+   prefill. See DEVLOG 2026-07-12.
 5. **Interview round** — `interview-round-form.tsx`; required-or-N/A.
 6. **Placement** — `placement-edit-form.tsx`; required-or-TBD (edit form only).
 

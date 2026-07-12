@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { RefinementCtx } from "zod";
 import {
   optionalText,
   optionalNonNegativeNumber,
@@ -6,6 +7,10 @@ import {
   emptyToUndefined,
 } from "./common";
 import { STATUS_CHANGE_REASONS } from "@/lib/labels";
+
+/** Posts "1" when the field is explicitly marked N/A — satisfies the requirement
+ *  while the value stays blank (stored null). Mirrors validation/requirement.ts. */
+const naFlag = z.preprocess((v) => v === "1", z.boolean().default(false));
 
 export const SUBMISSION_STATUS_VALUES = [
   "SUBMITTED",
@@ -65,6 +70,59 @@ function refineResumeChoice(d: ResumeFields, ctx: z.RefinementCtx) {
     });
 }
 
+/**
+ * Forms-discipline (Wave 3, PR-4): on a NEW submission the commercial terms are
+ * each required OR explicitly N/A (`<field>__na="1"` → satisfies, stays null).
+ * These override the optional `benchFields` above. The EDIT form keeps the
+ * lenient `benchFields` so legacy blank-term submissions stay editable.
+ */
+const requiredTermsFields = {
+  engagement: z.preprocess(emptyToUndefined, z.enum(["C2C", "W2"]).optional()),
+  engagementNa: naFlag,
+  vendorRecruiterName: optionalText,
+  vendorRecruiterNameNa: naFlag,
+  jobDuties: optionalText,
+  payRate: optionalNonNegativeNumber,
+  payRateNa: naFlag,
+  billRate: optionalNonNegativeNumber,
+  billRateNa: naFlag,
+  clientRate: optionalNonNegativeNumber,
+  clientRateNa: naFlag,
+  teamLead: optionalText,
+  teamLeadNa: naFlag,
+};
+
+type RequiredTerms = {
+  engagement?: "C2C" | "W2";
+  engagementNa: boolean;
+  vendorRecruiterName?: string;
+  vendorRecruiterNameNa: boolean;
+  payRate?: number;
+  payRateNa: boolean;
+  billRate?: number;
+  billRateNa: boolean;
+  clientRate?: number;
+  clientRateNa: boolean;
+  teamLead?: string;
+  teamLeadNa: boolean;
+};
+
+/** Each term is satisfied by a value OR its explicit N/A flag. */
+function refineTerms(d: RequiredTerms, ctx: RefinementCtx) {
+  if (!d.engagement && !d.engagementNa)
+    ctx.addIssue({ code: "custom", path: ["engagement"], message: "Pick an engagement, or mark N/A." });
+  if (!d.vendorRecruiterName && !d.vendorRecruiterNameNa)
+    ctx.addIssue({ code: "custom", path: ["vendorRecruiterName"], message: "Name the vendor recruiter, or mark N/A." });
+  if (d.payRate == null && !d.payRateNa)
+    ctx.addIssue({ code: "custom", path: ["payRate"], message: "Enter a rate, or mark N/A." });
+  if (d.billRate == null && !d.billRateNa)
+    ctx.addIssue({ code: "custom", path: ["billRate"], message: "Enter a rate, or mark N/A." });
+  if (d.clientRate == null && !d.clientRateNa)
+    ctx.addIssue({ code: "custom", path: ["clientRate"], message: "Enter a rate, or mark not disclosed." });
+  if (!d.teamLead && !d.teamLeadNa)
+    ctx.addIssue({ code: "custom", path: ["teamLead"], message: "Pick a team lead, or mark N/A." });
+}
+
 /** A new submission — candidate, job, and submitting recruiter are all fixed here. */
 export const submissionSchema = z
   .object({
@@ -72,9 +130,10 @@ export const submissionSchema = z
     jobId: z.string().min(1, "Missing job reference."),
     submittedById: z.string().min(1, "Select the submitting recruiter."),
     ...resumeFields,
-    ...benchFields,
+    ...requiredTermsFields,
   })
-  .superRefine(refineResumeChoice);
+  .superRefine(refineResumeChoice)
+  .superRefine(refineTerms);
 
 export type SubmissionInput = z.infer<typeof submissionSchema>;
 

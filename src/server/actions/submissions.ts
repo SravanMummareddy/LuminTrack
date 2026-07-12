@@ -48,12 +48,18 @@ function readSubmission(formData: FormData) {
     resumeChoice: formData.get("resumeChoice") ?? "none",
     candidateResumeId: formData.get("candidateResumeId") ?? "",
     engagement: formData.get("engagement") ?? "",
+    engagementNa: formData.get("engagement__na") ?? "",
     vendorRecruiterName: formData.get("vendorRecruiterName") ?? "",
+    vendorRecruiterNameNa: formData.get("vendorRecruiterName__na") ?? "",
     jobDuties: formData.get("jobDuties") ?? "",
     payRate: formData.get("payRate") ?? "",
+    payRateNa: formData.get("payRate__na") ?? "",
     billRate: formData.get("billRate") ?? "",
+    billRateNa: formData.get("billRate__na") ?? "",
     clientRate: formData.get("clientRate") ?? "",
+    clientRateNa: formData.get("clientRate__na") ?? "",
     teamLead: formData.get("teamLead") ?? "",
+    teamLeadNa: formData.get("teamLead__na") ?? "",
   });
 }
 

@@ -10,6 +10,42 @@ short instead of long.
 
 ---
 
+## 2026-07-12 · Submission forms-discipline (PR-4) — tighten the *create* schema only, and auto-N/A the convert prefill
+
+**Situation.** Rolling the forms-discipline pattern onto the submission form (5 cards +
+required-or-N/A). The owner's call: every commercial term (engagement · vendor recruiter ·
+pay · bill · client · team lead) is required-or-N/A. The naïve move is to tighten the
+shared `benchFields` block in `validation/submission.ts`.
+
+**Diagnosis.** Two traps. (1) `benchFields` is spread into **both** `submissionSchema`
+(create) *and* `submissionEditSchema`. Tightening it in place would retroactively block
+editing every legacy submission that was saved with blank terms ("regular non-bench" rows
+the old comment explicitly allowed). (2) `SubmissionForm` is only reachable through the
+**VPR convert** path (`mode="job-locked"`, `isConvert`), where terms arrive *prefilled from
+the requirement*. But a requirement can itself have a term marked N/A → prefill arrives
+blank → the tightened submission would demand the recruiter re-mark it N/A by hand. Friction
+on the one path that actually exists.
+
+**Fix.** (1) Left `benchFields` untouched for the edit schema; added a separate
+`requiredTermsFields` + `refineTerms` spread only into the create `submissionSchema`. Edit
+stays lenient. (2) In the form, seed each `<field>Na` flag from prefill emptiness — on
+convert, a blank prefilled value *means* the requirement marked it N/A, so carry the flag
+over (`engagementNa: !prefill?.engagement`, etc.); on dynamic job-pick, `payRateNa: p.payRate
+=== ""`. A fully-filled requirement converts with zero N/A toggles and zero added clicks
+(browser-verified: all 6 inputs enabled, no `__na` hidden inputs). The write path already
+did `d.engagement ?? null`, so N/A → null needed no action change. Gate engine untouched —
+the restructure only wrapped fields in `FormSection` cards around the amber `pendingGates`
+block.
+
+**Lesson.** When a validation block is shared by a create and an edit schema, "make it
+required" is never a one-line change to the shared block — it's a new stricter block for the
+create side only, or you break editing of every historical row. And when a field is
+*prefilled from an upstream record that already enforced required-or-N/A*, propagate the
+upstream's "explicitly unknown" state instead of re-asking — a blank prefill is a decision,
+not a gap.
+
+---
+
 ## 2026-07-12 · The VPR "Engagement" dropdown never saved — a `<Select>` with no `name`
 
 **Situation.** Rolling the Jobs forms-discipline pattern onto the Vendor Portal Requirement form
