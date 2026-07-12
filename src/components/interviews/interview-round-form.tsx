@@ -2,6 +2,8 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
+import { FormSection } from "@/components/ui/form-section";
+import { NullableField } from "@/components/ui/nullable-field";
 import { Button } from "@/components/ui/button";
 import {
   createInterviewRound,
@@ -74,138 +76,156 @@ export function InterviewRoundForm({
   }, [state.ok, onDone]);
 
   const errors = state.fieldErrors ?? {};
-  // The video platform field only shows when the mode is a video call.
-  const [mode, setMode] = useState(round?.interviewMode ?? "");
+
+  // Inputs are controlled so the N/A toggle can clear + disable them. On EDIT a
+  // field that was left blank opens pre-marked N/A (the value was a conscious
+  // gap, and forcing the editor to re-touch every empty field is friction); on a
+  // NEW round nothing is pre-marked, so each field must get a value or an N/A.
+  const isEdit = round != null;
+  const naInit = (v: string | null | undefined) => isEdit && !v;
+  const [fields, setFields] = useState({
+    roundName: round?.roundName ?? "",
+    interviewType: (round?.interviewType as string) ?? "",
+    result: (round?.result as string) ?? "WAITING",
+    interviewerName: round?.interviewerName ?? "",
+    interviewerNameNa: naInit(round?.interviewerName),
+    interviewMode: round?.interviewMode ?? "",
+    interviewModeNa: naInit(round?.interviewMode),
+    interviewPlatform: round?.interviewPlatform ?? "",
+    interviewPlatformNa: naInit(round?.interviewPlatform),
+    meetingLink: round?.meetingLink ?? "",
+    meetingLinkNa: naInit(round?.meetingLink),
+    scheduledAt: toDateTimeLocal(round?.scheduledAt ?? null),
+    scheduledAtNa: naInit(
+      round?.scheduledAt == null ? "" : String(round.scheduledAt),
+    ),
+    scheduledTimezone: round?.scheduledTimezone ?? "",
+    scheduledTimezoneNa: naInit(round?.scheduledTimezone),
+    supportProviderId: round?.supportProviderId ?? "",
+    supportProviderIdNa: naInit(round?.supportProviderId),
+    supportMethod: round?.supportMethod ?? "",
+    supportMethodNa: naInit(round?.supportMethod),
+    feedback: round?.feedback ?? "",
+    feedbackNa: naInit(round?.feedback),
+    notes: round?.notes ?? "",
+  });
   // "Done with support" reveals the provider + method fields.
   const [withSupport, setWithSupport] = useState(round?.supportNeeded ?? false);
+
+  type Fields = typeof fields;
+  const set =
+    (name: keyof Fields) =>
+    (
+      e: React.ChangeEvent<
+        HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+      >,
+    ) =>
+      setFields((f) => ({ ...f, [name]: e.target.value }));
+  // Toggling N/A on clears the paired value; off leaves it for re-entry.
+  const naToggle =
+    (field: keyof Fields, naField: keyof Fields) => (v: boolean) =>
+      setFields((f) => ({ ...f, [naField]: v, ...(v ? { [field]: "" } : {}) }));
+
+  const isVideo = fields.interviewMode === "VIDEO";
 
   return (
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="submissionId" value={submissionId} />
       {round && <input type="hidden" name="id" value={round.id} />}
 
-      <Field
-        label="Round name"
-        htmlFor="roundName"
-        required
-        error={errors.roundName}
-      >
-        <Input
-          id="roundName"
-          name="roundName"
-          defaultValue={round?.roundName ?? ""}
-          placeholder="e.g. Technical Round 1"
-          required
-        />
-      </Field>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field
-          label="Interview type"
-          htmlFor="interviewType"
-          required
-          error={errors.interviewType}
-        >
-          <Select
-            id="interviewType"
-            name="interviewType"
-            defaultValue={round?.interviewType ?? ""}
+      <FormSection n={1} title="Round & outcome">
+        <Field label="Round name" htmlFor="roundName" required error={errors.roundName}>
+          <Input
+            id="roundName"
+            name="roundName"
+            value={fields.roundName}
+            onChange={set("roundName")}
+            placeholder="e.g. Technical Round 1"
             required
-          >
-            <option value="" disabled>
-              Select a type…
-            </option>
-            {INTERVIEW_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {INTERVIEW_TYPE_LABEL[t]}
-              </option>
-            ))}
-          </Select>
+          />
         </Field>
 
-        <Field label="Result" htmlFor="result" required error={errors.result}>
-          <Select
-            id="result"
-            name="result"
-            defaultValue={round?.result ?? "WAITING"}
-          >
-            {INTERVIEW_RESULTS.map((r) => (
-              <option key={r} value={r}>
-                {INTERVIEW_RESULT_LABEL[r]}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Interview type" htmlFor="interviewType" required error={errors.interviewType}>
+            <Select id="interviewType" name="interviewType" value={fields.interviewType} onChange={set("interviewType")} required>
+              <option value="" disabled>
+                Select a type…
               </option>
-            ))}
-          </Select>
-        </Field>
-
-        <Field
-          label="Interview mode"
-          htmlFor="interviewMode"
-          error={errors.interviewMode}
-        >
-          <Select
-            id="interviewMode"
-            name="interviewMode"
-            value={mode}
-            onChange={(e) => setMode(e.target.value)}
-          >
-            <option value="">Not specified</option>
-            {INTERVIEW_MODES.map((m) => (
-              <option key={m} value={m}>
-                {INTERVIEW_MODE_LABEL[m]}
-              </option>
-            ))}
-          </Select>
-        </Field>
-
-        {mode === "VIDEO" && (
-          <Field
-            label="Video platform"
-            htmlFor="interviewPlatform"
-            error={errors.interviewPlatform}
-          >
-            <Select
-              id="interviewPlatform"
-              name="interviewPlatform"
-              defaultValue={round?.interviewPlatform ?? ""}
-            >
-              <option value="">Not specified</option>
-              {INTERVIEW_PLATFORMS.map((p) => (
-                <option key={p} value={p}>
-                  {INTERVIEW_PLATFORM_LABEL[p]}
+              {INTERVIEW_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {INTERVIEW_TYPE_LABEL[t]}
                 </option>
               ))}
             </Select>
           </Field>
-        )}
 
-        <Field
-          label="Interviewer name"
-          htmlFor="interviewerName"
-          error={errors.interviewerName}
-        >
-          <Input
-            id="interviewerName"
-            name="interviewerName"
-            defaultValue={round?.interviewerName ?? ""}
-          />
-        </Field>
+          <Field label="Result" htmlFor="result" required error={errors.result}>
+            <Select id="result" name="result" value={fields.result} onChange={set("result")}>
+              {INTERVIEW_RESULTS.map((r) => (
+                <option key={r} value={r}>
+                  {INTERVIEW_RESULT_LABEL[r]}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+      </FormSection>
 
-        <Field
-          label="Meeting link"
-          htmlFor="meetingLink"
-          error={errors.meetingLink}
-        >
-          <Input
-            id="meetingLink"
-            name="meetingLink"
-            type="url"
-            inputMode="url"
-            placeholder="https://…"
-            defaultValue={round?.meetingLink ?? ""}
-          />
-        </Field>
+      <FormSection n={2} title="Schedule & support">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <NullableField label="Interview mode" htmlFor="interviewMode" name="interviewMode" na={fields.interviewModeNa} onToggleNa={naToggle("interviewMode", "interviewModeNa")} error={errors.interviewMode}>
+            <Select id="interviewMode" name="interviewMode" value={fields.interviewMode} onChange={set("interviewMode")} disabled={fields.interviewModeNa}>
+              <option value="">Not specified</option>
+              {INTERVIEW_MODES.map((m) => (
+                <option key={m} value={m}>
+                  {INTERVIEW_MODE_LABEL[m]}
+                </option>
+              ))}
+            </Select>
+          </NullableField>
 
-        <div className="space-y-2 sm:col-span-2">
+          {isVideo && (
+            <NullableField label="Video platform" htmlFor="interviewPlatform" name="interviewPlatform" na={fields.interviewPlatformNa} onToggleNa={naToggle("interviewPlatform", "interviewPlatformNa")} error={errors.interviewPlatform}>
+              <Select id="interviewPlatform" name="interviewPlatform" value={fields.interviewPlatform} onChange={set("interviewPlatform")} disabled={fields.interviewPlatformNa}>
+                <option value="">Not specified</option>
+                {INTERVIEW_PLATFORMS.map((p) => (
+                  <option key={p} value={p}>
+                    {INTERVIEW_PLATFORM_LABEL[p]}
+                  </option>
+                ))}
+              </Select>
+            </NullableField>
+          )}
+
+          <NullableField label="Interviewer name" htmlFor="interviewerName" name="interviewerName" na={fields.interviewerNameNa} onToggleNa={naToggle("interviewerName", "interviewerNameNa")} error={errors.interviewerName}>
+            <Input id="interviewerName" name="interviewerName" value={fields.interviewerName} onChange={set("interviewerName")} disabled={fields.interviewerNameNa} />
+          </NullableField>
+
+          <NullableField label="Meeting link" htmlFor="meetingLink" name="meetingLink" na={fields.meetingLinkNa} onToggleNa={naToggle("meetingLink", "meetingLinkNa")} error={errors.meetingLink}>
+            <Input id="meetingLink" name="meetingLink" type="url" inputMode="url" placeholder="https://…" value={fields.meetingLink} onChange={set("meetingLink")} disabled={fields.meetingLinkNa} />
+          </NullableField>
+
+          <NullableField label="Interview date & time" htmlFor="scheduledAt" name="scheduledAt" na={fields.scheduledAtNa} onToggleNa={naToggle("scheduledAt", "scheduledAtNa")} error={errors.scheduledAt}>
+            <Input id="scheduledAt" name="scheduledAt" type="datetime-local" value={fields.scheduledAt} onChange={set("scheduledAt")} disabled={fields.scheduledAtNa} />
+          </NullableField>
+
+          <NullableField label="Time zone" htmlFor="scheduledTimezone" name="scheduledTimezone" na={fields.scheduledTimezoneNa} onToggleNa={naToggle("scheduledTimezone", "scheduledTimezoneNa")} error={errors.scheduledTimezone} hint="IANA name — e.g. America/New_York, Asia/Kolkata.">
+            <Input
+              id="scheduledTimezone"
+              name="scheduledTimezone"
+              placeholder={
+                typeof Intl !== "undefined"
+                  ? Intl.DateTimeFormat().resolvedOptions().timeZone
+                  : "America/New_York"
+              }
+              value={fields.scheduledTimezone}
+              onChange={set("scheduledTimezone")}
+              disabled={fields.scheduledTimezoneNa}
+            />
+          </NullableField>
+        </div>
+
+        <div className="space-y-2">
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input
               type="checkbox"
@@ -218,17 +238,8 @@ export function InterviewRoundForm({
           </label>
           {withSupport && (
             <div className="grid grid-cols-1 gap-3 rounded-md border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-2">
-              <Field
-                label="Support provider"
-                htmlFor="supportProviderId"
-                hint="Manage the list in Settings → Support."
-                error={errors.supportProviderId}
-              >
-                <Select
-                  id="supportProviderId"
-                  name="supportProviderId"
-                  defaultValue={round?.supportProviderId ?? ""}
-                >
+              <NullableField label="Support provider" htmlFor="supportProviderId" name="supportProviderId" na={fields.supportProviderIdNa} onToggleNa={naToggle("supportProviderId", "supportProviderIdNa")} error={errors.supportProviderId} hint="Manage the list in Settings → Support.">
+                <Select id="supportProviderId" name="supportProviderId" value={fields.supportProviderId} onChange={set("supportProviderId")} disabled={fields.supportProviderIdNa}>
                   <option value="">— Select —</option>
                   {supportProviders.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -237,73 +248,24 @@ export function InterviewRoundForm({
                     </option>
                   ))}
                 </Select>
-              </Field>
-              <Field
-                label="Support method"
-                htmlFor="supportMethod"
-                hint="How support was given (free text)."
-                error={errors.supportMethod}
-              >
-                <Input
-                  id="supportMethod"
-                  name="supportMethod"
-                  placeholder="e.g. live audio support"
-                  defaultValue={round?.supportMethod ?? ""}
-                />
-              </Field>
+              </NullableField>
+              <NullableField label="Support method" htmlFor="supportMethod" name="supportMethod" na={fields.supportMethodNa} onToggleNa={naToggle("supportMethod", "supportMethodNa")} error={errors.supportMethod} hint="How support was given (free text).">
+                <Input id="supportMethod" name="supportMethod" placeholder="e.g. live audio support" value={fields.supportMethod} onChange={set("supportMethod")} disabled={fields.supportMethodNa} />
+              </NullableField>
             </div>
           )}
         </div>
+      </FormSection>
 
-        <Field
-          label="Interview date & time"
-          htmlFor="scheduledAt"
-          error={errors.scheduledAt}
-        >
-          <Input
-            id="scheduledAt"
-            name="scheduledAt"
-            type="datetime-local"
-            defaultValue={toDateTimeLocal(round?.scheduledAt ?? null)}
-          />
+      <FormSection n={3} title="Feedback & notes">
+        <NullableField label="Feedback" htmlFor="feedback" name="feedback" na={fields.feedbackNa} onToggleNa={naToggle("feedback", "feedbackNa")} error={errors.feedback}>
+          <Textarea id="feedback" name="feedback" rows={3} value={fields.feedback} onChange={set("feedback")} disabled={fields.feedbackNa} />
+        </NullableField>
+
+        <Field label="Notes" htmlFor="notes" error={errors.notes} hint="Optional.">
+          <Textarea id="notes" name="notes" rows={2} value={fields.notes} onChange={set("notes")} />
         </Field>
-
-        <Field
-          label="Time zone"
-          htmlFor="scheduledTimezone"
-          hint="IANA name — e.g. America/New_York, Asia/Kolkata, Europe/London."
-          error={errors.scheduledTimezone}
-        >
-          <Input
-            id="scheduledTimezone"
-            name="scheduledTimezone"
-            placeholder={
-              typeof Intl !== "undefined"
-                ? Intl.DateTimeFormat().resolvedOptions().timeZone
-                : "America/New_York"
-            }
-            defaultValue={round?.scheduledTimezone ?? ""}
-          />
-        </Field>
-      </div>
-
-      <Field label="Feedback" htmlFor="feedback" error={errors.feedback}>
-        <Textarea
-          id="feedback"
-          name="feedback"
-          rows={3}
-          defaultValue={round?.feedback ?? ""}
-        />
-      </Field>
-
-      <Field label="Notes" htmlFor="notes" error={errors.notes}>
-        <Textarea
-          id="notes"
-          name="notes"
-          rows={2}
-          defaultValue={round?.notes ?? ""}
-        />
-      </Field>
+      </FormSection>
 
       {state.error && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
