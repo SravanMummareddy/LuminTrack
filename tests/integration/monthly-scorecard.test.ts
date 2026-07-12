@@ -179,12 +179,13 @@ describe.skipIf(!dbReachable)("getMonthlyScorecard — metric bucketing", () => 
     expect(a.weeks[1].newVendors).toBe(1);
   });
 
-  it("counts each recruiter's vendor first-use independently", async () => {
+  it("counts a vendor's company-first use once, not per recruiter", async () => {
     const sc = await getMonthlyScorecard(JUNE);
     const b = sc.rows.find((r) => r.recruiterId === ids.recB.id)!;
-    // B's first-ever use of V1 is Jun 5 → counts for B even though A used V1 earlier.
-    expect(b.total.newVendors).toBe(1);
-    expect(b.weeks[0].newVendors).toBe(1);
+    // New-vendor = new to the whole company (see the query's header comment).
+    // V1 was first used company-wide by recruiter A in May, so B's June use of
+    // V1 is NOT a new vendor for B — the credit already went to A's earlier use.
+    expect(b.total.newVendors).toBe(0);
     expect(b.total.submissions).toBe(1);
   });
 
