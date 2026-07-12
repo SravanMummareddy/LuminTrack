@@ -123,7 +123,10 @@ derived/read-only fields, any close-gate. Owner approves grouping + the required
    untouched**. Tightening scoped to the *create* schema only (edit stays lenient for legacy blank-term
    rows). Reachable only via the VPR convert path → terms auto-inherit the requirement's N/A state on
    prefill. See DEVLOG 2026-07-12.
-5. **Interview round** — `interview-round-form.tsx`; required-or-N/A.
+5. ✅ **Interview round** (PR-5) — `interview-round-form.tsx` + `validation/interview.ts`; required-or-N/A
+   (round name/type/result hard-required; notes optional). Converted uncontrolled `defaultValue` inputs
+   to controlled `NullableField`s; edit pre-marks existing blanks N/A. Conditional (video platform,
+   support pair) required-or-N/A only while shown. No migration. See DEVLOG 2026-07-12.
 6. **Placement** — `placement-edit-form.tsx`; required-or-TBD (edit form only).
 
 Each is one PR, mock-gated, following the recipe above.

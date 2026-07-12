@@ -10,6 +10,34 @@ short instead of long.
 
 ---
 
+## 2026-07-12 · Interview forms-discipline (PR-5) — uncontrolled `defaultValue` inputs can't do N/A
+
+**Situation.** Applying required-or-N/A to the interview-round dialog. The existing form used
+uncontrolled `defaultValue` inputs (React never owns the value — the DOM does).
+
+**Diagnosis.** The N/A pattern needs to *clear + disable* a field when its toggle flips.
+That's a state write to the input's value — impossible on an uncontrolled input, whose value
+lives only in the DOM. So "add N/A toggles" was really "convert the whole form to controlled
+state first." Second wrinkle: on **edit**, a legacy round often has blank optional fields
+(interviewer, timezone, feedback). Forcing the editor to re-touch every empty field just to
+save an unrelated change is friction the discipline shouldn't create.
+
+**Fix.** Moved the form to one controlled `fields` object (+ a `naToggle` that clears the
+paired value on N/A). Seed each `<field>Na` from `isEdit && !value` — on edit a blank field
+opens *pre-marked N/A* (a conscious gap, editable by un-toggling); on a new round nothing is
+pre-marked, so each field demands a value or an explicit N/A. Hard-required stays on the
+round's identity/outcome (name/type/result); notes stays optional (owner). Conditional fields
+(video platform when mode=VIDEO; support provider/method when support used) are required-or-N/A
+only while shown. No migration — pure validation + component.
+
+**Lesson.** "Add an N/A escape" is never additive on an uncontrolled form — the escape *is* a
+state write, so the real task is the controlled-state conversion; budget for that, not for a
+few toggles. And when tightening an **edit** form, inherit the record's existing blanks as
+explicit-N/A rather than re-demanding them — new-vs-edit want different defaults from the same
+rule.
+
+---
+
 ## 2026-07-12 · Submission forms-discipline (PR-4) — tighten the *create* schema only, and auto-N/A the convert prefill
 
 **Situation.** Rolling the forms-discipline pattern onto the submission form (5 cards +
