@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Plus } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -13,16 +14,13 @@ import {
   type StatusFilter,
 } from "@/components/settings/settings-list-filter";
 import { useLocalPagination } from "@/components/ui/local-pager";
-import {
-  ContactsDialog,
-  type ContactRow,
-} from "@/components/settings/contacts-dialog";
 import type { ContactKind } from "@/lib/contact-kinds";
-import { AuditCell, type AuditFields } from "@/components/settings/audit-cell";
+import { formatVendorDisplayId, formatSourceDisplayId } from "@/lib/format";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 
-export type ContactOrg = AuditFields & {
+export type ContactOrg = {
   id: string;
+  seq: number;
   name: string;
   contactPerson: string | null;
   email: string | null;
@@ -30,7 +28,7 @@ export type ContactOrg = AuditFields & {
   location: string | null;
   notes: string | null;
   isActive: boolean;
-  contacts: ContactRow[];
+  _count: { jobs: number };
   // Vendors only: the owning team member. `recruitedBy` is the linked user;
   // `recruitedByName` is the free-text fallback when nobody is linked.
   recruitedBy?: { fullName: string } | null;
@@ -55,6 +53,7 @@ export function ContactOrgSection({
   isAdmin,
   showRecruitedBy = false,
   userNames = [],
+  openEditId,
 }: {
   title: string;
   singular: string;
@@ -66,11 +65,19 @@ export function ContactOrgSection({
   showRecruitedBy?: boolean;
   /** Active user names that seed the "Recruited by" suggestion list. */
   userNames?: string[];
+  openEditId?: string;
 }) {
   const [editing, setEditing] = useState<ContactOrg | "new" | null>(null);
-  const [contactsOf, setContactsOf] = useState<ContactOrg | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
+  const fmtId = contactKind === "vendor" ? formatVendorDisplayId : formatSourceDisplayId;
+
+  useEffect(() => {
+    if (openEditId) {
+      const row = items.find((i) => i.id === openEditId);
+      if (row) setEditing(row);
+    }
+  }, [openEditId, items]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -122,22 +129,29 @@ export function ContactOrgSection({
           <thead className="border-b border-slate-200 bg-slate-50">
             <tr>
               <Th>Name</Th>
+              <Th>ID</Th>
               <Th>Contact</Th>
               {showRecruitedBy && <Th>Recruited by</Th>}
               <Th>Email</Th>
               <Th>Phone</Th>
-              <Th>Location</Th>
               <Th>Status</Th>
-              <Th>Contacts</Th>
-              <Th>Added / Updated</Th>
+              <Th>Jobs</Th>
               <Th />
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {pageItems.map((item) => (
               <tr key={item.id}>
-                <Td label="Name" className="font-medium text-slate-900">
-                  {item.name}
+                <Td label="Name">
+                  <Link
+                    href={`/settings/${contactKind}/${item.id}`}
+                    className="font-medium text-indigo-600 hover:underline"
+                  >
+                    {item.name}
+                  </Link>
+                </Td>
+                <Td label="ID" className="font-mono text-xs text-slate-500">
+                  {fmtId(item)}
                 </Td>
                 <Td label="Contact">{item.contactPerson || "—"}</Td>
                 {showRecruitedBy && (
@@ -145,23 +159,13 @@ export function ContactOrgSection({
                 )}
                 <Td label="Email">{item.email || "—"}</Td>
                 <Td label="Phone">{item.phone || "—"}</Td>
-                <Td label="Location">{item.location || "—"}</Td>
                 <Td label="Status">
                   <Badge tone={item.isActive ? "green" : "slate"}>
                     {item.isActive ? "Active" : "Inactive"}
                   </Badge>
                 </Td>
-                <Td label="Contacts">
-                  <button
-                    type="button"
-                    onClick={() => setContactsOf(item)}
-                    className="text-sm font-medium text-indigo-600 hover:underline"
-                  >
-                    Manage ({item.contacts.length})
-                  </button>
-                </Td>
-                <Td label="Added / Updated">
-                  <AuditCell {...item} />
+                <Td label="Jobs" className="tabular-nums text-slate-600">
+                  {item._count.jobs}
                 </Td>
                 <Td className="text-right">
                   {isAdmin ? (
@@ -197,16 +201,6 @@ export function ContactOrgSection({
           />
         )}
       </Dialog>
-
-      <ContactsDialog
-        open={contactsOf !== null}
-        onClose={() => setContactsOf(null)}
-        kind={contactKind}
-        parentId={contactsOf?.id ?? ""}
-        parentName={contactsOf?.name ?? ""}
-        contacts={contactsOf?.contacts ?? []}
-        readOnly={!isAdmin}
-      />
     </section>
   );
 }

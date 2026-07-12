@@ -71,6 +71,9 @@ export default async function SettingsPage({
   const isSuperAdmin = canManageOrganizations(user);
 
   const rawTab = Array.isArray(sp.tab) ? sp.tab[0] : sp.tab;
+  // `?edit=<id>` (from an org-entity detail page's Edit button) opens that row's
+  // dialog on load.
+  const editId = Array.isArray(sp.edit) ? sp.edit[0] : sp.edit;
   // Only managers get the management tabs. Everyone else is limited to their own
   // account (reached via the user-menu "Change password" link) — a `?tab=users`
   // URL from a restricted user still lands on account.
@@ -90,11 +93,12 @@ export default async function SettingsPage({
         action={saveSisterCompany}
         contactKind="source"
         isAdmin={isAdmin}
+        openEditId={editId}
       />
     );
   } else if (tab === "clients") {
     content = (
-      <ClientSection items={await listClients()} isAdmin={isAdmin} />
+      <ClientSection items={await listClients()} isAdmin={isAdmin} openEditId={editId} />
     );
   } else if (tab === "vendors") {
     const [vendors, userOptions] = await Promise.all([
@@ -111,11 +115,12 @@ export default async function SettingsPage({
         isAdmin={isAdmin}
         showRecruitedBy
         userNames={userOptions.map((u) => u.fullName)}
+        openEditId={editId}
       />
     );
   } else if (tab === "referrers") {
     content = (
-      <ReferrerSection items={await listReferrersAdmin()} isAdmin={isAdmin} />
+      <ReferrerSection items={await listReferrersAdmin()} isAdmin={isAdmin} openEditId={editId} />
     );
   } else if (tab === "support") {
     content = (

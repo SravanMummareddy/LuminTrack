@@ -4,6 +4,7 @@ import { useActionState, useState, useTransition } from "react";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { LocationInput } from "@/components/ui/location-input";
 import { SearchSelect } from "@/components/ui/search-select";
+import { SuggestInput } from "@/components/ui/suggest-input";
 import { Button } from "@/components/ui/button";
 import { NullableField } from "@/components/ui/nullable-field";
 import {
@@ -36,7 +37,6 @@ const SOURCE_TYPES = [
   { value: "JOB_BOARD", label: "Job board" },
   { value: "REFERRAL", label: "Referral" },
   { value: "SISTER_COMPANY", label: "Sister company" },
-  { value: "DIRECT", label: "Direct" },
   { value: "OTHER", label: "Other" },
 ] as const;
 
@@ -279,11 +279,15 @@ export function JobForm({
 
         {sourceType === "JOB_BOARD" && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Job board" htmlFor="jobBoard" required error={errors.jobBoard} hint="Seeded with popular boards; new ones are remembered.">
-              <Input id="jobBoard" name="jobBoard" list="job-boards" defaultValue={values?.jobBoard ?? ""} placeholder="LinkedIn, Indeed, Dice…" />
-              <datalist id="job-boards">
-                {jobBoards.map((b) => <option key={b} value={b} />)}
-              </datalist>
+            <Field label="Job board" htmlFor="jobBoard" required error={errors.jobBoard} hint="Seeded with popular boards; type your own if it's not listed.">
+              <SuggestInput
+                id="jobBoard"
+                name="jobBoard"
+                defaultValue={values?.jobBoard ?? ""}
+                suggestions={jobBoards}
+                maxResults={jobBoards.length}
+                placeholder="LinkedIn, Indeed, Dice…"
+              />
             </Field>
             <Field label="Posting URL" htmlFor="postingUrl" required error={errors.postingUrl}>
               <Input id="postingUrl" name="postingUrl" type="url" defaultValue={values?.postingUrl ?? ""} placeholder="https://…" />
@@ -317,9 +321,6 @@ export function JobForm({
           <Field label="Where from" htmlFor="sourceOther" required error={errors.sourceOther}>
             <Input id="sourceOther" name="sourceOther" defaultValue={values?.sourceOther ?? ""} placeholder="Describe the source" />
           </Field>
-        )}
-        {sourceType === "DIRECT" && (
-          <p className="text-sm text-slate-500">Direct — no extra detail needed.</p>
         )}
 
         {/* ── 3. Requirement details ──────────────────────────────── */}

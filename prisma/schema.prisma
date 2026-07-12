@@ -430,6 +430,7 @@ model SisterCompanySource {
   id             String       @id @default(cuid())
   organizationId String       @default("")
   organization   Organization @relation(fields: [organizationId], references: [id])
+  seq            Int          @unique @default(autoincrement())
   name           String
   contactPerson  String?
   email          String?
@@ -455,6 +456,7 @@ model Client {
   id             String       @id @default(cuid())
   organizationId String       @default("")
   organization   Organization @relation(fields: [organizationId], references: [id])
+  seq            Int          @unique @default(autoincrement())
   name           String
   contactPerson  String?
   email          String?
@@ -480,6 +482,7 @@ model Vendor {
   id              String       @id @default(cuid())
   organizationId  String       @default("")
   organization    Organization @relation(fields: [organizationId], references: [id])
+  seq             Int          @unique @default(autoincrement())
   name            String
   contactPerson   String?
   email           String?
@@ -546,6 +549,7 @@ model Referrer {
   id             String       @id @default(cuid())
   organizationId String       @default("")
   organization   Organization @relation(fields: [organizationId], references: [id])
+  seq            Int          @unique @default(autoincrement())
   name           String
   email          String?
   phone          String?
@@ -599,7 +603,7 @@ model Job {
   // field applies: JOB_BOARD → `jobBoard` name + `postingUrl`; REFERRAL →
   // `referrerId`; SISTER_COMPANY → `sisterCompanySourceId`; OTHER → `sourceOther`;
   // DIRECT → none. `jobSourceLabel()` resolves the display name.
-  sourceType            JobSourceType        @default(DIRECT)
+  sourceType            JobSourceType        @default(OTHER)
   jobBoard              String?
   referrerId            String?
   referrer              Referrer?            @relation(fields: [referrerId], references: [id])

@@ -26,7 +26,6 @@ export const JOB_SOURCE_TYPE_VALUES = [
   "JOB_BOARD",
   "REFERRAL",
   "SISTER_COMPANY",
-  "DIRECT",
   "OTHER",
 ] as const;
 

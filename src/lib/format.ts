@@ -114,6 +114,20 @@ export function formatVendorRequirementDisplayId(r: { seq: number }): string {
   return `VPR-${String(r.seq).padStart(3, "0")}`;
 }
 
+// Org-entity display IDs (Settings records with their own detail pages).
+export function formatClientDisplayId(c: { seq: number }): string {
+  return `CLI-${String(c.seq).padStart(3, "0")}`;
+}
+export function formatVendorDisplayId(v: { seq: number }): string {
+  return `VEN-${String(v.seq).padStart(3, "0")}`;
+}
+export function formatSourceDisplayId(s: { seq: number }): string {
+  return `SRC-${String(s.seq).padStart(3, "0")}`;
+}
+export function formatReferrerDisplayId(r: { seq: number }): string {
+  return `REF-${String(r.seq).padStart(3, "0")}`;
+}
+
 /** Formats a years-of-experience value (Prisma Decimal or number). */
 export function formatExperience(
   value: { toString(): string } | number | null | undefined,
