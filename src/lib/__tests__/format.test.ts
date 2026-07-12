@@ -4,6 +4,7 @@ import {
   formatDate,
   jobDuration,
   daysToFirstSubmission,
+  avgDaysToFirstSubmission,
   timeToFirstSubmissionLabel,
   formatClientDisplayId,
   formatVendorDisplayId,
@@ -97,3 +98,29 @@ describe("daysToFirstSubmission (D3/V-5)", () => {
     expect(timeToFirstSubmissionLabel("2026-07-08", null)).toBe("—");
   });
 });
+
+describe("avgDaysToFirstSubmission (V-5 rollup)", () => {
+  it("groups by job → earliest submission per job → averages", () => {
+    const subs = [
+      // job A: received Jul 1; earliest sub Jul 4 = 3 days (a later sub is ignored)
+      { jobId: "A", receivedAt: "2026-07-01", submittedAt: "2026-07-04" },
+      { jobId: "A", receivedAt: "2026-07-01", submittedAt: "2026-07-09" },
+      // job B: received Jul 1; earliest sub Jul 6 = 5 days
+      { jobId: "B", receivedAt: "2026-07-01", submittedAt: "2026-07-06" },
+    ];
+    expect(avgDaysToFirstSubmission(subs)).toBe(4); // (3 + 5) / 2
+  });
+
+  it("is null with no rows", () => {
+    expect(avgDaysToFirstSubmission([])).toBeNull();
+  });
+
+  it("rounds to one decimal", () => {
+    const subs = [
+      { jobId: "A", receivedAt: "2026-07-01", submittedAt: "2026-07-02" }, // 1
+      { jobId: "B", receivedAt: "2026-07-01", submittedAt: "2026-07-03" }, // 2
+      { jobId: "C", receivedAt: "2026-07-01", submittedAt: "2026-07-03" }, // 2
+    ];
+    expect(avgDaysToFirstSubmission(subs)).toBe(1.7); // 5/3 = 1.666…
+  });
+})

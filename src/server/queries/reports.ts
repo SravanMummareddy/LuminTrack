@@ -1,5 +1,6 @@
 import { getScopedPrisma } from "@/lib/session";
 import type { Prisma } from "@/generated/prisma/client";
+import { avgDaysToFirstSubmission } from "@/lib/format";
 import {
   buildSubmissionWhere,
   daysSince,
@@ -45,6 +46,11 @@ export async function getReportsData(
       select: {
         status: true,
         submittedById: true,
+        // V-5: jobId + submittedAt + the job's received date drive avg
+        // time-to-submit (grouped to the earliest submission per job).
+        jobId: true,
+        submittedAt: true,
+        job: { select: { receivedAt: true } },
         _count: { select: { interviewRounds: true } },
       },
     }),
@@ -54,6 +60,13 @@ export async function getReportsData(
       orderBy: { fullName: "asc" },
     }),
   ]);
+
+  // V-5: flatten each submission to the shape avgDaysToFirstSubmission wants.
+  const ttsRows = submissions.map((s) => ({
+    jobId: s.jobId,
+    receivedAt: s.job.receivedAt,
+    submittedAt: s.submittedAt,
+  }));
 
   // Recruiter breakdown.
   const byRecruiter = recruiters
@@ -65,6 +78,15 @@ export async function getReportsData(
         interviews: own.reduce((sum, s) => sum + s._count.interviewRounds, 0),
         selected: own.filter((s) => s.status === "SELECTED").length,
         joined: own.filter((s) => s.status === "JOINED").length,
+        // Their avg = each job they touched, credited with their earliest
+        // submission on it (every-submitter attribution).
+        avgTimeToSubmit: avgDaysToFirstSubmission(
+          own.map((s) => ({
+            jobId: s.jobId,
+            receivedAt: s.job.receivedAt,
+            submittedAt: s.submittedAt,
+          })),
+        ),
       };
     })
     .filter((r) => r.submissions > 0)
@@ -81,6 +103,8 @@ export async function getReportsData(
         s.status === "OFFER_RELEASED" ||
         s.status === "JOINED"),
   ).length;
+  // V-5: overall avg time-to-submit + how many jobs it spans (for the caption).
+  const jobsWithSubmission = new Set(submissions.map((s) => s.jobId)).size;
   const conversions = {
     totalSubmissions: submissions.length,
     interviewed,
@@ -91,6 +115,8 @@ export async function getReportsData(
     interviewToSelection: interviewed
       ? selectedAfterInterview / interviewed
       : 0,
+    avgTimeToSubmit: avgDaysToFirstSubmission(ttsRows),
+    jobsWithSubmission,
   };
 
   // §F3 — recruiter aging: submissions older than 14 days that haven't moved
