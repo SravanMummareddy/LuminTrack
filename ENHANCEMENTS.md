@@ -398,6 +398,27 @@ per-column `min-w`/`w` presets → stable, balanced widths without any resize in
 
 ---
 
+## Org switching & cross-org onboarding (deferred from Phase C, 2026-07-11)
+
+Phase C shipped the tenancy *foundation* — the `organizationId` boundary, central `scopedPrisma`
+enforcement, and a super-admin **Organizations** admin tab (list/create orgs). Deliberately **out of
+scope** and parked here until a second company actually onboards:
+
+- **Org switcher UI** — a way for a platform super-admin to *act within* a chosen org (today every
+  authed request resolves the acting user's own `organizationId` in `getCurrentUser`; there's no
+  "view as org X" affordance). Needs a session-level selected-org, guarded so only `isPlatformAdmin`
+  can switch, and an unmistakable "you are viewing <Org>" banner.
+- **Cross-org user onboarding** — assigning/moving users between orgs, inviting a user into a new org,
+  and the login/identity story when `User.email`/`empId` are still **globally** unique (a documented
+  Phase-C deferral — composite-email + org-aware login is the real-multi-org piece).
+- **Per-tenant polish** — per-org branding/name in the chrome, and (if ever requested) contiguous
+  per-org display-ID numbering (today IDs stay globally sequenced by owner decision).
+
+Foundation is additive, so all of the above is later UI/session work — not a schema rewrite. Revisit
+when onboarding org #2 is real.
+
+---
+
 ## Deferred indefinitely (not in any milestone)
 
 These were explicitly declined on 2026-05-26:

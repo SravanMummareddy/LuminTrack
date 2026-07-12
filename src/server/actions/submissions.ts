@@ -21,6 +21,7 @@ import {
   JOB_STATUS_LABEL,
 } from "@/lib/labels";
 import { rateChainWarnings } from "@/lib/rates";
+import { formatDate } from "@/lib/format";
 import type { FormState } from "@/lib/form-state";
 import {
   ensurePlacementOnJoined,
@@ -30,8 +31,13 @@ import { createSubmissionRecord } from "@/server/submission-create";
 import {
   collectSubmissionGates,
   gatesFromCreateResult,
+  workAuthExpiredOn,
 } from "@/server/submission-gates";
-import { branchActions } from "@/lib/submission-flow";
+import {
+  branchActions,
+  resumeFlag,
+  isForwardAdvance,
+} from "@/lib/submission-flow";
 
 function readSubmission(formData: FormData) {
   return submissionSchema.safeParse({
@@ -83,6 +89,15 @@ export async function createSubmission(
         isActive: true,
         deletedAt: true,
         benchConsultant: { select: { marketingStatus: true } },
+        documents: {
+          where: { category: "WORK_AUTH" },
+          select: { expiresAt: true },
+        },
+        resumes: {
+          where: { isActive: true, kind: "ORIGINAL" },
+          select: { id: true },
+          take: 1,
+        },
       },
     }),
   ]);
@@ -148,6 +163,12 @@ export async function createSubmission(
   const candidateStatusOverrideReason = String(
     formData.get("candidateStatusOverrideReason") ?? "",
   ).trim();
+  const workAuthOverrideReason = String(
+    formData.get("workAuthOverrideReason") ?? "",
+  ).trim();
+  const originalResumeOverrideReason = String(
+    formData.get("originalResumeOverrideReason") ?? "",
+  ).trim();
   const benchOverrideReason = String(
     formData.get("benchOverrideReason") ?? "",
   ).trim();
@@ -161,6 +182,8 @@ export async function createSubmission(
   const candidateBlocked =
     candidate.status === "NOT_INTERESTED" ||
     candidate.status === "DO_NOT_CONTACT";
+  const workAuthExpiry = workAuthExpiredOn(candidate.documents, new Date());
+  const missingOriginalResume = candidate.resumes.length === 0;
   const bench = candidate.benchConsultant;
   const notMarketed = !bench || bench.marketingStatus === "INACTIVE";
 
@@ -195,12 +218,16 @@ export async function createSubmission(
     candidateStatusLabel: candidateBlocked
       ? CANDIDATE_STATUS_LABEL[candidate.status]
       : null,
+    workAuthExpiredOn: workAuthExpiry ? formatDate(workAuthExpiry) : null,
+    missingOriginalResume,
     notMarketed,
     convertWarnings: [],
     duplicateExistingId: existingDup?.id ?? null,
     reasons: {
       rate: rateOverrideReason,
       candidateStatus: candidateStatusOverrideReason,
+      workAuth: workAuthOverrideReason,
+      originalResume: originalResumeOverrideReason,
       bench: benchOverrideReason,
       convert: "",
       duplicate: duplicateReason,
@@ -231,6 +258,8 @@ export async function createSubmission(
       duplicateReason,
       rateOverrideReason,
       candidateStatusOverrideReason,
+      workAuthOverrideReason,
+      originalResumeOverrideReason,
       benchOverrideReason,
       job,
       candidateFullName: candidate.fullName,
@@ -470,6 +499,17 @@ export async function changeSubmissionStatus(
     return { error: "Status is already set to that value." };
   const next = d.status as SubmissionStatus;
   const prev = submission.status;
+
+  // SB-3: a résumé — or an explicit "not required" waiver — is required to
+  // advance a submission to a later pipeline stage. Branch outcomes (Hold /
+  // Reject / Backed out) and backward corrections are exempt; only a genuine
+  // forward move gates. The waiver on the detail page is the intentional escape
+  // hatch for legitimately résumé-less submissions.
+  if (isForwardAdvance(prev, next) && resumeFlag(submission) === "missing")
+    return {
+      error:
+        'This submission has no résumé. Attach one — or mark it "not required" — before advancing it.',
+    };
 
   // The reason category only applies to the Rejected / On Hold outcomes.
   const reason =

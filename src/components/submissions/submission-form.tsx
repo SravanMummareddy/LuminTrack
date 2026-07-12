@@ -80,6 +80,8 @@ type Fields = {
   rateReason: string;
   convertReason: string;
   candidateStatusReason: string;
+  workAuthReason: string;
+  originalResumeReason: string;
   benchReason: string;
   duplicatePreset: string;
   duplicateNote: string;
@@ -152,6 +154,8 @@ export function SubmissionForm({
     rateReason: "",
     convertReason: "",
     candidateStatusReason: "",
+    workAuthReason: "",
+    originalResumeReason: "",
     benchReason: "",
     duplicatePreset: "",
     duplicateNote: "",
@@ -268,6 +272,8 @@ export function SubmissionForm({
       rateReason: "",
       convertReason: "",
       candidateStatusReason: "",
+      workAuthReason: "",
+      originalResumeReason: "",
       benchReason: "",
       duplicatePreset: "",
       duplicateNote: "",
@@ -478,6 +484,24 @@ export function SubmissionForm({
           type="hidden"
           name="candidateStatusOverrideReason"
           value={fields.candidateStatusReason}
+        />
+      )}
+      {/* Expired work-authorization override reason, latched so it survives a
+          follow-up gate. */}
+      {fields.workAuthReason.trim() !== "" && (
+        <input
+          type="hidden"
+          name="workAuthOverrideReason"
+          value={fields.workAuthReason}
+        />
+      )}
+      {/* No-original-résumé override reason (C-1), latched so it survives a
+          follow-up gate. */}
+      {fields.originalResumeReason.trim() !== "" && (
+        <input
+          type="hidden"
+          name="originalResumeOverrideReason"
+          value={fields.originalResumeReason}
         />
       )}
       {/* Off-bench override reason, latched so it survives a follow-up gate. */}
@@ -838,6 +862,55 @@ export function SubmissionForm({
                   required
                   value={fields.candidateStatusReason}
                   onChange={set("candidateStatusReason")}
+                />
+              </Field>
+            </div>
+          )}
+
+          {gate("work_auth") && (
+            <div className="border-t border-amber-200 pt-3">
+              <p className="text-sm font-medium text-amber-800">
+                {gate("work_auth")!.message ??
+                  "Candidate's work authorization has expired."}
+              </p>
+              <Field
+                label="Reason for submitting anyway"
+                htmlFor="workAuthReason"
+                required
+                hint="Captured on the audit trail."
+              >
+                <Textarea
+                  id="workAuthReason"
+                  rows={2}
+                  required
+                  value={fields.workAuthReason}
+                  onChange={set("workAuthReason")}
+                />
+              </Field>
+            </div>
+          )}
+
+          {gate("no_original_resume") && (
+            <div className="border-t border-amber-200 pt-3">
+              <p className="text-sm font-medium text-amber-800">
+                Candidate has no original résumé.
+              </p>
+              <p className="mt-0.5 text-xs text-amber-700">
+                An authentic (non-marketing) résumé should be on file before
+                submitting.
+              </p>
+              <Field
+                label="Reason for submitting anyway"
+                htmlFor="originalResumeReason"
+                required
+                hint="Captured on the audit trail."
+              >
+                <Textarea
+                  id="originalResumeReason"
+                  rows={2}
+                  required
+                  value={fields.originalResumeReason}
+                  onChange={set("originalResumeReason")}
                 />
               </Field>
             </div>

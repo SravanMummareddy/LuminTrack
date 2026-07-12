@@ -52,6 +52,14 @@ enum DocumentCategory {
   OTHER
 }
 
+// C-1 — a résumé is either the candidate's authentic/ORIGINAL résumé or a
+// reformatted MARKETING version. A candidate should have an ORIGINAL on file
+// before being submitted (soft-gated). Existing rows backfill to ORIGINAL.
+enum ResumeKind {
+  ORIGINAL
+  MARKETING
+}
+
 // R4.2 — Placement lifecycle. ACTIVE = currently on assignment; EXTENDED =
 // at least one PlacementExtension exists and the parent endDate was bumped;
 // ENDED = completed normally; TERMINATED = ended early (incl. JOINED-status
@@ -674,6 +682,10 @@ model CandidateResume {
   candidateId    String
   candidate      Candidate    @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   label          String
+  // C-1 — authentic résumé vs a reformatted marketing version. Defaults to
+  // ORIGINAL so existing rows + new uploads are treated as authentic unless the
+  // recruiter marks them Marketing.
+  kind           ResumeKind   @default(ORIGINAL)
   // Private Vercel Blob upload. `blobPathname` is the key we pass to
   // get(pathname, { access: 'private' }) to stream the file through our own
   // authenticated route (private blobs are never fetched directly by the browser).

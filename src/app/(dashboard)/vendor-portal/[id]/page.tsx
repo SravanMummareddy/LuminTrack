@@ -264,8 +264,12 @@ export default async function RequirementDetailPage({
           <SummaryItem label="Vendor recruiter">
             {requirement.vendorRecruiterName ?? "—"}
           </SummaryItem>
-          <SummaryItem label="Created by">
+          <SummaryItem label="Created">
             {requirement.createdBy?.fullName ?? "—"}
+            {requirement.createdAt ? ` · ${formatDate(requirement.createdAt)}` : ""}
+          </SummaryItem>
+          <SummaryItem label="Last updated">
+            {formatDate(requirement.updatedAt)}
           </SummaryItem>
         </dl>
       </Card>

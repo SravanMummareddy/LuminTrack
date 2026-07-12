@@ -13,7 +13,9 @@ import {
 import {
   collectSubmissionGates,
   gatesFromCreateResult,
+  workAuthExpiredOn,
 } from "@/server/submission-gates";
+import { formatDate } from "@/lib/format";
 import {
   requirementSchema,
   requirementEditSchema,
@@ -335,6 +337,12 @@ export async function convertRequirementToSubmission(
   const candidateStatusOverrideReason = String(
     formData.get("candidateStatusOverrideReason") ?? "",
   ).trim();
+  const workAuthOverrideReason = String(
+    formData.get("workAuthOverrideReason") ?? "",
+  ).trim();
+  const originalResumeOverrideReason = String(
+    formData.get("originalResumeOverrideReason") ?? "",
+  ).trim();
   const benchOverrideReason = String(
     formData.get("benchOverrideReason") ?? "",
   ).trim();
@@ -364,6 +372,15 @@ export async function convertRequirementToSubmission(
         status: true,
         isActive: true,
         benchConsultant: { select: { marketingStatus: true } },
+        documents: {
+          where: { category: "WORK_AUTH" },
+          select: { expiresAt: true },
+        },
+        resumes: {
+          where: { isActive: true, kind: "ORIGINAL" },
+          select: { id: true },
+          take: 1,
+        },
         placements: {
           where: { status: { in: ["ACTIVE", "EXTENDED"] } },
           select: { id: true },
@@ -424,6 +441,8 @@ export async function convertRequirementToSubmission(
   const candidateBlocked =
     candidate.status === "NOT_INTERESTED" ||
     candidate.status === "DO_NOT_CONTACT";
+  const workAuthExpiry = workAuthExpiredOn(candidate.documents, new Date());
+  const missingOriginalResume = candidate.resumes.length === 0;
   const bench = candidate.benchConsultant;
   const notMarketed = !bench || bench.marketingStatus === "INACTIVE";
 
@@ -453,12 +472,16 @@ export async function convertRequirementToSubmission(
     candidateStatusLabel: candidateBlocked
       ? CANDIDATE_STATUS_LABEL[candidate.status]
       : null,
+    workAuthExpiredOn: workAuthExpiry ? formatDate(workAuthExpiry) : null,
+    missingOriginalResume,
     notMarketed,
     convertWarnings,
     duplicateExistingId: existingDup?.id ?? null,
     reasons: {
       rate: "",
       candidateStatus: candidateStatusOverrideReason,
+      workAuth: workAuthOverrideReason,
+      originalResume: originalResumeOverrideReason,
       bench: benchOverrideReason,
       convert: convertOverrideReason,
       duplicate: duplicateReason,
@@ -488,6 +511,8 @@ export async function convertRequirementToSubmission(
         pickedResume,
         duplicateReason,
         candidateStatusOverrideReason,
+        workAuthOverrideReason,
+        originalResumeOverrideReason,
         benchOverrideReason,
         job,
         candidateFullName: candidate.fullName,

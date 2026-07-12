@@ -11,23 +11,33 @@ import type { SortDir } from "@/lib/filters";
  * support ordering — clicking it sets `?sort=&dir=` in the URL (and clears
  * `?page=` so re-sorting returns to page 1). Plain `<Th>` stays for columns
  * that can't be sorted (array / many-relation columns).
+ *
+ * The URL param names are overridable (`sortParam`/`dirParam`/`resetParam`) so a
+ * secondary/sub-table on a page that already owns `?sort` can keep its own
+ * namespace (e.g. `rsort`/`rdir`, resetting its own `rsubs` page).
  */
 export function SortableHeader({
   column,
   label,
   align = "left",
   defaultDir = "asc",
+  sortParam = "sort",
+  dirParam = "dir",
+  resetParam = "page",
 }: {
   column: string;
   label: string;
   align?: "left" | "right";
   defaultDir?: SortDir;
+  sortParam?: string;
+  dirParam?: string;
+  resetParam?: string;
 }) {
   const pathname = usePathname();
   const params = useSearchParams();
 
-  const isActive = params.get("sort") === column;
-  const currentDir: SortDir = params.get("dir") === "desc" ? "desc" : "asc";
+  const isActive = params.get(sortParam) === column;
+  const currentDir: SortDir = params.get(dirParam) === "desc" ? "desc" : "asc";
   // Clicking the active column flips direction; an inactive column starts at
   // its natural direction (`defaultDir`).
   const nextDir: SortDir = isActive
@@ -37,9 +47,9 @@ export function SortableHeader({
     : defaultDir;
 
   const next = new URLSearchParams(params.toString());
-  next.set("sort", column);
-  next.set("dir", nextDir);
-  next.delete("page");
+  next.set(sortParam, column);
+  next.set(dirParam, nextDir);
+  next.delete(resetParam);
   const href = `${pathname}?${next.toString()}`;
 
   const Icon = !isActive

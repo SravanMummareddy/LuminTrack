@@ -37,13 +37,14 @@ export async function uploadCandidateResume(
   const parsed = resumeUploadMetaSchema.safeParse({
     candidateId: formData.get("candidateId") ?? "",
     label: formData.get("label") ?? "",
+    kind: formData.get("kind") ?? undefined,
   });
   if (!parsed.success)
     return {
       error: "Please fix the highlighted fields.",
       fieldErrors: toFieldErrors(parsed.error),
     };
-  const { candidateId, label } = parsed.data;
+  const { candidateId, label, kind } = parsed.data;
 
   const file = formData.get("file");
   if (!(file instanceof File))
@@ -73,6 +74,7 @@ export async function uploadCandidateResume(
       data: {
         candidateId,
         label,
+        kind,
         blobPathname: blob.pathname,
         blobUrl: blob.url,
         sizeBytes: blob.size,
@@ -107,30 +109,34 @@ export async function updateCandidateResume(
 
   const parsed = resumeLabelSchema.safeParse({
     label: formData.get("label") ?? "",
+    kind: formData.get("kind") ?? undefined,
   });
   if (!parsed.success)
     return {
       error: "Please fix the highlighted fields.",
       fieldErrors: toFieldErrors(parsed.error),
     };
-  const { label } = parsed.data;
+  const { label, kind } = parsed.data;
 
   const existing = await db.candidateResume.findUnique({
     where: { id: resumeId },
-    select: { id: true, label: true, candidateId: true },
+    select: { id: true, label: true, kind: true, candidateId: true },
   });
   if (!existing) return { error: "This résumé no longer exists." };
 
-  if (existing.label !== label) {
+  if (existing.label !== label || existing.kind !== kind) {
+    const kindChanged = existing.kind !== kind;
     await db.$transaction(async (tx) => {
       await tx.candidateResume.update({
         where: { id: resumeId },
-        data: { label },
+        data: { label, kind },
       });
       await logActivity(tx, {
         entityType: "CANDIDATE",
         action: "RESUME_UPDATED",
-        description: `Resume "${existing.label}" → "${label}"`,
+        description: kindChanged
+          ? `Resume "${label}" marked ${kind === "ORIGINAL" ? "Original" : "Marketing"}`
+          : `Resume "${existing.label}" → "${label}"`,
         performedById: user.id,
         candidateId: existing.candidateId,
       });

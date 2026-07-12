@@ -1,3 +1,4 @@
+import { gunzipSync } from "node:zlib";
 import { get } from "@vercel/blob";
 import { getCurrentUser, getScopedPrisma } from "@/lib/session";
 
@@ -56,12 +57,18 @@ export async function GET(
   const download = new URL(request.url).searchParams.get("download") === "1";
   const filename = downloadName(resume.label, contentType, resume.blobPathname);
 
-  return new Response(result.stream, {
+  // Blobs are stored gzip-compressed (see uploadPrivateFile). Inflate here and
+  // serve the plain bytes rather than passing them through with a manual
+  // `Content-Encoding: gzip` — that header is fragile once the dev server /
+  // platform also touches compression (the browser can get
+  // ERR_CONTENT_DECODING_FAILED, which renders as a blank/black preview iframe).
+  // Files are size-capped, so buffering + a synchronous inflate is cheap.
+  const body = await inflateBody(result.stream);
+
+  return new Response(body, {
     headers: {
       "Content-Type": contentType,
-      // Blobs are stored gzip-compressed (see uploadPrivateFile); the browser
-      // inflates transparently.
-      "Content-Encoding": "gzip",
+      "Content-Length": String(body.byteLength),
       // RFC 5987 `filename*` carries the (percent-encoded) name; the quoted
       // `filename` stays as an ASCII fallback. Encoding the value keeps the
       // header injection-safe regardless of what the label sanitizer lets
@@ -72,4 +79,21 @@ export async function GET(
       "X-Content-Type-Options": "nosniff",
     },
   });
+}
+
+/** Read a stored blob stream and gunzip it. Falls back to the raw bytes for any
+ *  (legacy) blob that wasn't stored gzipped, so serving never corrupts a file.
+ *  Returns a fresh Uint8Array (a valid Response body — a Node Buffer is not,
+ *  by its type). */
+async function inflateBody(stream: ReadableStream | unknown): Promise<ArrayBuffer> {
+  const stored = Buffer.from(
+    await new Response(stream as BodyInit).arrayBuffer(),
+  );
+  const isGzip = stored[0] === 0x1f && stored[1] === 0x8b;
+  const out = isGzip ? gunzipSync(stored) : stored;
+  // Copy into a standalone ArrayBuffer — a concrete Response body, dodging the
+  // Uint8Array<ArrayBufferLike> vs <ArrayBuffer> generic mismatch.
+  const ab = new ArrayBuffer(out.byteLength);
+  new Uint8Array(ab).set(out);
+  return ab;
 }

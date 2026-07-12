@@ -99,6 +99,21 @@ export function branchActions(status: SubmissionStatus): SubmissionStatus[] {
   return out;
 }
 
+/**
+ * SB-3: whether a status change is a forward move to a later pipeline stage — so
+ * it requires a résumé (or an explicit waiver). Branch outcomes (Hold / Reject /
+ * Backed out) and backward corrections are NOT advances and never gate. Pure so
+ * the résumé-to-advance rule can be unit-tested apart from the action.
+ */
+export function isForwardAdvance(
+  prev: SubmissionStatus,
+  next: SubmissionStatus,
+): boolean {
+  if (next === "ON_HOLD" || next === "REJECTED" || next === "BACKED_OUT")
+    return false;
+  return SUBMISSION_STAGE_INDEX[next] > SUBMISSION_STAGE_INDEX[prev];
+}
+
 /** Whether a submission's résumé is attached, missing, or intentionally waived.
  *  "missing" is the actionable to-do state (flagged + on the worklist); "waived"
  *  is missing-but-intentional and drops it off the worklist. Pure/derived — no

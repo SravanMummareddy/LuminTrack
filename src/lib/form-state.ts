@@ -35,6 +35,12 @@ export type PendingGateKind =
   | "not_assigned"
   | "rate_chain"
   | "candidate_status"
+  // Soft warn when the candidate's work authorization has expired. Overridable
+  // with a free-text `workAuthOverrideReason` (direct-submit and VPR-convert).
+  | "work_auth"
+  // Soft warn (C-1) when the candidate has no authentic (Original) résumé on
+  // file. Overridable with a free-text `originalResumeOverrideReason`.
+  | "no_original_resume"
   | "not_marketing"
   | "convert_warn"
   | "duplicate";

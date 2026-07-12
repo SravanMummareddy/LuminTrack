@@ -178,10 +178,10 @@ Shipped from the large queue:
 ---
 
 1. ~~in settings there is no filter option for the avilable fields - mostly care about status~~ — partial: per-row Active/Inactive toggles exist; status-based filter on entity pickers is still §B2.
-2. **OPEN** — need to add client contacts in setting in setting tab and similarly for vendors - name email and phone and location if possible. (Tracked as Round 3 §B1.)
+2. ~~need to add client contacts in setting tab and similarly for vendors - name email and phone and location~~ ✅ **shipped (verified 2026-07-11)** — `Contact` model (name/email/phone/role/isPrimary) links Client · Vendor · SisterCompanySource; managed via `contacts-dialog.tsx` under each settings tab. Both Client and Vendor also carry inline `contactPerson/email/phone/location`.
 3. ~~source in jobs need not come from a dropdown list of sister companies — manual "Other" option~~ ✅ shipped.
 4. ~~change the name from sister company source to just source.~~ ✅ shipped (audit remaining labels — Round 3 §B3).
-5. **OPEN** — once candidate is moved from our company how to track it, should we also include active - inactive status for candidates? (Active flag exists; richer status reasons tracked as Round 3 §B4.)
+5. ~~once candidate is moved from our company how to track it — richer active/inactive status for candidates~~ ✅ **shipped (verified 2026-07-11)** — `CandidateStatus` enum (AVAILABLE / PLACED / NOT_INTERESTED / DO_NOT_CONTACT) is wired into the candidate validation (`candidate.ts:45`) + form. (Free-form status *tags* like "Hot prospect" remain a separate enhancement.)
 6. ~~submitted date we are not able to update in update status.~~ ✅ addressed — the status form links to `/submissions/[id]/edit` for correcting the original submitted date.
 7. ~~by default show present date and time in when this happened field~~ ✅ shipped — `submission-status-form.tsx` seeds `eventAt` with `nowDateTimeLocal()` on mount.
 8. ~~interview round mode/platform dropdown~~ ✅ shipped — `InterviewRound.interviewMode` / `interviewPlatform` + meeting link (Round 4 #1).
@@ -322,10 +322,9 @@ Both are additive; existing jobs and the iLabor importer keep working unchanged.
 
 Echoes user's original notes 1-4 + 5.
 
-1. **Vendor & Client contact records** (currently only Clients have contact
-   sub-records — and only one). Spec out a `Contact` table tied to
-   `Client | Vendor | SisterCompanySource` with `name / email / phone /
-   role / isPrimary` and a UI under each settings tab. **M**.
+1. ~~**Vendor & Client contact records**~~ ✅ **SHIPPED (verified 2026-07-11)** — the `Contact`
+   table (tied to `Client | Vendor | SisterCompanySource`, with `name / email / phone / role /
+   isPrimary`) + per-settings-tab UI (`contacts-dialog.tsx`) all exist. Vendors have contacts now.
 2. **Filter field controls in Settings** (user request #1). What we have is
    "Active vs Inactive" toggles per row; what was asked for is a
    status-based filter on lists / picker dropdowns. Concretely: when picking
@@ -334,10 +333,9 @@ Echoes user's original notes 1-4 + 5.
 3. **Source dropdown free-text "Other" already shipped** — the wording fix
    ("Sister company source" → "Source") was caught and is mostly already
    reflected. Audit remaining labels for stragglers. **S**.
-4. **Candidate Active flag** already exists (Badge on candidate detail).
-   Add explicit status reasons: `AVAILABLE / PLACED / NOT_INTERESTED /
-   DO_NOT_CONTACT` — more useful than a single boolean for recruiters
-   filtering for re-engagement. **M**.
+4. ~~Add explicit candidate status reasons: `AVAILABLE / PLACED / NOT_INTERESTED /
+   DO_NOT_CONTACT`~~ ✅ **SHIPPED (verified 2026-07-11)** — `CandidateStatus` enum wired into the
+   candidate validation + form; drives the submission status gates too.
 
 ## C. Pipeline / submission gaps (what big-ATS users expect)
 

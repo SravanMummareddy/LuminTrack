@@ -114,13 +114,11 @@ const INTERVIEW_SORTS: Record<
 export const INTERVIEW_SORT_KEYS = Object.keys(INTERVIEW_SORTS);
 export const INTERVIEW_DEFAULT_SORT: SortState = { key: "date", dir: "desc" };
 
-/**
- * Read-only roll-up of every scheduled interview round across all submissions —
- * the standalone Interviews list. Undated rounds are excluded so a date-sorted
- * sheet stays clean. Each row links back to its candidate and submission.
- */
-export async function listInterviews(filters: InterviewListFilters) {
-  const db = await getScopedPrisma();
+/** Shared filter → `where` builder for both the list and the schedule view.
+ *  Undated rounds are always excluded so a date-keyed view stays clean. */
+function buildInterviewWhere(
+  filters: InterviewListFilters,
+): Prisma.InterviewRoundWhereInput {
   const where: Prisma.InterviewRoundWhereInput = { scheduledAt: { not: null } };
   if (filters.scheduledRange?.gte || filters.scheduledRange?.lte)
     where.scheduledAt = { not: null, ...filters.scheduledRange };
@@ -154,6 +152,67 @@ export async function listInterviews(filters: InterviewListFilters) {
         },
       ],
     }));
+  return where;
+}
+
+// One row shape for both views — the table columns + the schedule cards read the
+// same fields.
+const INTERVIEW_LIST_SELECT = {
+  id: true,
+  roundOrder: true,
+  roundName: true,
+  interviewType: true,
+  scheduledAt: true,
+  result: true,
+  supportNeeded: true,
+  supportMethod: true,
+  supportProvider: { select: { name: true } },
+  feedback: true, // "Remarks" column (spreadsheet Interviews tab)
+  createdAt: true,
+  updatedAt: true,
+  submission: {
+    select: {
+      id: true,
+      seq: true,
+      candidate: {
+        select: {
+          id: true,
+          fullName: true,
+          skills: true,
+          featuredSkills: true,
+          deletedAt: true,
+          erasedAt: true,
+        },
+      },
+      job: {
+        select: {
+          id: true,
+          title: true,
+          location: true,
+          deletedAt: true,
+          erasedAt: true,
+          client: { select: { name: true } },
+          vendor: { select: { name: true } },
+        },
+      },
+      submittedBy: { select: { fullName: true } },
+    },
+  },
+} satisfies Prisma.InterviewRoundSelect;
+
+/** Ceiling for the (unpaginated) schedule view. Awaiting/upcoming are bounded by
+ *  the active pipeline; only the ever-growing Completed set needs a cap. Ordered
+ *  date-desc, so the 500 kept are all future rounds + the most recent past. */
+const SCHEDULE_CAP = 500;
+
+/**
+ * Read-only roll-up of every scheduled interview round across all submissions —
+ * the standalone Interviews list. Undated rounds are excluded so a date-sorted
+ * sheet stays clean. Each row links back to its candidate and submission.
+ */
+export async function listInterviews(filters: InterviewListFilters) {
+  const db = await getScopedPrisma();
+  const where = buildInterviewWhere(filters);
 
   const sort = filters.sort ?? INTERVIEW_DEFAULT_SORT;
   const sortFn = INTERVIEW_SORTS[sort.key] ?? INTERVIEW_SORTS.date;
@@ -171,48 +230,7 @@ export async function listInterviews(filters: InterviewListFilters) {
     orderBy,
     skip: (page - 1) * LIST_PAGE_SIZE,
     take: LIST_PAGE_SIZE,
-    select: {
-      id: true,
-      roundOrder: true,
-      roundName: true,
-      interviewType: true,
-      scheduledAt: true,
-      result: true,
-      supportNeeded: true,
-      supportMethod: true,
-      supportProvider: { select: { name: true } },
-      feedback: true, // "Remarks" column (spreadsheet Interviews tab)
-      createdAt: true,
-      updatedAt: true,
-      submission: {
-        select: {
-          id: true,
-          seq: true,
-          candidate: {
-            select: {
-              id: true,
-              fullName: true,
-              skills: true,
-              featuredSkills: true,
-              deletedAt: true,
-              erasedAt: true,
-            },
-          },
-          job: {
-            select: {
-              id: true,
-              title: true,
-              location: true,
-              deletedAt: true,
-              erasedAt: true,
-              client: { select: { name: true } },
-              vendor: { select: { name: true } },
-            },
-          },
-          submittedBy: { select: { fullName: true } },
-        },
-      },
-    },
+    select: INTERVIEW_LIST_SELECT,
   });
 
   return { rows, total, page };
@@ -221,3 +239,24 @@ export async function listInterviews(filters: InterviewListFilters) {
 export type InterviewListRow = Awaited<
   ReturnType<typeof listInterviews>
 >["rows"][number];
+
+/**
+ * The same filtered rounds as `listInterviews`, but unpaginated (capped at
+ * `SCHEDULE_CAP`) and always date-desc — for the Schedule view, which groups by
+ * time bucket rather than paging. `capped` is true when the filter matched more
+ * than the ceiling, so the UI can nudge the user to narrow it.
+ */
+export async function listInterviewsSchedule(filters: InterviewListFilters) {
+  const db = await getScopedPrisma();
+  const where = buildInterviewWhere(filters);
+
+  const total = await db.interviewRound.count({ where });
+  const rows = await db.interviewRound.findMany({
+    where,
+    orderBy: [{ scheduledAt: "desc" }, { id: "asc" }],
+    take: SCHEDULE_CAP,
+    select: INTERVIEW_LIST_SELECT,
+  });
+
+  return { rows, total, capped: total > SCHEDULE_CAP };
+}

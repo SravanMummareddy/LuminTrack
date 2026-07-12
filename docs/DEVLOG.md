@@ -10,6 +10,59 @@ short instead of long.
 
 ---
 
+## 2026-07-11 · Résumé/document preview = black box — a fragile manual `Content-Encoding: gzip`
+
+**Situation.** Every résumé preview rendered as a black/blank iframe. Blobs are stored gzip-compressed
+(to save the free-tier cap); the serve routes streamed the raw stored bytes back with a manual
+`Content-Encoding: gzip` header, trusting the browser to inflate.
+
+**Diagnosis.** Ruled out corrupt storage and a bytes/header mismatch empirically: a probe called
+`get(pathname)` and inspected the stream — first bytes `1f 8b 08` (gzip magic), and gunzipping them
+yielded a valid `%PDF-1.5`, 152 KB (a real upload, not a seed stub). So the bytes were fine *and*
+agreed with the header. The failure was the **manual `Content-Encoding: gzip` on a streamed Next.js
+Response** — fragile once the dev server / platform also touches compression: the browser can hit
+`ERR_CONTENT_DECODING_FAILED`, which a PDF iframe renders as a blank/black box. Both the résumé and
+document routes shared the pattern.
+
+**Fix.** Stop shipping the encoding contract to the browser: inflate the gzip in the route
+(`gunzipSync`, with a gzip-magic guard so a legacy non-gzipped blob still serves) and return the plain
+bytes as a concrete `ArrayBuffer` with `Content-Length` and no `Content-Encoding`. Files are size-capped,
+so buffer + synchronous inflate is cheap. Applied to `api/resumes/[id]` and `api/documents/[id]`.
+
+**Lesson.** Manually setting `Content-Encoding` is a footgun the moment anything else in the chain also
+compresses — prefer serving already-decoded bytes and let the platform negotiate transport compression.
+And when a preview is blank, probe the actual bytes at the source (magic number + inflate) before
+theorizing about the viewer; it turns "the PDF is broken" into "the transport header is."
+
+---
+
+## 2026-07-11 · A "compile error" that wasn't — browser console buffer vs server log
+
+**Situation.** While building C-1, every page load in the preview browser surfaced 20+ copies of
+`./src/server/db.ts:83 — the name 'orgScopeExtension' is defined multiple times`, with a source
+excerpt (`export function orgScopeExtension` + an "auto-stamping to load demo data" comment) pointing
+at a line 83 that doesn't exist — `db.ts` is 75 lines and only *imports* + *re-exports* the symbol.
+
+**Diagnosis.** Chased it as a stale Turbopack cache, then (wrongly) as a real SWC diagnostic from
+`import {X} from "m"; export {X} from "m"`, and edited `db.ts`. The error persisted across `rm -rf .next`
++ a full restart — which should have cleared any cache. The tell: `mcp` `read_console_messages` returns
+the browser's *accumulated* console buffer, which is **not** cleared on navigation, so it kept replaying
+errors logged *before* the fix. The authoritative check — `preview_logs` (server stdout) — said
+**"No server errors found."** `tsc` was clean throughout, and the error's source excerpt matched *no*
+current file (that comment had been deleted in an earlier Phase-C refactor). It was a ghost.
+
+**Fix.** Nothing to fix in the app — the server compiled clean. Kept a harmless cosmetic `db.ts` tweak
+(re-export the imported binding instead of a second `export … from`) but corrected the comment that had
+overclaimed a bug.
+
+**Lesson.** For "is it compiling?", trust the **server log** (`preview_logs`), not the **browser console
+buffer** (`read_console_messages`) — the latter accumulates stale entries across navigations and will
+happily show you an error you already fixed. When an error excerpt cites a line/comment that isn't in the
+file, and `tsc` is clean, suspect the *observer*, not the code. Verify the ghost is gone at its source
+before "fixing" it.
+
+---
+
 ## 2026-07-11 · Phase C — multi-tenancy foundation on one enforcement seam
 
 **Situation.** LuminTrack had no tenant boundary — every one of ~978 query sites read a single global

@@ -16,11 +16,16 @@ import { Forbidden, MANAGER_ONLY_FORBIDDEN } from "@/components/ui/forbidden";
 import { requireUser } from "@/lib/session";
 import { isManagerTier, roleLabel } from "@/lib/permissions";
 import { Table, Th, Td } from "@/components/ui/table";
+import { SortableHeader } from "@/components/ui/sortable-header";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { BarChartCard } from "@/components/dashboard/charts";
 import { ActivityTimeline } from "@/components/timeline/activity-timeline";
-import { getRecruiterDetail } from "@/server/queries/recruiters";
+import {
+  getRecruiterDetail,
+  RECRUITER_SUB_SORT_KEYS,
+  RECRUITER_SUB_DEFAULT_SORT,
+} from "@/server/queries/recruiters";
 import {
   listClients,
   listVendors,
@@ -29,7 +34,7 @@ import {
 } from "@/server/queries/org";
 import { parseAnalyticsParams } from "@/lib/analytics";
 import { Pagination } from "@/components/ui/pagination";
-import { SUB_PAGE_SIZE as PAGE_SIZE, parsePage } from "@/lib/filters";
+import { SUB_PAGE_SIZE as PAGE_SIZE, parsePage, parseSort } from "@/lib/filters";
 import {
   JOB_STATUS_LABEL,
   JOB_STATUS_TONE,
@@ -52,6 +57,32 @@ function Card({
       <h2 className="mb-3 text-sm font-semibold text-slate-700">{title}</h2>
       {children}
     </section>
+  );
+}
+
+/** Sortable header for the Submissions sub-table — namespaced to `rsort`/`rdir`
+ *  (the page already owns other params) and resets its own `rsubs` page. */
+function SubSort({
+  column,
+  label,
+  align,
+  defaultDir,
+}: {
+  column: string;
+  label: string;
+  align?: "left" | "right";
+  defaultDir?: "asc" | "desc";
+}) {
+  return (
+    <SortableHeader
+      column={column}
+      label={label}
+      align={align}
+      defaultDir={defaultDir}
+      sortParam="rsort"
+      dirParam="rdir"
+      resetParam="rsubs"
+    />
   );
 }
 
@@ -79,12 +110,21 @@ export default async function RecruiterDetailPage({
     rstatusRaw && (SUBMISSION_STATUSES as readonly string[]).includes(rstatusRaw)
       ? (rstatusRaw as SubmissionStatus)
       : undefined;
+  const clean1 = (v: string | string[] | undefined) =>
+    Array.isArray(v) ? v[0] : v;
+  const subSort = parseSort(
+    clean1(sp.rsort),
+    clean1(sp.rdir),
+    RECRUITER_SUB_SORT_KEYS,
+    RECRUITER_SUB_DEFAULT_SORT,
+  );
 
   const [detail, clients, vendors, sources, recruiters] = await Promise.all([
     getRecruiterDetail(id, filters, {
       jobsPage,
       subsPage: rsubsPage,
       subStatus: rstatus,
+      subSort,
     }),
     listClients(),
     listVendors(),
@@ -295,11 +335,11 @@ export default async function RecruiterDetailPage({
           <Table>
             <thead className="border-b border-slate-200 bg-slate-50">
               <tr>
-                <Th>Candidate</Th>
-                <Th>Job</Th>
-                <Th>Status</Th>
-                <Th className="text-right">Rounds</Th>
-                <Th>Submitted</Th>
+                <SubSort column="candidate" label="Candidate" />
+                <SubSort column="job" label="Job" />
+                <SubSort column="status" label="Status" />
+                <SubSort column="rounds" label="Rounds" align="right" defaultDir="desc" />
+                <SubSort column="submitted" label="Submitted" defaultDir="desc" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
