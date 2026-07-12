@@ -3,6 +3,9 @@
 export type SearchResultType =
   | "candidate"
   | "job"
+  | "requirement"
+  | "submission"
+  | "placement"
   | "client"
   | "vendor"
   | "source"
@@ -18,6 +21,9 @@ export type SearchResult = {
 export const SEARCH_TYPE_LABEL: Record<SearchResultType, string> = {
   candidate: "Candidate",
   job: "Job",
+  requirement: "Requirement",
+  submission: "Submission",
+  placement: "Placement",
   client: "Client",
   vendor: "Vendor",
   source: "Source",

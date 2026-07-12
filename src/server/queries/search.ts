@@ -1,6 +1,11 @@
 import { getScopedPrisma } from "@/lib/session";
 import type { Prisma } from "@/generated/prisma/client";
 import type { SearchResult } from "@/lib/search-types";
+import {
+  formatSubmissionDisplayId,
+  formatPlacementDisplayId,
+  formatVendorRequirementDisplayId,
+} from "@/lib/format";
 
 /**
  * Global typeahead search across candidates, jobs, clients, vendors, sister
@@ -11,14 +16,21 @@ export async function globalSearch(q: string): Promise<SearchResult[]> {
   const db = await getScopedPrisma();
   const like = { contains: q, mode: "insensitive" as const };
 
-  // Pull a seq number out of "CAND-001", "JOB-00123", or a bare number so
-  // typing a display ID finds its row.
+  // Pull a seq number out of a display ID ("CAND-001", "JOB-00123", "VPR-007",
+  // "SUB-042", "PLC-003") or a bare number so typing a display ID finds its row.
+  // A bare number matches every entity type's seq; a prefixed one only its own.
   const trimmed = q.trim();
   const numericPart = trimmed.replace(/^[A-Za-z]+-?/, "");
   const parsedSeq = /^\d+$/.test(numericPart) ? Number(numericPart) : null;
   const upper = trimmed.toUpperCase();
-  const candSeq = upper.startsWith("CAND") || /^\d+$/.test(trimmed) ? parsedSeq : null;
-  const jobSeq = upper.startsWith("JOB") || /^\d+$/.test(trimmed) ? parsedSeq : null;
+  const bare = /^\d+$/.test(trimmed);
+  const seqFor = (prefix: string) =>
+    upper.startsWith(prefix) || bare ? parsedSeq : null;
+  const candSeq = seqFor("CAND");
+  const jobSeq = seqFor("JOB");
+  const vprSeq = seqFor("VPR");
+  const subSeq = seqFor("SUB");
+  const plcSeq = seqFor("PLC");
 
   const candidateOR: Prisma.CandidateWhereInput["OR"] = [
     { fullName: like },
@@ -35,8 +47,19 @@ export async function globalSearch(q: string): Promise<SearchResult[]> {
   ];
   if (jobSeq != null) jobOR.push({ seq: jobSeq });
 
-  const [candidates, jobs, clients, vendors, sources, users] =
-    await Promise.all([
+  // VPR/SUB/PLC have no free-text fields worth searching — they're only ever
+  // found by their display ID, so query them solely when a seq was parsed.
+  const [
+    candidates,
+    jobs,
+    requirements,
+    submissions,
+    placements,
+    clients,
+    vendors,
+    sources,
+    users,
+  ] = await Promise.all([
       db.candidate.findMany({
         where: { deletedAt: null, OR: candidateOR },
         take: 6,
@@ -49,6 +72,37 @@ export async function globalSearch(q: string): Promise<SearchResult[]> {
         orderBy: { createdAt: "desc" },
         select: { id: true, title: true, client: { select: { name: true } } },
       }),
+      vprSeq == null
+        ? []
+        : db.vendorRequirement.findMany({
+            where: { seq: vprSeq },
+            take: 4,
+            select: { id: true, seq: true, job: { select: { title: true } } },
+          }),
+      subSeq == null
+        ? []
+        : db.submission.findMany({
+            where: { seq: subSeq },
+            take: 4,
+            select: {
+              id: true,
+              seq: true,
+              candidate: { select: { fullName: true } },
+              job: { select: { title: true } },
+            },
+          }),
+      plcSeq == null
+        ? []
+        : db.placement.findMany({
+            where: { seq: plcSeq },
+            take: 4,
+            select: {
+              id: true,
+              seq: true,
+              candidate: { select: { fullName: true } },
+              job: { select: { title: true } },
+            },
+          }),
       db.client.findMany({
         where: { OR: [{ name: like }, { location: like }] },
         take: 4,
@@ -87,6 +141,24 @@ export async function globalSearch(q: string): Promise<SearchResult[]> {
       label: j.title,
       sublabel: j.client.name,
       href: `/jobs/${j.id}`,
+    })),
+    ...requirements.map((r): SearchResult => ({
+      type: "requirement",
+      label: formatVendorRequirementDisplayId(r),
+      sublabel: r.job.title,
+      href: `/vendor-portal/${r.id}`,
+    })),
+    ...submissions.map((s): SearchResult => ({
+      type: "submission",
+      label: formatSubmissionDisplayId(s),
+      sublabel: `${s.candidate.fullName} → ${s.job.title}`,
+      href: `/submissions/${s.id}`,
+    })),
+    ...placements.map((p): SearchResult => ({
+      type: "placement",
+      label: formatPlacementDisplayId(p),
+      sublabel: `${p.candidate.fullName} → ${p.job.title}`,
+      href: `/placements/${p.id}`,
     })),
     ...clients.map((c): SearchResult => ({
       type: "client",
