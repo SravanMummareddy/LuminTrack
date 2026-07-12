@@ -65,19 +65,17 @@ export default async function EditJobPage({
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader title="Edit job" description={job.title} />
-      <div className="rounded-lg border border-slate-200 bg-white p-6">
-        <JobForm
-          action={updateJob}
-          clients={clients}
-          vendors={vendors}
-          sources={sources}
-          referrers={referrers}
-          jobBoards={[...JOB_BOARD_SEED]}
-          values={values}
-          submitLabel="Save changes"
-          canManageRatesAndAssignment={canRates}
-        />
-      </div>
+      <JobForm
+        action={updateJob}
+        clients={clients}
+        vendors={vendors}
+        sources={sources}
+        referrers={referrers}
+        jobBoards={[...JOB_BOARD_SEED]}
+        values={values}
+        submitLabel="Save changes"
+        canManageRatesAndAssignment={canRates}
+      />
     </div>
   );
 }

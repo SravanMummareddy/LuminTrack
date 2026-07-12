@@ -23,19 +23,17 @@ export default async function NewJobPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader title="Add job" description="Create a new job requirement." />
-      <div className="rounded-lg border border-slate-200 bg-white p-6">
-        <JobForm
-          action={createJob}
-          clients={clients}
-          vendors={vendors}
-          sources={sources}
-          referrers={referrers}
-          jobBoards={[...JOB_BOARD_SEED]}
-          submitLabel="Create job"
-          canQuickAdd={canQuickAddOrgEntities(user)}
-          canManageRatesAndAssignment={hasFullAccess(user)}
-        />
-      </div>
+      <JobForm
+        action={createJob}
+        clients={clients}
+        vendors={vendors}
+        sources={sources}
+        referrers={referrers}
+        jobBoards={[...JOB_BOARD_SEED]}
+        submitLabel="Create job"
+        canQuickAdd={canQuickAddOrgEntities(user)}
+        canManageRatesAndAssignment={hasFullAccess(user)}
+      />
     </div>
   );
 }

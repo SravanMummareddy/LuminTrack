@@ -1,5 +1,22 @@
 import { describe, it, expect } from "vitest";
-import { deletedSuffix, formatDate, jobDuration } from "@/lib/format";
+import {
+  deletedSuffix,
+  formatDate,
+  jobDuration,
+  formatClientDisplayId,
+  formatVendorDisplayId,
+  formatSourceDisplayId,
+  formatReferrerDisplayId,
+} from "@/lib/format";
+
+describe("org-entity display IDs", () => {
+  it("pads to 3 digits with the right prefix", () => {
+    expect(formatClientDisplayId({ seq: 1 })).toBe("CLI-001");
+    expect(formatVendorDisplayId({ seq: 14 })).toBe("VEN-014");
+    expect(formatSourceDisplayId({ seq: 7 })).toBe("SRC-007");
+    expect(formatReferrerDisplayId({ seq: 123 })).toBe("REF-123");
+  });
+});
 
 describe("jobDuration", () => {
   it("returns — with no start date", () => {

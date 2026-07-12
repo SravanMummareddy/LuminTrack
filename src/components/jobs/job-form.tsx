@@ -76,14 +76,17 @@ type JobAction = (prev: FormState, formData: FormData) => Promise<FormState>;
 const optionLabel = (name: string, isActive: boolean) =>
   isActive ? name : `${name} (inactive)`;
 
-function SectionHeading({ n, title }: { n: number; title: string }) {
+function FormSection({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-2 pt-1">
-      <span className="grid h-5 w-5 place-items-center rounded bg-indigo-50 text-[11px] font-bold text-indigo-600">
-        {n}
-      </span>
-      <h2 className="text-xs font-bold uppercase tracking-wide text-slate-500">{title}</h2>
-    </div>
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50/70 px-4 py-2.5">
+        <span className="grid h-5 w-5 place-items-center rounded bg-indigo-50 text-[11px] font-bold text-indigo-600">
+          {n}
+        </span>
+        <h2 className="text-xs font-bold uppercase tracking-wide text-slate-500">{title}</h2>
+      </div>
+      <div className="space-y-4 p-4">{children}</div>
+    </section>
   );
 }
 
@@ -188,7 +191,7 @@ export function JobForm({
         <input type="hidden" name="sourceType" value={sourceType} />
 
         {/* ── 1. The role ─────────────────────────────────────────── */}
-        <SectionHeading n={1} title="The role" />
+        <FormSection n={1} title="The role">
         <Field label="Job title" htmlFor="title" required error={errors.title}>
           <Input id="title" name="title" defaultValue={values?.title ?? ""} required />
         </Field>
@@ -249,7 +252,9 @@ export function JobForm({
         </div>
 
         {/* ── 2. Where we found it ────────────────────────────────── */}
-        <SectionHeading n={2} title="Where we found it" />
+        </FormSection>
+
+        <FormSection n={2} title="Where we found it">
         <Field label="Source type" htmlFor="sourceType-seg" required error={errors.sourceType}>
           <div className="flex flex-wrap gap-2" id="sourceType-seg">
             {SOURCE_TYPES.map((t) => (
@@ -324,7 +329,9 @@ export function JobForm({
         )}
 
         {/* ── 3. Requirement details ──────────────────────────────── */}
-        <SectionHeading n={3} title="Requirement details" />
+        </FormSection>
+
+        <FormSection n={3} title="Requirement details">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Positions" htmlFor="positions" required error={errors.positions}>
             <Input id="positions" name="positions" type="number" min="1" step="1" defaultValue={values?.positions || "1"} />
@@ -383,7 +390,9 @@ export function JobForm({
         )}
 
         {/* ── 4. Description ──────────────────────────────────────── */}
-        <SectionHeading n={4} title="Description" />
+        </FormSection>
+
+        <FormSection n={4} title="Description">
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <label htmlFor="description" className="block text-sm font-medium text-slate-700">
@@ -400,6 +409,8 @@ export function JobForm({
         <Field label="Notes" htmlFor="notes" hint="The only optional field." error={errors.notes}>
           <Textarea id="notes" name="notes" rows={3} defaultValue={values?.notes ?? ""} />
         </Field>
+
+        </FormSection>
 
         {state.error && (
           <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{state.error}</p>
