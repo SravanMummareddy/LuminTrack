@@ -8,12 +8,12 @@ vi.mock("@/server/db", async () => {
   const real = await import("./db");
   return { prisma: real.testPrisma, isUniqueConstraintError: real.isUniqueConstraintError };
 });
-vi.mock("@/lib/session", () => ({ requireUser: vi.fn(), getCurrentUser: vi.fn() }));
+vi.mock("@/lib/session", () => ({ requireUser: vi.fn(), getCurrentUser: vi.fn(), getScopedPrisma: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn(), notFound: vi.fn() }));
 
 import { changeSubmissionStatus } from "@/server/actions/submissions";
-import { requireUser } from "@/lib/session";
+import { requireUser, getScopedPrisma } from "@/lib/session";
 
 // Auto-skip the whole suite when the Docker test DB isn't up, so it never blocks
 // `npm test` / CI's no-DB job. Start it with `npm run test:db:up`.
@@ -37,6 +37,7 @@ describe.skipIf(!dbReachable)("changeSubmissionStatus — real DB cascades", () 
   beforeEach(async () => {
     await truncateAll(testPrisma);
     ctx = await seedBasics(testPrisma);
+    vi.mocked(getScopedPrisma).mockResolvedValue(ctx.db as never);
     vi.mocked(requireUser).mockResolvedValue(ctx.user as never);
   });
 
@@ -133,12 +134,12 @@ describe.skipIf(!dbReachable)("changeSubmissionStatus — real DB cascades", () 
 
   /** Put the seeded candidate on the bench (linked 1:1, actively marketed). */
   async function putOnBench() {
-    return testPrisma.benchConsultant.create({
+    return ctx.db.benchConsultant.create({
       data: {
         fullName: "Test Candidate",
         marketingStatus: "ACTIVE",
-        candidate: { connect: { id: ctx.candidate.id } },
-        createdBy: { connect: { id: ctx.user.id } },
+        candidateId: ctx.candidate.id,
+        createdById: ctx.user.id,
       },
     });
   }

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { testPrisma } from "./db";
-import { truncateAll } from "./helpers";
+import { truncateAll, seedOrg } from "./helpers";
 
 // Real requirement actions → test DB; stub the Next.js request couplings.
 vi.mock("@/server/db", async () => {
@@ -10,7 +10,7 @@ vi.mock("@/server/db", async () => {
     isUniqueConstraintError: real.isUniqueConstraintError,
   };
 });
-vi.mock("@/lib/session", () => ({ requireUser: vi.fn(), getCurrentUser: vi.fn() }));
+vi.mock("@/lib/session", () => ({ requireUser: vi.fn(), getCurrentUser: vi.fn(), getScopedPrisma: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
 // Success paths end in redirect() — make it a no-op so the action returns
 // instead of throwing NEXT_REDIRECT. Gate/error paths return before redirect.
@@ -22,7 +22,7 @@ import {
   cancelVendorRequirement,
   convertRequirementToSubmission,
 } from "@/server/actions/requirements";
-import { requireUser } from "@/lib/session";
+import { requireUser, getScopedPrisma } from "@/lib/session";
 
 let dbReachable = false;
 try {
@@ -33,20 +33,21 @@ try {
 }
 
 async function seed() {
+  const { org, db } = await seedOrg(testPrisma);
   const [admin, lead] = await Promise.all([
-    testPrisma.user.create({
+    db.user.create({
       data: { fullName: "Admin", email: "admin@test.local", passwordHash: "x", role: "MANAGER" },
     }),
-    testPrisma.user.create({
+    db.user.create({
       data: { fullName: "Team Lead", email: "lead@test.local", passwordHash: "x", role: "TEAM_LEAD" },
     }),
   ]);
   // Real team + membership so deriveTeamLead resolves the recruiter → its lead.
-  const team = await testPrisma.team.create({
+  const team = await db.team.create({
     data: { name: "Alpha", leadId: lead.id },
   });
-  await testPrisma.user.update({ where: { id: lead.id }, data: { teamId: team.id } });
-  const recruiter = await testPrisma.user.create({
+  await db.user.update({ where: { id: lead.id }, data: { teamId: team.id } });
+  const recruiter = await db.user.create({
     data: {
       fullName: "Rec One",
       email: "rec1@test.local",
@@ -56,33 +57,33 @@ async function seed() {
     },
   });
   const [client, vendor] = await Promise.all([
-    testPrisma.client.create({ data: { name: "Client" } }),
-    testPrisma.vendor.create({ data: { name: "Vendor" } }),
+    db.client.create({ data: { name: "Client" } }),
+    db.vendor.create({ data: { name: "Vendor" } }),
   ]);
-  const candidate = await testPrisma.candidate.create({
-    data: { fullName: "Cand", status: "AVAILABLE", createdBy: { connect: { id: admin.id } } },
+  const candidate = await db.candidate.create({
+    data: { fullName: "Cand", status: "AVAILABLE", createdById: admin.id },
   });
-  const job = await testPrisma.job.create({
+  const job = await db.job.create({
     data: {
       title: "Senior Engineer",
-      client: { connect: { id: client.id } },
-      vendor: { connect: { id: vendor.id } },
-      createdBy: { connect: { id: admin.id } },
+      clientId: client.id,
+      vendorId: vendor.id,
+      createdById: admin.id,
     },
   });
-  return { admin, lead, recruiter, client, vendor, candidate, job };
+  return { org, db, admin, lead, recruiter, client, vendor, candidate, job };
 }
 
 type Ctx = Awaited<ReturnType<typeof seed>>;
 
 /** A requirement directly in the DB (bypasses the create action). */
 function makeRequirement(ctx: Ctx, extra: Record<string, unknown> = {}) {
-  return testPrisma.vendorRequirement.create({
+  return ctx.db.vendorRequirement.create({
     data: {
-      job: { connect: { id: ctx.job.id } },
-      candidate: { connect: { id: ctx.candidate.id } },
-      recruiter: { connect: { id: ctx.recruiter.id } },
-      createdBy: { connect: { id: ctx.lead.id } },
+      jobId: ctx.job.id,
+      candidateId: ctx.candidate.id,
+      recruiterId: ctx.recruiter.id,
+      createdById: ctx.lead.id,
       payRate: 70,
       billRate: 100,
       ...extra,
@@ -104,6 +105,10 @@ function convertForm(
   fd.set("resumeChoice", "none");
   fd.set("payRate", "70");
   fd.set("billRate", "100");
+  // Clear the incidental soft gates (#84) so these tests isolate the convert /
+  // duplicate behaviour, not the résumé/bench gates.
+  fd.set("originalResumeOverrideReason", "n/a for this test");
+  fd.set("benchOverrideReason", "n/a for this test");
   for (const [k, v] of Object.entries(extra)) fd.set(k, v);
   return fd;
 }
@@ -116,6 +121,7 @@ describe.skipIf(!dbReachable)("vendor requirement actions", () => {
   beforeEach(async () => {
     await truncateAll(testPrisma);
     ctx = await seed();
+    vi.mocked(getScopedPrisma).mockResolvedValue(ctx.db as never);
   });
 
   it("gates create behind canManageRequirements", async () => {
@@ -162,11 +168,11 @@ describe.skipIf(!dbReachable)("vendor requirement actions", () => {
     mockedRequireUser.mockResolvedValue(ctx.recruiter as never);
 
     // A second candidate to submit against the same requirement.
-    const cand2 = await testPrisma.candidate.create({
+    const cand2 = await ctx.db.candidate.create({
       data: {
         fullName: "Cand Two",
         status: "AVAILABLE",
-        createdBy: { connect: { id: ctx.admin.id } },
+        createdById: ctx.admin.id,
       },
     });
 
@@ -193,12 +199,12 @@ describe.skipIf(!dbReachable)("vendor requirement actions", () => {
 
     // The per-(candidate, job) duplicate gate fires instead of silently
     // creating a second identical submission.
-    expect(second.needsConfirm).toBe("duplicate");
+    expect(second.pendingGates?.map((g) => g.kind)).toContain("duplicate");
     expect(await testPrisma.submission.count()).toBe(1);
   });
 
   it("blocks convert when the job is closed (requirement stays OPEN)", async () => {
-    await testPrisma.job.update({ where: { id: ctx.job.id }, data: { status: "CLOSED" } });
+    await ctx.db.job.update({ where: { id: ctx.job.id }, data: { status: "CLOSED" } });
     const req = await makeRequirement(ctx);
     mockedRequireUser.mockResolvedValue(ctx.recruiter as never);
 

@@ -34,7 +34,7 @@ async function seedOrgWithData(slug: string, emailPrefix: string) {
   // per-org (composite), not global.
   const client = await db.client.create({ data: { name: "Shared Client Name" } });
   const candidate = await db.candidate.create({
-    data: { fullName: "Cand", createdBy: { connect: { id: user.id } } },
+    data: { fullName: "Cand", createdById: user.id },
   });
   return { org, db, user, client, candidate };
 }

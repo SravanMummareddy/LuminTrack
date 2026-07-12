@@ -1,5 +1,8 @@
 import type { PrismaClient } from "@/generated/prisma/client";
-import { orgScopeExtension } from "@/server/db";
+// Import from the pure org-scope module, NOT `@/server/db` (which the test files
+// mock, dropping this export and constructing the Neon client). org-scope.ts has
+// no client construction, so the real extension is always available here.
+import { orgScopeExtension } from "@/server/org-scope";
 
 /** Wipe every table (except the migration ledger) between tests. Discovered
  *  dynamically so new models never need to be added here by hand. */
@@ -42,26 +45,29 @@ export async function seedBasics(base: PrismaClient) {
     data: {
       fullName: "Test Candidate",
       status: "AVAILABLE",
-      createdBy: { connect: { id: user.id } },
+      createdById: user.id,
     },
   });
   const job = await prisma.job.create({
     data: {
       title: "Senior Engineer",
-      client: { connect: { id: client.id } },
-      vendor: { connect: { id: vendor.id } },
-      createdBy: { connect: { id: user.id } },
+      clientId: client.id,
+      vendorId: vendor.id,
+      createdById: user.id,
     },
   });
   const submission = await prisma.submission.create({
     data: {
       status: "SELECTED",
-      candidate: { connect: { id: candidate.id } },
-      job: { connect: { id: job.id } },
-      submittedBy: { connect: { id: user.id } },
+      candidateId: candidate.id,
+      jobId: job.id,
+      submittedById: user.id,
+      // Waive the résumé so the SB-3 forward-advance gate (#84) doesn't block the
+      // status-cascade tests, which are about JOINED→placement, not résumés.
+      resumeWaivedAt: new Date(),
     },
   });
-  return { org, user, client, vendor, candidate, job, submission };
+  return { org, db: prisma, user, client, vendor, candidate, job, submission };
 }
 
 /** Loose actors for the createSubmission gate tests: an admin, an unassigned
@@ -82,9 +88,9 @@ export async function seedSubmissionScenario(base: PrismaClient) {
     prisma.vendor.create({ data: { name: "Test Vendor" } }),
   ]);
   const candidate = await prisma.candidate.create({
-    data: { fullName: "Bench Candidate", status: "AVAILABLE", createdBy: { connect: { id: admin.id } } },
+    data: { fullName: "Bench Candidate", status: "AVAILABLE", createdById: admin.id },
   });
-  return { org, admin, recruiter, client, vendor, candidate };
+  return { org, db: prisma, admin, recruiter, client, vendor, candidate };
 }
 
 /** A live SUBMITTED submission owned by `recruiterA`, plus an admin, a
@@ -109,14 +115,14 @@ export async function seedSubmissionEditScenario(base: PrismaClient) {
     prisma.vendor.create({ data: { name: "Test Vendor" } }),
   ]);
   const candidate = await prisma.candidate.create({
-    data: { fullName: "Edit Candidate", status: "AVAILABLE", createdBy: { connect: { id: admin.id } } },
+    data: { fullName: "Edit Candidate", status: "AVAILABLE", createdById: admin.id },
   });
   const job = await prisma.job.create({
     data: {
       title: "Senior Engineer",
-      client: { connect: { id: client.id } },
-      vendor: { connect: { id: vendor.id } },
-      createdBy: { connect: { id: admin.id } },
+      clientId: client.id,
+      vendorId: vendor.id,
+      createdById: admin.id,
     },
   });
   const resume = await prisma.candidateResume.create({
@@ -133,12 +139,12 @@ export async function seedSubmissionEditScenario(base: PrismaClient) {
       status: "SUBMITTED",
       submissionNotes: "Original note",
       submittedAt: new Date("2026-06-01T10:00"), // local; matches the edit form's string
-      candidate: { connect: { id: candidate.id } },
-      job: { connect: { id: job.id } },
-      submittedBy: { connect: { id: recruiterA.id } },
+      candidateId: candidate.id,
+      jobId: job.id,
+      submittedById: recruiterA.id,
     },
   });
-  return { org, admin, recruiterA, recruiterB, client, vendor, candidate, job, resume, submission };
+  return { org, db: prisma, admin, recruiterA, recruiterB, client, vendor, candidate, job, resume, submission };
 }
 
 /** A placement owned by `recruiterA` (recruiter-of-record), plus an admin and an
@@ -161,22 +167,22 @@ export async function seedPlacementScenario(base: PrismaClient) {
     prisma.vendor.create({ data: { name: "Test Vendor" } }),
   ]);
   const candidate = await prisma.candidate.create({
-    data: { fullName: "Placed Candidate", status: "PLACED", createdBy: { connect: { id: admin.id } } },
+    data: { fullName: "Placed Candidate", status: "PLACED", createdById: admin.id },
   });
   const job = await prisma.job.create({
     data: {
       title: "Senior Engineer",
-      client: { connect: { id: client.id } },
-      vendor: { connect: { id: vendor.id } },
-      createdBy: { connect: { id: admin.id } },
+      clientId: client.id,
+      vendorId: vendor.id,
+      createdById: admin.id,
     },
   });
   const submission = await prisma.submission.create({
     data: {
       status: "JOINED",
-      candidate: { connect: { id: candidate.id } },
-      job: { connect: { id: job.id } },
-      submittedBy: { connect: { id: recruiterA.id } }, // recruiter-of-record
+      candidateId: candidate.id,
+      jobId: job.id,
+      submittedById: recruiterA.id, // recruiter-of-record
     },
   });
   const placement = await prisma.placement.create({
@@ -184,10 +190,10 @@ export async function seedPlacementScenario(base: PrismaClient) {
       startDate: new Date("2026-06-01"),
       billRate: 90,
       payRate: 70,
-      submission: { connect: { id: submission.id } },
-      candidate: { connect: { id: candidate.id } },
-      job: { connect: { id: job.id } },
+      submissionId: submission.id,
+      candidateId: candidate.id,
+      jobId: job.id,
     },
   });
-  return { org, admin, recruiterA, recruiterB, client, vendor, candidate, job, submission, placement };
+  return { org, db: prisma, admin, recruiterA, recruiterB, client, vendor, candidate, job, submission, placement };
 }

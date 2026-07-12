@@ -6,12 +6,12 @@ vi.mock("@/server/db", async () => {
   const real = await import("./db");
   return { prisma: real.testPrisma, isUniqueConstraintError: real.isUniqueConstraintError };
 });
-vi.mock("@/lib/session", () => ({ requireUser: vi.fn(), getCurrentUser: vi.fn() }));
+vi.mock("@/lib/session", () => ({ requireUser: vi.fn(), getCurrentUser: vi.fn(), getScopedPrisma: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn(), notFound: vi.fn() }));
 
 import { updatePlacement } from "@/server/actions/placements";
-import { requireUser } from "@/lib/session";
+import { requireUser, getScopedPrisma } from "@/lib/session";
 
 let dbReachable = false;
 try {
@@ -27,6 +27,7 @@ describe.skipIf(!dbReachable)("updatePlacement — rate-edit permission + bench 
   beforeEach(async () => {
     await truncateAll(testPrisma);
     ctx = await seedPlacementScenario(testPrisma);
+    vi.mocked(getScopedPrisma).mockResolvedValue(ctx.db as never);
   });
 
   // The placement edit form always posts startDate (required by the schema).

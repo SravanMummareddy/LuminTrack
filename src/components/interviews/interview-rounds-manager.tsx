@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Plus, Trash2 } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { ConfirmSubmit } from "@/components/ui/confirm-dialog";
@@ -166,12 +167,12 @@ export function InterviewRoundsManager({
                     {r.supportProvider && (
                       <>
                         {" — "}
-                        <a
+                        <Link
                           href="/settings?tab=support"
                           className="font-medium text-amber-900 underline"
                         >
                           contact details
-                        </a>
+                        </Link>
                       </>
                     )}
                   </dd>

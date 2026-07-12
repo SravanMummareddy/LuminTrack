@@ -7,7 +7,7 @@ vi.mock("@/server/db", async () => {
   const real = await import("./db");
   return { prisma: real.testPrisma, isUniqueConstraintError: real.isUniqueConstraintError };
 });
-vi.mock("@/lib/session", () => ({ requireUser: vi.fn(), getCurrentUser: vi.fn() }));
+vi.mock("@/lib/session", () => ({ requireUser: vi.fn(), getCurrentUser: vi.fn(), getScopedPrisma: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
 // createSubmission ends in redirect() on success — make it a no-op so the action
 // returns undefined instead of throwing NEXT_REDIRECT. Gate paths return a
@@ -15,7 +15,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }
 vi.mock("next/navigation", () => ({ redirect: vi.fn(), notFound: vi.fn() }));
 
 import { createSubmission } from "@/server/actions/submissions";
-import { requireUser } from "@/lib/session";
+import { requireUser, getScopedPrisma } from "@/lib/session";
 
 let dbReachable = false;
 try {
@@ -31,16 +31,17 @@ describe.skipIf(!dbReachable)("createSubmission — gate flows", () => {
   beforeEach(async () => {
     await truncateAll(testPrisma);
     ctx = await seedSubmissionScenario(testPrisma);
+    vi.mocked(getScopedPrisma).mockResolvedValue(ctx.db as never);
   });
 
   /** Create a job, optionally with extra fields. */
   function makeJob(extra: Record<string, unknown> = {}) {
-    return testPrisma.job.create({
+    return ctx.db.job.create({
       data: {
         title: "Senior Engineer",
-        client: { connect: { id: ctx.client.id } },
-        vendor: { connect: { id: ctx.vendor.id } },
-        createdBy: { connect: { id: ctx.admin.id } },
+        clientId: ctx.client.id,
+        vendorId: ctx.vendor.id,
+        createdById: ctx.admin.id,
         ...extra,
       },
     });
@@ -53,6 +54,10 @@ describe.skipIf(!dbReachable)("createSubmission — gate flows", () => {
     fd.set("jobId", jobId);
     fd.set("submittedById", submittedById);
     fd.set("resumeChoice", "none");
+    // Clear the incidental soft gates (#84 added no_original_resume + not_marketing
+    // as always-on) so each test isolates its target gate (assignment / duplicate).
+    fd.set("originalResumeOverrideReason", "n/a for this test");
+    fd.set("benchOverrideReason", "n/a for this test");
     for (const [k, v] of Object.entries(extra)) fd.set(k, v);
     return fd;
   }
@@ -67,7 +72,7 @@ describe.skipIf(!dbReachable)("createSubmission — gate flows", () => {
 
     const res = await createSubmission(undefined as never, form(job.id, ctx.recruiter.id));
 
-    expect(res?.needsConfirm).toBe("not_assigned");
+    expect(res?.pendingGates?.map((g) => g.kind)).toContain("not_assigned");
     expect(await subCount(job.id)).toBe(0);
     // No phantom self-assignment when the claim flag is absent.
     expect(await testPrisma.jobAssignment.count({ where: { jobId: job.id } })).toBe(0);
@@ -115,8 +120,8 @@ describe.skipIf(!dbReachable)("createSubmission — gate flows", () => {
 
     // Second, with no reason, is gated.
     const gated = await createSubmission(undefined as never, form(job.id, ctx.admin.id));
-    expect(gated?.needsConfirm).toBe("duplicate");
-    expect(gated?.confirmData).toMatchObject({ existingSubmissionId: first!.id });
+    const dup = gated?.pendingGates?.find((g) => g.kind === "duplicate");
+    expect(dup).toMatchObject({ existingSubmissionId: first!.id });
     expect(await subCount(job.id)).toBe(1); // nothing written
 
     // Second, with a reason, overrides.

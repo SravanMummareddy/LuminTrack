@@ -7,13 +7,13 @@ vi.mock("@/server/db", async () => {
   const real = await import("./db");
   return { prisma: real.testPrisma, isUniqueConstraintError: real.isUniqueConstraintError };
 });
-vi.mock("@/lib/session", () => ({ requireUser: vi.fn(), getCurrentUser: vi.fn() }));
+vi.mock("@/lib/session", () => ({ requireUser: vi.fn(), getCurrentUser: vi.fn(), getScopedPrisma: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
 // updateSubmission ends in redirect() on success — no-op so it returns instead of throwing.
 vi.mock("next/navigation", () => ({ redirect: vi.fn(), notFound: vi.fn() }));
 
 import { updateSubmission } from "@/server/actions/submissions";
-import { requireUser } from "@/lib/session";
+import { requireUser, getScopedPrisma } from "@/lib/session";
 
 let dbReachable = false;
 try {
@@ -29,6 +29,7 @@ describe.skipIf(!dbReachable)("updateSubmission — re-attribution, résumé sna
   beforeEach(async () => {
     await truncateAll(testPrisma);
     ctx = await seedSubmissionEditScenario(testPrisma);
+    vi.mocked(getScopedPrisma).mockResolvedValue(ctx.db as never);
   });
 
   /** The edit form always posts id + submittedAt + a résumé choice. Defaults
