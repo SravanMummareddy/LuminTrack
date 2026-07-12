@@ -2,7 +2,10 @@ import { PrismaNeon } from "@prisma/adapter-neon";
 import { PrismaClient } from "@/generated/prisma/client";
 import { orgScopeExtension } from "@/server/org-scope";
 
-export { orgScopeExtension } from "@/server/org-scope";
+// Re-export the already-imported binding for callers that reach it via
+// `@/server/db` (seed, tests). Equivalent to `export … from "@/server/org-scope"`
+// but without importing the module a second time.
+export { orgScopeExtension };
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
