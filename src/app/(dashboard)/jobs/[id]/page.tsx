@@ -13,7 +13,8 @@ import { getRequirementsForJob } from "@/server/queries/requirements";
 import { getTimelineFor } from "@/server/queries/timeline";
 import { getNotesFor } from "@/server/queries/notes";
 import { getCurrentUser, getScopedPrisma } from "@/lib/session";
-import { canManageRequirements } from "@/lib/permissions";
+import { canManageRequirements, isManagerTier } from "@/lib/permissions";
+import { OrgEntityLink } from "@/components/settings/org-entity-link";
 import { JobStatusForm } from "@/components/jobs/job-status-form";
 import { JobPipelineSteps } from "@/components/jobs/job-pipeline-steps";
 import { JobTrashBanner } from "@/components/jobs/job-trash-banner";
@@ -132,6 +133,7 @@ export default async function JobDetailPage({
   ]);
   if (!job) notFound();
   const canManageReq = canManageRequirements(currentUser ?? undefined);
+  const canLinkOrg = isManagerTier(currentUser);
   const isErased = Boolean(job.erasedAt);
   const isTrashed = Boolean(job.deletedAt) && !isErased;
   const isLive = !isTrashed && !isErased;
@@ -219,9 +221,21 @@ export default async function JobDetailPage({
 
       <Card title="Job summary">
         <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <SummaryItem label="Client">{job.client.name}</SummaryItem>
-          <SummaryItem label="Vendor">{job.vendor.name}</SummaryItem>
-          <SummaryItem label="Source">{jobSourceLabel(job)}</SummaryItem>
+          <SummaryItem label="Client">
+            <OrgEntityLink kind="client" id={job.clientId} name={job.client.name} isManager={canLinkOrg} />
+          </SummaryItem>
+          <SummaryItem label="Vendor">
+            <OrgEntityLink kind="vendor" id={job.vendorId} name={job.vendor.name} isManager={canLinkOrg} />
+          </SummaryItem>
+          <SummaryItem label="Source">
+            {job.sourceType === "SISTER_COMPANY" && job.sisterCompanySource ? (
+              <OrgEntityLink kind="source" id={job.sisterCompanySourceId} name={job.sisterCompanySource.name} isManager={canLinkOrg} />
+            ) : job.sourceType === "REFERRAL" && job.referrer ? (
+              <OrgEntityLink kind="referrer" id={job.referrerId} name={job.referrer.name} isManager={canLinkOrg} />
+            ) : (
+              jobSourceLabel(job)
+            )}
+          </SummaryItem>
           <SummaryItem label="Location">{job.location || "—"}</SummaryItem>
           <SummaryItem label="Client rate">{formatRate(job.clientRate, "Undisclosed")}</SummaryItem>
           <SummaryItem label="Vendor rate">{formatRate(job.vendorRate)}</SummaryItem>
