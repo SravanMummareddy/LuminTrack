@@ -53,6 +53,34 @@ export function daysToFirstSubmission(
   return Math.max(0, days);
 }
 
+/**
+ * V-5 rollup: the average days-to-first-submission across a set of submissions,
+ * to one decimal, or null when there's nothing to average. Groups by `jobId` and
+ * uses each job's **earliest** submission (from the rows given) — so passing all
+ * submissions yields the team average, and passing one recruiter's submissions
+ * yields their average (each job credited with *their* first submission on it,
+ * per the "every submitter counts" attribution). Pure/unit-tested.
+ */
+export function avgDaysToFirstSubmission(
+  subs: {
+    jobId: string;
+    receivedAt: Date | string;
+    submittedAt: Date | string;
+  }[],
+): number | null {
+  const earliest = new Map<string, { receivedAt: Date | string; submittedAt: Date | string }>();
+  for (const s of subs) {
+    const cur = earliest.get(s.jobId);
+    if (!cur || new Date(s.submittedAt) < new Date(cur.submittedAt))
+      earliest.set(s.jobId, { receivedAt: s.receivedAt, submittedAt: s.submittedAt });
+  }
+  const days = [...earliest.values()]
+    .map((e) => daysToFirstSubmission(e.receivedAt, e.submittedAt))
+    .filter((d): d is number => d != null);
+  if (!days.length) return null;
+  return Math.round((days.reduce((a, b) => a + b, 0) / days.length) * 10) / 10;
+}
+
 /** Label for `daysToFirstSubmission`: "—" (no submission), "Same day", or "N days". */
 export function timeToFirstSubmissionLabel(
   receivedAt: Date | string | null | undefined,

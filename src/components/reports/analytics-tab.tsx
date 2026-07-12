@@ -42,6 +42,11 @@ function pct(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
+/** V-5: an avg-days value (or null when there's nothing to average). */
+function fmtDays(value: number | null): string {
+  return value == null ? "—" : `${value} day${value === 1 ? "" : "s"}`;
+}
+
 function ConversionCard({
   label,
   value,
@@ -108,6 +113,7 @@ export async function AnalyticsTab({
       <Th className="text-right">Interviews</Th>
       <Th className="text-right">Selected</Th>
       <Th className="text-right">Joined</Th>
+      <Th className="text-right">Avg time to submit</Th>
     </tr>
   );
 
@@ -121,7 +127,7 @@ export async function AnalyticsTab({
         recruiters={recruiters}
       />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <ConversionCard
           label="Submission → Interview"
           value={pct(conversions.submissionToInterview)}
@@ -131,6 +137,14 @@ export async function AnalyticsTab({
           label="Interview → Selection"
           value={pct(conversions.interviewToSelection)}
           detail={`${conversions.selectedAfterInterview} of ${conversions.interviewed} interviewed candidates were selected or beyond`}
+        />
+        {/* V-5: avg time-to-submit, measured from each job's received date. */}
+        <ConversionCard
+          label="Avg time to submit"
+          value={fmtDays(conversions.avgTimeToSubmit)}
+          detail={`across ${conversions.jobsWithSubmission} job${
+            conversions.jobsWithSubmission === 1 ? "" : "s"
+          } with a submission · from received date`}
         />
       </div>
 
@@ -153,6 +167,9 @@ export async function AnalyticsTab({
               </Td>
               <Td label="Joined" className="text-right tabular-nums">
                 {r.joined}
+              </Td>
+              <Td label="Avg time to submit" className="text-right tabular-nums">
+                {fmtDays(r.avgTimeToSubmit)}
               </Td>
             </tr>
           ))}
