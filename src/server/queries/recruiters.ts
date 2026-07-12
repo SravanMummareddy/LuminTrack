@@ -8,7 +8,30 @@ import {
   type AnalyticsFilters,
 } from "@/lib/analytics";
 import { OTHER_SOURCE } from "@/lib/labels";
-import { PAGE_SIZE, SUB_PAGE_SIZE, type SortState } from "@/lib/filters";
+import {
+  PAGE_SIZE,
+  SUB_PAGE_SIZE,
+  type SortDir,
+  type SortState,
+} from "@/lib/filters";
+
+// Sortable columns for the recruiter-detail Submissions sub-table.
+const RECRUITER_SUB_SORTS: Record<
+  string,
+  (d: SortDir) => Prisma.SubmissionOrderByWithRelationInput
+> = {
+  candidate: (d) => ({ candidate: { fullName: d } }),
+  job: (d) => ({ job: { title: d } }),
+  status: (d) => ({ status: d }),
+  rounds: (d) => ({ interviewRounds: { _count: d } }),
+  submitted: (d) => ({ submittedAt: d }),
+};
+
+export const RECRUITER_SUB_SORT_KEYS = Object.keys(RECRUITER_SUB_SORTS);
+export const RECRUITER_SUB_DEFAULT_SORT: SortState = {
+  key: "submitted",
+  dir: "desc",
+};
 
 /** Client/vendor/source filter for a job — used for assignment counts. */
 function jobOrgWhere(f: AnalyticsFilters): Prisma.JobWhereInput {
@@ -189,6 +212,8 @@ export async function getRecruiterDetail(
     /** Optional status filter applied to the displayed submissions table only —
      *  stats + monthly chart still use ALL submissions in the filter window. */
     subStatus?: SubmissionStatus;
+    /** Sort for the displayed submissions sub-table (defaults to newest first). */
+    subSort?: SortState;
   } = {},
 ) {
   const db = await getScopedPrisma();
@@ -280,7 +305,11 @@ export async function getRecruiterDetail(
     }),
     db.submission.findMany({
       where: displaySubmissionWhere,
-      orderBy: { submittedAt: "desc" },
+      orderBy: [
+        (RECRUITER_SUB_SORTS[opts.subSort?.key ?? ""] ??
+          RECRUITER_SUB_SORTS.submitted)(opts.subSort?.dir ?? "desc"),
+        { id: "asc" },
+      ],
       skip: (subsPage - 1) * SUB_PAGE_SIZE,
       take: SUB_PAGE_SIZE,
       select: {
