@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { digestEmail, newSubmissionEmail } from "@/server/email-templates";
+import {
+  digestEmail,
+  newSubmissionEmail,
+  recruiterAssignedEmail,
+} from "@/server/email-templates";
 
 describe("digestEmail", () => {
   const items = [
@@ -53,5 +57,45 @@ describe("newSubmissionEmail", () => {
     expect(out.html).toContain("Priya Nair → Senior Data Engineer");
     expect(out.html).toContain("SUB-342");
     expect(out.html).toContain("https://x/submissions/9");
+  });
+});
+
+describe("recruiterAssignedEmail", () => {
+  const base = {
+    recruiterName: "Hrishikesh Batta",
+    teamLeadName: "Sriman Iyer",
+    jobTitle: "Java Full-Stack Developer",
+    vendorName: "Meridian Vendor",
+    vprDisplayId: "VPR-042",
+    billRate: "$92/hr",
+    engagement: "C2C",
+    url: "https://x/vendor-portal/42",
+  };
+
+  it("names the recruiter, team lead, job, vendor, and VPR id", () => {
+    const out = recruiterAssignedEmail({ ...base, note: null });
+    expect(out.subject).toBe("You've been assigned VPR-042: Java Full-Stack Developer");
+    expect(out.html).toContain("Hi Hrishikesh,");
+    expect(out.html).toContain("Sriman Iyer assigned a vendor requirement to you.");
+    expect(out.html).toContain("Java Full-Stack Developer · Meridian Vendor");
+    expect(out.html).toContain("VPR-042");
+  });
+
+  it("renders the note block only when a note is present", () => {
+    const without = recruiterAssignedEmail({ ...base, note: null });
+    expect(without.html).not.toContain("Note from");
+
+    const withNote = recruiterAssignedEmail({
+      ...base,
+      note: "Priority — 2 by Friday",
+    });
+    expect(withNote.html).toContain("Note from Sriman Iyer");
+    expect(withNote.html).toContain("Priority — 2 by Friday");
+  });
+
+  it("escapes HTML in the note", () => {
+    const out = recruiterAssignedEmail({ ...base, note: "<b>x</b> & y" });
+    expect(out.html).not.toContain("<b>x</b>");
+    expect(out.html).toContain("&lt;b&gt;x&lt;/b&gt; &amp; y");
   });
 });

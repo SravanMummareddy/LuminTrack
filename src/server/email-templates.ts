@@ -87,3 +87,41 @@ export function newSubmissionEmail(opts: {
     html: shell(inner, "#d85a30"),
   };
 }
+
+/** Immediate email: a team lead assigned a VPR to the recipient (a recruiter),
+ *  optionally with a personal note. */
+export function recruiterAssignedEmail(opts: {
+  recruiterName: string;
+  teamLeadName: string;
+  jobTitle: string;
+  vendorName: string | null;
+  vprDisplayId: string;
+  billRate: string | null;
+  engagement: string | null;
+  note: string | null;
+  url: string;
+}): { subject: string; html: string } {
+  const first = opts.recruiterName.split(" ")[0] || opts.recruiterName;
+  const terms = [
+    opts.billRate ? `Bill ${opts.billRate}` : null,
+    opts.engagement ? `engagement ${opts.engagement}` : null,
+  ].filter((t): t is string => Boolean(t));
+  const metaLine = [opts.vprDisplayId, ...terms].map(esc).join(" · ");
+  const noteBlock = opts.note
+    ? `<div style="margin-top:14px;border-left:3px solid ${BRAND};background:#f4f8f6;padding:10px 14px;border-radius:0 8px 8px 0">
+<div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:${SOFT};font-weight:700">Note from ${esc(opts.teamLeadName)}</div>
+<div style="font-size:13.5px;color:${INK};margin-top:3px;white-space:pre-wrap">${esc(opts.note)}</div></div>`
+    : "";
+  const inner = `<p style="font-size:14px;color:${INK};margin:0 0 4px">Hi ${esc(first)},</p>
+<p style="font-size:13.5px;color:${SOFT};margin:0 0 14px">${esc(opts.teamLeadName)} assigned a vendor requirement to you.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:13px 0;border-top:1px solid ${LINE};border-bottom:1px solid ${LINE}">
+<div style="font-size:14px;font-weight:600;color:${INK}">${esc(opts.jobTitle)}${opts.vendorName ? " · " + esc(opts.vendorName) : ""}</div>
+<div style="font-size:12.5px;color:${SOFT};margin-top:2px">${metaLine}</div></td></tr></table>
+${noteBlock}
+<a href="${esc(opts.url)}" style="display:inline-block;margin-top:16px;background:${BRAND};color:#fff;font-weight:700;font-size:13.5px;padding:9px 18px;border-radius:8px;text-decoration:none">Open requirement →</a>
+<p style="font-size:11.5px;color:${FAINT};margin-top:16px;border-top:1px solid ${LINE};padding-top:12px">A direct message from your team lead in LuminTrack.</p>`;
+  return {
+    subject: `You've been assigned ${opts.vprDisplayId}: ${opts.jobTitle}`,
+    html: shell(inner),
+  };
+}

@@ -6,6 +6,7 @@ import { getScopedPrisma, requireUser } from "@/lib/session";
 import { canManageRequirements, hasFullAccess } from "@/lib/permissions";
 import { logActivity } from "@/server/activity";
 import { deriveTeamLead } from "@/server/team-lead";
+import { notifyRecruiterAssigned } from "@/server/notify";
 import {
   createSubmissionRecord,
   type CreateSubmissionResult,
@@ -106,6 +107,10 @@ export async function createVendorRequirement(
     return r;
   });
 
+  // Wave 7.1 — optional "notify recruiter by email" on assign (note-less path).
+  if (formData.get("notifyRecruiter") === "on" && d.recruiterId)
+    await notifyRecruiterAssigned(db, created.id, { actorName: user.fullName });
+
   revalidatePath("/vendor-portal");
   revalidatePath(`/jobs/${d.jobId}`);
   redirect(`/vendor-portal/${created.id}`);
@@ -170,9 +175,60 @@ export async function updateVendorRequirement(
     });
   });
 
+  // Wave 7.1 — optional "notify recruiter by email" on reassign (note-less path).
+  if (formData.get("notifyRecruiter") === "on" && d.recruiterId)
+    await notifyRecruiterAssigned(db, id, { actorName: user.fullName });
+
   revalidatePath("/vendor-portal");
   revalidatePath(`/vendor-portal/${id}`);
   redirect(`/vendor-portal/${id}`);
+}
+
+/** Wave 7.1 — a team lead's explicit "Email recruiter" action from the VPR
+ *  detail page, with an optional personal note. Returns a toast on success so
+ *  the dialog can confirm. Sends regardless of the recruiter's `notifyEvents`
+ *  opt-out (a direct, intended message, not an automatic system email). */
+export async function emailAssignedRecruiter(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const db = await getScopedPrisma();
+  const user = await requireUser();
+  if (!canManageRequirements(user))
+    return { error: "Only admins and team leads can email the recruiter." };
+
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) return { error: "Missing requirement reference." };
+  const note = String(formData.get("note") ?? "").trim();
+
+  const existing = await db.vendorRequirement.findUnique({
+    where: { id },
+    select: { id: true, recruiterId: true },
+  });
+  if (!existing) return { error: "This requirement no longer exists." };
+  if (!existing.recruiterId)
+    return { error: "No recruiter is assigned to this requirement yet." };
+
+  const recruiterName = await notifyRecruiterAssigned(db, id, {
+    note: note || null,
+    actorName: user.fullName,
+  });
+  if (!recruiterName)
+    return { error: "Couldn't reach the assigned recruiter." };
+
+  await db.$transaction(async (tx) => {
+    await logActivity(tx, {
+      entityType: "REQUIREMENT",
+      action: "REQUIREMENT_RECRUITER_EMAILED",
+      description: `Emailed ${recruiterName} about this requirement`,
+      note: note || null,
+      performedById: user.id,
+      requirementId: id,
+    });
+  });
+
+  revalidatePath(`/vendor-portal/${id}`);
+  return { ok: true, toast: { title: `Email sent to ${recruiterName}` } };
 }
 
 /** Cancels an OPEN requirement (soft — sets CANCELLED). Converted requirements

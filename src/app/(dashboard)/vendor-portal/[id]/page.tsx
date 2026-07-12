@@ -5,6 +5,7 @@ import { CheckCircle2, Pencil, Send, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
 import { ConfirmSubmit } from "@/components/ui/confirm-dialog";
+import { EmailRecruiterButton } from "@/components/vendor-portal/email-recruiter-button";
 import { ActivityTimeline } from "@/components/timeline/activity-timeline";
 import {
   getVendorRequirement,
@@ -166,6 +167,16 @@ export default async function RequirementDetailPage({
               />
             </>
           )}
+          {canManage && requirement.recruiter?.email && (
+            <EmailRecruiterButton
+              requirementId={requirement.id}
+              recruiterName={requirement.recruiter.fullName}
+              recruiterEmail={requirement.recruiter.email}
+              vprDisplayId={formatVendorRequirementDisplayId(requirement)}
+              jobTitle={requirement.job.title}
+              variant="button"
+            />
+          )}
           {canManage && submissions.length === 0 && (
             <ConfirmSubmit
               action={deleteVendorRequirement}
@@ -269,7 +280,23 @@ export default async function RequirementDetailPage({
           <SummaryItem label="Bill rate">{formatRate(requirement.billRate)}</SummaryItem>
           <SummaryItem label="Pay rate">{formatRate(requirement.payRate)}</SummaryItem>
           <SummaryItem label="Recruiter">
-            {requirement.recruiter?.fullName ?? "—"}
+            {requirement.recruiter ? (
+              <span className="inline-flex items-center gap-2">
+                {requirement.recruiter.fullName}
+                {canManage && requirement.recruiter.email && (
+                  <EmailRecruiterButton
+                    requirementId={requirement.id}
+                    recruiterName={requirement.recruiter.fullName}
+                    recruiterEmail={requirement.recruiter.email}
+                    vprDisplayId={formatVendorRequirementDisplayId(requirement)}
+                    jobTitle={requirement.job.title}
+                    variant="link"
+                  />
+                )}
+              </span>
+            ) : (
+              "—"
+            )}
           </SummaryItem>
           <SummaryItem label="Team lead">{requirement.teamLead ?? "—"}</SummaryItem>
           <SummaryItem label="Vendor recruiter">

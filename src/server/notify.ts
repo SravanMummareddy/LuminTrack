@@ -7,8 +7,11 @@
  */
 import type { ScopedPrisma } from "@/server/db";
 import { sendEmail, appUrl } from "@/server/email";
-import { newSubmissionEmail } from "@/server/email-templates";
-import { formatSubmissionDisplayId } from "@/lib/format";
+import { newSubmissionEmail, recruiterAssignedEmail } from "@/server/email-templates";
+import {
+  formatSubmissionDisplayId,
+  formatVendorRequirementDisplayId,
+} from "@/lib/format";
 
 /** Notify the submitting recruiter's team lead that a new submission landed on a
  *  requirement they lead. No-op when there's no lead, no email, the lead opted
@@ -58,4 +61,45 @@ export async function notifyNewSubmission(
     url: `${appUrl()}/submissions/${submissionId}`,
   });
   await sendEmail({ to: lead.email, subject: email.subject, html: email.html });
+}
+
+/** Immediate email to the recruiter assigned to a VPR — a team lead's explicit,
+ *  intended message, so it IGNORES the `notifyEvents` opt-out (that governs only
+ *  the automatic system emails). No-op when no recruiter is assigned. Returns
+ *  the recruiter's name when sent (or attempted) so the caller can toast; null
+ *  when there was no one to notify. */
+export async function notifyRecruiterAssigned(
+  db: ScopedPrisma,
+  requirementId: string,
+  opts: { note?: string | null; actorName: string },
+): Promise<string | null> {
+  const vpr = await db.vendorRequirement.findUnique({
+    where: { id: requirementId },
+    select: {
+      seq: true,
+      teamLead: true,
+      billRate: true,
+      engagement: true,
+      recruiter: { select: { fullName: true, email: true } },
+      job: {
+        select: { title: true, vendor: { select: { name: true } } },
+      },
+    },
+  });
+  const recruiter = vpr?.recruiter;
+  if (!vpr || !recruiter || !recruiter.email) return null;
+
+  const email = recruiterAssignedEmail({
+    recruiterName: recruiter.fullName,
+    teamLeadName: vpr.teamLead ?? opts.actorName,
+    jobTitle: vpr.job?.title ?? "a role",
+    vendorName: vpr.job?.vendor?.name ?? null,
+    vprDisplayId: formatVendorRequirementDisplayId(vpr),
+    billRate: vpr.billRate ? `$${vpr.billRate}/hr` : null,
+    engagement: vpr.engagement ?? null,
+    note: opts.note?.trim() || null,
+    url: `${appUrl()}/vendor-portal/${requirementId}`,
+  });
+  await sendEmail({ to: recruiter.email, subject: email.subject, html: email.html });
+  return recruiter.fullName;
 }
