@@ -7,7 +7,7 @@ import type {
   SubmissionStatus,
 } from "@/generated/prisma/enums";
 import { getScopedPrisma, requireUser } from "@/lib/session";
-import { hasFullAccess, canReattributeSubmission } from "@/lib/permissions";
+import { hasFullAccess, isManagerTier, canReattributeSubmission } from "@/lib/permissions";
 import { logActivity } from "@/server/activity";
 import {
   submissionSchema,
@@ -659,10 +659,11 @@ export async function bulkChangeSubmissionStatus(
   const db = await getScopedPrisma();
   const user = await requireUser();
   const ids = bulkIds(formData);
-  // Bulk status is restricted to admins / team leads — the blast radius (many
-  // rows across the whole team's pipeline in one click) is larger than a
-  // recruiter should wield. Single-submission status changes stay open to all.
-  if (!hasFullAccess(user)) return { changed: 0, skipped: ids.length };
+  // Bulk status is restricted to the Manager/Admin tier — the blast radius (many
+  // rows across the whole team's pipeline in one click) is larger than a team
+  // lead or recruiter should wield. Single-submission status changes stay open to
+  // all; team leads still change statuses one at a time.
+  if (!isManagerTier(user)) return { changed: 0, skipped: ids.length };
   const target = String(formData.get("status") ?? "").trim();
   if (ids.length === 0 || !isBulkStatusTarget(target))
     return { changed: 0, skipped: ids.length };
