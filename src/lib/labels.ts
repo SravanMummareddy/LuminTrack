@@ -198,14 +198,55 @@ export const OTHER_SOURCE = "__OTHER__";
  *  action resolves it to a created-or-reused entity by name (admin-only). */
 export const NEW_ORG_ENTITY = "__NEW_ORG__";
 
+/** Popular job boards seeded into the Job form's board picker datalist. Learned
+ *  boards (new ones typed by recruiters) are a follow-up via the LookupOption
+ *  learned-dropdown; for now this seed list covers the common cases. */
+export const JOB_BOARD_SEED = [
+  "LinkedIn",
+  "Indeed",
+  "Dice",
+  "Monster",
+  "CareerBuilder",
+  "ZipRecruiter",
+  "Glassdoor",
+  "Naukri",
+  "Company careers page",
+] as const;
+
+export const JOB_SOURCE_TYPE_LABEL: Record<string, string> = {
+  JOB_BOARD: "Job board",
+  REFERRAL: "Referral",
+  SISTER_COMPANY: "Sister company",
+  DIRECT: "Direct",
+  OTHER: "Other",
+};
+
 /**
- * A job's display source — managed source name or free-text fallback.
+ * A job's display source, resolved from its `sourceType`: the job-board name,
+ * the referrer's name, the sister-company name, the free-text "other", or the
+ * plain type label for Direct. Falls back gracefully for pre-rework rows.
  */
 export function jobSourceLabel(job: {
+  sourceType?: string | null;
+  jobBoard?: string | null;
+  referrer?: { name: string } | null;
   sisterCompanySource: { name: string } | null;
   sourceOther: string | null;
 }): string {
-  return job.sisterCompanySource?.name ?? job.sourceOther ?? "—";
+  switch (job.sourceType) {
+    case "JOB_BOARD":
+      return job.jobBoard ?? "Job board";
+    case "REFERRAL":
+      return job.referrer?.name ?? "Referral";
+    case "SISTER_COMPANY":
+      return job.sisterCompanySource?.name ?? "Sister company";
+    case "OTHER":
+      return job.sourceOther ?? "Other";
+    case "DIRECT":
+      return "Direct";
+    default:
+      return job.sisterCompanySource?.name ?? job.sourceOther ?? "—";
+  }
 }
 
 // ─── Interview mode & platform ───────────────────────────────────────────────

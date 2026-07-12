@@ -106,6 +106,7 @@ export async function listJobs(filters: JobListFilters) {
       client: { select: { name: true } },
       vendor: { select: { name: true } },
       sisterCompanySource: { select: { name: true } },
+      referrer: { select: { name: true } },
       assignments: {
         include: { recruiter: { select: { id: true, fullName: true } } },
       },
@@ -171,6 +172,7 @@ export async function getJobDetail(id: string) {
       client: true,
       vendor: true,
       sisterCompanySource: true,
+      referrer: { select: { name: true } },
       createdBy: { select: { fullName: true } },
       assignments: {
         include: { recruiter: { select: { id: true, fullName: true } } },

@@ -5,7 +5,6 @@ import { redirect } from "next/navigation";
 import { del } from "@vercel/blob";
 import { getScopedPrisma, requireUser } from "@/lib/session";
 import {
-  canQuickAddOrgEntities,
   canEditJobRatesAndAssignment,
   hasFullAccess,
 } from "@/lib/permissions";
@@ -17,27 +16,37 @@ import {
   JOB_ARCHIVE_PREFIX,
 } from "@/server/job-erase";
 import { jobSchema, JOB_STATUS_VALUES } from "@/lib/validation/job";
+import type { JobInput } from "@/lib/validation/job";
 import { toFieldErrors } from "@/lib/validation/common";
-import { JOB_STATUS_LABEL, OTHER_SOURCE, NEW_ORG_ENTITY } from "@/lib/labels";
+import { JOB_STATUS_LABEL } from "@/lib/labels";
 import type { FormState } from "@/lib/form-state";
-import type { Tx } from "@/server/db";
 
-/** Resolve a "+ Add new client/vendor" sentinel to an id: reuse a case-
- *  insensitive name match if one exists, else create the record. Mirrors the
- *  iLabor importer's create-if-missing so "Acme" and "ACME" don't fork. */
-async function findOrCreateClient(tx: Tx, name: string) {
-  const existing = await tx.client.findFirst({
-    where: { name: { equals: name, mode: "insensitive" } },
-    select: { id: true },
-  });
-  return existing ?? (await tx.client.create({ data: { name }, select: { id: true } }));
+/** Resolve the source columns for a job's `sourceType`: keep only the relevant
+ *  one set and null the rest, so the row's origin is unambiguous. `postingUrl`
+ *  is handled separately (it doubles as the job-board link). */
+function resolveSource(d: JobInput) {
+  const t = d.sourceType;
+  return {
+    sourceType: t,
+    jobBoard: t === "JOB_BOARD" ? (d.jobBoard ?? null) : null,
+    referrerId: t === "REFERRAL" ? (d.referrerId ?? null) : null,
+    sisterCompanySourceId:
+      t === "SISTER_COMPANY" ? (d.sisterCompanySourceId ?? null) : null,
+    sourceOther: t === "OTHER" ? (d.sourceOther ?? null) : null,
+  };
 }
-async function findOrCreateVendor(tx: Tx, name: string) {
-  const existing = await tx.vendor.findFirst({
-    where: { name: { equals: name, mode: "insensitive" } },
-    select: { id: true },
-  });
-  return existing ?? (await tx.vendor.create({ data: { name }, select: { id: true } }));
+
+/** Estimated-start close-gate: a non-estimated real start date is required
+ *  before a job can be Filled/Closed. Returns an error message or null. */
+function startGate(
+  next: string,
+  startDate: Date | null,
+  estimated: boolean,
+): string | null {
+  const closing = next === "FILLED" || next === "CLOSED";
+  if (closing && (!startDate || estimated))
+    return "Set a confirmed (non-estimated) start date before marking this job Filled or Closed.";
+  return null;
 }
 
 function parseSkillsCsv(raw: unknown): string[] {
@@ -57,6 +66,9 @@ function readJob(formData: FormData) {
     title: formData.get("title") ?? "",
     clientId: formData.get("clientId") ?? "",
     vendorId: formData.get("vendorId") ?? "",
+    sourceType: formData.get("sourceType") ?? "",
+    jobBoard: formData.get("jobBoard") ?? "",
+    referrerId: formData.get("referrerId") ?? "",
     sisterCompanySourceId: formData.get("sisterCompanySourceId") ?? "",
     sourceOther: formData.get("sourceOther") ?? "",
     status: formData.get("status") ?? "OPEN",
@@ -67,18 +79,17 @@ function readJob(formData: FormData) {
     notes: formData.get("notes") ?? "",
     recruiterIds: formData.getAll("recruiterIds").map(String),
     positions: formData.get("positions") ?? "",
-    reqType: formData.get("reqType") ?? "",
-    department: formData.get("department") ?? "",
-    durationLabel: formData.get("durationLabel") ?? "",
-    atsId: formData.get("atsId") ?? "",
     startDate: formData.get("startDate") ?? "",
+    startDateEstimated: formData.get("startDateEstimated") ?? "",
     endDate: formData.get("endDate") ?? "",
     workMode: formData.get("workMode") ?? "",
     priority: formData.get("priority") ?? "",
     discipline: formData.get("discipline") ?? "",
     targetCloseDate: formData.get("targetCloseDate") ?? "",
-    postingUrl: formData.get("postingUrl") ?? "",
+    targetCloseDateNa: formData.get("targetCloseDate__na") ?? "",
     workAuthRequirement: formData.get("workAuthRequirement") ?? "",
+    workAuthRequirementNa: formData.get("workAuthRequirement__na") ?? "",
+    postingUrl: formData.get("postingUrl") ?? "",
     skills: formData.get("skills") ?? "",
   });
 }
@@ -96,59 +107,34 @@ export async function createJob(
       fieldErrors: toFieldErrors(parsed.error),
     };
   const d = parsed.data;
-  const isOtherSource = d.sisterCompanySourceId === OTHER_SOURCE;
-
-  // Inline "+ Add new client/vendor" — any signed-in user may quick-add while
-  // working (curation/rename/deactivate stays manager-only, in Settings).
-  const canCreateOrg = canQuickAddOrgEntities(user);
-  const newClientName = String(formData.get("newClientName") ?? "").trim();
-  const newVendorName = String(formData.get("newVendorName") ?? "").trim();
-  const wantNewClient = d.clientId === NEW_ORG_ENTITY;
-  const wantNewVendor = d.vendorId === NEW_ORG_ENTITY;
-  if ((wantNewClient || wantNewVendor) && !canCreateOrg)
-    return {
-      error: "You must be signed in to add a new client or vendor.",
-    };
-  const orgErrors: Record<string, string> = {};
-  if (wantNewClient && !newClientName)
-    orgErrors.clientId = "Enter the new client name.";
-  if (wantNewVendor && !newVendorName)
-    orgErrors.vendorId = "Enter the new vendor name.";
-  if (Object.keys(orgErrors).length)
-    return { error: "Please fix the highlighted fields.", fieldErrors: orgErrors };
+  // Rates are manager-only (the form hides them for recruiters) — force null for
+  // anyone who can't edit them so a crafted POST can't set them.
+  const canRates = canEditJobRatesAndAssignment(user);
+  const estimated = d.startDate ? d.startDateEstimated : false;
+  const gate = startGate(d.status, d.startDate ?? null, estimated);
+  if (gate) return { error: gate, fieldErrors: { startDate: gate } };
+  const src = resolveSource(d);
 
   const job = await db.$transaction(async (tx) => {
-    // Resolve inline-added client/vendor first (create-or-reuse by name).
-    const clientId = wantNewClient
-      ? (await findOrCreateClient(tx, newClientName)).id
-      : d.clientId;
-    const vendorId = wantNewVendor
-      ? (await findOrCreateVendor(tx, newVendorName)).id
-      : d.vendorId;
-
     const created = await tx.job.create({
       data: {
         title: d.title,
-        clientId,
-        vendorId,
-        sisterCompanySourceId: isOtherSource ? null : d.sisterCompanySourceId,
-        sourceOther: isOtherSource ? (d.sourceOther ?? null) : null,
+        clientId: d.clientId,
+        vendorId: d.vendorId,
+        ...src,
         status: d.status,
-        location: d.location ?? null,
-        clientRate: d.clientRate ?? null,
-        vendorRate: d.vendorRate ?? null,
-        description: d.description ?? null,
+        location: d.location,
+        clientRate: canRates ? (d.clientRate ?? null) : null,
+        vendorRate: canRates ? (d.vendorRate ?? null) : null,
+        description: d.description,
         notes: d.notes ?? null,
         positions: d.positions ?? null,
-        reqType: d.reqType ?? null,
-        department: d.department ?? null,
-        durationLabel: d.durationLabel ?? null,
-        atsId: d.atsId ?? null,
         startDate: d.startDate ?? null,
+        startDateEstimated: estimated,
         endDate: d.endDate ?? null,
-        workMode: d.workMode ?? null,
-        priority: d.priority ?? null,
-        discipline: d.discipline ?? null,
+        workMode: d.workMode,
+        priority: d.priority,
+        discipline: d.discipline,
         targetCloseDate: d.targetCloseDate ?? null,
         postingUrl: d.postingUrl ?? null,
         workAuthRequirement: d.workAuthRequirement ?? null,
@@ -187,12 +173,14 @@ export async function updateJob(
       fieldErrors: toFieldErrors(parsed.error),
     };
   const d = parsed.data;
-  const isOtherSource = d.sisterCompanySourceId === OTHER_SOURCE;
-  const nextSourceId = isOtherSource ? null : d.sisterCompanySourceId;
-  const nextSourceOther = isOtherSource ? (d.sourceOther ?? null) : null;
+  const src = resolveSource(d);
 
   const existing = await db.job.findUnique({ where: { id: jobId } });
   if (!existing) return { error: "This job no longer exists." };
+
+  const estimated = d.startDate ? d.startDateEstimated : false;
+  const gate = startGate(d.status, d.startDate ?? null, estimated);
+  if (gate) return { error: gate, fieldErrors: { startDate: gate } };
 
   // Recruiters may edit basic job details + status, but NOT the commercial
   // rates — those are manager/team-lead only. For a recruiter, force the rate
@@ -218,10 +206,14 @@ export async function updateJob(
   compare("title", existing.title, d.title);
   compare("client", existing.clientId, d.clientId);
   compare("vendor", existing.vendorId, d.vendorId);
+  compare("source type", existing.sourceType, src.sourceType);
   compare(
     "source",
-    existing.sisterCompanySourceId ?? existing.sourceOther,
-    nextSourceId ?? nextSourceOther,
+    existing.jobBoard ??
+      existing.referrerId ??
+      existing.sisterCompanySourceId ??
+      existing.sourceOther,
+    src.jobBoard ?? src.referrerId ?? src.sisterCompanySourceId ?? src.sourceOther,
   );
   compare("status", existing.status, d.status);
   compare("location", existing.location, d.location);
@@ -241,15 +233,12 @@ export async function updateJob(
   compare("description", existing.description, d.description);
   compare("notes", existing.notes, d.notes);
   compare("positions", existing.positions, d.positions);
-  compare("position type", existing.reqType, d.reqType);
-  compare("department", existing.department, d.department);
-  compare("duration", existing.durationLabel, d.durationLabel);
-  compare("customer ref", existing.atsId, d.atsId);
   compare(
     "projected start",
     existing.startDate?.toISOString(),
     d.startDate?.toISOString(),
   );
+  compare("start estimate", existing.startDateEstimated, estimated);
   compare(
     "projected end",
     existing.endDate?.toISOString(),
@@ -257,6 +246,7 @@ export async function updateJob(
   );
   compare("work mode", existing.workMode, d.workMode);
   compare("priority", existing.priority, d.priority);
+  compare("discipline", existing.discipline, d.discipline);
   compare(
     "target close date",
     existing.targetCloseDate?.toISOString(),
@@ -274,24 +264,20 @@ export async function updateJob(
         title: d.title,
         clientId: d.clientId,
         vendorId: d.vendorId,
-        sisterCompanySourceId: nextSourceId,
-        sourceOther: nextSourceOther,
+        ...src,
         status: d.status,
-        location: d.location ?? null,
+        location: d.location,
         clientRate: effClientRate,
         vendorRate: effVendorRate,
-        description: d.description ?? null,
+        description: d.description,
         notes: d.notes ?? null,
         positions: d.positions ?? null,
-        reqType: d.reqType ?? null,
-        department: d.department ?? null,
-        durationLabel: d.durationLabel ?? null,
-        atsId: d.atsId ?? null,
         startDate: d.startDate ?? null,
+        startDateEstimated: estimated,
         endDate: d.endDate ?? null,
-        workMode: d.workMode ?? null,
-        priority: d.priority ?? null,
-        discipline: d.discipline ?? null,
+        workMode: d.workMode,
+        priority: d.priority,
+        discipline: d.discipline,
         targetCloseDate: d.targetCloseDate ?? null,
         postingUrl: d.postingUrl ?? null,
         workAuthRequirement: d.workAuthRequirement ?? null,
@@ -337,6 +323,8 @@ export async function changeJobStatus(
   if (job.status === status)
     return { error: "Status is already set to that value." };
   const next = status as (typeof JOB_STATUS_VALUES)[number];
+  const gate = startGate(next, job.startDate, job.startDateEstimated);
+  if (gate) return { error: gate };
   // Closing/filling/cancelling a job retires its open requirements too — they
   // can't be worked once the job is done (same cascade as trashing a job). A
   // job that FILLED succeeded, so its reqs read "fulfilled" (CONVERTED); a job

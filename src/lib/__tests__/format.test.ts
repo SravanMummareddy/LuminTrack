@@ -1,5 +1,27 @@
 import { describe, it, expect } from "vitest";
-import { deletedSuffix, formatDate } from "@/lib/format";
+import { deletedSuffix, formatDate, jobDuration } from "@/lib/format";
+
+describe("jobDuration", () => {
+  it("returns — with no start date", () => {
+    expect(jobDuration(null, "2026-06-01")).toBe("—");
+  });
+  it("is Ongoing when there's a start but no end", () => {
+    expect(jobDuration("2026-01-01", null)).toBe("Ongoing");
+  });
+  it("computes months between start and end", () => {
+    expect(jobDuration("2026-01-01", "2026-07-01")).toBe("~6 months");
+  });
+  it("uses weeks for short spans", () => {
+    expect(jobDuration("2026-01-01", "2026-01-15")).toBe("~2 weeks");
+  });
+  it("returns — when end precedes start", () => {
+    expect(jobDuration("2026-07-01", "2026-01-01")).toBe("—");
+  });
+  it("appends (est.) when the start is an estimate", () => {
+    expect(jobDuration("2026-01-01", "2026-07-01", true)).toBe("~6 months (est.)");
+    expect(jobDuration("2026-01-01", null, true)).toBe("Ongoing (est.)");
+  });
+});
 
 describe("deletedSuffix", () => {
   it("is empty for a live record", () => {

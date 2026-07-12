@@ -41,6 +41,7 @@ import {
   formatSubmissionDisplayId,
   formatVendorRequirementDisplayId,
   deletedSuffix,
+  jobDuration,
 } from "@/lib/format";
 import { RecentlyViewedTracker } from "@/components/layout/recently-viewed";
 
@@ -232,18 +233,10 @@ export default async function JobDetailPage({
           {job.positions != null && (
             <SummaryItem label="Positions">{job.positions}</SummaryItem>
           )}
-          {job.reqType && (
-            <SummaryItem label="Position type">{job.reqType}</SummaryItem>
-          )}
-          {job.department && (
-            <SummaryItem label="Department">{job.department}</SummaryItem>
-          )}
-          {job.durationLabel && (
-            <SummaryItem label="Duration">{job.durationLabel}</SummaryItem>
-          )}
           {job.startDate && (
             <SummaryItem label="Projected start">
               {formatDate(job.startDate)}
+              {job.startDateEstimated ? " (est.)" : ""}
             </SummaryItem>
           )}
           {job.endDate && (
@@ -251,8 +244,10 @@ export default async function JobDetailPage({
               {formatDate(job.endDate)}
             </SummaryItem>
           )}
-          {job.atsId && (
-            <SummaryItem label="Customer ref">{job.atsId}</SummaryItem>
+          {job.startDate && (
+            <SummaryItem label="Duration">
+              {jobDuration(job.startDate, job.endDate, job.startDateEstimated)}
+            </SummaryItem>
           )}
           {job.workMode && (
             <SummaryItem label="Work mode">

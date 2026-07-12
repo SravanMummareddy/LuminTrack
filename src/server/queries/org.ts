@@ -42,6 +42,15 @@ export async function listVendors() {
   });
 }
 
+/** Reusable referrer directory (source rework) — active first, by name. */
+export async function listReferrers() {
+  const db = await getScopedPrisma();
+  return db.referrer.findMany({
+    orderBy: [{ isActive: "desc" }, { name: "asc" }],
+    select: { id: true, name: true, isActive: true },
+  });
+}
+
 /** All active users as `{id, fullName}` — the suggestion pool for the vendor
  *  "Recruited by" picker (any role: recruiter, team lead, manager). Deduped by
  *  name so accidental seed duplicates don't double up. */

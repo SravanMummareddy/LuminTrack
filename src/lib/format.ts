@@ -28,6 +28,36 @@ export function formatTime(date: Date | string): string {
 }
 
 /**
+ * Human-readable duration derived from a job's projected start + end (replaces
+ * the retired free-text `durationLabel`). No start → "—"; start but no end →
+ * "Ongoing"; end before start → "—"; otherwise "~N weeks" (under ~6 weeks) or
+ * "~N months". Appends " (est.)" when the start date is a recruiter's estimate.
+ * Pure + unit-tested.
+ */
+export function jobDuration(
+  start: Date | string | null | undefined,
+  end: Date | string | null | undefined,
+  estimated = false,
+): string {
+  if (!start) return "—";
+  const s = new Date(start);
+  if (Number.isNaN(s.getTime())) return "—";
+  const est = estimated ? " (est.)" : "";
+  if (!end) return `Ongoing${est}`;
+  const e = new Date(end);
+  if (Number.isNaN(e.getTime())) return `Ongoing${est}`;
+  const ms = e.getTime() - s.getTime();
+  if (ms < 0) return "—";
+  const days = Math.round(ms / 86_400_000);
+  if (days < 42) {
+    const weeks = Math.max(1, Math.round(days / 7));
+    return `~${weeks} week${weeks === 1 ? "" : "s"}${est}`;
+  }
+  const months = Math.max(1, Math.round(days / 30));
+  return `~${months} month${months === 1 ? "" : "s"}${est}`;
+}
+
+/**
  * Suffix marking a removed entity in history/reference lists. A candidate or job
  * that has been trashed or permanently erased keeps its real name (owner
  * decision); wherever that name still appears against a submission/placement/etc.

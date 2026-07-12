@@ -5,15 +5,18 @@ import {
   listClients,
   listVendors,
   listSisterCompanies,
+  listReferrers,
 } from "@/server/queries/org";
 import { getCurrentUser } from "@/lib/session";
 import { canQuickAddOrgEntities, hasFullAccess } from "@/lib/permissions";
+import { JOB_BOARD_SEED } from "@/lib/labels";
 
 export default async function NewJobPage() {
-  const [clients, vendors, sources, user] = await Promise.all([
+  const [clients, vendors, sources, referrers, user] = await Promise.all([
     listClients(),
     listVendors(),
     listSisterCompanies(),
+    listReferrers(),
     getCurrentUser(),
   ]);
 
@@ -26,8 +29,10 @@ export default async function NewJobPage() {
           clients={clients}
           vendors={vendors}
           sources={sources}
+          referrers={referrers}
+          jobBoards={[...JOB_BOARD_SEED]}
           submitLabel="Create job"
-          canCreateOrgEntities={canQuickAddOrgEntities(user)}
+          canQuickAdd={canQuickAddOrgEntities(user)}
           canManageRatesAndAssignment={hasFullAccess(user)}
         />
       </div>
