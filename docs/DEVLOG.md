@@ -10,6 +10,29 @@ short instead of long.
 
 ---
 
+## 2026-07-12 · Card section `overflow-hidden` clipped the job-form dropdowns
+
+**Situation.** After wrapping the Job form's sections in cards (the new `FormSection` in
+`job-form.tsx`), the Client/Vendor pickers opened a dropdown whose list was cut off at the card's
+bottom edge — the pinned "+ Add new client…" action (and lower list rows) became unreachable, so a
+recruiter couldn't quick-add a client.
+
+**Diagnosis.** `FormSection`'s outer `<section>` had `overflow-hidden` (added so the tinted header
+background respected the card's rounded top corners). But the `SearchSelect`/`Select` dropdowns are
+absolutely-positioned children that intentionally overflow the field to float over the content below —
+`overflow-hidden` on any ancestor clips exactly that.
+
+**Fix.** Drop `overflow-hidden` from the section; round only the header (`rounded-t-xl`) so its
+background still clips to the top corners without clipping descendants. The dropdown now overflows the
+card and floats over the fields below, with its own internal scroll reaching the add-action.
+
+**Lesson.** `overflow-hidden` for rounded-corner clipping is a trap on any container that hosts
+floating UI (dropdowns, popovers, tooltips). Round the specific child that needs clipping
+(`rounded-t-*` on the header) instead of clipping the whole container. Caught only in the visual smoke
+test — tsc/tests can't see it.
+
+---
+
 ## 2026-07-11 · Résumé/document preview = black box — a fragile manual `Content-Encoding: gzip`
 
 **Situation.** Every résumé preview rendered as a black/blank iframe. Blobs are stored gzip-compressed

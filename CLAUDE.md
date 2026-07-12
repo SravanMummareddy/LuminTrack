@@ -71,16 +71,24 @@ from all code. Do not reintroduce it.
 **Source of truth:** the header comment + `rateChainWarnings()` in `src/lib/rates.ts` (chain
 = Client ≥ Bill ≥ Pay); the live chain warning is `src/components/ui/rate-chain-warning.tsx`.
 
-## Current state (2026-07-10)
+## Current state (2026-07-12)
 
-- **Branch `main`**, tsc clean. Deployed to prod at `lumin-track.vercel.app`.
-- **Latest built work:** feedback round 3 (candidate + bench forms & marketing lifecycle,
-  2026-07-08) and the iLabor removal (2026-07-10). See DEVLOG for both.
-- **Pending deploy:** the iLabor-removal prod migration (`20260710170000_remove_ilabor`) is
-  **not yet applied to prod** — awaiting owner go-ahead.
-- **Open owner questions** (still gating rate/scorecard work): confirm the rate chain;
-  "New vendors" company-wide semantics; rate guardrail soft-warn vs hard-block; cap
-  requirements per job. In the walkthrough DOCX.
+- **`main` is live on prod** (`lumin-track.vercel.app`); org/roles/tenancy foundation (Phases A/B/C,
+  PRs #79–#83) + the independent backlog (#84) shipped. tsc clean, 247 unit tests.
+- **In flight: PR #86** (branch `feat/job-form-redesign`, 8 commits) — **Job form redesign + org-entity
+  records**. Both migrations (`20260712120000_job_source_and_org_audit`, `20260712140000_org_entity_seq`)
+  **applied to dev + PROD**; **awaiting owner squash-merge** → Vercel auto-deploys (schema already ahead
+  of code). What it ships: 4-card Job form (required + N/A toggle), source rework (Job board / Referral /
+  Sister company / Other — **"Direct" removed**), a **Referrer** directory, derived duration +
+  estimated-start close-gate, quick-add dialog; org entities (Client/Vendor/Source/Referrer) now have
+  **display IDs** (CLI-/VEN-/SRC-/REF-), **manager-only detail pages** (`/settings/[entity]/[id]`), slim
+  lists, `createdById/updatedById`, and app-wide `OrgEntityLink` (names link for managers, plain text for
+  recruiters). See DEVLOG 2026-07-12 + the plan file RESUME-HERE block.
+- **Deferred:** submission-form restructure (5 sections + N/A, same pattern); two skipped link surfaces
+  (dashboard-home, candidate-detail source).
+- **Open owner decisions** (gate the remaining waves): D3 received-date · D5 referrer entity · D7
+  dashboards/forms · D9 new-vendors/closures · D13 rate masking · D14 VPR-dedup scope. See
+  `docs/WORKLIST.md` §A + the work-tracker artifact.
 
 ## Stack (all current majors — verify APIs, don't assume older versions)
 
