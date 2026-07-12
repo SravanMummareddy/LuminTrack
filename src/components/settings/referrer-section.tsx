@@ -12,35 +12,29 @@ import {
   type StatusFilter,
 } from "@/components/settings/settings-list-filter";
 import { useLocalPagination } from "@/components/ui/local-pager";
-import { saveClient } from "@/server/actions/org";
-import {
-  ContactsDialog,
-  type ContactRow,
-} from "@/components/settings/contacts-dialog";
+import { saveReferrer } from "@/server/actions/org";
 import { AuditCell, type AuditFields } from "@/components/settings/audit-cell";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
 
-export type ClientRow = AuditFields & {
+export type ReferrerRow = AuditFields & {
   id: string;
   name: string;
-  contactPerson: string | null;
   email: string | null;
   phone: string | null;
-  location: string | null;
+  company: string | null;
   notes: string | null;
   isActive: boolean;
-  contacts: ContactRow[];
 };
 
-export function ClientSection({
+/** Settings › Referrers — the reusable directory of people who refer jobs. */
+export function ReferrerSection({
   items,
   isAdmin,
 }: {
-  items: ClientRow[];
+  items: ReferrerRow[];
   isAdmin: boolean;
 }) {
-  const [editing, setEditing] = useState<ClientRow | "new" | null>(null);
-  const [contactsOf, setContactsOf] = useState<ClientRow | null>(null);
+  const [editing, setEditing] = useState<ReferrerRow | "new" | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
 
@@ -60,15 +54,20 @@ export function ClientSection({
     <section className="space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-slate-700">
-          Clients <span className="font-normal text-slate-400">({items.length})</span>
+          Referrers{" "}
+          <span className="font-normal text-slate-400">({items.length})</span>
         </h2>
         {isAdmin && (
           <Button size="sm" onClick={() => setEditing("new")}>
             <Plus className="h-4 w-4" />
-            Add client
+            Add referrer
           </Button>
         )}
       </div>
+      <p className="text-xs text-slate-500">
+        People who refer jobs to us. Recruiters can quick-add one while creating a
+        job; managers curate the directory here.
+      </p>
 
       {items.length > 0 && (
         <SettingsListFilter
@@ -76,28 +75,27 @@ export function ClientSection({
           onSearchChange={setSearch}
           status={status}
           onStatusChange={setStatus}
-          searchPlaceholder="Search clients…"
+          searchPlaceholder="Search referrers…"
         />
       )}
 
       {items.length === 0 ? (
         <p className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-400">
-          No clients yet.
+          No referrers yet.
         </p>
       ) : filtered.length === 0 ? (
         <p className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-400">
-          No clients match these filters.
+          No referrers match these filters.
         </p>
       ) : (
         <Table>
           <thead className="border-b border-slate-200 bg-slate-50">
             <tr>
               <Th>Name</Th>
-              <Th>Contact</Th>
+              <Th>Company</Th>
               <Th>Email</Th>
-              <Th>Location</Th>
+              <Th>Phone</Th>
               <Th>Status</Th>
-              <Th>Contacts</Th>
               <Th>Added / Updated</Th>
               <Th />
             </tr>
@@ -108,22 +106,13 @@ export function ClientSection({
                 <Td label="Name" className="font-medium text-slate-900">
                   {item.name}
                 </Td>
-                <Td label="Contact">{item.contactPerson || "—"}</Td>
+                <Td label="Company">{item.company || "—"}</Td>
                 <Td label="Email">{item.email || "—"}</Td>
-                <Td label="Location">{item.location || "—"}</Td>
+                <Td label="Phone">{item.phone || "—"}</Td>
                 <Td label="Status">
                   <Badge tone={item.isActive ? "green" : "slate"}>
                     {item.isActive ? "Active" : "Inactive"}
                   </Badge>
-                </Td>
-                <Td label="Contacts">
-                  <button
-                    type="button"
-                    onClick={() => setContactsOf(item)}
-                    className="text-sm font-medium text-indigo-600 hover:underline"
-                  >
-                    Manage ({item.contacts.length})
-                  </button>
                 </Td>
                 <Td label="Added / Updated">
                   <AuditCell {...item} />
@@ -150,37 +139,27 @@ export function ClientSection({
       <Dialog
         open={editing !== null}
         onClose={() => setEditing(null)}
-        title={editing === "new" ? "Add client" : "Edit client"}
+        title={editing === "new" ? "Add referrer" : "Edit referrer"}
       >
         {editing !== null && (
-          <ClientForm
+          <ReferrerForm
             entity={editing === "new" ? null : editing}
             onDone={() => setEditing(null)}
           />
         )}
       </Dialog>
-
-      <ContactsDialog
-        open={contactsOf !== null}
-        onClose={() => setContactsOf(null)}
-        kind="client"
-        parentId={contactsOf?.id ?? ""}
-        parentName={contactsOf?.name ?? ""}
-        contacts={contactsOf?.contacts ?? []}
-        readOnly={!isAdmin}
-      />
     </section>
   );
 }
 
-function ClientForm({
+function ReferrerForm({
   entity,
   onDone,
 }: {
-  entity: ClientRow | null;
+  entity: ReferrerRow | null;
   onDone: () => void;
 }) {
-  const [state, formAction, pending] = useActionState(saveClient, EMPTY_FORM_STATE);
+  const [state, formAction, pending] = useActionState(saveReferrer, EMPTY_FORM_STATE);
 
   useEffect(() => {
     if (state.ok) onDone();
@@ -190,39 +169,22 @@ function ClientForm({
     <form action={formAction} className="space-y-4">
       {entity && <input type="hidden" name="id" value={entity.id} />}
 
-      <Field label="Client name" htmlFor="name" required error={state.fieldErrors?.name}>
+      <Field label="Name" htmlFor="name" required error={state.fieldErrors?.name}>
         <Input id="name" name="name" defaultValue={entity?.name ?? ""} required />
       </Field>
 
-      <Field
-        label="Contact person"
-        htmlFor="contactPerson"
-        error={state.fieldErrors?.contactPerson}
-      >
-        <Input
-          id="contactPerson"
-          name="contactPerson"
-          defaultValue={entity?.contactPerson ?? ""}
-        />
+      <Field label="Company" htmlFor="company" error={state.fieldErrors?.company}>
+        <Input id="company" name="company" defaultValue={entity?.company ?? ""} placeholder="e.g. ex-TCS, LinkedIn contact" />
       </Field>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Email" htmlFor="email" error={state.fieldErrors?.email}>
-          <Input
-            id="email"
-            name="email"
-            type="email"
-            defaultValue={entity?.email ?? ""}
-          />
+          <Input id="email" name="email" type="email" defaultValue={entity?.email ?? ""} />
         </Field>
         <Field label="Phone" htmlFor="phone" error={state.fieldErrors?.phone}>
           <Input id="phone" name="phone" defaultValue={entity?.phone ?? ""} />
         </Field>
       </div>
-
-      <Field label="Location" htmlFor="location" error={state.fieldErrors?.location}>
-        <Input id="location" name="location" defaultValue={entity?.location ?? ""} />
-      </Field>
 
       <Field label="Notes" htmlFor="notes" error={state.fieldErrors?.notes}>
         <Textarea id="notes" name="notes" rows={3} defaultValue={entity?.notes ?? ""} />

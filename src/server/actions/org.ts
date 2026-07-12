@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 import { isUniqueConstraintError } from "@/server/db";
 import { getScopedPrisma, requireUser } from "@/lib/session";
 import { canManageOrgEntities } from "@/lib/permissions";
-import { contactOrgSchema, clientSchema, teamSchema } from "@/lib/validation/org";
+import {
+  contactOrgSchema,
+  clientSchema,
+  teamSchema,
+  referrerSchema,
+} from "@/lib/validation/org";
 import { toFieldErrors } from "@/lib/validation/common";
 import type { FormState } from "@/lib/form-state";
 
@@ -49,14 +54,24 @@ async function resolveRecruitedBy(
  *  deactivations of shared records therefore leave no trail; acceptable for a
  *  <10-person team where writes are already manager-gated, but flagged here so
  *  the gap is a known trade-off rather than an oversight (review IN-03). */
-async function requireOrgManager(): Promise<FormState | { ok: true }> {
+async function requireOrgManager(): Promise<
+  FormState | { ok: true; actorId: string }
+> {
   const actor = await requireUser();
   if (!canManageOrgEntities(actor))
     return {
       error:
         "Only managers and team leads can manage clients, vendors, and sources.",
     };
-  return { ok: true };
+  return { ok: true, actorId: actor.id };
+}
+
+/** Audit stamp for an org-entity write: set the creator on insert, and always
+ *  the last editor. `id` present → update (creator untouched). */
+function auditStamp(actorId: string, isCreate: boolean) {
+  return isCreate
+    ? { createdById: actorId, updatedById: actorId }
+    : { updatedById: actorId };
 }
 
 export async function saveSisterCompany(
@@ -65,7 +80,7 @@ export async function saveSisterCompany(
 ): Promise<FormState> {
   const db = await getScopedPrisma();
   const gate = await requireOrgManager();
-  if ("error" in gate) return gate;
+  if (!("actorId" in gate)) return gate;
   const id = String(formData.get("id") ?? "").trim();
   const parsed = readContactOrg(formData);
   if (!parsed.success) return { fieldErrors: toFieldErrors(parsed.error) };
@@ -81,8 +96,15 @@ export async function saveSisterCompany(
   };
 
   try {
-    if (id) await db.sisterCompanySource.update({ where: { id }, data });
-    else await db.sisterCompanySource.create({ data });
+    if (id)
+      await db.sisterCompanySource.update({
+        where: { id },
+        data: { ...data, ...auditStamp(gate.actorId, false) },
+      });
+    else
+      await db.sisterCompanySource.create({
+        data: { ...data, ...auditStamp(gate.actorId, true) },
+      });
   } catch (error) {
     if (isUniqueConstraintError(error))
       return { fieldErrors: { name: "A source with this name already exists." } };
@@ -99,7 +121,7 @@ export async function saveVendor(
 ): Promise<FormState> {
   const db = await getScopedPrisma();
   const gate = await requireOrgManager();
-  if ("error" in gate) return gate;
+  if (!("actorId" in gate)) return gate;
   const id = String(formData.get("id") ?? "").trim();
   const parsed = readContactOrg(formData);
   if (!parsed.success) return { fieldErrors: toFieldErrors(parsed.error) };
@@ -118,8 +140,15 @@ export async function saveVendor(
   };
 
   try {
-    if (id) await db.vendor.update({ where: { id }, data });
-    else await db.vendor.create({ data });
+    if (id)
+      await db.vendor.update({
+        where: { id },
+        data: { ...data, ...auditStamp(gate.actorId, false) },
+      });
+    else
+      await db.vendor.create({
+        data: { ...data, ...auditStamp(gate.actorId, true) },
+      });
   } catch (error) {
     if (isUniqueConstraintError(error))
       return { fieldErrors: { name: "A vendor with this name already exists." } };
@@ -136,7 +165,7 @@ export async function saveClient(
 ): Promise<FormState> {
   const db = await getScopedPrisma();
   const gate = await requireOrgManager();
-  if ("error" in gate) return gate;
+  if (!("actorId" in gate)) return gate;
   const id = String(formData.get("id") ?? "").trim();
   const parsed = clientSchema.safeParse({
     name: formData.get("name") ?? "",
@@ -160,11 +189,68 @@ export async function saveClient(
   };
 
   try {
-    if (id) await db.client.update({ where: { id }, data });
-    else await db.client.create({ data });
+    if (id)
+      await db.client.update({
+        where: { id },
+        data: { ...data, ...auditStamp(gate.actorId, false) },
+      });
+    else
+      await db.client.create({
+        data: { ...data, ...auditStamp(gate.actorId, true) },
+      });
   } catch (error) {
     if (isUniqueConstraintError(error))
       return { fieldErrors: { name: "A client with this name already exists." } };
+    throw error;
+  }
+
+  revalidatePath("/settings");
+  return { ok: true };
+}
+
+/** Create/rename/deactivate a referrer in the reusable referrer directory
+ *  (source rework). Manager-gated for edits; recruiters quick-add via the job
+ *  form. Records who created/updated it, like the other org entities. */
+export async function saveReferrer(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const db = await getScopedPrisma();
+  const gate = await requireOrgManager();
+  if (!("actorId" in gate)) return gate;
+  const id = String(formData.get("id") ?? "").trim();
+  const parsed = referrerSchema.safeParse({
+    name: formData.get("name") ?? "",
+    email: formData.get("email") ?? "",
+    phone: formData.get("phone") ?? "",
+    company: formData.get("company") ?? "",
+    notes: formData.get("notes") ?? "",
+    isActive: formData.get("isActive") != null,
+  });
+  if (!parsed.success) return { fieldErrors: toFieldErrors(parsed.error) };
+
+  const data = {
+    name: parsed.data.name,
+    email: parsed.data.email ?? null,
+    phone: parsed.data.phone ?? null,
+    company: parsed.data.company ?? null,
+    notes: parsed.data.notes ?? null,
+    isActive: parsed.data.isActive,
+  };
+
+  try {
+    if (id)
+      await db.referrer.update({
+        where: { id },
+        data: { ...data, ...auditStamp(gate.actorId, false) },
+      });
+    else
+      await db.referrer.create({
+        data: { ...data, ...auditStamp(gate.actorId, true) },
+      });
+  } catch (error) {
+    if (isUniqueConstraintError(error))
+      return { fieldErrors: { name: "A referrer with this name already exists." } };
     throw error;
   }
 
@@ -180,7 +266,7 @@ export async function saveTeam(
 ): Promise<FormState> {
   const db = await getScopedPrisma();
   const gate = await requireOrgManager();
-  if ("error" in gate) return gate;
+  if (!("actorId" in gate)) return gate;
   const id = String(formData.get("id") ?? "").trim();
   const parsed = teamSchema.safeParse({
     name: formData.get("name") ?? "",

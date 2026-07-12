@@ -31,6 +31,18 @@ export const teamSchema = z.object({
   leadId: optionalText,
 });
 
+/** A referrer in the reusable directory (source rework) — a person who refers
+ *  jobs to us. `company` replaces the contact-person field. */
+export const referrerSchema = z.object({
+  name: z.string().trim().min(1, "Name is required.").max(160),
+  email: optionalEmail,
+  phone: optionalText,
+  company: optionalText,
+  notes: optionalText,
+  isActive: z.boolean(),
+});
+
 export type ContactOrgInput = z.infer<typeof contactOrgSchema>;
 export type ClientInput = z.infer<typeof clientSchema>;
 export type TeamInput = z.infer<typeof teamSchema>;
+export type ReferrerInput = z.infer<typeof referrerSchema>;

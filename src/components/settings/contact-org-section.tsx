@@ -18,9 +18,10 @@ import {
   type ContactRow,
 } from "@/components/settings/contacts-dialog";
 import type { ContactKind } from "@/lib/contact-kinds";
+import { AuditCell, type AuditFields } from "@/components/settings/audit-cell";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 
-export type ContactOrg = {
+export type ContactOrg = AuditFields & {
   id: string;
   name: string;
   contactPerson: string | null;
@@ -128,6 +129,7 @@ export function ContactOrgSection({
               <Th>Location</Th>
               <Th>Status</Th>
               <Th>Contacts</Th>
+              <Th>Added / Updated</Th>
               <Th />
             </tr>
           </thead>
@@ -157,6 +159,9 @@ export function ContactOrgSection({
                   >
                     Manage ({item.contacts.length})
                   </button>
+                </Td>
+                <Td label="Added / Updated">
+                  <AuditCell {...item} />
                 </Td>
                 <Td className="text-right">
                   {isAdmin ? (

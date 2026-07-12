@@ -18,6 +18,7 @@ import {
   listSisterCompanies,
   listClients,
   listVendors,
+  listReferrersAdmin,
   listUsers,
   listActiveUserOptions,
   listTeamsAdmin,
@@ -29,6 +30,7 @@ import { listSupportProviders } from "@/server/queries/support";
 import { ContactOrgSection } from "@/components/settings/contact-org-section";
 import { SupportSection } from "@/components/settings/support-section";
 import { ClientSection } from "@/components/settings/client-section";
+import { ReferrerSection } from "@/components/settings/referrer-section";
 import { UserSection } from "@/components/settings/user-section";
 import { AccountSection } from "@/components/settings/account-section";
 import { DeletedCandidatesSection } from "@/components/settings/deleted-candidates-section";
@@ -44,6 +46,7 @@ const TABS = [
   { key: "sister-companies", label: "Sources" },
   { key: "clients", label: "Clients" },
   { key: "vendors", label: "Vendors" },
+  { key: "referrers", label: "Referrers" },
   { key: "support", label: "Support" },
   { key: "teams", label: "Teams" },
   { key: "users", label: "Users" },
@@ -109,6 +112,10 @@ export default async function SettingsPage({
         showRecruitedBy
         userNames={userOptions.map((u) => u.fullName)}
       />
+    );
+  } else if (tab === "referrers") {
+    content = (
+      <ReferrerSection items={await listReferrersAdmin()} isAdmin={isAdmin} />
     );
   } else if (tab === "support") {
     content = (

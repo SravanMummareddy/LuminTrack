@@ -4,6 +4,12 @@ import { getScopedPrisma } from "@/lib/session";
 // "Contacts (N)" links without a follow-up roundtrip.
 // Include each parent's contacts inline. Volume is bounded (single-digit
 // per entity), so the settings page reads cheap. Primary first.
+// Who-added / who-updated audit names for the Settings admin lists.
+const audit = {
+  createdBy: { select: { fullName: true } },
+  updatedBy: { select: { fullName: true } },
+};
+
 const contactsInclude = {
   contacts: {
     orderBy: [
@@ -17,7 +23,7 @@ export async function listSisterCompanies() {
   const db = await getScopedPrisma();
   return db.sisterCompanySource.findMany({
     orderBy: { name: "asc" },
-    include: contactsInclude,
+    include: { ...contactsInclude, ...audit },
   });
 }
 
@@ -25,7 +31,7 @@ export async function listClients() {
   const db = await getScopedPrisma();
   return db.client.findMany({
     orderBy: { name: "asc" },
-    include: contactsInclude,
+    include: { ...contactsInclude, ...audit },
   });
 }
 
@@ -35,10 +41,20 @@ export async function listVendors() {
     orderBy: { name: "asc" },
     include: {
       ...contactsInclude,
+      ...audit,
       // "Recruited by" — the linked owner (if any). Display falls back to the
       // free-text recruitedByName when no user is linked.
       recruitedBy: { select: { id: true, fullName: true } },
     },
+  });
+}
+
+/** Full referrer rows for the Settings › Referrers admin tab (with audit). */
+export async function listReferrersAdmin() {
+  const db = await getScopedPrisma();
+  return db.referrer.findMany({
+    orderBy: [{ isActive: "desc" }, { name: "asc" }],
+    include: audit,
   });
 }
 
