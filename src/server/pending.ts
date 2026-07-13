@@ -102,7 +102,11 @@ export async function getPendingTodos(
     db.interviewRound.findMany({
       where: {
         result: { in: ["WAITING", "NEED_ANOTHER_ROUND"] },
-        submission: { submittedById: inSet },
+        // Exclude rounds whose submission already went terminal — the status
+        // change never resolves a lingering round result, so without this a
+        // directly-rejected/joined submission with an unlogged round emits a
+        // permanent "log the outcome" todo.
+        submission: { submittedById: inSet, status: { notIn: [...TERMINAL] } },
       },
       orderBy: { scheduledAt: "asc" },
       take: TAKE,
@@ -129,6 +133,9 @@ export async function getPendingTodos(
         submittedById: inSet,
         status: { in: ["OFFER_ACCEPTED", "OFFER_RELEASED", ...MOVING] },
       },
+      // Oldest-updated first so truncation past the cap is deterministic and
+      // drops the freshest (least likely to be stalled) rows.
+      orderBy: { updatedAt: "asc" },
       take: TAKE * 2,
       select: {
         id: true,
@@ -190,6 +197,7 @@ export async function getPendingTodos(
     // Assigned OPEN/ON_HOLD jobs — filtered to < 2 submissions below (D4).
     db.jobAssignment.findMany({
       where: { recruiterId: inSet, job: { status: { in: ["OPEN", "ON_HOLD"] } } },
+      orderBy: { assignedAt: "asc" },
       take: TAKE * 2,
       select: {
         recruiterId: true,

@@ -10,6 +10,33 @@ short instead of long.
 
 ---
 
+## 2026-07-13 · Wave 7.2 follow-up — phantom "log the outcome" todos (adversarial review catch)
+
+**Situation.** An adversarial bug-hunt over the just-shipped pending/dashboard rewrite (two review
+agents; the app-wide sweep found the server layer otherwise clean) flagged that the interview-rounds
+bucket in `getPendingTodos` filtered only on `result IN [WAITING, NEED_ANOTHER_ROUND]` +
+`submittedById`, with no submission-status filter.
+
+**Diagnosis.** The submission status-change action (`actions/submissions.ts`) only *reads*
+`interviewRounds` (for `advanceBlock`) — it never resolves a lingering round result. So when a recruiter
+marks a submission `REJECTED`/`JOINED`/`BACKED_OUT` directly while a round is still `WAITING` (interview
+happened, outcome never logged), the round stays `WAITING` on a now-terminal submission → an
+`interview_to_log` item at `urgency: overdue` **forever**, also inflating the team-member counts and the
+digest. A dev-data count confirmed **10** such phantom rounds. (The retired `getMyWork.pendingRounds`
+had the same latent gap; the rewrite made it louder by putting it in the Overdue tier.)
+
+**Fix.** Add `status: { notIn: [...TERMINAL] }` to the round query's `submission` filter — you never need
+to log an outcome for a submission that's already terminal. 10 phantom todos gone; the 23 genuine
+pending rounds still surface. Also hardened two capped-but-unordered queries (`pipeline`, `assigned`)
+with an `orderBy` so truncation past the cap is deterministic (drops the freshest rows, not an arbitrary
+set) — a correctness cliff only at scale, but free to close.
+
+**Lesson.** "Pending" queries must exclude terminal parents — a child row (round, gate, flag) can outlive
+the workflow that made it actionable. Whenever a bucket keys off a child's own status, add the parent's
+terminal-status guard too. Adversarial review of your own fresh code pays: this was invisible in the
+happy-path smoke (which had data, so it "worked") and would only have shown as a slowly-accreting pile of
+un-actionable overdue items.
+
 ## 2026-07-13 · Wave 7.2b — the manager dashboard is oversight, not a checklist
 
 **Situation.** PR-A gave recruiters and team leads an urgency-tiered pending view. The manager/admin
