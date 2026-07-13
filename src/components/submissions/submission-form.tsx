@@ -91,6 +91,7 @@ type Fields = {
   workAuthReason: string;
   originalResumeReason: string;
   benchReason: string;
+  incompleteReason: string;
   duplicatePreset: string;
   duplicateNote: string;
 };
@@ -171,6 +172,7 @@ export function SubmissionForm({
     workAuthReason: "",
     originalResumeReason: "",
     benchReason: "",
+    incompleteReason: "",
     duplicatePreset: "",
     duplicateNote: "",
     ...prefill,
@@ -597,6 +599,14 @@ export function SubmissionForm({
           value={fields.benchReason}
         />
       )}
+      {/* Incomplete-profile override reason, latched so it survives a follow-up gate. */}
+      {fields.incompleteReason.trim() !== "" && (
+        <input
+          type="hidden"
+          name="incompleteProfileOverrideReason"
+          value={fields.incompleteReason}
+        />
+      )}
       {/* Each stacked gate's reason posts via its own latched hidden input, so the
           whole batch submits together (the visible fields drive these values). */}
       {fields.rateReason.trim() !== "" && (
@@ -985,6 +995,32 @@ export function SubmissionForm({
                   required
                   value={fields.workAuthReason}
                   onChange={set("workAuthReason")}
+                />
+              </Field>
+            </div>
+          )}
+
+          {gate("incomplete_profile") && (
+            <div className="border-t border-amber-200 pt-3">
+              <p className="text-sm font-medium text-amber-800">
+                Candidate profile is missing details.
+              </p>
+              <p className="mt-0.5 text-xs text-amber-700">
+                Recruiters usually need these before submitting:{" "}
+                {gate("incomplete_profile")!.missing?.join(", ")}.
+              </p>
+              <Field
+                label="Reason for submitting anyway"
+                htmlFor="incompleteReason"
+                required
+                hint="Captured on the audit trail."
+              >
+                <Textarea
+                  id="incompleteReason"
+                  rows={2}
+                  required
+                  value={fields.incompleteReason}
+                  onChange={set("incompleteReason")}
                 />
               </Field>
             </div>

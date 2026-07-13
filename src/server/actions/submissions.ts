@@ -34,6 +34,7 @@ import {
   gatesFromCreateResult,
   workAuthExpiredOn,
 } from "@/server/submission-gates";
+import { missingCandidateDetails } from "@/lib/bench-readiness";
 import {
   branchActions,
   resumeFlag,
@@ -97,6 +98,10 @@ export async function createSubmission(
         status: true,
         isActive: true,
         deletedAt: true,
+        technology: true,
+        totalExperienceYears: true,
+        workAuthorization: true,
+        currentLocation: true,
         benchConsultant: { select: { marketingStatus: true } },
         documents: {
           where: { category: "WORK_AUTH" },
@@ -181,6 +186,9 @@ export async function createSubmission(
   const benchOverrideReason = String(
     formData.get("benchOverrideReason") ?? "",
   ).trim();
+  const incompleteProfileOverrideReason = String(
+    formData.get("incompleteProfileOverrideReason") ?? "",
+  ).trim();
   const duplicateReason = String(formData.get("duplicateReason") ?? "").trim();
 
   const rateWarnings = rateChainWarnings({
@@ -195,6 +203,15 @@ export async function createSubmission(
   const missingOriginalResume = candidate.resumes.length === 0;
   const bench = candidate.benchConsultant;
   const notMarketed = !bench || bench.marketingStatus === "INACTIVE";
+  // Résumé is already gated (no_original_resume), so pass hasResume:true — this
+  // gate only nags the other four profile details.
+  const incompleteFields = missingCandidateDetails({
+    hasResume: true,
+    totalExperienceYears: candidate.totalExperienceYears,
+    technology: candidate.technology,
+    workAuthorization: candidate.workAuthorization,
+    currentLocation: candidate.currentLocation,
+  });
 
   // Pre-check duplicate here (createSubmissionRecord re-checks under the advisory
   // lock as the race-safe net) so it joins the same stacked prompt.
@@ -223,6 +240,7 @@ export async function createSubmission(
   const gates = collectSubmissionGates({
     isConvert: false,
     assignmentOk: isAdmin || hasAssignment || claim,
+    incompleteFields,
     rateWarnings,
     candidateStatusLabel: candidateBlocked
       ? CANDIDATE_STATUS_LABEL[candidate.status]
@@ -240,6 +258,7 @@ export async function createSubmission(
       bench: benchOverrideReason,
       convert: "",
       duplicate: duplicateReason,
+      incompleteProfile: incompleteProfileOverrideReason,
     },
   });
   if (gates.length > 0)
@@ -270,6 +289,7 @@ export async function createSubmission(
       workAuthOverrideReason,
       originalResumeOverrideReason,
       benchOverrideReason,
+      incompleteProfileOverrideReason,
       job,
       candidateFullName: candidate.fullName,
       actor: { id: user.id, fullName: user.fullName, isAdmin },

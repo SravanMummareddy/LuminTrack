@@ -33,6 +33,10 @@ export type ConfirmKind =
  */
 export type PendingGateKind =
   | "not_assigned"
+  // Soft warn when the bench candidate is missing required profile details
+  // (experience / technology / visa / location). Overridable with a free-text
+  // `incompleteProfileOverrideReason`. Résumé is handled by `no_original_resume`.
+  | "incomplete_profile"
   | "rate_chain"
   | "candidate_status"
   // Soft warn when the candidate's work authorization has expired. Overridable
@@ -51,6 +55,8 @@ export type PendingGate = {
   message?: string;
   /** Broken rate-chain rungs (rate_chain) or convert warnings (convert_warn). */
   warnings?: string[];
+  /** Missing required fields, for the incomplete_profile gate. */
+  missing?: string[];
   /** Existing submission to link, for the duplicate gate. */
   existingSubmissionId?: string;
 };
