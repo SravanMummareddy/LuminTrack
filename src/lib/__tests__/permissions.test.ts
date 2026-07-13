@@ -58,10 +58,16 @@ describe("permissions — gates default to deny", () => {
       it("allows team leads", () => {
         expect(gate(TEAM_LEAD)).toBe(true);
       });
-      it("denies recruiters", () => {
-        // canManageRequirements now ALLOWS recruiters (owner decision 2026-07-13
-        // — recruiters create/edit VPRs); every other gate here still denies them.
-        expect(gate(RECRUITER)).toBe(name === "canManageRequirements");
+      it("allows or denies recruiters per the owner grants", () => {
+        // Recruiters now hold requirement:manage (VPRs) and both sensitive-doc
+        // keys (attach/see identity + work-auth for their own candidates — owner
+        // decision 2026-07-13). The rate/full-access gates still deny them.
+        const recruiterAllowed = new Set([
+          "canManageRequirements",
+          "canViewSensitiveDocs",
+          "canManageSensitiveDocs",
+        ]);
+        expect(gate(RECRUITER)).toBe(recruiterAllowed.has(name));
       });
       it("denies null / undefined / role-less viewers", () => {
         expect(gate(null)).toBe(false);

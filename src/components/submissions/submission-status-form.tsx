@@ -89,7 +89,6 @@ export function SubmissionStatusForm({
   const [expectedJoinDate, setExpectedJoinDate] = useState("");
   const [actualJoinDate, setActualJoinDate] = useState("");
   // SB-5: "this stage didn't happen" — on the vendor-screen advance dialog only.
-  const [skip, setSkip] = useState(false);
 
   const [showDetails, setShowDetails] = useState(false);
   const [dialog, setDialog] = useState<DialogKind | null>(null);
@@ -124,7 +123,6 @@ export function SubmissionStatusForm({
       setReason("");
       setExpectedJoinDate("");
       setActualJoinDate("");
-      setSkip(false);
       setEventAt(nowIso());
       setShowDetails(false);
       /* eslint-enable react-hooks/set-state-in-effect */
@@ -147,7 +145,6 @@ export function SubmissionStatusForm({
     setReason("");
     setExpectedJoinDate("");
     setActualJoinDate("");
-    setSkip(false);
   }
 
   /**
@@ -204,16 +201,11 @@ export function SubmissionStatusForm({
     submitWith(target);
   }
 
-  /** SB-5: confirm the stage-detail advance. A ticked "didn't happen" on the
-   *  vendor screen skips it — advancing to Client interview with the note as the
-   *  recorded reason. */
+  /** SB-5: confirm the stage-detail advance (Offer released / accepted, etc. —
+   *  interview stages are entered by adding a round, not through this dialog). */
   function confirmAdvance() {
     submittedFromDialog.current = true;
-    if (skip && target === "VENDOR_SCREENING_CALL") {
-      submitWith("CLIENT_INTERVIEW");
-    } else {
-      submitWith(target);
-    }
+    submitWith(target);
   }
 
   function cancelDialog() {
@@ -255,12 +247,8 @@ export function SubmissionStatusForm({
         ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  // In the advance dialog the vendor-screen skip retargets Client interview, so
-  // the block it must satisfy is that stage's (needs a client-interview round).
-  const advanceEffectiveTarget: SubmissionStatus =
-    skip && target === "VENDOR_SCREENING_CALL" ? "CLIENT_INTERVIEW" : target;
   const advanceBlockedReason =
-    dialog === "advance" ? recordBlock(advanceEffectiveTarget) : null;
+    dialog === "advance" ? recordBlock(target) : null;
 
   const branchLabel: Record<string, string> = {
     ON_HOLD: "Put on hold",
@@ -581,22 +569,6 @@ export function SubmissionStatusForm({
           description="Record when this stage happened and any context. It lands on the timeline."
         >
           <div className="space-y-3">
-            {target === "VENDOR_SCREENING_CALL" && (
-              <label className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                <input
-                  type="checkbox"
-                  className="mt-0.5"
-                  checked={skip}
-                  onChange={(e) => setSkip(e.target.checked)}
-                />
-                <span>
-                  The client <strong>waived</strong> the vendor screen — skip it
-                  and go straight to the client interview. You&apos;ll still need
-                  the interview scheduled.
-                </span>
-              </label>
-            )}
-
             {advanceBlockedReason ? (
               // SB-5 (strict): the required interview/screening record is missing
               // — guide the recruiter to add it rather than let the advance
@@ -622,11 +594,11 @@ export function SubmissionStatusForm({
               <>
                 <div className="w-56">
                   <label htmlFor="advEventAt" className={labelClass}>
-                    {skip ? "Effective date/time" : "When did this happen?"}
+                    When did this happen?
                   </label>
                   <DateTimeField id="advEventAt" value={eventAt} onChange={setEventAt} />
                 </div>
-                {target === "OFFER_ACCEPTED" && !skip && (
+                {target === "OFFER_ACCEPTED" && (
                   <div className="w-56">
                     <label htmlFor="advExpectedJoin" className={labelClass}>
                       Expected join date <span className="text-rose-500">*</span>
@@ -636,26 +608,16 @@ export function SubmissionStatusForm({
                 )}
                 <div>
                   <label htmlFor="advNote" className={labelClass}>
-                    {skip ? (
-                      <>
-                        Reason <span className="text-rose-500">*</span>
-                      </>
-                    ) : target === "CLIENT_INTERVIEW" ? (
-                      "Note (log the round details below after advancing)"
-                    ) : (
-                      "Note"
-                    )}
+                    {target === "CLIENT_INTERVIEW"
+                      ? "Note (log the round details below after advancing)"
+                      : "Note"}
                   </label>
                   <Textarea
                     id="advNote"
                     rows={2}
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
-                    placeholder={
-                      skip
-                        ? "Why was the vendor screen skipped?"
-                        : "Optional — what happened at this stage?"
-                    }
+                    placeholder="Optional — what happened at this stage?"
                   />
                 </div>
                 <div className="flex justify-end gap-2">
@@ -673,15 +635,10 @@ export function SubmissionStatusForm({
                     onClick={confirmAdvance}
                     disabled={
                       isPending ||
-                      (skip && !note.trim()) ||
-                      (target === "OFFER_ACCEPTED" && !skip && !expectedJoinDate)
+                      (target === "OFFER_ACCEPTED" && !expectedJoinDate)
                     }
                   >
-                    {isPending
-                      ? "Saving…"
-                      : skip
-                        ? "Skip & advance"
-                        : "Save & advance"}
+                    {isPending ? "Saving…" : "Save & advance"}
                   </Button>
                 </div>
               </>

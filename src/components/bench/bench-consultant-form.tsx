@@ -90,7 +90,6 @@ type Fields = {
   realTimeExpYears: string;
   technology: string;
   skills: string;
-  reference: string;
   company: string;
   projectType: string;
   leastRateC2C: string;
@@ -130,7 +129,6 @@ function initialFields(v?: BenchConsultantFormValues): Fields {
     realTimeExpYears: v?.realTimeExpYears ?? "",
     technology: v?.technology ?? "",
     skills: v?.skills.join(", ") ?? "",
-    reference: v?.reference ?? "",
     company: v?.company ?? "",
     projectType: v?.projectType ?? "",
     leastRateC2C: v?.leastRateC2C ?? "",
@@ -254,7 +252,6 @@ export function BenchConsultantForm({
       skills: c && c.skills.length ? c.skills.join(", ") : f.skills,
       technology: c?.technology || f.technology,
       company: c?.currentCompany || f.company,
-      reference: c?.reference || f.reference,
       realTimeExpYears: c?.realTimeExpYears || f.realTimeExpYears,
     }));
   }

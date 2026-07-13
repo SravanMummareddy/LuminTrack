@@ -8,7 +8,10 @@ import {
   listReferrers,
 } from "@/server/queries/org";
 import { getCurrentUser } from "@/lib/session";
-import { canQuickAddOrgEntities, hasFullAccess } from "@/lib/permissions";
+import {
+  canQuickAddOrgEntities,
+  canEditJobRatesAndAssignment,
+} from "@/lib/permissions";
 import { listLookupValues } from "@/server/queries/lookups";
 
 export default async function NewJobPage() {
@@ -35,7 +38,7 @@ export default async function NewJobPage() {
         todayIso={new Date().toISOString().slice(0, 10)}
         submitLabel="Create job"
         canQuickAdd={canQuickAddOrgEntities(user)}
-        canManageRatesAndAssignment={hasFullAccess(user)}
+        canManageRatesAndAssignment={canEditJobRatesAndAssignment(user)}
       />
     </div>
   );

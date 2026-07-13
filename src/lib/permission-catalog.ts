@@ -167,6 +167,14 @@ const RECRUITER_GRANTS: PermissionKey[] = [
   // 2026-07-13). VPRs are a separate table, invisible to submission analytics by
   // construction, so this doesn't affect any recruiter performance metric.
   "requirement:manage",
+  // Recruiters manage identity/work-auth docs for their own candidates (owner
+  // decision 2026-07-13). Both keys together: manage = upload/replace/delete,
+  // view = see them in the list + open via /api/documents/[id]. Granting manage
+  // without view would let a recruiter upload a doc they then can't see or open,
+  // so the pair moves together. Makes the work-auth-expiry submit gate usable
+  // for recruiter-owned candidates.
+  "document:view_sensitive",
+  "document:manage_sensitive",
 ];
 
 const TEAM_LEAD_GRANTS: PermissionKey[] = [
@@ -175,8 +183,6 @@ const TEAM_LEAD_GRANTS: PermissionKey[] = [
   "job:edit_rates",
   "submission:reattribute",
   "financials:view",
-  "document:view_sensitive",
-  "document:manage_sensitive",
 ];
 
 const MANAGER_GRANTS: PermissionKey[] = [...PERMISSION_KEYS];

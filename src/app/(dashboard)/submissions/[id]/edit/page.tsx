@@ -53,6 +53,7 @@ export default async function EditSubmissionPage({
         <SubmissionEditForm
           action={updateSubmission}
           submissionId={submission.id}
+          candidateId={submission.candidateId}
           candidateName={submission.candidate.fullName}
           jobTitle={submission.job.title}
           recruiterName={submission.submittedBy.fullName}

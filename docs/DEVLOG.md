@@ -10,6 +10,58 @@ short instead of long.
 
 ---
 
+## 2026-07-13 · "Attach résumé" dead-ended — two forms for one concept drifted apart
+
+**Situation.** On a submission with no résumé, the amber "No résumé attached" card offers an **Attach résumé** button. A recruiter clicked it, landed on the submission edit form, and — for a candidate with no uploaded résumés — had no way to attach one. The button promised an action the destination couldn't deliver ("went to a wrong page").
+
+**Diagnosis.** The **create** submission form (`submission-form.tsx`) has an inline "Upload a new resume" affordance (eager `uploadCandidateResume` → add to picker → select). The **edit** form (`submission-edit-form.tsx`) is a separate component and only had a *pick-existing* `<Select>` with a hint to "upload on the candidate's profile." So for the 34-of-57 no-résumé submissions whose candidate also had an empty résumé library, the edit form's résumé control offered only "No resume" — a dead-end. Two forms implementing the same concept had diverged: the capability existed on one and was missing on the sibling.
+
+**Fix.** Ported the create form's inline upload into the edit form verbatim (same eager-upload path, merged-with-dedupe option list, `resumeSelection` set to the new id). No server change — the upload produces a `candidateResumeId` the existing update path already handles. Now "Attach résumé" always reaches a page where you can actually attach.
+
+**Lesson.** When two components render the same domain concept (a résumé picker) they drift — a fix or feature lands on one and not the other. A button's label is a promise; verify its destination can keep it for *every* state (here: the candidate-has-no-résumés state), not just the common one. The durable move is a shared résumé-picker component; the lazy-but-correct one is to keep the sibling in sync and note the duplication.
+
+---
+
+## 2026-07-13 · Recruiter-persona hunt — the "upload succeeds, then vanishes" document bug (an include-list that drifted from the catalog)
+
+**Situation.** A recruiter-perspective pass over the daily flows (add job / VPR / candidate / bench /
+submission / pipeline) asked the sharp question: is any permission a recruiter *should* have missing,
+and does any control lead them somewhere broken? The pipeline and VPR flows came back clean, but the
+documents surface hid a data-visibility bug: a recruiter could upload an **"Other"**-category document,
+get a success, land back on the candidate page — and the doc was gone.
+
+**Diagnosis.** Two independent definitions of "which categories may a non-privileged viewer see" had
+drifted apart. The write side (`document-form` category options, `createCandidateDocument`) gates on
+the single source of truth — `isSensitiveCategory` (`SENSITIVE = {IDENTITY, WORK_AUTH}`) — so it
+correctly *offers and accepts* OTHER for a recruiter. But the read side hardcoded an **include-list**:
+`getCandidateDocuments`/`getExpiringDocuments` filtered non-privileged viewers to
+`category { in: ["EDUCATION","EMPLOYMENT"] }`, which silently omits OTHER (a fifth, non-sensitive
+category). An allow-list that enumerates the *permitted* set will always drift when a new enum value is
+added on the not-enumerated side; a deny-list keyed off the same predicate as the writer cannot. The
+same hunt surfaced a permission-mechanics bug: the job form's rate section was gated on `hasFullAccess`
+on the *new* page but `job:edit_rates` on the *edit* page and the server action — a create/edit
+asymmetry that only bites a custom role holding `job:edit_rates` without `tier:full`.
+
+**Fix.** Make the reader mirror the writer: `category { notIn: ["IDENTITY","WORK_AUTH"] }` (the negation
+of `isSensitiveCategory`), so anything non-sensitive — including OTHER and any future non-sensitive
+category — surfaces. Align the new-job rate gate to `canEditJobRatesAndAssignment` to match the edit
+page + action. Separately, an owner decision this round (recruiters may manage identity/work-auth docs
+for their own candidates, so the work-auth-expiry submit gate is usable for them) meant granting the
+Recruiter role `document:view_sensitive` **and** `document:manage_sensitive` — the pair moves together,
+because manage-without-view would let a recruiter upload a doc they then can't see in the list or open
+via the view-gated `/api/documents/[id]` route (the same vanish bug, one layer up). Backfilled existing
+orgs with an idempotent grant script (seedRbac never overwrites existing role grants), and relabeled the
+now-inaccurate "Admin only" doc badge to "Sensitive" (team leads and recruiters hold it too — never were
+"admins").
+
+**Lesson.** When two sides of a boundary must agree on a set, don't write the set down twice. One side
+enumerating "what's allowed" and the other enumerating "what's forbidden" is a drift waiting for the
+next enum value — route both through the one predicate. And a coarse permission that bundles two
+capabilities (view + manage) can't be half-granted: granting only the second re-creates the exact bug
+the first would have prevented.
+
+---
+
 ## 2026-07-13 · Bug-hunt sweep over the post-pilot wave (WS1–WS4) — the timezone one that only breaks on prod
 
 **Situation.** After shipping the four post-pilot workstreams (edge-case seed, submission pipeline
