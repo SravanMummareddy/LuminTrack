@@ -255,6 +255,10 @@ export function SubmissionForm({
   const [uploadPending, startUpload] = useTransition();
   const [, startPrefill] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
+  // Guards the prefill fetch against out-of-order resolution: a slow response
+  // for a previously-selected job must not overwrite the rates of the job now
+  // in the picker (see onJobChange).
+  const latestPrefillJob = useRef<string>("");
 
   const resetUpload = () => {
     setShowUpload(false);
@@ -349,9 +353,13 @@ export function SubmissionForm({
     // the open / candidate-locked entry points behave like the job page + the
     // convert flow (rates flow down instead of being re-typed).
     if (!nextJobId) return;
+    latestPrefillJob.current = nextJobId;
     startPrefill(async () => {
       const p = await fetchSubmissionPrefill(nextJobId);
       if (!p) return;
+      // Drop a stale response: the picker moved on to another job while this
+      // fetch was in flight, so its rates would be for the wrong job.
+      if (latestPrefillJob.current !== nextJobId) return;
       setFields((f) => ({
         ...f,
         payRate: p.payRate,

@@ -10,6 +10,34 @@ short instead of long.
 
 ---
 
+## 2026-07-12 · Pre-handoff audit — trashed records were still counting in analytics
+
+**Situation.** A multi-agent bug sweep before owner handoff (14 raw → 10 confirmed,
+all fixed; full slate in `docs/HANDOFF_AUDIT_2026-07-12.md`). The most instructive
+finding: after an admin trashed a job or erased a candidate, that entity's historical
+submissions kept counting toward every recruiter's Reports/Dashboard totals **and** the
+monthly scorecard — silently inflating performance numbers.
+
+**Diagnosis.** Submissions have no soft-delete of their own; only Job/Candidate carry
+`deletedAt`. Trashing a candidate sets `deletedAt` but never cascades a status change onto
+its submissions (and erase deliberately *keeps* them). The analytics builder
+`buildSubmissionWhere` filtered by recruiter/date/status but never constrained the parent's
+`deletedAt` — while its sibling `buildJobWhere` *did*. So on one Reports page the source
+scoreboard excluded trashed jobs but the recruiter table included them: the numbers stopped
+reconciling. `monthly-scorecard.ts` had the same gap across all 5 aggregations.
+
+**Fix.** Fold `candidate: { deletedAt: null }` + `job.deletedAt: null` into the shared
+builder (one change fixes Reports + Dashboard + Recruiters + RecruiterDetail) and into each
+scorecard where clause.
+
+**Lesson.** When a soft-delete lives on a *parent* row, every aggregation over the child
+must reach through the relation to filter it — the child looks perfectly live on its own.
+Two sibling query builders that disagree on the same invariant (`buildJobWhere` filtered,
+`buildSubmissionWhere` didn't) is the tell: make the guard a single shared choke-point so
+they can't drift.
+
+---
+
 ## 2026-07-13 · Backup restore repaired — the DR snapshot is restorable again
 
 **Situation.** Round-3's exporter hunt found the nightly backup unrestorable: `build-backup-json.ts` +

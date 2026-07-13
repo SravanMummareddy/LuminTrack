@@ -9,8 +9,7 @@ const STORAGE_KEY = "lumintrack.settings.adminTools";
 /**
  * Collapsed-by-default disclosure for the Settings "Admin tools" card. The
  * summary enumerates the contents so the audit log / export stay discoverable
- * without expanding, and the open/closed choice is remembered (localStorage) —
- * so an admin in an import-heavy week doesn't re-open it every visit.
+ * without expanding, and the open/closed choice is remembered (localStorage).
  */
 export function AdminToolsDisclosure({
   children,
@@ -44,7 +43,7 @@ export function AdminToolsDisclosure({
           <span className="font-semibold text-slate-700">Admin tools</span>
           <span className="text-slate-400">
             {" "}
-            — Import · Import history · Audit log · Export data
+            — Audit log · Export data
           </span>
         </span>
         <ChevronDown

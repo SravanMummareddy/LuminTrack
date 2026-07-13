@@ -21,7 +21,7 @@ function downloadName(label: string, contentType: string, pathname: string): str
  * Streams a candidate résumé. Private Vercel Blobs are never fetched directly by
  * the browser — this authenticated route is the only way in: it looks the résumé
  * up, then `get(pathname, { access: 'private' })` and pipes the stream back.
- * Legacy Google-Drive résumés (no blob) redirect to the Drive link.
+ * A résumé row with no blob (never uploaded) returns 404.
  *
  * `?download=1` forces a download; otherwise it's served inline (so a PDF can be
  * embedded in the preview iframe).

@@ -83,6 +83,21 @@ export async function saveContact(
   // in the same transaction so the "single primary" intent holds without a DB
   // constraint (a partial unique index would force one primary even if none
   // is wanted).
+  // On edit, the contact's parent is fixed — reject any request that tries to
+  // reparent it to a different entity (a crafted POST could otherwise submit an
+  // existing contact's id with someone else's kind/parentId and silently move
+  // it, demoting the new parent's primary). Contacts write no audit row, so this
+  // must be guarded here.
+  if (id) {
+    const existing = await db.contact.findUnique({
+      where: { id },
+      select: { clientId: true, vendorId: true, sourceId: true },
+    });
+    if (!existing) return { error: "Contact not found." };
+    if ((existing as Record<string, string | null>)[fk] !== parentId)
+      return { error: "This contact belongs to a different record." };
+  }
+
   await db.$transaction(async (tx) => {
     if (parsed.data.isPrimary) {
       await tx.contact.updateMany({

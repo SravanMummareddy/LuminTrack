@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { RotateCcw, Download, Trash2, AlertTriangle } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button, buttonClass } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Input } from "@/components/ui/field";
 import {
   restoreCandidateFromTrash,
@@ -65,10 +66,10 @@ export function CandidateTrashBanner({
             </a>
             <form action={restoreCandidateFromTrash}>
               <input type="hidden" name="id" value={candidateId} />
-              <button type="submit" className={buttonClass("primary")}>
+              <SubmitButton pendingLabel="Restoring…">
                 <RotateCcw className="h-4 w-4" aria-hidden />
                 Restore
-              </button>
+              </SubmitButton>
             </form>
             <Button variant="danger" onClick={() => setOpen(true)}>
               <Trash2 className="h-4 w-4" aria-hidden />

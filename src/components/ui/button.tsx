@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 
-type Variant = "primary" | "secondary" | "danger" | "ghost";
+export type Variant = "primary" | "secondary" | "danger" | "ghost";
 export type Size = "md" | "sm";
 
 const variantClass: Record<Variant, string> = {

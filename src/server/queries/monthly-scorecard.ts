@@ -151,13 +151,21 @@ export async function getMonthlyScorecard({
         where: {
           submittedAt: { gte: monthStart, lt: nextMonthStart },
           submittedBy: recruiterWhere,
+          // Exclude submissions to trashed/erased candidates or jobs so the
+          // scorecard never over-credits work on since-removed records.
+          candidate: { deletedAt: null },
+          job: { deletedAt: null },
         },
         select: { submittedById: true, submittedAt: true },
       }),
       db.interviewRound.findMany({
         where: {
           scheduledAt: { gte: monthStart, lt: nextMonthStart },
-          submission: { submittedBy: recruiterWhere },
+          submission: {
+            submittedBy: recruiterWhere,
+            candidate: { deletedAt: null },
+            job: { deletedAt: null },
+          },
         },
         select: {
           scheduledAt: true,
@@ -171,7 +179,13 @@ export async function getMonthlyScorecard({
       db.activity.findMany({
         where: {
           newValue: { in: [BACKED_OUT_LABEL, OFFER_ACCEPTED_LABEL] },
-          submission: { is: { submittedBy: recruiterWhere } },
+          submission: {
+            is: {
+              submittedBy: recruiterWhere,
+              candidate: { deletedAt: null },
+              job: { deletedAt: null },
+            },
+          },
           OR: [
             { eventAt: { gte: monthStart, lt: nextMonthStart } },
             {
@@ -192,6 +206,10 @@ export async function getMonthlyScorecard({
       // full scan is cheap; ordered ascending so the first row per vendor is the
       // earliest submission to it by anyone.
       db.submission.findMany({
+        where: {
+          candidate: { deletedAt: null },
+          job: { deletedAt: null },
+        },
         select: {
           submittedById: true,
           submittedAt: true,

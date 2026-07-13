@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getScopedPrisma, requireUser } from "@/lib/session";
 import { logActivity } from "@/server/activity";
+import { hashPair } from "@/server/submission-create";
 import { interviewRoundSchema } from "@/lib/validation/interview";
 import { toFieldErrors } from "@/lib/validation/common";
 import { INTERVIEW_TYPE_LABEL, INTERVIEW_RESULT_LABEL } from "@/lib/labels";
@@ -73,15 +74,22 @@ export async function createInterviewRound(
   });
   if (!submission) return { error: "This submission no longer exists." };
 
-  // Rounds are unlimited and ordered — the next round continues the sequence.
-  const last = await db.interviewRound.findFirst({
-    where: { submissionId: d.submissionId },
-    orderBy: { roundOrder: "desc" },
-    select: { roundOrder: true },
-  });
-  const roundOrder = (last?.roundOrder ?? 0) + 1;
-
   await db.$transaction(async (tx) => {
+    // Serialize concurrent "Add round" submits for the same submission so two
+    // don't read the same max and create duplicate roundOrder values (there is
+    // no @@unique([submissionId, roundOrder]) to fall back on). Same pattern as
+    // createSubmissionRecord. Lock auto-releases at tx end.
+    const lock = hashPair(d.submissionId, "interview-round");
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lock.a}::int, ${lock.b}::int)`;
+
+    // Rounds are unlimited and ordered — the next round continues the sequence.
+    const last = await tx.interviewRound.findFirst({
+      where: { submissionId: d.submissionId },
+      orderBy: { roundOrder: "desc" },
+      select: { roundOrder: true },
+    });
+    const roundOrder = (last?.roundOrder ?? 0) + 1;
+
     const created = await tx.interviewRound.create({
       data: {
         submissionId: d.submissionId,
