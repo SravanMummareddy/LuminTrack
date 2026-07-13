@@ -10,6 +10,29 @@ short instead of long.
 
 ---
 
+## 2026-07-13 · Demo reseed blocked — Referrer missing from the wipe order
+
+**Situation.** Extending `seed-demo.ts` with edge-case data (WS1), the reseed died on the
+wipe step: `delete on "Organization" violates RESTRICT ... "Referrer_organizationId_fkey"`.
+The org couldn't be dropped because `Referrer` rows still pointed at it.
+
+**Diagnosis.** The `Referrer` table (added with the candidate-referrer work, #86/PR-2) holds a
+RESTRICT FK to `Organization` but was never added to the seed's dependency-ordered `deleteMany`
+sweep. The wipe deletes `Organization` last, expecting every child gone first — but referrers
+lingered. It only surfaced now because a prior seed had actually written referrer rows; earlier
+reseeds predated the table.
+
+**Fix.** One line: `await baseDb.referrer.deleteMany()` between the org-entity wipes and the
+`organization` delete (Referrer is referenced by Job + Candidate, both already cleared above,
+so it's safe there).
+
+**Lesson.** A new table with a RESTRICT FK to a parent is a wipe-order landmine — it stays
+invisible until real rows exist. When adding an entity, add it to the seed's teardown in the
+same change, not just its creation. The whole point of the reverse-FK delete order is that it
+must list *every* child; a gap is silent until the data catches up.
+
+---
+
 ## 2026-07-12 · Pre-handoff audit — trashed records were still counting in analytics
 
 **Situation.** A multi-agent bug sweep before owner handoff (14 raw → 10 confirmed,
