@@ -10,6 +10,40 @@ short instead of long.
 
 ---
 
+## 2026-07-13 · Pilot-readiness — the one uncaught crash was an unguarded Blob upload
+
+**Situation.** The app goes to ~10 real recruiters tomorrow for a week of real-data use. A 3-agent
+readiness sweep of the daily hot paths (create job/candidate/VPR/submission, advance rounds, upload
+résumé) plus a read-only prod DB check. The server layer came back unusually clean — empty states all
+render, Decimals are flattened, the gate engine has no dead-ends — with **one** genuine crash spot and a
+prod-data surprise.
+
+**Diagnosis.** `uploadPrivateFile` (`src/server/blob-upload.ts`) called Vercel Blob `put()` with no
+try/catch, and neither caller (`uploadCandidateResume`, `createCandidateDocument`) wrapped it. Validation
+errors returned friendly `FormState`s, but a *real* Blob failure (transient network, quota, a
+missing/rotated `BLOB_READ_WRITE_TOKEN`) is a **thrown exception** — it escaped to the route error
+boundary and replaced the whole page, discarding a half-filled submission. Uploading a résumé is a
+normal daily action, so this was the single "ordinary click can dump you on the error page" defect.
+Separately, the prod DB still held the **demo seed** (50 jobs / 30 candidates / 160 submissions / 12
+`@lumintrack.com` users) — real recruiters would have logged into fake data. (Migrations were in sync and
+RBAC roles were provisioned, so those were non-issues.)
+
+**Fix.** Root-cause, in the shared function: wrap `put()` once, log the real reason for ops, and throw a
+typed `UploadFailedError`; each of the two callers catches *that specific type* and returns a friendly
+`{ error: "Upload failed — please try again." }` — the submission form's inline path already handled a
+returned `!ok`, so it needed no change. One guard in the shared upload beats a guard in every caller. For
+the prod data: a new `prisma/seed-prod-clean.ts` — reuses seed-demo's exact FK-safe wipe, then provisions
+**one org + `seedRbac` + one admin** and nothing else (the "real org, no demo data" path plain `seed.ts`
+lacks, since it never seeds RBAC roles → an empty Add-User dropdown). Guardrails refuse to run without
+`CONFIRM_CLEAN=yes` and a ≥10-char admin password, and print the target DB host first.
+
+**Lesson.** Before a pilot, audit the *hot paths a user actually touches*, not the feature list — the risk
+lives where a normal action hits an external service (Blob, email, a queue) whose failure you didn't model
+as a returned error. And "production-ready" is often gated on **data + config you can't see from the
+repo** (is prod migrated? is it holding demo data? are the roles provisioned? is the token set?) far more
+than on code — a 2-minute read-only prod query answered three unknowns that no amount of code review
+could. A typed error at the throw site keeps the friendly-fallback logic to one `instanceof` per caller.
+
 ## 2026-07-13 · Wave 7.2 follow-up — phantom "log the outcome" todos (adversarial review catch)
 
 **Situation.** An adversarial bug-hunt over the just-shipped pending/dashboard rewrite (two review

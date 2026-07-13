@@ -2,6 +2,20 @@ import { gzipSync } from "node:zlib";
 import { put } from "@vercel/blob";
 
 /**
+ * Thrown when the Blob `put()` fails (transient network, storage quota, a
+ * missing/rotated `BLOB_READ_WRITE_TOKEN`). Callers catch this to return a
+ * friendly form error instead of letting it escape to the error boundary and
+ * blow away a half-filled form.
+ */
+export class UploadFailedError extends Error {
+  constructor(cause?: unknown) {
+    super("File upload failed");
+    this.name = "UploadFailedError";
+    this.cause = cause;
+  }
+}
+
+/**
  * Uploads a file to **private** Vercel Blob, gzip-compressed to save storage
  * against the free-tier cap. The stored bytes are gzipped; the serving route
  * sets `Content-Encoding: gzip` so the browser transparently inflates them.
@@ -20,11 +34,19 @@ export async function uploadPrivateFile(
 ): Promise<{ pathname: string; url: string; size: number }> {
   const raw = Buffer.from(await file.arrayBuffer());
   const gzipped = gzipSync(raw);
-  const blob = await put(pathname, gzipped, {
-    access: "private",
-    addRandomSuffix: true,
-    contentType: file.type || undefined,
-  });
+  let blob;
+  try {
+    blob = await put(pathname, gzipped, {
+      access: "private",
+      addRandomSuffix: true,
+      contentType: file.type || undefined,
+    });
+  } catch (err) {
+    // Log the real reason (quota, token, network) for ops; hand callers a typed
+    // error so they can surface a friendly retry instead of crashing the page.
+    console.error("[blob-upload] put failed for", pathname, "-", err);
+    throw new UploadFailedError(err);
+  }
   return { pathname: blob.pathname, url: blob.url, size: raw.length };
 }
 
