@@ -58,3 +58,13 @@ next-env.d.ts
 # local screenshot/upload dropbox (iLabor sample is tracked explicitly)
 /uploads/*
 !/uploads/ilabor_data_sample.json
+
+# Owner-managed working docs + assets — kept local, never committed (see DEVLOG 2026-07-13).
+/DEMO_RUNBOOK.md
+/PRODUCT_OVERVIEW.md
+/LuminTrack_Product_Overview.docx
+/LuminTrack_Product_Overview.pdf
+/reports.png
+/docs/OWNER_DECISIONS.md
+/docs/OWNER_QUESTIONS_excel-mapping.md
+/docs/WORKLIST.md
