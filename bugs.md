@@ -1,4 +1,29 @@
-# ⤵ Reconciled 2026-07-05 — read this first
+# ⤵⤵ Reconciled 2026-07-13 — BUG BACKLOG IS CLEAR
+
+Verified against current `main` today: **every concrete "still-open" bug below is already fixed**, and
+an adversarial app-wide sweep (two review agents) found the server query/action layer clean against all
+recurring bug classes (Decimal→client leaks, soft-delete/org-scope filters, permission gaps, unbounded
+queries, React-19 gotchas). The one real defect found — phantom "log the outcome" todos on terminal
+submissions in the new pending-todos code — was fixed in #108.
+
+- ✅ **Global search indexes display IDs** — `search.ts` parses CAND-/JOB-/VPR-/SUB-/PLC- seq (verified).
+- ✅ **Reports per-source conversion column** — shipped (SRC-2, #101; `analytics-tab.tsx` fill-rate).
+- ✅ **Mobile topbar search overlap** — fixed (`topbar.tsx` capped search + `shrink-0` spacer).
+- ✅ **Recruiter-detail sub-table sorting** — fixed (`rsort`/`rdir` + `RECRUITER_SUB_SORTS`).
+- ✅ **404 hydration mismatch · scorecard 1440px overflow · résumé-preview empty box** — all fixed.
+- ➡ **Bulk status update UI** and **saved filters/views** are **enhancements, not bugs** →
+  `ENHANCEMENTS.md`.
+
+One *latent* (not a live bug) note from the sweep: three `include`-based queries (`getJobSubmissions`,
+`getCandidateSubmissions`, `getJobDetail`) over-fetch Prisma `Decimal`s — safe today (consumed in Server
+Components) but would break serialization if ever handed to a Client table; flatten them if that refactor
+happens.
+
+Everything below this line is **historical** — do not re-pick without checking CLAUDE.md + DEVLOG first.
+
+---
+
+# ⤵ Reconciled 2026-07-05
 
 Baseline: `main` @ `23c4f86` (no open PRs, tsc clean, 113 unit tests). The dated
 sweeps below are historical; much has shipped since. For the current "what shipped"

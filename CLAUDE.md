@@ -71,31 +71,41 @@ from all code. Do not reintroduce it.
 **Source of truth:** the header comment + `rateChainWarnings()` in `src/lib/rates.ts` (chain
 = Client ≥ Bill ≥ Pay); the live chain warning is `src/components/ui/rate-chain-warning.tsx`.
 
-## Current state (2026-07-12)
+## Current state (2026-07-13)
 
-- **`main` is live on prod** (`lumin-track.vercel.app`); org/roles/tenancy foundation (Phases A/B/C,
-  PRs #79–#83) + independent backlog (#84) + Job-form/org-entity redesign (#86) all shipped.
-- **Forms-discipline rollout COMPLETE (6 forms MERGED to `main`)** — the numbered `FormSection` +
-  required-or-explicitly-N/A pattern across VPR (#90), Candidates (#96, +name-split/referrer migration),
-  Bench (#92), Submissions (#93), Interview Round (#94), Placement (#95). Primitives:
-  `src/components/ui/{form-section,nullable-field}.tsx`.
-- **Just built: PR #97 — Wave 4 strict submission-pipeline discipline** (`feat/wave4-pipeline-discipline`,
-  **migration `20260712200000_interview_didnt_happen` applied to dev + PROD**; awaiting merge/deploy).
-  Ships: per-stage dates on the stepper (SB-4, derived from the status log); controlled transitions —
-  no free jumps, one-step-back **corrections require a reason** logged who/when/why (SB-6); **strict
-  advance gate** `advanceBlock` (`src/lib/submission-flow.ts`) — can't reach Vendor-screening/Client-
-  interview without the matching `InterviewRound`, can't leave a `WAITING` stage, can't mark Selected
-  without a passing result, join dates required for Offer-accepted/Joined (SB-5); the round form's
-  mode/interviewer/date are now **hard-required** (no N/A escape) so an empty round can't slip the gate;
-  new `InterviewResult` **NO_SHOW/CANCELLED** for "scheduled but didn't happen"; round-tracking hint
-  (IV-2); soft per-requirement min-submissions nudge (V-6). tsc clean, 332 unit tests. See DEVLOG
-  2026-07-12 (the strict-pipeline entry supersedes the earlier lenient one).
-- **⚠ Known debt:** the **integration suite is red on `main`** (12 pre-existing failures in
-  requirement-convert / submission-create-gates / placement-edit; `unit` + Vercel are green). It's a
-  non-blocking check — untangle separately.
-- **Open owner decisions** (gate the remaining waves): D3 received-date · D5 referrer entity · D7
-  dashboards/forms · D9 new-vendors/closures · D13 rate masking · D14 VPR-dedup scope. See
-  `docs/WORKLIST.md` §A + the work-tracker artifact.
+- **`main` is live on prod** (`lumin-track.vercel.app`). Foundation (org/roles/tenancy Phases A/B/C
+  #79–#83, independent backlog #84, Job-form/org-entity redesign #86) + the **6-form forms-discipline
+  rollout** (#90/#92/#93/#94/#95/#96) + field-definition cleanup (#102) all shipped.
+- **Wave 4 — strict submission pipeline** ✅ #97 (migration `20260712200000_interview_didnt_happen` on
+  dev+PROD): per-stage dates SB-4, controlled transitions SB-6 (`advanceBlock` in `submission-flow.ts`),
+  hard-required round fields SB-5, `InterviewResult` NO_SHOW/CANCELLED, round-tracking IV-2, min-subs
+  nudge V-6. Plus **IV-1** interview schedule view.
+- **Wave 5** — **V-5** received-date + time-to-first-submission ✅ #99/#100 (migration
+  `20260712230000_job_received_at`) · **SRC-2** source analytics ✅ #101. SRC-1 partial (job source
+  rework #86); SRC-3 gated on D9.
+- **Wave 6 — C-1** original-résumé flag ✅ (`ResumeKind`, migration `20260711180000_resume_kind`).
+- **Wave 7 family (email + dashboard) ✅ ALL SHIPPED:**
+  - **7 notifications** #103 — Resend over plain `fetch` (`src/server/email.ts`, fails safe when
+    `RESEND_API_KEY` unset); weekday **7am CST** digest cron (`/api/cron/digest`, #107); immediate
+    submission→team-lead event; per-user opt-out (`User.notifyDigest`/`notifyEvents`, migration
+    `20260713100000`).
+  - **7.1** team-lead → recruiter **VPR-assignment email** #104 (`notifyRecruiterAssigned`, an
+    "Email recruiter" button + assign-form checkbox; audit `REQUIREMENT_RECRUITER_EMAILED`, migration
+    `20260713140000`). Explicit sends ignore the `notifyEvents` opt-out.
+  - **7.2a/b** unified **pending-todos** — one canonical `src/server/pending.ts` (`getPendingTodos`)
+    feeding **both** the dashboard "Needs attention" card and the digest, so they agree. Urgency tiers
+    (overdue/soon/backlog). Dashboard scope = **me · team · org**: recruiters (me), **team leads**
+    (me·team — `leadsAnyTeam`/`ledTeamMemberIds`, owner-tagged items + per-member strip), **managers/
+    admins** (me·org — `getTeamRollup` cards + manager action items via `getManagerActionItems`).
+    #105/#106. Phantom terminal-round todo fixed #108.
+- **Bug backlog: CLEAR** (reconciled 2026-07-13) — `bugs.md` head reconciled; adversarial app-wide sweep
+  found the server layer clean; integration suite is green (the old 12-failure debt was fixed #98).
+- **Open owner decisions** (the only real gates left): **D5** referrer entity (→ finishes SRC-1) · **D9**
+  new-vendor/closure def (→ SRC-3) · **D14** VPR-dedup scope · **D8** hosting (→ Track B: Google SSO,
+  GoDaddy subdomain). D13 rate masking DECLINED. See `docs/WORKLIST.md` (top RECONCILED block).
+- **Parked enhancement:** candidate/vendor **outreach** (owner parked 2026-07-13 pending bug-cleanup;
+  scope questions ready). **Owner to-do:** configure Resend (domain + `RESEND_API_KEY`/`EMAIL_FROM`) for
+  real delivery; a logged-in browser pass over the new dashboard.
 
 ## Stack (all current majors — verify APIs, don't assume older versions)
 
