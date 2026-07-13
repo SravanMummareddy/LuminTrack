@@ -270,6 +270,15 @@ invisible until real rows exist. When adding an entity, add it to the seed's tea
 same change, not just its creation. The whole point of the reverse-FK delete order is that it
 must list *every* child; a gap is silent until the data catches up.
 
+**Recurrence (pilot handover, same day).** The identical failure hit again building
+`seed-pilot.ts` — because `seed-prod-clean.ts` carried its *own* copy of the wipe order that
+predated `Referrer` too, and the pilot script was cloned from it. Fixed the referrer gap in
+both. The deeper smell: **three** seed scripts (`seed-demo` / `seed-prod-clean` / `seed-pilot`)
+each maintain a duplicated 27-line teardown, so the fix to one doesn't reach the siblings and
+they drift independently. Follow-up worth doing: extract one `wipeAllData(baseDb)` helper all
+three import, so the next new table only has to be added in one place. Deferred out of the
+handover to avoid touching the working demo seed right before the prod run.
+
 ---
 
 ## 2026-07-12 · Pre-handoff audit — trashed records were still counting in analytics

@@ -86,6 +86,7 @@ async function main() {
   await baseDb.vendor.deleteMany();
   await baseDb.client.deleteMany();
   await baseDb.sisterCompanySource.deleteMany();
+  await baseDb.referrer.deleteMany();
   await baseDb.lookupOption.deleteMany();
   await baseDb.customGlossaryTerm.deleteMany();
   await baseDb.glossaryNote.deleteMany();
