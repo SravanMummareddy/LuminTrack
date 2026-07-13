@@ -20,6 +20,7 @@ import {
   INTERVIEW_PLATFORMS,
   INTERVIEW_PLATFORM_LABEL,
 } from "@/lib/labels";
+import { useToast } from "@/components/ui/toast";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
 import type { InterviewType, InterviewResult } from "@/generated/prisma/enums";
 
@@ -78,10 +79,16 @@ export function InterviewRoundForm({
     round ? updateInterviewRound : createInterviewRound,
     EMPTY_FORM_STATE,
   );
+  const { toast } = useToast();
 
   useEffect(() => {
-    if (state.ok) onDone();
-  }, [state.ok, onDone]);
+    if (state.ok) {
+      // e.g. the résumé-missing "status not advanced" notice from createInterviewRound.
+      if (state.toast)
+        toast({ tone: "success", title: state.toast.title, description: state.toast.description });
+      onDone();
+    }
+  }, [state.ok, state.toast, onDone, toast]);
 
   const errors = state.fieldErrors ?? {};
 
@@ -325,11 +332,9 @@ export function InterviewRoundForm({
           </NullableField>
 
           {isVideo && (
-            <Field label="Video platform" htmlFor="interviewPlatform" required error={errors.interviewPlatform}>
-              <Select id="interviewPlatform" name="interviewPlatform" value={fields.interviewPlatform} onChange={set("interviewPlatform")} required>
-                <option value="" disabled>
-                  Select a platform…
-                </option>
+            <Field label="Video platform" htmlFor="interviewPlatform" error={errors.interviewPlatform} hint="Optional.">
+              <Select id="interviewPlatform" name="interviewPlatform" value={fields.interviewPlatform} onChange={set("interviewPlatform")}>
+                <option value="">— Select —</option>
                 {INTERVIEW_PLATFORMS.map((p) => (
                   <option key={p} value={p}>
                     {INTERVIEW_PLATFORM_LABEL[p]}
@@ -340,8 +345,8 @@ export function InterviewRoundForm({
           )}
 
           {isVideo && (
-            <Field label="Meeting link" htmlFor="meetingLink" required error={errors.meetingLink}>
-              <Input id="meetingLink" name="meetingLink" type="url" inputMode="url" placeholder="https://…" value={fields.meetingLink} onChange={set("meetingLink")} required />
+            <Field label="Meeting link" htmlFor="meetingLink" error={errors.meetingLink} hint="Optional — add it when you have it.">
+              <Input id="meetingLink" name="meetingLink" type="url" inputMode="url" placeholder="https://…" value={fields.meetingLink} onChange={set("meetingLink")} />
             </Field>
           )}
         </div>

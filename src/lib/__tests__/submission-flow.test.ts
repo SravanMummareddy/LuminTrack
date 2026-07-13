@@ -12,6 +12,7 @@ import {
   isBackwardCorrection,
   advanceBlock,
   stageForRoundType,
+  highestInterviewStage,
 } from "@/lib/submission-flow";
 
 describe("primaryAdvance", () => {
@@ -307,5 +308,35 @@ describe("stageForRoundType (Model B rounds-first)", () => {
     ] as const) {
       expect(stageForRoundType(t)).toBe("CLIENT_INTERVIEW");
     }
+  });
+});
+
+describe("advanceBlock — Selected accepts any client-family round (F7 dead-end fix)", () => {
+  it("a passing Manager/HR/Final/Client round unblocks Selected", () => {
+    for (const t of ["CLIENT_INTERVIEW", "MANAGER_ROUND", "HR_ROUND", "FINAL_ROUND"] as const) {
+      const rounds: RoundLite[] = [{ interviewType: t, result: "SELECTED", roundOrder: 1 }];
+      expect(advanceBlock("CLIENT_INTERVIEW", "SELECTED", rounds)).toBeNull();
+    }
+  });
+
+  it("still blocks Selected when the only round is a vendor screen", () => {
+    const rounds: RoundLite[] = [
+      { interviewType: "VENDOR_SCREENING", result: "SELECTED", roundOrder: 1 },
+    ];
+    expect(advanceBlock("CLIENT_INTERVIEW", "SELECTED", rounds)).not.toBeNull();
+  });
+});
+
+describe("highestInterviewStage (delete-revert helper)", () => {
+  it("any client-family round → CLIENT_INTERVIEW", () => {
+    expect(highestInterviewStage([{ interviewType: "HR_ROUND" }])).toBe("CLIENT_INTERVIEW");
+  });
+  it("only a vendor round → VENDOR_SCREENING_CALL", () => {
+    expect(highestInterviewStage([{ interviewType: "VENDOR_SCREENING" }])).toBe(
+      "VENDOR_SCREENING_CALL",
+    );
+  });
+  it("no rounds → null", () => {
+    expect(highestInterviewStage([])).toBeNull();
   });
 });

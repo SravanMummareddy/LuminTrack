@@ -16,6 +16,7 @@ import {
   stageForRoundType,
   isTerminal,
   resumeFlag,
+  highestInterviewStage,
 } from "@/lib/submission-flow";
 import { formatDateTime } from "@/lib/format";
 import type { FormState } from "@/lib/form-state";
@@ -80,9 +81,18 @@ export async function createInterviewRound(
 
   const submission = await db.submission.findUnique({
     where: { id: d.submissionId },
-    select: { id: true },
+    select: { id: true, status: true, jobId: true, candidateId: true },
   });
   if (!submission) return { error: "This submission no longer exists." };
+  // Don't log new interviews on a closed submission — reopen it first.
+  if (isTerminal(submission.status))
+    return {
+      error: `This submission is closed (${SUBMISSION_STATUS_LABEL[submission.status]}). Reopen it before adding interview rounds.`,
+    };
+
+  // Set when the round is added but the status can't advance because no résumé is
+  // attached — surfaced as a notice so the recruiter isn't left guessing.
+  let advanceSkippedNoResume = false;
 
   await db.$transaction(async (tx) => {
     // Serialize concurrent "Add round" submits for the same submission so two
@@ -147,26 +157,53 @@ export async function createInterviewRound(
     if (
       sub &&
       !isTerminal(sub.status) &&
-      resumeFlag(sub) !== "missing" &&
       SUBMISSION_STAGE_INDEX[target] > SUBMISSION_STAGE_INDEX[sub.status]
     ) {
-      await tx.submission.update({
-        where: { id: d.submissionId },
-        data: { status: target },
-      });
-      await logActivity(tx, {
-        entityType: "SUBMISSION",
-        action: "SUBMISSION_STATUS_CHANGED",
-        description: `Status changed from ${SUBMISSION_STATUS_LABEL[sub.status]} to ${SUBMISSION_STATUS_LABEL[target]} (interview round added)`,
-        oldValue: SUBMISSION_STATUS_LABEL[sub.status],
-        newValue: SUBMISSION_STATUS_LABEL[target],
-        performedById: user.id,
-        submissionId: d.submissionId,
-      });
+      if (resumeFlag(sub) === "missing") {
+        advanceSkippedNoResume = true;
+      } else {
+        // Stamp the stage-entry time at the interview date for a round that
+        // already happened (backdated) — else the manual "now" would skew
+        // time-in-stage/time-to-fill. A future-scheduled round enters the stage now.
+        const now = new Date();
+        const eventAt =
+          created.scheduledAt && created.scheduledAt < now
+            ? created.scheduledAt
+            : now;
+        await tx.submission.update({
+          where: { id: d.submissionId },
+          data: { status: target },
+        });
+        await logActivity(tx, {
+          entityType: "SUBMISSION",
+          action: "SUBMISSION_STATUS_CHANGED",
+          description: `Status changed from ${SUBMISSION_STATUS_LABEL[sub.status]} to ${SUBMISSION_STATUS_LABEL[target]} (interview round added)`,
+          oldValue: SUBMISSION_STATUS_LABEL[sub.status],
+          newValue: SUBMISSION_STATUS_LABEL[target],
+          eventAt,
+          performedById: user.id,
+          submissionId: d.submissionId,
+        });
+      }
     }
   });
 
+  // A round-driven status change shows on the submissions list + the job's and
+  // candidate's pages too — revalidate them like the manual advance does.
   revalidatePath(`/submissions/${d.submissionId}`);
+  revalidatePath("/submissions");
+  revalidatePath(`/jobs/${submission.jobId}`);
+  revalidatePath(`/candidates/${submission.candidateId}`);
+
+  if (advanceSkippedNoResume)
+    return {
+      ok: true,
+      toast: {
+        title: "Round added — status not advanced",
+        description:
+          "Attach a résumé (or waive it) to move this submission into the interview stage.",
+      },
+    };
   return { ok: true };
 }
 
@@ -281,6 +318,9 @@ export async function deleteInterviewRound(formData: FormData): Promise<void> {
       submissionId: true,
       roundName: true,
       roundOrder: true,
+      submission: {
+        select: { status: true, jobId: true, candidateId: true },
+      },
     },
   });
   if (!existing) return;
@@ -294,7 +334,41 @@ export async function deleteInterviewRound(formData: FormData): Promise<void> {
       performedById: user.id,
       submissionId: existing.submissionId,
     });
+
+    // If the submission sits at an interview stage that this deleted round was
+    // holding up, and no remaining round supports that stage, revert it — a
+    // submission must not sit at an interview stage with no record (SB-5).
+    const status = existing.submission.status;
+    if (status === "VENDOR_SCREENING_CALL" || status === "CLIENT_INTERVIEW") {
+      const remaining = await tx.interviewRound.findMany({
+        where: { submissionId: existing.submissionId },
+        select: { interviewType: true },
+      });
+      const supported = highestInterviewStage(remaining);
+      const supportedIdx = supported
+        ? SUBMISSION_STAGE_INDEX[supported]
+        : SUBMISSION_STAGE_INDEX["RESUME_PICKED"];
+      if (supportedIdx < SUBMISSION_STAGE_INDEX[status]) {
+        const revertTo = supported ?? "RESUME_PICKED";
+        await tx.submission.update({
+          where: { id: existing.submissionId },
+          data: { status: revertTo },
+        });
+        await logActivity(tx, {
+          entityType: "SUBMISSION",
+          action: "SUBMISSION_STATUS_CHANGED",
+          description: `Status reverted from ${SUBMISSION_STATUS_LABEL[status]} to ${SUBMISSION_STATUS_LABEL[revertTo]} (interview round removed)`,
+          oldValue: SUBMISSION_STATUS_LABEL[status],
+          newValue: SUBMISSION_STATUS_LABEL[revertTo],
+          performedById: user.id,
+          submissionId: existing.submissionId,
+        });
+      }
+    }
   });
 
   revalidatePath(`/submissions/${existing.submissionId}`);
+  revalidatePath("/submissions");
+  revalidatePath(`/jobs/${existing.submission.jobId}`);
+  revalidatePath(`/candidates/${existing.submission.candidateId}`);
 }
