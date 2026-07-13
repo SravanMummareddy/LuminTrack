@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { DateTimeField } from "@/components/ui/date-field";
 import { FormSection } from "@/components/ui/form-section";
@@ -44,6 +44,20 @@ export type InterviewRoundData = {
   updatedAt: Date | string;
   updatedBy: { fullName: string } | null;
 };
+
+// Curated common zones (US + India) for the timezone picker — the recruiter's
+// browser-detected zone is preselected, and any zone not in this list (a stored
+// value, or an unusual detected zone) is added on the fly so it stays selectable.
+const TIMEZONES: { value: string; label: string }[] = [
+  { value: "America/New_York", label: "Eastern — America/New_York" },
+  { value: "America/Chicago", label: "Central — America/Chicago" },
+  { value: "America/Denver", label: "Mountain — America/Denver" },
+  { value: "America/Los_Angeles", label: "Pacific — America/Los_Angeles" },
+  { value: "America/Phoenix", label: "Arizona — America/Phoenix" },
+  { value: "America/Anchorage", label: "Alaska — America/Anchorage" },
+  { value: "Pacific/Honolulu", label: "Hawaii — Pacific/Honolulu" },
+  { value: "Asia/Kolkata", label: "India — Asia/Kolkata" },
+];
 
 export function InterviewRoundForm({
   submissionId,
@@ -120,10 +134,77 @@ export function InterviewRoundForm({
 
   const isVideo = fields.interviewMode === "VIDEO";
 
+  // Model B: is the recruiter *scheduling* a future interview or *logging* one
+  // that happened? Scheduling locks the result to Waiting and hides the outcome
+  // section; a round that already carries a real result opens in "done" mode.
+  const [mode, setMode] = useState<"scheduling" | "done">(
+    round && (round.result !== "WAITING" || round.feedback) ? "done" : "scheduling",
+  );
+  function switchMode(next: "scheduling" | "done") {
+    setMode(next);
+    setFields((f) => ({
+      ...f,
+      result:
+        next === "scheduling"
+          ? "WAITING"
+          : f.result === "WAITING"
+            ? "COMPLETED"
+            : f.result,
+    }));
+  }
+
+  // Preselect the browser-detected zone for a new round (client-only, so no SSR
+  // hydration mismatch — the server would resolve its own zone).
+  const detectedTz =
+    typeof Intl !== "undefined"
+      ? Intl.DateTimeFormat().resolvedOptions().timeZone
+      : "America/New_York";
+  useEffect(() => {
+    if (!round) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only default
+      setFields((f) => (f.scheduledTimezone ? f : { ...f, scheduledTimezone: detectedTz }));
+    }
+  }, [round, detectedTz]);
+
+  const tzOptions = useMemo(() => {
+    const opts = [...TIMEZONES];
+    const has = (v: string) => opts.some((o) => o.value === v);
+    if (fields.scheduledTimezone && !has(fields.scheduledTimezone))
+      opts.push({ value: fields.scheduledTimezone, label: fields.scheduledTimezone });
+    return opts;
+  }, [fields.scheduledTimezone]);
+
+  const resultOptions =
+    mode === "scheduling"
+      ? INTERVIEW_RESULTS
+      : INTERVIEW_RESULTS.filter((r) => r !== "WAITING");
+
   return (
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="submissionId" value={submissionId} />
       {round && <input type="hidden" name="id" value={round.id} />}
+
+      <div className="inline-flex gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
+        {([
+          ["scheduling", "Scheduling", "Booked for later"],
+          ["done", "Already happened", "Log the outcome"],
+        ] as const).map(([m, label, sub]) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => switchMode(m)}
+            aria-pressed={mode === m}
+            className={
+              mode === m
+                ? "rounded-md bg-white px-3 py-1.5 text-sm font-medium text-indigo-700 shadow-sm"
+                : "rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 hover:text-slate-700"
+            }
+            title={sub}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
       <FormSection n={1} title="Round & outcome">
         <Field label="Round name" htmlFor="roundName" required error={errors.roundName}>
@@ -151,9 +232,21 @@ export function InterviewRoundForm({
             </Select>
           </Field>
 
-          <Field label="Result" htmlFor="result" required error={errors.result}>
-            <Select id="result" name="result" value={fields.result} onChange={set("result")}>
-              {INTERVIEW_RESULTS.map((r) => (
+          <Field
+            label="Result"
+            htmlFor="result"
+            required
+            error={errors.result}
+            hint={mode === "scheduling" ? "Locked to Waiting — log the outcome later." : undefined}
+          >
+            <Select
+              id="result"
+              name="result"
+              value={fields.result}
+              onChange={set("result")}
+              disabled={mode === "scheduling"}
+            >
+              {resultOptions.map((r) => (
                 <option key={r} value={r}>
                   {INTERVIEW_RESULT_LABEL[r]}
                 </option>
@@ -164,10 +257,10 @@ export function InterviewRoundForm({
       </FormSection>
 
       <FormSection n={2} title="Schedule & support">
-        {/* Wave 4 (strict): mode, interviewer and date/time mean "an interview
-            is really set up" — hard-required, no N/A escape, so an empty round
-            can't slip past the pipeline's advance gate. Video adds platform +
-            link. Time zone / feedback / support stay required-or-N/A. */}
+        {/* Only mode + date/time are hard-required to book a slot (Model B). The
+            interviewer is often unknown when scheduling → required-or-TBD. Video
+            adds platform + link. Time zone / feedback / support stay
+            required-or-N/A. */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Interview mode" htmlFor="interviewMode" required error={errors.interviewMode}>
             <Select id="interviewMode" name="interviewMode" value={fields.interviewMode} onChange={set("interviewMode")} required>
@@ -182,9 +275,9 @@ export function InterviewRoundForm({
             </Select>
           </Field>
 
-          <Field label="Interviewer name" htmlFor="interviewerName" required error={errors.interviewerName}>
-            <Input id="interviewerName" name="interviewerName" value={fields.interviewerName} onChange={set("interviewerName")} placeholder="Who is interviewing" required />
-          </Field>
+          <NullableField label="Interviewer name" naLabel="TBD" htmlFor="interviewerName" name="interviewerName" na={fields.interviewerNameNa} onToggleNa={naToggle("interviewerName", "interviewerNameNa")} error={errors.interviewerName} hint="Often unknown when booking — mark TBD and fill it in later.">
+            <Input id="interviewerName" name="interviewerName" value={fields.interviewerName} onChange={set("interviewerName")} placeholder="Who is interviewing — if known" disabled={fields.interviewerNameNa} />
+          </NullableField>
 
           <Field label="Interview date & time" htmlFor="scheduledAt" required error={errors.scheduledAt}>
             {/* DateTimeField posts an unambiguous ISO instant via its own hidden
@@ -199,19 +292,23 @@ export function InterviewRoundForm({
             />
           </Field>
 
-          <NullableField label="Time zone" htmlFor="scheduledTimezone" name="scheduledTimezone" na={fields.scheduledTimezoneNa} onToggleNa={naToggle("scheduledTimezone", "scheduledTimezoneNa")} error={errors.scheduledTimezone} hint="IANA name — e.g. America/New_York, Asia/Kolkata.">
-            <Input
+          <NullableField label="Time zone" htmlFor="scheduledTimezone" name="scheduledTimezone" na={fields.scheduledTimezoneNa} onToggleNa={naToggle("scheduledTimezone", "scheduledTimezoneNa")} error={errors.scheduledTimezone} hint="Detected zone preselected.">
+            <Select
               id="scheduledTimezone"
               name="scheduledTimezone"
-              placeholder={
-                typeof Intl !== "undefined"
-                  ? Intl.DateTimeFormat().resolvedOptions().timeZone
-                  : "America/New_York"
-              }
               value={fields.scheduledTimezone}
               onChange={set("scheduledTimezone")}
               disabled={fields.scheduledTimezoneNa}
-            />
+            >
+              <option value="" disabled>
+                Select a zone…
+              </option>
+              {tzOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
           </NullableField>
 
           {isVideo && (
@@ -268,15 +365,19 @@ export function InterviewRoundForm({
         </div>
       </FormSection>
 
-      <FormSection n={3} title="Feedback & notes">
-        <NullableField label="Feedback" htmlFor="feedback" name="feedback" na={fields.feedbackNa} onToggleNa={naToggle("feedback", "feedbackNa")} error={errors.feedback}>
-          <Textarea id="feedback" name="feedback" rows={3} value={fields.feedback} onChange={set("feedback")} disabled={fields.feedbackNa} />
-        </NullableField>
+      {/* Model B: the outcome only exists once the interview happened — hidden
+          while scheduling so a new round captures just the schedule. */}
+      {mode === "done" && (
+        <FormSection n={3} title="Outcome & feedback">
+          <NullableField label="Feedback" htmlFor="feedback" name="feedback" na={fields.feedbackNa} onToggleNa={naToggle("feedback", "feedbackNa")} error={errors.feedback}>
+            <Textarea id="feedback" name="feedback" rows={3} value={fields.feedback} onChange={set("feedback")} disabled={fields.feedbackNa} />
+          </NullableField>
 
-        <Field label="Notes" htmlFor="notes" error={errors.notes} hint="Optional.">
-          <Textarea id="notes" name="notes" rows={2} value={fields.notes} onChange={set("notes")} />
-        </Field>
-      </FormSection>
+          <Field label="Notes" htmlFor="notes" error={errors.notes} hint="Optional.">
+            <Textarea id="notes" name="notes" rows={2} value={fields.notes} onChange={set("notes")} />
+          </Field>
+        </FormSection>
+      )}
 
       {state.error && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">

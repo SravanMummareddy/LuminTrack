@@ -56,12 +56,9 @@ describe("interviewRoundSchema — hard-required fields (no N/A escape)", () => 
     expect(interviewRoundSchema.safeParse({ ...base, result: "" }).success).toBe(false);
   });
 
-  it("requires mode, interviewer and date — an N/A flag no longer satisfies them", () => {
+  it("requires mode and date — an N/A flag no longer satisfies them", () => {
     expect(
       interviewRoundSchema.safeParse({ ...base, interviewMode: "", interviewModeNa: "1" }).success,
-    ).toBe(false);
-    expect(
-      interviewRoundSchema.safeParse({ ...base, interviewerName: "", interviewerNameNa: "1" }).success,
     ).toBe(false);
     expect(
       interviewRoundSchema.safeParse({ ...base, scheduledAt: "", scheduledAtNa: "1" }).success,
@@ -75,21 +72,50 @@ describe("interviewRoundSchema — hard-required fields (no N/A escape)", () => 
 });
 
 describe("interviewRoundSchema — required-or-N/A fields", () => {
-  it.each(["scheduledTimezoneNa", "feedbackNa"] as const)(
-    "blank without %s fails",
-    (naField) => {
-      expect(interviewRoundSchema.safeParse({ ...base, [naField]: "" }).success).toBe(false);
-    },
-  );
+  it("blank time zone without its N/A flag fails", () => {
+    expect(interviewRoundSchema.safeParse({ ...base, scheduledTimezoneNa: "" }).success).toBe(false);
+  });
 
-  it("a real value satisfies a required-or-N/A field without its flag", () => {
+  it("a real time-zone value satisfies it without the flag", () => {
     expect(
       interviewRoundSchema.safeParse({
         ...base,
-        feedbackNa: "",
-        feedback: "Strong on system design.",
+        scheduledTimezoneNa: "",
+        scheduledTimezone: "America/Chicago",
       }).success,
     ).toBe(true);
+  });
+});
+
+describe("interviewRoundSchema — Model B: interviewer required-or-TBD", () => {
+  it("blank interviewer with no TBD flag fails", () => {
+    expect(
+      interviewRoundSchema.safeParse({ ...base, interviewerName: "", interviewerNameNa: "" }).success,
+    ).toBe(false);
+  });
+
+  it("TBD (N/A flag) satisfies a blank interviewer", () => {
+    expect(
+      interviewRoundSchema.safeParse({ ...base, interviewerName: "", interviewerNameNa: "1" }).success,
+    ).toBe(true);
+  });
+});
+
+describe("interviewRoundSchema — Model B: feedback only once the result is logged", () => {
+  it("a still-Waiting (scheduled) round needs no feedback", () => {
+    // result WAITING + no feedback + no feedback N/A flag → still valid.
+    expect(
+      interviewRoundSchema.safeParse({ ...base, result: "WAITING", feedbackNa: "" }).success,
+    ).toBe(true);
+  });
+
+  it("a logged result requires feedback or its N/A flag", () => {
+    const done = { ...base, result: "SELECTED" as const, feedbackNa: "" };
+    expect(interviewRoundSchema.safeParse(done).success).toBe(false);
+    expect(
+      interviewRoundSchema.safeParse({ ...done, feedback: "Cleared all rounds." }).success,
+    ).toBe(true);
+    expect(interviewRoundSchema.safeParse({ ...done, feedbackNa: "1" }).success).toBe(true);
   });
 });
 

@@ -106,10 +106,14 @@ export const interviewRoundSchema = z
       if (blank && !na) ctx.addIssue({ code: "custom", path: [path], message });
     };
     hard(!d.interviewMode, "interviewMode", "Pick how the interview is held.");
-    hard(!d.interviewerName, "interviewerName", "Enter who is interviewing.");
+    // Model B: the interviewer is often unknown when booking → required-or-TBD.
+    req(!d.interviewerName, d.interviewerNameNa, "interviewerName", "Enter who is interviewing, or mark TBD.");
     hard(d.scheduledAt == null, "scheduledAt", "Set the interview date & time.");
     req(!d.scheduledTimezone, d.scheduledTimezoneNa, "scheduledTimezone", "Enter a time zone, or mark N/A.");
-    req(!d.feedback, d.feedbackNa, "feedback", "Enter feedback, or mark N/A.");
+    // Feedback only matters once the interview has happened (a non-Waiting
+    // result). A still-scheduled round (Waiting) needs none.
+    if (d.result !== "WAITING")
+      req(!d.feedback, d.feedbackNa, "feedback", "Enter feedback, or mark N/A.");
 
     // A video call must carry its platform + a join link (no N/A escape).
     if (d.interviewMode === "VIDEO") {
