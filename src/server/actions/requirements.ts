@@ -54,7 +54,7 @@ export async function createVendorRequirement(
   const db = await getScopedPrisma();
   const user = await requireUser();
   if (!canManageRequirements(user))
-    return { error: "Only admins and team leads can create requirements." };
+    return { error: "You don't have permission to create requirements." };
 
   const parsed = requirementSchema.safeParse({
     jobId: formData.get("jobId") ?? "",
@@ -124,7 +124,7 @@ export async function updateVendorRequirement(
   const db = await getScopedPrisma();
   const user = await requireUser();
   if (!canManageRequirements(user))
-    return { error: "Only admins and team leads can edit requirements." };
+    return { error: "You don't have permission to edit requirements." };
 
   const id = String(formData.get("id") ?? "").trim();
   if (!id) return { error: "Missing requirement reference." };
@@ -196,7 +196,7 @@ export async function emailAssignedRecruiter(
   const db = await getScopedPrisma();
   const user = await requireUser();
   if (!canManageRequirements(user))
-    return { error: "Only admins and team leads can email the recruiter." };
+    return { error: "You don't have permission to email the recruiter." };
 
   const id = String(formData.get("id") ?? "").trim();
   if (!id) return { error: "Missing requirement reference." };

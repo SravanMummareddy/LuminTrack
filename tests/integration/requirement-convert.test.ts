@@ -140,11 +140,10 @@ describe.skipIf(!dbReachable)("vendor requirement actions", () => {
     vi.mocked(getScopedPrisma).mockResolvedValue(ctx.db as never);
   });
 
-  it("gates create behind canManageRequirements", async () => {
+  it("lets recruiters and leads create a requirement (requirement:manage)", async () => {
     const fd = new FormData();
     fd.set("jobId", ctx.job.id);
-    // Forms-discipline (PR-1): these are now required to create a requirement.
-    // The recruiter is still denied up front on permission, before validation.
+    // Forms-discipline (PR-1): these are required to create a requirement.
     fd.set("location", "Remote");
     fd.set("engagement", "C2C");
     fd.set("vendorRecruiterName", "Vendor Rec");
@@ -154,14 +153,16 @@ describe.skipIf(!dbReachable)("vendor requirement actions", () => {
     fd.set("billRate__na", "1");
     fd.set("clientRate__na", "1");
 
+    // Recruiters can now create/edit VPRs (owner decision 2026-07-13) — they hold
+    // requirement:manage alongside team leads + managers. A denial would return
+    // early without writing, so the row count rising proves the create ran.
     mockedRequireUser.mockResolvedValue(ctx.recruiter as never);
-    const denied = await createVendorRequirement({}, fd);
-    expect(denied.error).toMatch(/admins and team leads/i);
-    expect(await testPrisma.vendorRequirement.count()).toBe(0);
+    await createVendorRequirement({}, fd);
+    expect(await testPrisma.vendorRequirement.count()).toBe(1);
 
     mockedRequireUser.mockResolvedValue(ctx.lead as never);
     await createVendorRequirement({}, fd);
-    expect(await testPrisma.vendorRequirement.count()).toBe(1);
+    expect(await testPrisma.vendorRequirement.count()).toBe(2);
   });
 
   it("submits a candidate against an OPEN requirement (VPR stays open, submission links back)", async () => {
