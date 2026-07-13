@@ -113,6 +113,7 @@ export function UserSection({
         <Table>
           <thead className="border-b border-slate-200 bg-slate-50">
             <tr>
+              <Th>ID</Th>
               <Th>Name</Th>
               <Th>Email</Th>
               <Th>Role</Th>

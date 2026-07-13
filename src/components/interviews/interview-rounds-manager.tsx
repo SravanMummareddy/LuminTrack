@@ -18,7 +18,7 @@ import {
   INTERVIEW_RESULT_TONE,
   interviewModeLabel,
 } from "@/lib/labels";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatDateTimeInZone } from "@/lib/format";
 import { isTerminal } from "@/lib/submission-flow";
 import type { SubmissionStatus } from "@/generated/prisma/enums";
 
@@ -215,7 +215,9 @@ export function InterviewRoundsManager({
                 </RoundItem>
                 <RoundItem label="Date & time">
                   <span suppressHydrationWarning>
-                    {r.scheduledAt ? formatDateTime(r.scheduledAt) : "—"}
+                    {r.scheduledAt
+                      ? formatDateTimeInZone(r.scheduledAt, r.scheduledTimezone)
+                      : "—"}
                   </span>
                   {r.scheduledAt && r.scheduledTimezone ? (
                     <span className="ml-1 text-xs text-slate-500">

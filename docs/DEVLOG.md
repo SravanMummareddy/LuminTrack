@@ -10,6 +10,42 @@ short instead of long.
 
 ---
 
+## 2026-07-13 · Bug-hunt sweep over the post-pilot wave (WS1–WS4) — the timezone one that only breaks on prod
+
+**Situation.** After shipping the four post-pilot workstreams (edge-case seed, submission pipeline
+coupling, dashboard notifications, Settings admin parity), a three-agent adversarial sweep + browser
+pass turned up a batch of bugs. The most consequential was invisible in dev: **every interview time
+would display in the wrong zone on Vercel.**
+
+**Diagnosis.** The react-day-picker `DateTimeField` builds its stored instant with browser-local
+`setHours()` → `toISOString()` (correct moment for the picker's zone), but the read side —
+`formatDateTime`/`formatTime` (date-fns `format`) — renders in the **runtime** zone. In dev the
+browser and Node runtime share the developer's zone, so entry == display and it looks fine. On Vercel
+the runtime is UTC, so a 2:30 PM Central pick (stored `20:30Z`) renders "8:30 PM" — directly
+contradicting the `(America/Chicago)` label the form captured right beside it. A whole class of "works
+on my machine" that a local browser pass structurally cannot catch. Sibling finds: a Settings table
+whose header row was one `<Th>` short of its body (every column label shifted); a "Jobs created" card
+showing a count over a hard-coded empty list; the dashboard docs section keyed off a hardcoded
+`filter === "overdue"` so soon-expiring docs hid under the wrong tier; and the rounds-first add-round
+path skipping the `advanceBlock` leave-gate the manual advance runs (a later round could jump an
+unresolved earlier one).
+
+**Fix.** Render interview instants back in their captured IANA zone with `Intl.DateTimeFormat({
+timeZone })` (new `formatTimeInZone`/`formatDateTimeInZone`, falling back to the runtime-zone formatter
+when no zone is on file) — so the clock matches the label on every runtime. The rest were one-liners
+at the root: add the missing `<Th>`; populate the jobs list from a real query; make the pipeline
+add-round obey the same `advanceBlock` the manual path does (and carry the block reason into the toast
+so a refused move isn't a silent no-op); treat expiring docs as their own group like the `/todos` page
+rather than folding them into tier pills whose counts exclude them.
+
+**Lesson.** A zone bug where storage and display resolve the zone differently is *latent by
+construction* in dev — the two zones coincide on the developer's machine and diverge only in prod
+(UTC). If a value carries a zone label, render it *through* that zone, don't trust the ambient one.
+And a browser pass on localhost proves rendering and wiring, not zone correctness — that needs a unit
+test that pins a fixed instant to a fixed zone (`20:30Z` in `America/Chicago` is `3:30 PM`, full stop).
+
+---
+
 ## 2026-07-13 · A custom `<Select>` that quietly showed ids instead of labels
 
 **Situation.** The interview form's support-provider dropdown rendered raw CUIDs

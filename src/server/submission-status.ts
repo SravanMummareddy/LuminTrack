@@ -169,6 +169,11 @@ export type CouplingOutcome = {
   /** SELECTED was blocked because the submission has no résumé (SB-3). The round
    *  result is still recorded; the caller surfaces this as a notice. */
   blockedNoResume: boolean;
+  /** A decisive result resolved to a valid forward target but `advanceBlock`
+   *  refused it (e.g. a later client round is still WAITING, so this isn't the
+   *  latest passing round). The result is recorded but the submission stays put;
+   *  the caller surfaces this reason so the move isn't a silent no-op. */
+  blockedAdvance?: string | null;
 };
 
 /**
@@ -209,9 +214,10 @@ export async function applyResultCoupling(
       return { coupled: null, blockedNoResume: true };
     // SB-5: the same record/pass gate the manual advance enforces. The round
     // result just written is the passing evidence when it's a client-family
-    // round; without one on file, stay put.
-    if (advanceBlock(submission.status, target, rounds))
-      return { coupled: null, blockedNoResume: false };
+    // round; without one on file, stay put — but carry the reason so the caller
+    // can tell the recruiter why the result didn't move the submission.
+    const blocked = advanceBlock(submission.status, target, rounds);
+    if (blocked) return { coupled: null, blockedNoResume: false, blockedAdvance: blocked };
   }
 
   await applySubmissionStatus(tx, submission, target, {

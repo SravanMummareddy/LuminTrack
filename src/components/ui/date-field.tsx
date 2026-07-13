@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { DayPicker, type Matcher } from "react-day-picker";
 import { format, parseISO, isValid } from "date-fns";
-import { Calendar as CalendarIcon, ChevronDown } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronDown, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 /**
@@ -155,6 +155,24 @@ function BaseDateField({
         </span>
         <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
       </button>
+
+      {/* Clear (×) for optional fields — a picked date could otherwise never be
+          blanked again (regression from the native input's empty state). Hidden
+          when required/disabled or already empty. */}
+      {!required && !disabled && current && (
+        <button
+          type="button"
+          aria-label="Clear date"
+          onClick={() => {
+            setTime("");
+            setOpen(false);
+            emit("");
+          }}
+          className="absolute right-8 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
 
       {open && (
         <div className="rdp-pop absolute z-30 mt-1 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">

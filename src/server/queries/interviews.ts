@@ -167,6 +167,7 @@ const INTERVIEW_LIST_SELECT = {
   roundName: true,
   interviewType: true,
   scheduledAt: true,
+  scheduledTimezone: true,
   result: true,
   supportNeeded: true,
   supportMethod: true,

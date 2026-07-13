@@ -8,7 +8,7 @@ import {
 } from "@/lib/labels";
 import {
   formatDate,
-  formatTime,
+  formatTimeInZone,
   formatSubmissionDisplayId,
   deletedSuffix,
 } from "@/lib/format";
@@ -116,7 +116,7 @@ function ScheduleGroup({
                 {row.scheduledAt ? formatDate(row.scheduledAt) : "—"}
               </span>{" "}
               <span suppressHydrationWarning>
-                {row.scheduledAt ? formatTime(row.scheduledAt) : ""}
+                {row.scheduledAt ? formatTimeInZone(row.scheduledAt, row.scheduledTimezone) : ""}
               </span>
             </div>
             <span className="min-w-0 flex-1 truncate text-xs text-slate-600">
