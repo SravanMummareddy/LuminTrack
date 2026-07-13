@@ -10,6 +10,52 @@ short instead of long.
 
 ---
 
+## 2026-07-13 · Pilot bug-hunt — audit-integrity holes on the money path (4-agent adversarial sweep)
+
+**Situation.** Ahead of the pilot, a 4-agent adversarial fan-out over the submission flow + lifecycle
+cascades (core action logic · client form state · placement/bench/interview cascades · cross-cutting
+correctness). Each agent had to produce a concrete failure scenario per finding; every reported bug was
+then re-verified against the code by hand before any fix. Cross-cutting came back clean; the other three
+surfaced five real defects, four of them on the money/consent path the audit log exists to protect.
+
+**Diagnosis.**
+- **`updateSubmission` (A):** the `changed[]` detector inspected only notes/date/résumé/submitter, but the
+  `update` wrote rates/engagement/duties/team-lead unconditionally, and both the audit row *and* the
+  `rateOverrideReason` lived inside `if (changed.length)`. Editing only a pay rate → silent write, **no
+  audit, override reason discarded**.
+- **`convertRequirementToSubmission` (B):** `convertOverrideReason` (justifying an override of a
+  negative-margin / active-placement / archived-résumé convert) gated the save but was threaded into
+  neither `createSubmissionRecord`'s note composition nor the `REQUIREMENT_CONVERTED` log — the
+  justification vanished. The *direct* submit path persisted its overrides; convert silently didn't.
+- **`claimIntent` leak (C):** the self-claim consent latch was reset with the gate reasons on a candidate
+  change but **not on a job change** — a claim approved for job X rode into a submit for a different
+  unassigned job Y and suppressed Y's not-assigned gate, auto-claiming Y with no warning.
+- **Manual → PLACED (D):** the candidate guard was one-directional (blocked `PLACED → other` under an
+  active placement) but nothing blocked `other → PLACED`. A manual status edit produced a candidate
+  marked PLACED with **no Placement row and a bench still marketing them** — a three-way desync of a
+  status that's supposed to be *derived* from the placement lifecycle.
+- **Schedule "concluded" (E):** `CONCLUDED_RESULTS` omitted `NO_SHOW`/`CANCELLED`, which `advanceBlock`
+  treats as resolved — so a no-showed past round nagged "awaiting outcome" forever.
+
+**Fix.** A/B: put the money/term fields in the change detector and log when they change or an override was
+given (A); thread `convertOverrideReason` through the shared note composition next to its siblings (B) —
+both fixes make the write and its justification commit together. C: reset `claimIntent` inside the shared
+`dismissStaleGate()`, so *any* context change drops the job-scoped consent. D: reject `→ PLACED` from the
+create/update actions (allow only the already-PLACED no-op) and filter the option out of the form unless
+it's the current value — PLACED stays owned by the lifecycle helper. E: add the two didn't-happen results
+to the set. Regression tests: integration for A (rate-only edit → audit row) and B (convert-override note
+persisted), unit for E (NO_SHOW → Completed).
+
+**Lesson.** When a write path has a *change-detector gating both the write's audit and its override
+reason*, every field the write touches must be in that detector — a field written outside the detector's
+view mutates with no trail, and that's most dangerous on money fields. Consent/justification latches
+(claim flag, override reasons) must all reset on the *same* context-change boundary; resetting some but
+not others (reasons yes, claim no) reopens exactly the leak the reset exists to close. And a *derived*
+status (PLACED, owned by a lifecycle helper) needs a guard in **both** directions — a one-directional
+guard invites the desync from the unguarded side. Adversarial fan-out with mandatory concrete-repro +
+hand re-verification kept the signal high: cross-cutting's PLAUSIBLE-only findings were correctly held
+back, and every shipped fix had a traced failure scenario.
+
 ## 2026-07-13 · Pilot-readiness — the one uncaught crash was an unguarded Blob upload
 
 **Situation.** The app goes to ~10 real recruiters tomorrow for a week of real-data use. A 3-agent

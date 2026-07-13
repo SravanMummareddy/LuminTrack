@@ -574,6 +574,7 @@ export async function convertRequirementToSubmission(
         workAuthOverrideReason,
         originalResumeOverrideReason,
         benchOverrideReason,
+        convertOverrideReason,
         job,
         candidateFullName: candidate.fullName,
         actor: { id: user.id, fullName: user.fullName, isAdmin: hasFullAccess(user) },

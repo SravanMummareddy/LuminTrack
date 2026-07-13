@@ -120,6 +120,25 @@ describe.skipIf(!dbReachable)("updateSubmission — re-attribution, résumé sna
     expect(after!.teamLead).toBe("Sriman Udugula");
   });
 
+  it("editing ONLY commercial rates writes a SUBMISSION_UPDATED audit row (money changes must be logged)", async () => {
+    // Regression: the change-detector once ignored rate/engagement/duties/team-lead
+    // (only notes/date/résumé/submitter), so a rate-only edit committed silently
+    // with no audit row and dropped any rate-override reason. Bill ≥ Pay keeps the
+    // chain valid so this isolates the audit behaviour, not the rate-chain gate.
+    vi.mocked(requireUser).mockResolvedValue(ctx.admin as never);
+    await updateSubmission(
+      undefined as never,
+      editForm({ payRate: "55", billRate: "90" }),
+    );
+
+    const after = await testPrisma.submission.findUnique({ where: { id: ctx.submission.id } });
+    expect(Number(after!.payRate)).toBe(55);
+
+    const audit = await lastUpdate();
+    expect(audit, "a rate-only edit must be audited").not.toBeNull();
+    expect(audit!.description).toContain("pay rate");
+  });
+
   it("a true no-op edit writes no SUBMISSION_UPDATED audit row", async () => {
     vi.mocked(requireUser).mockResolvedValue(ctx.admin as never);
     // Re-post every seeded value verbatim — nothing changed.

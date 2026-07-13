@@ -38,7 +38,10 @@ export const SCHEDULE_BUCKET_META: {
 // A round whose result means THIS round is finished — it drops to Completed even
 // if its date is in the future (e.g. an outcome entered ahead of the slot).
 const CONCLUDED_RESULTS: ReadonlySet<InterviewResult> = new Set<InterviewResult>(
-  ["SELECTED", "REJECTED", "COMPLETED", "NEED_ANOTHER_ROUND", "ON_HOLD"],
+  // NO_SHOW / CANCELLED are resolved "didn't happen" outcomes — the pipeline
+  // treats them as done (only WAITING blocks an advance), so the schedule view
+  // must too, or a no-showed round nags "awaiting outcome" forever.
+  ["SELECTED", "REJECTED", "COMPLETED", "NEED_ANOTHER_ROUND", "ON_HOLD", "NO_SHOW", "CANCELLED"],
 );
 
 export function isConcluded(result: InterviewResult): boolean {

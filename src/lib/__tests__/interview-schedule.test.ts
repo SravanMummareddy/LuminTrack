@@ -52,6 +52,17 @@ describe("isConcluded", () => {
     expect(isConcluded("SELECTED")).toBe(true);
     expect(isConcluded("COMPLETED")).toBe(true);
   });
+
+  it("NO_SHOW and CANCELLED are concluded (didn't-happen outcomes)", () => {
+    // The pipeline treats these as resolved (only WAITING blocks an advance),
+    // so the schedule view must too — else a no-showed past round nags forever.
+    expect(isConcluded("NO_SHOW")).toBe(true);
+    expect(isConcluded("CANCELLED")).toBe(true);
+    // And a past-dated NO_SHOW round lands in Completed, not Awaiting.
+    expect(scheduleBucketOf(at("2026-07-10T09:00:00Z", "NO_SHOW"), NOW)).toBe(
+      "completed",
+    );
+  });
 });
 
 describe("bucketInterviews", () => {
