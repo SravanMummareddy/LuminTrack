@@ -26,13 +26,18 @@ export function TeamSection({
   items,
   canManage,
   leadOptions,
+  openEditId,
 }: {
   items: TeamRow[];
   canManage: boolean;
   /** Team-lead (+ manager) users eligible to lead a team. */
   leadOptions: Option[];
+  /** When set (from `?edit=<id>`), open that row's dialog on load. */
+  openEditId?: string;
 }) {
-  const [editing, setEditing] = useState<TeamRow | "new" | null>(null);
+  const [editing, setEditing] = useState<TeamRow | "new" | null>(
+    () => (openEditId ? items.find((i) => i.id === openEditId) ?? null : null),
+  );
 
   return (
     <section className="space-y-3">

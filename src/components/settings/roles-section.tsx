@@ -30,11 +30,16 @@ const GROUPED = PERMISSION_CATALOG.reduce(
 export function RolesSection({
   roles,
   canManage,
+  openEditId,
 }: {
   roles: RoleRow[];
   canManage: boolean;
+  /** When set (from `?edit=<id>`), open that row's dialog on load. */
+  openEditId?: string;
 }) {
-  const [editing, setEditing] = useState<RoleRow | "new" | null>(null);
+  const [editing, setEditing] = useState<RoleRow | "new" | null>(
+    () => (openEditId ? roles.find((r) => r.id === openEditId) ?? null : null),
+  );
 
   return (
     <section className="space-y-3">

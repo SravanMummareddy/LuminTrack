@@ -132,7 +132,12 @@ export default async function SettingsPage({
       listTeamLeadOptions(),
     ]);
     content = (
-      <TeamSection items={teams} canManage={isAdmin} leadOptions={leadOptions} />
+      <TeamSection
+        items={teams}
+        canManage={isAdmin}
+        leadOptions={leadOptions}
+        openEditId={editId}
+      />
     );
   } else if (tab === "users") {
     // All teams (incl. empty ones) so a new team is immediately assignable.
@@ -163,11 +168,16 @@ export default async function SettingsPage({
         teams={allTeams.map((t) => ({ id: t.id, name: t.name }))}
         userOptions={userOptions}
         roleOptions={roleOptions}
+        openEditId={editId}
       />
     );
   } else if (tab === "roles") {
     content = (
-      <RolesSection roles={await listRoles()} canManage={canManageRoles(user)} />
+      <RolesSection
+        roles={await listRoles()}
+        canManage={canManageRoles(user)}
+        openEditId={editId}
+      />
     );
   } else if (tab === "organizations") {
     // Platform-super-admin only — a ?tab=organizations URL from anyone else is
@@ -176,13 +186,18 @@ export default async function SettingsPage({
       <OrganizationsSection
         organizations={await listOrganizationsAdmin()}
         canManage
+        openEditId={editId}
       />
     ) : (
       <Forbidden />
     );
   } else if (tab === "glossary") {
     content = (
-      <GlossarySection rows={await getGlossaryWithNotes()} isAdmin={isAdmin} />
+      <GlossarySection
+        rows={await getGlossaryWithNotes()}
+        isAdmin={isAdmin}
+        openEditId={editId}
+      />
     );
   } else if (tab === "deleted") {
     if (isAdmin) {

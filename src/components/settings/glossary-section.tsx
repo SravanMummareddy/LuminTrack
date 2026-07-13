@@ -27,13 +27,19 @@ const CATEGORY_OPTIONS = [...GLOSSARY_CATEGORIES, "Custom"];
 export function GlossarySection({
   rows,
   isAdmin,
+  openEditId,
 }: {
   rows: GlossaryRow[];
   isAdmin: boolean;
+  /** When set (from `?edit=<id>`), open that row's dialog on load. */
+  openEditId?: string;
 }) {
   const [q, setQ] = useState("");
   // The add/edit dialog: "new", an existing custom row, or null (closed).
-  const [editing, setEditing] = useState<null | "new" | GlossaryRow>(null);
+  const [editing, setEditing] = useState<null | "new" | GlossaryRow>(
+    () =>
+      openEditId ? rows.find((r) => r.customId === openEditId) ?? null : null,
+  );
   const [deleting, setDeleting] = useState<GlossaryRow | null>(null);
 
   const filtered = useMemo(() => {
