@@ -190,7 +190,11 @@ export async function getCandidateDocuments(
   const db = await getScopedPrisma();
   const where: Prisma.CandidateDocumentWhereInput = { candidateId };
   if (!canViewSensitiveDocs(viewer)) {
-    where.category = { in: ["EDUCATION", "EMPLOYMENT"] };
+    // Exclude only the sensitive categories — mirror the single source of truth
+    // (isSensitiveCategory), not a hardcoded include-list. An include-list drops
+    // OTHER, which the upload form offers + the create action accepts, so a
+    // recruiter's "Other" doc would save then vanish from their own view.
+    where.category = { notIn: ["IDENTITY", "WORK_AUTH"] };
   }
   const rows = await db.candidateDocument.findMany({
     where,
@@ -206,8 +210,8 @@ export type CandidateDocumentRow = Awaited<
 
 /**
  * Documents expiring within `withinDays` days (or already expired). Scoped
- * by viewer role: non-admins can only see EDUCATION + EMPLOYMENT docs (the
- * sensitive ones never surface here for them).
+ * by viewer role: viewers without sensitive-doc access never see the sensitive
+ * categories (IDENTITY / WORK_AUTH); everything else surfaces.
  *
  * Used by the Dashboard "Documents expiring" widget.
  */
@@ -224,7 +228,7 @@ export async function getExpiringDocuments(
     expiresAt: { not: null, lte: cutoff },
   };
   if (!canViewSensitiveDocs(viewer)) {
-    where.category = { in: ["EDUCATION", "EMPLOYMENT"] };
+    where.category = { notIn: ["IDENTITY", "WORK_AUTH"] };
   }
   if (opts.scope === "me") {
     where.candidate = { createdById: viewer.id };

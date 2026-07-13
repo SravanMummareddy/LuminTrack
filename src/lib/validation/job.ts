@@ -59,7 +59,6 @@ export const jobSchema = z
     vendorRate: optionalNonNegativeNumber,
     description: z.string().trim().min(1, "A job description is required."),
     notes: optionalText,
-    recruiterIds: z.array(z.string().min(1)).default([]),
     positions: optionalPositiveInt,
     startDate: optionalDateTime,
     startDateEstimated: z.preprocess(

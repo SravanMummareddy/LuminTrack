@@ -10,6 +10,46 @@ short instead of long.
 
 ---
 
+## 2026-07-13 · Recruiter-persona hunt — the "upload succeeds, then vanishes" document bug (an include-list that drifted from the catalog)
+
+**Situation.** A recruiter-perspective pass over the daily flows (add job / VPR / candidate / bench /
+submission / pipeline) asked the sharp question: is any permission a recruiter *should* have missing,
+and does any control lead them somewhere broken? The pipeline and VPR flows came back clean, but the
+documents surface hid a data-visibility bug: a recruiter could upload an **"Other"**-category document,
+get a success, land back on the candidate page — and the doc was gone.
+
+**Diagnosis.** Two independent definitions of "which categories may a non-privileged viewer see" had
+drifted apart. The write side (`document-form` category options, `createCandidateDocument`) gates on
+the single source of truth — `isSensitiveCategory` (`SENSITIVE = {IDENTITY, WORK_AUTH}`) — so it
+correctly *offers and accepts* OTHER for a recruiter. But the read side hardcoded an **include-list**:
+`getCandidateDocuments`/`getExpiringDocuments` filtered non-privileged viewers to
+`category { in: ["EDUCATION","EMPLOYMENT"] }`, which silently omits OTHER (a fifth, non-sensitive
+category). An allow-list that enumerates the *permitted* set will always drift when a new enum value is
+added on the not-enumerated side; a deny-list keyed off the same predicate as the writer cannot. The
+same hunt surfaced a permission-mechanics bug: the job form's rate section was gated on `hasFullAccess`
+on the *new* page but `job:edit_rates` on the *edit* page and the server action — a create/edit
+asymmetry that only bites a custom role holding `job:edit_rates` without `tier:full`.
+
+**Fix.** Make the reader mirror the writer: `category { notIn: ["IDENTITY","WORK_AUTH"] }` (the negation
+of `isSensitiveCategory`), so anything non-sensitive — including OTHER and any future non-sensitive
+category — surfaces. Align the new-job rate gate to `canEditJobRatesAndAssignment` to match the edit
+page + action. Separately, an owner decision this round (recruiters may manage identity/work-auth docs
+for their own candidates, so the work-auth-expiry submit gate is usable for them) meant granting the
+Recruiter role `document:view_sensitive` **and** `document:manage_sensitive` — the pair moves together,
+because manage-without-view would let a recruiter upload a doc they then can't see in the list or open
+via the view-gated `/api/documents/[id]` route (the same vanish bug, one layer up). Backfilled existing
+orgs with an idempotent grant script (seedRbac never overwrites existing role grants), and relabeled the
+now-inaccurate "Admin only" doc badge to "Sensitive" (team leads and recruiters hold it too — never were
+"admins").
+
+**Lesson.** When two sides of a boundary must agree on a set, don't write the set down twice. One side
+enumerating "what's allowed" and the other enumerating "what's forbidden" is a drift waiting for the
+next enum value — route both through the one predicate. And a coarse permission that bundles two
+capabilities (view + manage) can't be half-granted: granting only the second re-creates the exact bug
+the first would have prevented.
+
+---
+
 ## 2026-07-13 · Bug-hunt sweep over the post-pilot wave (WS1–WS4) — the timezone one that only breaks on prod
 
 **Situation.** After shipping the four post-pilot workstreams (edge-case seed, submission pipeline

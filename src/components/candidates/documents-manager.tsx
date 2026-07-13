@@ -178,7 +178,7 @@ export function DocumentsManager({
                     </span>
                     {cat.sensitive && (
                       <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-normal text-indigo-700">
-                        Admin only
+                        Sensitive
                       </span>
                     )}
                   </button>

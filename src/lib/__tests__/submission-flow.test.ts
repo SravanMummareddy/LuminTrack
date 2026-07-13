@@ -235,7 +235,7 @@ describe("advanceBlock (SB-5 strict gate)", () => {
 
   it("blocks reaching vendor screening without a screening round", () => {
     expect(advanceBlock("RESUME_PICKED", "VENDOR_SCREENING_CALL", [])).toMatch(
-      /vendor screening call first/i,
+      /vendor screening round first/i,
     );
     expect(
       advanceBlock("RESUME_PICKED", "VENDOR_SCREENING_CALL", [vs("WAITING")]),

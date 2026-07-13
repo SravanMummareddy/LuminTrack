@@ -263,7 +263,7 @@ export function advanceBlock(
 
   // Enter-gates: the stage's record must exist.
   if (next === "VENDOR_SCREENING_CALL" && !latestOfType(rounds, "VENDOR_SCREENING"))
-    return "Record the vendor screening call first — or skip it as client-waived.";
+    return "Add the vendor screening round first.";
   if (next === "CLIENT_INTERVIEW" && !latestClientRound(rounds))
     return "Schedule the client interview first.";
 

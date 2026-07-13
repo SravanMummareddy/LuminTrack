@@ -78,7 +78,6 @@ function readJob(formData: FormData) {
     vendorRate: formData.get("vendorRate") ?? "",
     description: formData.get("description") ?? "",
     notes: formData.get("notes") ?? "",
-    recruiterIds: formData.getAll("recruiterIds").map(String),
     positions: formData.get("positions") ?? "",
     startDate: formData.get("startDate") ?? "",
     startDateEstimated: formData.get("startDateEstimated") ?? "",
