@@ -25,6 +25,8 @@ import type {
   InterviewResult,
   Discipline,
   JobSourceType,
+  WorkMode,
+  JobPriority,
 } from "../src/generated/prisma/enums";
 
 // A bulk one-shot script: use a direct TCP connection (DIRECT_URL, the pg
@@ -534,6 +536,10 @@ function feedbackFor(result: InterviewResult): string {
       return "Solid round overall; client would like one more technical screen.";
     case "COMPLETED":
       return "Round completed — feedback shared with the recruiter.";
+    case "NO_SHOW":
+      return "Candidate did not attend the scheduled interview.";
+    case "CANCELLED":
+      return "Interview cancelled by the client — to be rescheduled.";
     default:
       return "";
   }
@@ -591,6 +597,9 @@ async function main() {
   await baseDb.vendor.deleteMany();
   await baseDb.client.deleteMany();
   await baseDb.sisterCompanySource.deleteMany();
+  // Referrer holds a Restrict FK to Organization (and is referenced by Job +
+  // Candidate, both already cleared above) — must go before the org wipe below.
+  await baseDb.referrer.deleteMany();
   await baseDb.lookupOption.deleteMany();
   // Glossary: notes cascade on user delete, but custom terms Restrict — remove
   // them first so the user wipe doesn't fail.
@@ -866,6 +875,28 @@ async function main() {
               ? { sourceOther: "Inbound email" }
               : {};
 
+    // Start date: confirmed on FILLED jobs; an estimate on some still-open ones
+    // (drives the "estimated start" tag + the estimated-start close-gate).
+    const hasStart = status === "FILLED" || chance(0.4);
+    const startDate = hasStart
+      ? new Date(createdAt.getTime() + randInt(10, 60) * DAY)
+      : null;
+    const startDateEstimated = startDate != null && status !== "FILLED" && chance(0.5);
+    const endDate =
+      startDate && chance(0.5)
+        ? new Date(startDate.getTime() + randInt(90, 365) * DAY)
+        : null;
+    // Target hire-by: past for some still-open jobs (→ manager "past close date"
+    // todo, pending.ts), future for the rest.
+    const targetCloseDate =
+      (status === "OPEN" || status === "ON_HOLD") && chance(0.5)
+        ? chance(0.4)
+          ? new Date(NOW.getTime() - randInt(2, 25) * DAY) // overdue
+          : new Date(NOW.getTime() + randInt(5, 45) * DAY)
+        : status === "FILLED"
+          ? new Date(createdAt.getTime() + randInt(20, 60) * DAY)
+          : null;
+
     const job = await prisma.job.create({
       data: {
         title,
@@ -891,6 +922,18 @@ async function main() {
         ...sourceFields,
         // Optional job-detail fields — populated on a subset so the columns have data.
         positions: chance(0.5) ? randInt(1, 4) : null,
+        workMode: chance(0.7)
+          ? weighted<WorkMode>([["REMOTE", 3], ["HYBRID", 2], ["ONSITE", 2]])
+          : null,
+        priority: chance(0.7)
+          ? weighted<JobPriority>([["MEDIUM", 3], ["HIGH", 2], ["LOW", 1], ["CRITICAL", 1]])
+          : null,
+        skills: chance(0.7) ? pickN(SKILLS, randInt(3, 6)) : [],
+        workAuthRequirement: chance(0.5) ? pick(WORK_AUTH) : null,
+        startDate,
+        startDateEstimated,
+        endDate,
+        targetCloseDate,
         createdById: creator.id,
         // D3: requirements arrive 0–5 days before they're logged — so the
         // demo's time-to-first-submission reflects the real gap.
@@ -1041,18 +1084,28 @@ async function main() {
     // Résumé library — most candidates keep 1-3 uploaded PDF résumés (rotating
     // through the sample blobs). Skipped entirely if no Blob store is configured.
     const resumes: { id: string; blobUrl: string | null }[] = [];
-    if (chance(0.8) && sampleBlobs.length) {
+    // C-1: candidate #0 gets ONLY marketing résumés (no original on file) so the
+    // "No original résumé" flag + the no_original_resume submission gate have
+    // demo data; everyone else is mostly original with an occasional marketing copy.
+    const marketingOnly = i === 0;
+    if ((marketingOnly || chance(0.8)) && sampleBlobs.length) {
       const labels = pickN(RESUME_LABELS, randInt(1, 3));
       for (let j = 0; j < labels.length; j++) {
         // A few résumés are archived (soft-deleted) so the "Show archived" chip
         // on the candidate page has data. Archived ones aren't offered for
-        // submission, so only active ones go into the pick pool below.
-        const isActive = chance(0.85);
+        // submission, so only active ones go into the pick pool below. The
+        // marketing-only candidate keeps its résumés active so the gate can fire.
+        const isActive = marketingOnly || chance(0.85);
         const sample = sampleBlobs[(i + j) % sampleBlobs.length];
         const created = await prisma.candidateResume.create({
           data: {
             candidateId: candidate.id,
             label: labels[j],
+            kind: marketingOnly
+              ? "MARKETING"
+              : chance(0.25)
+                ? "MARKETING"
+                : "ORIGINAL",
             blobPathname: sample.pathname,
             blobUrl: sample.url,
             contentType: "application/pdf",
@@ -1119,6 +1172,7 @@ async function main() {
         ["REJECTED", 4],
         ["ON_HOLD", 2],
         ["OFFER_RELEASED", 1],
+        ["OFFER_ACCEPTED", 1],
         ["JOINED", 4],
         ["BACKED_OUT", 1],
       ]);
@@ -1129,6 +1183,7 @@ async function main() {
       ["REJECTED", 4],
       ["ON_HOLD", 1],
       ["OFFER_RELEASED", 2],
+      ["OFFER_ACCEPTED", 1],
       ["JOINED", 5],
       ["BACKED_OUT", 2],
     ]);
@@ -1335,6 +1390,23 @@ async function main() {
     // The requirement this candidate is submitted against (VPR-first).
     const vpr = await getVprForJob(job);
 
+    // ~6% of submissions have an inverted rate chain (pay > bill) so the
+    // rate-chain warning + gate + the Bill−Pay margin math have demo data.
+    const brokenRate = chance(0.06);
+    // Join dates: an accepted offer carries an expected join (half already past →
+    // the "join slipped" todo, pending.ts); a joined submission carries the
+    // actual join date.
+    const lastTime = times[times.length - 1];
+    const expectedJoinDate =
+      finalStatus === "OFFER_ACCEPTED"
+        ? chance(0.5)
+          ? new Date(NOW.getTime() - randInt(2, 20) * DAY) // slipped (past-due)
+          : new Date(NOW.getTime() + randInt(3, 30) * DAY)
+        : finalStatus === "JOINED"
+          ? lastTime
+          : null;
+    const actualJoinDate = finalStatus === "JOINED" ? lastTime : null;
+
     const submission = await prisma.submission.create({
       data: {
         candidateId: candidate.id,
@@ -1352,9 +1424,13 @@ async function main() {
         engagement: vpr.engagement,
         vendorRecruiterName: vpr.vendorRecruiterName,
         jobDuties: chance(0.3) ? pick(JOB_DUTIES_SAMPLES) : null,
-        payRate: vpr.payRate + randInt(-2, 2),
+        payRate: brokenRate
+          ? vpr.billRate + randInt(5, 20) // inverted: pay above bill
+          : vpr.payRate + randInt(-2, 2),
         billRate: vpr.billRate,
         teamLead: vpr.teamLead,
+        expectedJoinDate,
+        actualJoinDate,
         candidateResumeId: pickedResume?.id ?? null,
         resumeBlobUrl: pickedResume?.blobUrl ?? null,
         resumeWaivedAt: waiveResume ? submittedAt : null,
@@ -1418,6 +1494,7 @@ async function main() {
         } else if (
           finalStatus === "SELECTED" ||
           finalStatus === "OFFER_RELEASED" ||
+          finalStatus === "OFFER_ACCEPTED" ||
           finalStatus === "JOINED"
         ) {
           result = "SELECTED";
@@ -1430,6 +1507,10 @@ async function main() {
             ["WAITING", 2],
             ["NEED_ANOTHER_ROUND", 2],
             ["COMPLETED", 1],
+            // "Didn't happen" outcomes so the schedule's Completed/no-show states
+            // + the didn't-happen advance path have demo data.
+            ["NO_SHOW", 1],
+            ["CANCELLED", 1],
           ]);
         }
 
