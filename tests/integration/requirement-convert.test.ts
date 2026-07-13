@@ -61,7 +61,16 @@ async function seed() {
     db.vendor.create({ data: { name: "Vendor" } }),
   ]);
   const candidate = await db.candidate.create({
-    data: { fullName: "Cand", status: "AVAILABLE", createdById: admin.id },
+    // Complete profile so the "incomplete_profile" submit soft-block (#122) stays quiet.
+    data: {
+      fullName: "Cand",
+      status: "AVAILABLE",
+      createdById: admin.id,
+      totalExperienceYears: 5,
+      technology: "Java",
+      workAuthorization: "USC",
+      currentLocation: "Remote",
+    },
   });
   const job = await db.job.create({
     data: {
@@ -218,6 +227,10 @@ describe.skipIf(!dbReachable)("vendor requirement actions", () => {
         fullName: "Cand Two",
         status: "AVAILABLE",
         createdById: ctx.admin.id,
+        totalExperienceYears: 5,
+        technology: "Java",
+        workAuthorization: "USC",
+        currentLocation: "Remote",
       },
     });
 

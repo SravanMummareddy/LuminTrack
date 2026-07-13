@@ -88,7 +88,17 @@ export async function seedSubmissionScenario(base: PrismaClient) {
     prisma.vendor.create({ data: { name: "Test Vendor" } }),
   ]);
   const candidate = await prisma.candidate.create({
-    data: { fullName: "Bench Candidate", status: "AVAILABLE", createdById: admin.id },
+    // Profile complete so the submit-time "incomplete_profile" soft-block (#122)
+    // doesn't fire — these tests exercise the assignment / duplicate gates.
+    data: {
+      fullName: "Bench Candidate",
+      status: "AVAILABLE",
+      createdById: admin.id,
+      totalExperienceYears: 5,
+      technology: "Java",
+      workAuthorization: "USC",
+      currentLocation: "Remote",
+    },
   });
   return { org, db: prisma, admin, recruiter, client, vendor, candidate };
 }
