@@ -5,6 +5,7 @@ import { CalendarPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, Input, Textarea } from "@/components/ui/field";
+import { DateField } from "@/components/ui/date-field";
 import { extendPlacement } from "@/server/actions/placements";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
 import { formatDate } from "@/lib/format";
@@ -116,13 +117,7 @@ function ExtendForm({
           error={errors.startDate}
           hint="Must be on or after the current end date."
         >
-          <Input
-            id="startDate"
-            name="startDate"
-            type="date"
-            defaultValue={startDefault}
-            required
-          />
+          <DateField id="startDate" name="startDate" defaultValue={startDefault} required />
         </Field>
         <Field
           label="Extension ends"
@@ -130,7 +125,7 @@ function ExtendForm({
           required
           error={errors.endDate}
         >
-          <Input id="endDate" name="endDate" type="date" required />
+          <DateField id="endDate" name="endDate" required />
         </Field>
       </div>
       {canManageRates && (

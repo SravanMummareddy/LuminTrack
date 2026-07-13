@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect } from "react";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
+import { DateField } from "@/components/ui/date-field";
 import { Button } from "@/components/ui/button";
 import {
   createCandidateDocument,
@@ -119,12 +120,7 @@ export function DocumentForm({
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Issued on" htmlFor="issuedAt" error={errors.issuedAt}>
-          <Input
-            id="issuedAt"
-            name="issuedAt"
-            type="date"
-            defaultValue={toDateInput(doc?.issuedAt)}
-          />
+          <DateField id="issuedAt" name="issuedAt" defaultValue={toDateInput(doc?.issuedAt)} />
         </Field>
         <Field
           label="Expires on"
@@ -132,12 +128,7 @@ export function DocumentForm({
           hint="Leave blank for documents that don't expire (transcripts, offer letters, etc.). When set, the dashboard warns 30 days out."
           error={errors.expiresAt}
         >
-          <Input
-            id="expiresAt"
-            name="expiresAt"
-            type="date"
-            defaultValue={toDateInput(doc?.expiresAt)}
-          />
+          <DateField id="expiresAt" name="expiresAt" defaultValue={toDateInput(doc?.expiresAt)} />
         </Field>
       </div>
 

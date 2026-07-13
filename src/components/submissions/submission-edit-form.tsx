@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
+import { DateTimeField } from "@/components/ui/date-field";
 import { SearchSelect } from "@/components/ui/search-select";
 import { Button } from "@/components/ui/button";
 import { RateChainWarning } from "@/components/ui/rate-chain-warning";
@@ -59,15 +60,6 @@ type Fields = {
 };
 
 
-/** Converts a stored date into a `datetime-local` input value in the browser's timezone. */
-function toDateTimeLocal(value: Date | string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
-    date.getDate(),
-  )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
 
 function LockedField({ label, value }: { label: string; value: string }) {
   return (
@@ -111,7 +103,9 @@ export function SubmissionEditForm({
   const [fields, setFields] = useState<Fields>({
     resumeSelection: values.resumeSelection,
     submissionNotes: values.submissionNotes,
-    submittedAt: toDateTimeLocal(values.submittedAt),
+    submittedAt: values.submittedAt
+      ? new Date(values.submittedAt).toISOString()
+      : "",
     submittedById: values.submittedById,
     engagement: values.engagement,
     vendorRecruiterName: values.vendorRecruiterName,
@@ -209,12 +203,11 @@ export function SubmissionEditForm({
           required
           error={errors.submittedAt}
         >
-          <Input
+          <DateTimeField
             id="submittedAt"
             name="submittedAt"
-            type="datetime-local"
             value={fields.submittedAt}
-            onChange={set("submittedAt")}
+            onChange={(v) => setFields((f) => ({ ...f, submittedAt: v }))}
             required
           />
         </Field>

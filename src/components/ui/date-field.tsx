@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { DayPicker } from "react-day-picker";
+import { DayPicker, type Matcher } from "react-day-picker";
 import { format, parseISO, isValid } from "date-fns";
 import { Calendar as CalendarIcon, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -33,6 +33,10 @@ type BaseProps = {
   disabled?: boolean;
   placeholder?: string;
   className?: string;
+  /** yyyy-MM-dd bounds — days before `min` / after `max` are unselectable
+   *  (mirrors the native input's min/max, e.g. receivedAt's "no future" guard). */
+  min?: string;
+  max?: string;
   "aria-label"?: string;
 };
 
@@ -54,6 +58,8 @@ function BaseDateField({
   disabled,
   placeholder,
   className,
+  min,
+  max,
   withTime,
   "aria-label": ariaLabel,
 }: BaseProps & { withTime: boolean }) {
@@ -117,6 +123,10 @@ function BaseDateField({
       : format(date, "MMM d, yyyy")
     : "";
 
+  const disabledDays: Matcher[] = [];
+  if (min) disabledDays.push({ before: parseISO(min) });
+  if (max) disabledDays.push({ after: parseISO(max) });
+
   return (
     <div ref={rootRef} className="relative">
       <input
@@ -154,6 +164,7 @@ function BaseDateField({
             onSelect={pickDay}
             defaultMonth={date}
             showOutsideDays
+            disabled={disabledDays.length ? disabledDays : undefined}
           />
           {withTime && (
             <div className="flex items-center gap-2 border-t border-slate-100 px-2 py-2">
