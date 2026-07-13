@@ -4,24 +4,42 @@
  * sensitive document categories are all preserved — this dump is intended
  * for admin disaster-recovery, not third-party sharing.
  *
- * Output shape: `{ exportedAt, version, tables: { user: [...], job: [...], ... } }`.
+ * v3 (2026-07-13) added the tables the multi-tenancy migration made into required
+ * FKs — organization, team, role, rolePermission, permission, referrer — plus the
+ * user's governance columns (org/team/role/reportsTo/isPlatformAdmin/…). Without
+ * them a restore FK-violates on the first table. See restore-backup.ts.
+ *
+ * Output shape: `{ exportedAt, version, tables: { organization: [...], user: [...], … } }`.
  */
 import type { ScopedPrisma } from "@/server/db";
 import { getScopedPrisma } from "@/lib/session";
 
 export type BackupJson = {
   exportedAt: string;
-  // v2 added supportProvider, lookupOption, glossaryNote, customGlossaryTerm.
-  version: 2;
+  version: 3;
   tables: Record<string, unknown[]>;
 };
 
-/** Builds the backup for ONE organization via the passed scoped client. The
- *  authed full-export route passes getScopedPrisma() (the manager's own org);
- *  the scheduled backup iterates active orgs and passes scopedPrisma(org.id),
- *  writing one snapshot per tenant. */
-export async function buildBackupJson(db: ScopedPrisma): Promise<BackupJson> {
+/** Builds the backup for ONE organization via the passed scoped client + its id.
+ *  The authed full-export route passes getScopedPrisma() + the caller's org; the
+ *  scheduled backup iterates active orgs and passes scopedPrisma(org.id) + org.id,
+ *  writing one snapshot per tenant. `orgId` is needed because the Organization
+ *  table is the tenant boundary — the scope extension does NOT filter it, so we
+ *  fetch this org explicitly rather than dumping every org. */
+export async function buildBackupJson(
+  db: ScopedPrisma,
+  orgId: string,
+): Promise<BackupJson> {
   const [
+    organization,
+    // Permission is the one global (non-tenant) table — the scope extension
+    // leaves it unscoped, so this returns the whole catalog (fine: RolePermission
+    // rows reference it by key, and restore uses skipDuplicates).
+    permissions,
+    roles,
+    rolePermissions,
+    referrers,
+    teams,
     users,
     sources,
     clients,
@@ -45,17 +63,16 @@ export async function buildBackupJson(db: ScopedPrisma): Promise<BackupJson> {
     glossaryNotes,
     customGlossaryTerms,
   ] = await Promise.all([
-    db.user.findMany({
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        role: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    }),
+    db.organization.findUnique({ where: { id: orgId } }),
+    db.permission.findMany(),
+    db.role.findMany(),
+    db.rolePermission.findMany(),
+    db.referrer.findMany(),
+    db.team.findMany(),
+    // omit only the password hash — every other column (incl. organizationId,
+    // teamId, reportsToId, roleId, isPlatformAdmin, empId, notify flags) must
+    // round-trip or a restored user has no org/team/role.
+    db.user.findMany({ omit: { passwordHash: true } }),
     db.sisterCompanySource.findMany(),
     db.client.findMany(),
     db.vendor.findMany(),
@@ -83,8 +100,14 @@ export async function buildBackupJson(db: ScopedPrisma): Promise<BackupJson> {
 
   return {
     exportedAt: new Date().toISOString(),
-    version: 2,
+    version: 3,
     tables: {
+      organization: organization ? [organization] : [],
+      permission: permissions,
+      role: roles,
+      rolePermission: rolePermissions,
+      referrer: referrers,
+      team: teams,
       user: users,
       sisterCompanySource: sources,
       client: clients,
@@ -120,6 +143,9 @@ export async function getBackupPreflight(): Promise<BackupPreflight> {
   const db = await getScopedPrisma();
   const [
     users,
+    teams,
+    roles,
+    referrers,
     clients,
     vendors,
     sources,
@@ -140,6 +166,9 @@ export async function getBackupPreflight(): Promise<BackupPreflight> {
     customGlossaryTerms,
   ] = await Promise.all([
     db.user.count(),
+    db.team.count(),
+    db.role.count(),
+    db.referrer.count(),
     db.client.count(),
     db.vendor.count(),
     db.sisterCompanySource.count(),
@@ -162,6 +191,9 @@ export async function getBackupPreflight(): Promise<BackupPreflight> {
 
   const totals = {
     users,
+    teams,
+    roles,
+    referrers,
     clients,
     vendors,
     sources,

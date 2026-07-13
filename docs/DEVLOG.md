@@ -10,6 +10,38 @@ short instead of long.
 
 ---
 
+## 2026-07-13 · Backup restore repaired — the DR snapshot is restorable again
+
+**Situation.** Round-3's exporter hunt found the nightly backup unrestorable: `build-backup-json.ts` +
+`restore-from-backup.ts` pre-dated the multi-tenancy migration, so the dump omitted
+`Organization`/`Team`/`Role`/`RolePermission`/`Referrer` — all now enforced FKs — and dropped the user's
+governance columns. A `--confirm` restore FK-violated on the very first table (`user` with a defaulted
+empty `organizationId`). Deferred at first as too risky to rush; owner then asked to fix it properly.
+
+**Diagnosis.** Three problems: (1) missing FK-target tables; (2) the user select dropped
+`organizationId`/`teamId`/`reportsToId`/`roleId`/`isPlatformAdmin`/`empId`/notify flags; (3) two circular
+FKs a flat insert can't satisfy — `Team.leadId → User` while `User.teamId → Team`, and `User.reportsToId
+→ User` (self). Restoring pre-tenancy backups is impossible (they physically lack the org rows).
+
+**Fix.** Backup: add the five tables + the global Permission catalog; take the full user row via Prisma
+`omit: { passwordHash: true }` (future-proof — every column but the hash); add an `orgId` param (the
+Organization table is the tenant boundary, unscoped by the extension, so it's fetched explicitly); bump
+the format to **v3**. Restore: extract the logic into an importable `src/server/exporters/restore-backup.ts`
+(so the CLI script and a test share it), reorder inserts FK-safe (organization → permission → role →
+rolePermission → referrer → team → user → …), and break the two cycles with a **two-pass** insert — teams
+land with `leadId` null and users with `reportsToId` null, then a second pass sets them once every row
+exists. A v3 guard rejects older backups with a clear message instead of a cryptic FK error. Proven by a
+**round-trip integration test**: seed an org (users with a team-lead + reports-to chain, a referrer, a
+referrer-linked candidate) → back up → wipe → restore → assert the org, the governance columns, both
+circular FKs, and the referrer link all survive.
+
+**Lesson.** A schema migration that adds enforced FKs silently invalidates every out-of-band serializer
+that predates it (backup/restore, fixtures, export tooling) — those don't fail at migration time, they
+fail the day you actually need them. DR code specifically must have a **round-trip test**, because "the
+backup file exists" tells you nothing about whether it restores. And circular FKs are a two-pass problem:
+insert with the back-edges nulled, then wire them up once every node exists — the same shape as the
+reporting-chain and team-lead relations elsewhere in this app.
+
 ## 2026-07-13 · Pilot bug-hunt round 3 — forms, interviews, exporters (5-agent sweep of the last untouched surface)
 
 **Situation.** Third and final adversarial fan-out over everything rounds 1–2 didn't cover: placements

@@ -84,18 +84,18 @@ Honest scope — what's easy, what's a project, what not to promise.
 - **Deletes are soft, with a 30-day window.** Candidates/jobs go Active → Inactive → Trash (30d) →
   Erased; résumés archive rather than hard-delete when referenced. Nothing a recruiter does during
   the week is permanently lost.
-- **Nightly full-DB backup** to Blob at 02:00 UTC (needs `BLOB_READ_WRITE_TOKEN` + `CRON_SECRET`).
+- **Nightly full-DB backup** to Blob at 02:00 UTC (needs `BLOB_READ_WRITE_TOKEN` + `CRON_SECRET`),
+  restorable via `prisma/restore-from-backup.ts` (`--confirm` to actually wipe + restore; without it,
+  a dry-run prints the row counts). The restore is covered by a round-trip integration test.
 - The purge cron only permanently erases things soft-deleted **≥ 30 days ago**, and runs *after* the
   nightly backup — so fresh pilot data is never touched.
 
-> ⚠️ **Restore caveat.** The **primary** recovery mechanism for the pilot is the 30-day soft-delete
-> ladder above — that covers every recruiter mistake and is fully working. The nightly full-DB backup
-> writes a snapshot, but the `prisma/restore-from-backup.ts` script pre-dates the multi-tenancy schema
-> and can't restore a current backup without a fix (it omits the `Organization`/`Team`/`Role`/`Referrer`
-> tables that are now required foreign keys). Restoring from a full snapshot is a catastrophic-failure
-> fallback, not a day-to-day tool — the restore-script rewrite (+ a round-trip test) is a flagged
-> post-pilot task, deliberately not rushed the night before the pilot. Soft-delete has you covered for
-> the week.
+> **Recovery layers:** day-to-day, the **30-day soft-delete ladder** covers every recruiter mistake
+> (fully working). For a catastrophic failure, the **nightly full-DB snapshot** now restores correctly
+> (the multi-tenancy tables — organization/team/role/referrer — and the user's governance columns are
+> included, and the circular team/reports-to foreign keys are handled). Restored users come back
+> **login-blocked** (placeholder password + inactive) — an admin sets passwords afterward. Note: only
+> backups taken from **2026-07-13 onward** (format v3) are restorable; the earlier ones predate the fix.
 
 ---
 
