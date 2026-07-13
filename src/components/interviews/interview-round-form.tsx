@@ -37,7 +37,7 @@ export type InterviewRoundData = {
   supportNeeded: boolean;
   supportProviderId: string | null;
   supportMethod: string | null;
-  supportProvider: { name: string } | null;
+  supportProvider: { name: string; email: string | null; phone: string | null } | null;
   result: InterviewResult;
   feedback: string | null;
   notes: string | null;

@@ -258,7 +258,9 @@ export async function getSubmissionDetail(id: string) {
         orderBy: { roundOrder: "asc" },
         include: {
           updatedBy: { select: { fullName: true } },
-          supportProvider: { select: { name: true } },
+          // email/phone power the inline "contact details" popover — recruiters
+          // need the supporter's contact without opening manager-only Settings.
+          supportProvider: { select: { name: true, email: true, phone: true } },
         },
         // Soft cap — recruiters won't realistically run 50 rounds on one
         // submission. Avoids unbounded fetch if data ever goes sideways.

@@ -32,7 +32,9 @@ export const SCHEDULE_BUCKET_META: {
   { key: "today", label: "Today", hint: "" },
   { key: "week", label: "This week", hint: "" },
   { key: "upcoming", label: "Upcoming", hint: "" },
-  { key: "completed", label: "Completed", hint: "outcome logged" },
+  // "Logged" (not "Completed") — the group means "an outcome is recorded" for
+  // any concluded result, and must not collide with the "Completed" result badge.
+  { key: "completed", label: "Logged", hint: "outcome recorded" },
 ];
 
 // A round whose result means THIS round is finished — it drops to Completed even
