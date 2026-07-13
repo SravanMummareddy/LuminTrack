@@ -1,4 +1,18 @@
 @import "tailwindcss";
+@import "react-day-picker/style.css";
+
+/* react-day-picker: match the app's indigo accent + tighten the popover sizing.
+   Scoped to the shared DateField/DateTimeField popover (.rdp-pop). */
+.rdp-pop {
+  --rdp-accent-color: #4f46e5;
+  --rdp-accent-background-color: #eef2ff;
+  --rdp-today-color: #4f46e5;
+  --rdp-day-width: 2.1rem;
+  --rdp-day-height: 2.1rem;
+  --rdp-day_button-width: 2.1rem;
+  --rdp-day_button-height: 2.1rem;
+  font-size: 0.85rem;
+}
 
 @theme inline {
   --font-sans: var(--font-geist-sans);
