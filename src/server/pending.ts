@@ -14,6 +14,7 @@ import {
   formatJobDisplayId,
   formatCandidateDisplayId,
   formatVendorRequirementDisplayId,
+  formatPlacementDisplayId,
   formatDate,
 } from "@/lib/format";
 
@@ -29,7 +30,11 @@ export type TodoKind =
   | "doc_expiring"
   | "job_under_subs"
   | "vpr_to_move"
-  | "submission_stale";
+  | "submission_stale"
+  // manager-only action items (org oversight)
+  | "rates_pending"
+  | "job_past_close"
+  | "job_unassigned";
 
 export type TodoItem = {
   kind: TodoKind;
@@ -367,4 +372,148 @@ export async function getPendingTodos(
   }
 
   return items;
+}
+
+/**
+ * Manager-only action items — org-wide todos only a manager/admin resolves:
+ * placements live with $0 rates, open jobs past their target-close date, and
+ * OPEN jobs with no recruiter assigned. Surfaced in the manager's own "My work"
+ * tier (not visible to recruiters). Caller gates on `hasFullAccess`.
+ */
+export async function getManagerActionItems(db: ScopedPrisma): Promise<TodoItem[]> {
+  const now = Date.now();
+  const nowDate = new Date(now);
+  const [ratesPending, pastClose, unassigned] = await Promise.all([
+    db.placement.findMany({
+      where: { status: { in: ["ACTIVE", "EXTENDED"] }, billRate: 0, payRate: 0 },
+      orderBy: { createdAt: "desc" },
+      take: TAKE,
+      select: {
+        id: true,
+        seq: true,
+        candidate: { select: { fullName: true } },
+        job: { select: { title: true } },
+      },
+    }),
+    db.job.findMany({
+      where: {
+        status: { in: ["OPEN", "ON_HOLD"] },
+        targetCloseDate: { not: null, lt: nowDate },
+      },
+      orderBy: { targetCloseDate: "asc" },
+      take: TAKE,
+      select: { id: true, seq: true, title: true, targetCloseDate: true },
+    }),
+    db.job.findMany({
+      where: { status: "OPEN", assignments: { none: {} } },
+      orderBy: { createdAt: "asc" },
+      take: TAKE,
+      select: { id: true, seq: true, title: true },
+    }),
+  ]);
+
+  const items: TodoItem[] = [];
+  for (const p of ratesPending)
+    items.push({
+      kind: "rates_pending",
+      urgency: "overdue",
+      href: `/placements/${p.id}`,
+      primary: `Placement live with rates at $0`,
+      secondary: `${p.candidate?.fullName ?? ""} · ${p.job?.title ?? ""} · ${formatPlacementDisplayId(p)}`,
+      ownerId: "",
+      ownerName: "",
+      at: now,
+    });
+  for (const j of pastClose)
+    items.push({
+      kind: "job_past_close",
+      urgency: "overdue",
+      href: `/jobs/${j.id}`,
+      primary: `Job past its target-close date`,
+      secondary: `${formatJobDisplayId(j)} · ${j.title} · target ${j.targetCloseDate ? formatDate(j.targetCloseDate) : ""}`,
+      ownerId: "",
+      ownerName: "",
+      at: j.targetCloseDate?.getTime() ?? now,
+    });
+  for (const j of unassigned)
+    items.push({
+      kind: "job_unassigned",
+      urgency: "backlog",
+      href: `/jobs/${j.id}`,
+      primary: `Open job with no recruiter assigned`,
+      secondary: `${formatJobDisplayId(j)} · ${j.title}`,
+      ownerId: "",
+      ownerName: "",
+      at: now,
+    });
+  return items;
+}
+
+export type TeamRollup = {
+  teamId: string;
+  teamName: string;
+  leadName: string | null;
+  memberCount: number;
+  open: number;
+  overdue: number;
+  members: { id: string; name: string; open: number; overdue: number }[];
+};
+
+/**
+ * Org oversight for the manager dashboard: one rollup per team (open + overdue
+ * pending counts, worst-first, with per-member breakdown), plus the few most-
+ * urgent items across the whole org. One `getPendingTodos` pass per team — fine
+ * for the current handful of teams. ponytail: N teams × 6 queries; batch if the
+ * org grows past a few dozen teams.
+ */
+export async function getTeamRollup(
+  db: ScopedPrisma,
+  opts: { canSensitive: boolean },
+): Promise<{ teams: TeamRollup[]; topUrgent: TodoItem[] }> {
+  const teams = await db.team.findMany({
+    select: {
+      id: true,
+      name: true,
+      lead: { select: { fullName: true } },
+      members: { select: { id: true, fullName: true } },
+    },
+  });
+
+  const all: TodoItem[] = [];
+  const rollups = await Promise.all(
+    teams.map(async (t) => {
+      const memberIds = t.members.map((m) => m.id);
+      const todos = memberIds.length
+        ? await getPendingTodos(db, memberIds, opts)
+        : [];
+      all.push(...todos);
+      const open = new Map<string, number>();
+      const overdue = new Map<string, number>();
+      for (const x of todos) {
+        open.set(x.ownerId, (open.get(x.ownerId) ?? 0) + 1);
+        if (x.urgency === "overdue")
+          overdue.set(x.ownerId, (overdue.get(x.ownerId) ?? 0) + 1);
+      }
+      const members = t.members
+        .map((m) => ({
+          id: m.id,
+          name: m.fullName,
+          open: open.get(m.id) ?? 0,
+          overdue: overdue.get(m.id) ?? 0,
+        }))
+        .sort((a, b) => b.open - a.open);
+      return {
+        teamId: t.id,
+        teamName: t.name,
+        leadName: t.lead?.fullName ?? null,
+        memberCount: t.members.length,
+        open: todos.length,
+        overdue: todos.filter((x) => x.urgency === "overdue").length,
+        members,
+      };
+    }),
+  );
+
+  rollups.sort((a, b) => b.overdue - a.overdue || b.open - a.open);
+  return { teams: rollups, topUrgent: sortTodos(all).slice(0, 5) };
 }

@@ -18,15 +18,14 @@ import {
 import {
   getDashboardData,
   getMyRecentActivity,
-  getMissingResumeSubmissions,
   getOnboardingStatus,
   type MyRecentActivity,
 } from "@/server/queries/dashboard";
-import { getExpiringDocuments } from "@/server/queries/candidates";
-import { getRatesPendingPlacements } from "@/server/queries/placements";
 import { leadsAnyTeam, ledTeamMemberIds } from "@/server/team-lead";
 import {
   getPendingTodos,
+  getManagerActionItems,
+  getTeamRollup,
   groupByUrgency,
   type TodoItem,
 } from "@/server/pending";
@@ -34,11 +33,7 @@ import {
   PendingTodos,
   MemberCountStrip,
 } from "@/components/dashboard/pending-todos";
-import {
-  formatDate,
-  formatPlacementDisplayId,
-  formatSubmissionDisplayId,
-} from "@/lib/format";
+import { TeamRollupCards } from "@/components/dashboard/team-rollup";
 import {
   listClients,
   listVendors,
@@ -49,7 +44,6 @@ import { parseAnalyticsParams } from "@/lib/analytics";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist";
-import { MyWorkList } from "@/components/dashboard/needs-attention-list";
 import { RecentActivityCard } from "@/components/dashboard/recent-activity-card";
 import { Table, Th, Td, cardLink } from "@/components/ui/table";
 
@@ -172,9 +166,6 @@ export default async function DashboardPage({
   const [
     data,
     recentActivity,
-    expiringDocs,
-    ratesPendingPlacements,
-    missingResumeSubs,
     clients,
     vendors,
     sources,
@@ -182,22 +173,14 @@ export default async function DashboardPage({
     onboarding,
     todos,
     teamMembers,
+    managerActionItems,
+    teamRollup,
   ] = await Promise.all([
     getDashboardData(effectiveFilters),
     // Recent activity feed replaces the org-wide recruiter table in "My work".
     scope === "me" && user
       ? getMyRecentActivity(user.id)
       : Promise.resolve([] as MyRecentActivity),
-    // Legacy org-scope lists (manager card only; PR-B replaces with the rollup).
-    scope === "org" && user
-      ? getExpiringDocuments(user, { scope: "org", withinDays: 30 })
-      : Promise.resolve([] as Awaited<ReturnType<typeof getExpiringDocuments>>),
-    scope === "org" && user && hasFullAccess(user)
-      ? getRatesPendingPlacements({ limit: 5 })
-      : Promise.resolve([] as Awaited<ReturnType<typeof getRatesPendingPlacements>>),
-    scope === "org" && user
-      ? getMissingResumeSubmissions({ scope: "org", userId: user.id, limit: 8 })
-      : Promise.resolve([] as Awaited<ReturnType<typeof getMissingResumeSubmissions>>),
     listClients(),
     listVendors(),
     listSisterCompanies(),
@@ -213,9 +196,17 @@ export default async function DashboardPage({
           select: { id: true, fullName: true },
         })
       : Promise.resolve([] as { id: string; fullName: string }[]),
+    // Manager-only action items, folded into their own "My work" tiers.
+    scope === "me" && user && hasFullAccess(user)
+      ? getManagerActionItems(db)
+      : Promise.resolve([] as TodoItem[]),
+    // Manager org oversight — per-team rollup + top-urgent items.
+    scope === "org" && user
+      ? getTeamRollup(db, { canSensitive: canViewSensitiveDocs(user) })
+      : Promise.resolve({ teams: [], topUrgent: [] as TodoItem[] }),
   ]);
 
-  const grouped = groupByUrgency(todos);
+  const grouped = groupByUrgency([...todos, ...managerActionItems]);
   // Team per-member counts (worst-first), for the "who's drowning" strip.
   const memberCounts =
     scope === "team" && user
@@ -288,54 +279,21 @@ export default async function DashboardPage({
           )}
           <PendingTodos grouped={grouped} showOwner={scope === "team"} />
         </Card>
-      ) : expiringDocs.length > 0 ||
-        ratesPendingPlacements.length > 0 ||
-        missingResumeSubs.length > 0 ? (
-        <Card title="Needs attention">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <MyWorkList
-              heading={`Documents expiring (30 days) (${expiringDocs.length})`}
-              empty="No documents expiring in the next 30 days."
-              items={expiringDocs.map((d) => {
-                const days = d.daysUntilExpiry ?? 0;
-                const status =
-                  days < 0 ? "Expired" : days < 1 ? "Expires today" : `${days}d left`;
-                return {
-                  href: `/candidates/${d.candidate.id}`,
-                  primary: `${d.candidate.fullName} · ${d.label}`,
-                  secondary: `${d.category.replace("_", " ").toLowerCase()} · ${status}`,
-                };
-              })}
-            />
-            {missingResumeSubs.length > 0 && (
-              <MyWorkList
-                heading={`Submissions missing a résumé (${missingResumeSubs.length})`}
-                empty="No submissions missing a résumé."
-                footer={{
-                  href: listHref("/submissions", { missingResume: "1" }),
-                  label: "View all →",
-                }}
-                items={missingResumeSubs.map((s) => ({
-                  href: `/submissions/${s.id}`,
-                  primary: `${s.candidate.fullName} → ${s.job.title}`,
-                  secondary: `${formatSubmissionDisplayId(s)} · submitted ${formatDate(s.submittedAt)} · ${s.submittedBy.fullName}`,
-                }))}
+      ) : (
+        <div className="space-y-5">
+          <Card title="Teams — most behind first">
+            <TeamRollupCards teams={teamRollup.teams} />
+          </Card>
+          {teamRollup.topUrgent.length > 0 && (
+            <Card title="Org-wide, needs action now">
+              <PendingTodos
+                grouped={groupByUrgency(teamRollup.topUrgent)}
+                showOwner
               />
-            )}
-            {ratesPendingPlacements.length > 0 && (
-              <MyWorkList
-                heading={`Placements with rates pending (${ratesPendingPlacements.length})`}
-                empty="No placements waiting on rates."
-                items={ratesPendingPlacements.map((p) => ({
-                  href: `/placements/${p.id}`,
-                  primary: `${p.candidate.fullName} · ${p.job.title}`,
-                  secondary: `${formatPlacementDisplayId(p)} · since ${formatDate(p.startDate)}`,
-                }))}
-              />
-            )}
-          </div>
-        </Card>
-      ) : null}
+            </Card>
+          )}
+        </div>
+      )}
 
       <AnalyticsFilters
         basePath="/"

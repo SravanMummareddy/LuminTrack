@@ -10,6 +10,29 @@ short instead of long.
 
 ---
 
+## 2026-07-13 · Wave 7.2b — the manager dashboard is oversight, not a checklist
+
+**Situation.** PR-A gave recruiters and team leads an urgency-tiered pending view. The manager/admin
+"org" scope still showed the old flat card (3 org-wide lists). At org scale a manager doesn't want a
+wall of everyone's items — they want to know *which team is behind* and handle the few things only they
+resolve.
+
+**Fix.** Reused the PR-A `pending.ts` foundation, no new concepts. `getTeamRollup(db)` runs
+`getPendingTodos` once per team and returns per-team open/overdue counts (worst-first, with a per-member
+breakdown) plus the org's top-5 most-urgent items — all from the same canonical set. The manager org
+view becomes: team rollup cards (click to expand members inline — the drill-down is right there, which
+scales where a flat list wouldn't) + top-urgent + the existing recruiter-performance table.
+`getManagerActionItems(db)` adds the manager's *own* todos to their "My work" tier — placements live at
+$0, jobs past `targetCloseDate`, unassigned open jobs — things a recruiter never sees. Admin = manager
+(same tier), so identical. Deleted the now-orphaned `needs-attention-list.tsx` (MyWorkList) — the last
+consumer was the flat card it replaced.
+
+**Lesson.** Because PR-A consolidated "pending" into one query layer, the manager view was a *composition*
+of it (group per team, take the top N) rather than a fourth implementation — the whole PR added two
+query functions and a card component, no new definition of "pending". That's the payoff of consolidating
+first. ponytail: `getTeamRollup` is N teams × 6 queries; fine for a handful, batch if teams grow past a
+few dozen (flagged in-code).
+
 ## 2026-07-13 · Wave 7.2a — one definition of "pending", and a team-lead scope
 
 **Situation.** "Pending todos" was computed three different ways that disagreed: the dashboard "Needs
