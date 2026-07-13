@@ -8,17 +8,15 @@ import { JOB_STATUSES, SUBMISSION_STATUSES, OTHER_SOURCE } from "@/lib/labels";
 import { parseDateRange, parseList, type DateRange } from "@/lib/filters";
 
 /**
- * The roles that count as "performers" in recruiter analytics. Managers and
- * team leads submit alongside recruiters, so they belong in the recruiter
- * breakdown; ADMIN is excluded (support/ops, not a submitter to be ranked).
- * Single source of truth so the Recruiters page, Reports, and Dashboard all
- * report the same recruiter universe.
+ * The roles that count as "performers" in recruiter analytics = the people who
+ * actually recruit: TEAM_LEAD + RECRUITER. MANAGER is excluded — managers and
+ * platform/super-admins are oversight, not submitters to be ranked (they'd
+ * otherwise appear as empty rows in the leaderboard). Org-wide KPI totals still
+ * count every submission regardless of who made it; this only scopes the
+ * per-recruiter breakdown. Single source of truth so the Recruiters page,
+ * Reports, and Dashboard all report the same recruiter universe.
  */
-export const PERFORMANCE_ROLES: UserRole[] = [
-  "MANAGER",
-  "TEAM_LEAD",
-  "RECRUITER",
-];
+export const PERFORMANCE_ROLES: UserRole[] = ["TEAM_LEAD", "RECRUITER"];
 
 // ─── Open-job aging ──────────────────────────────────────────────────────────
 
