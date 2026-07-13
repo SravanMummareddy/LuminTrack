@@ -1,7 +1,7 @@
 "use server";
 
 import { del } from "@vercel/blob";
-import { uploadPrivateFile } from "@/server/blob-upload";
+import { uploadPrivateFile, UploadFailedError } from "@/server/blob-upload";
 import { revalidatePath } from "next/cache";
 import { getScopedPrisma, requireUser } from "@/lib/session";
 import { logActivity } from "@/server/activity";
@@ -74,10 +74,19 @@ export async function createCandidateDocument(
   });
   if (!candidate) return { error: "This candidate no longer exists." };
 
-  const blob = await uploadPrivateFile(
-    `documents/${d.candidateId}/${safeFileName(file.name)}`,
-    file,
-  );
+  let blob;
+  try {
+    blob = await uploadPrivateFile(
+      `documents/${d.candidateId}/${safeFileName(file.name)}`,
+      file,
+    );
+  } catch (err) {
+    if (err instanceof UploadFailedError) {
+      const msg = "Upload failed — please try again.";
+      return { error: msg, fieldErrors: { file: msg } };
+    }
+    throw err;
+  }
 
   await db.$transaction(async (tx) => {
     const created = await tx.candidateDocument.create({

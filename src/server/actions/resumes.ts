@@ -1,7 +1,7 @@
 "use server";
 
 import { del } from "@vercel/blob";
-import { uploadPrivateFile } from "@/server/blob-upload";
+import { uploadPrivateFile, UploadFailedError } from "@/server/blob-upload";
 import { revalidatePath } from "next/cache";
 import { getScopedPrisma, requireUser } from "@/lib/session";
 import { logActivity } from "@/server/activity";
@@ -64,10 +64,19 @@ export async function uploadCandidateResume(
 
   // Private, gzip-compressed blob — never fetched directly by the browser;
   // served via /api/resumes/[id]. blob.pathname is the actual stored key.
-  const blob = await uploadPrivateFile(
-    `resumes/${candidateId}/${safeFileName(file.name)}`,
-    file,
-  );
+  let blob;
+  try {
+    blob = await uploadPrivateFile(
+      `resumes/${candidateId}/${safeFileName(file.name)}`,
+      file,
+    );
+  } catch (err) {
+    if (err instanceof UploadFailedError) {
+      const msg = "Upload failed — please try again.";
+      return { error: msg, fieldErrors: { file: msg } };
+    }
+    throw err;
+  }
 
   const created = await db.$transaction(async (tx) => {
     const row = await tx.candidateResume.create({
