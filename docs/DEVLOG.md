@@ -10,6 +10,32 @@ short instead of long.
 
 ---
 
+## 2026-07-13 · A custom `<Select>` that quietly showed ids instead of labels
+
+**Situation.** The interview form's support-provider dropdown rendered raw CUIDs
+(`cmrivakwm001p4oze…`) instead of names — flagged in an owner review as "still not fixed." The
+first assumption (and a stale plan note) was *stale seed data*. It wasn't: a DB check showed the
+providers had real names ("Arjun Mehta", "Wei Chen"), and those CUIDs were exactly their `id`s.
+
+**Diagnosis.** The app's hand-rolled `<Select>` (`ui/select-menu.tsx`) derives each option's visible
+label from its `<option>` children. It only handled a **single** text child:
+`typeof children === "string" ? String(children) : String(value)`. The support-provider option is
+`<option>{p.name}{p.skills.length ? " · …" : ""}</option>` — two expressions, so `children` is an
+**array**, which fell through to `String(value)` = the id. Every option with concatenated children
+(name + a suffix) was silently showing its value instead of its label — a latent bug across the app,
+not just this one dropdown.
+
+**Fix.** Flatten array children into a string, falling back to the value only when there's genuinely
+no text. One helper, at the single place every `<Select>` routes through.
+
+**Lesson.** "Stale data" is a seductive explanation — it needs no code change, so it's tempting to
+accept. Two minutes querying the actual rows disproved it and pointed at the real, shared-component
+cause. When a value that should be a label looks like an id, suspect the label-extraction, not the
+data. And a shared primitive's happy-path (single text child) hides its edge cases (array children)
+until real content — a name plus a suffix — hits it.
+
+---
+
 ## 2026-07-13 · H2 — coupling a round result to the submission status without leaking backwards
 
 **Situation.** Model B made *adding* an interview round advance the submission into that interview
