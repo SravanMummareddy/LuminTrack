@@ -93,7 +93,10 @@ export async function createInterviewRound(
         interviewMode: d.interviewMode ?? null,
         interviewPlatform:
           d.interviewMode === "VIDEO" ? (d.interviewPlatform ?? null) : null,
-        meetingLink: d.meetingLink ?? null,
+        // Like interviewPlatform, a meeting link only belongs on a VIDEO round —
+        // null it otherwise so a crafted post can't attach a join link to a
+        // phone/in-person round (the UI already unmounts the field).
+        meetingLink: d.interviewMode === "VIDEO" ? (d.meetingLink ?? null) : null,
         scheduledAt: d.scheduledAt ?? null,
         scheduledTimezone: d.scheduledTimezone ?? null,
         ...supportFields(d),
@@ -162,7 +165,10 @@ export async function updateInterviewRound(
         interviewMode: d.interviewMode ?? null,
         interviewPlatform:
           d.interviewMode === "VIDEO" ? (d.interviewPlatform ?? null) : null,
-        meetingLink: d.meetingLink ?? null,
+        // Like interviewPlatform, a meeting link only belongs on a VIDEO round —
+        // null it otherwise so a crafted post can't attach a join link to a
+        // phone/in-person round (the UI already unmounts the field).
+        meetingLink: d.interviewMode === "VIDEO" ? (d.meetingLink ?? null) : null,
         scheduledAt: d.scheduledAt ?? null,
         scheduledTimezone: d.scheduledTimezone ?? null,
         ...supportFields(d),

@@ -137,6 +137,10 @@ export function RequirementForm({
   // restores the old "leave blank → derive from the recruiter" convenience while
   // keeping the field required + editable. A saved value starts as "manual".
   const [teamLeadAuto, setTeamLeadAuto] = useState(!defaults?.teamLead);
+  // Controlled so React 19's post-action form.reset() can't silently re-check it
+  // after a validation bounce — an uncontrolled defaultChecked would revert a
+  // deliberate un-check and send an assignment email the user opted out of.
+  const [notifyRecruiter, setNotifyRecruiter] = useState(mode === "create");
 
   function onRecruiterChange(v: string) {
     if (v === ADD_USER) return setAddUserFor("recruiterId");
@@ -416,7 +420,8 @@ export function RequirementForm({
               <input
                 type="checkbox"
                 name="notifyRecruiter"
-                defaultChecked={mode === "create"}
+                checked={notifyRecruiter}
+                onChange={(e) => setNotifyRecruiter(e.target.checked)}
                 className="mt-0.5 h-4 w-4 accent-green-600"
               />
               <span>

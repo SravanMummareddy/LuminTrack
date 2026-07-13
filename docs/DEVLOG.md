@@ -10,6 +10,55 @@ short instead of long.
 
 ---
 
+## 2026-07-13 · Pilot bug-hunt round 3 — forms, interviews, exporters (5-agent sweep of the last untouched surface)
+
+**Situation.** Third and final adversarial fan-out over everything rounds 1–2 didn't cover: placements
+edit/extensions/masking · interview-round CRUD + form · the four non-submission form state machines
+(job/candidate/bench/VPR) · notes/glossary/timeline/lookups · exporters/backup-restore/org-chart/roles.
+Each agent knew what prior rounds covered. Findings hand-verified. Notes/glossary and the org-chart
+cycle guards came back clean; the live bugs clustered in React-19 form state and datetime handling.
+
+**Diagnosis + fix (live, shipped).**
+- **React 19 `form.reset()` blanks uncontrolled fields on a validation bounce.** The candidate/bench/VPR
+  forms were built fully-controlled to survive this; the **job form's plain `<Input>`s were not** — so a
+  failed job-create silently wiped ~10 typed fields (incl. required Title + Skills) while the custom
+  Select/Suggest/Location components survived, a baffling partial wipe right at a validation error. Fixed
+  by making those inputs controlled. Same root cause hit the **VPR "Notify recruiter" checkbox**
+  (`defaultChecked` → reset re-checked it → an assignment email the user had un-checked got sent); made it
+  controlled.
+- **`Select` never armed the unsaved-changes guard.** The custom `Select` mutated its hidden input via
+  React state with no native event, so a dropdown-only edit left `dirty=false` → Cancel navigated with no
+  "discard?" prompt (all four forms). Fixed at the primitive: dispatch a bubbling `input` event on commit,
+  mirroring `SearchSelect`. One fix, every form.
+- **Interview `scheduledAt` drifted by the browser's UTC offset on every edit.** `datetime-local` is
+  naive; the display/prefill render browser-local but the server re-parsed the naive string as UTC, so a
+  round edited by a recruiter whose TZ ≠ UTC jumped +offset each save (and logged a phantom
+  `INTERVIEW_RESCHEDULED`, and eventually crossed into the wrong schedule bucket). Fixed by submitting an
+  unambiguous ISO instant (the browser parses the local wall-clock correctly → UTC) instead of the naive
+  string — which also makes *create* store the right instant. Kept the nice local display.
+- **Empty-job erase cascade-deleted its notes + activity, uncaptured by the archive.** `Note.jobId`/
+  `Activity.jobId` cascade on `job.delete()` (empty jobs are deleted outright, not anonymized), but
+  `buildJobArchive` wrote only job/submission/VPR summaries. Added notes + activity to the archive so the
+  "recoverable backup that must exist before erase" actually is.
+- Minor: `meetingLink` now nulled on non-VIDEO rounds (like `interviewPlatform`); bench candidate-pick
+  uses `||` not `??` so a blank candidate email can't clobber a typed one.
+
+**Deferred (flagged; runbook + memory updated).** The **backup/restore path is broken** —
+`restore-from-backup.ts` + `build-backup-json.ts` pre-date the tenancy migration and omit the now-required
+`Organization`/`Team`/`Role`/`Referrer` FKs + the user's governance columns, so a full restore FK-violates
+on the first table. Fixing it correctly needs the missing tables + user↔team cycle handling + an RBAC
+strategy + a round-trip test — a real task, not a night-before-pilot patch. **Runbook §D corrected** to
+say soft-delete (fully working) is the pilot recovery path and restore is a post-pilot fix. Also latent
+(custom-role-only): `saveRole` grant-ceiling (a `role:manage` holder can self-promote), placements
+rate-masking key divergence (`tier:full` vs `financials:view`).
+
+**Lesson.** When a framework has a footgun that one part of the codebase already worked around (React 19's
+post-action `form.reset()` wiping uncontrolled fields — the candidate form's own comment documents it), the
+*other* instances of the same pattern are almost certainly still vulnerable — grep for the pattern, don't
+assume the fix propagated. And `datetime-local` is a perennial trap: it's timezone-naive, so the write and
+the read must agree on which zone the wall-clock lives in — submit an explicit instant (ISO) rather than
+letting a naive string be re-parsed in whatever zone the server happens to run in.
+
 ## 2026-07-13 · Pilot bug-hunt round 2 — jobs, bench, reports, auth, search (5-agent sweep)
 
 **Situation.** Second adversarial fan-out covering everything the first round didn't: jobs · candidates/

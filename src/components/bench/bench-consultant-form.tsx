@@ -240,10 +240,13 @@ export function BenchConsultantForm({
       ...f,
       candidateId: v,
       fullName: c?.fullName ?? "",
-      email: c?.email ?? f.email,
-      phone: c?.phone ?? f.phone,
-      currentLocation: c?.currentLocation ?? f.currentLocation,
-      workAuthorization: c?.workAuthorization ?? f.workAuthorization,
+      // `||` (not `??`): a candidate with a blank email/phone/etc. must fall back
+      // to what the user already typed, not overwrite it with "" (?? only catches
+      // null/undefined, so an empty-string candidate field would clobber input).
+      email: c?.email || f.email,
+      phone: c?.phone || f.phone,
+      currentLocation: c?.currentLocation || f.currentLocation,
+      workAuthorization: c?.workAuthorization || f.workAuthorization,
       skills: c && c.skills.length ? c.skills.join(", ") : f.skills,
       technology: c?.technology || f.technology,
       company: c?.currentCompany || f.company,

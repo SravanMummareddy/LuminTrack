@@ -195,7 +195,18 @@ export function InterviewRoundForm({
           </Field>
 
           <Field label="Interview date & time" htmlFor="scheduledAt" required error={errors.scheduledAt}>
-            <Input id="scheduledAt" name="scheduledAt" type="datetime-local" value={fields.scheduledAt} onChange={set("scheduledAt")} required />
+            {/* The visible input is timezone-naive and shows the browser's local
+                wall-clock. Post an unambiguous ISO instant instead of the naive
+                string (the nameless input above doesn't submit) — the browser
+                parses the local value to the correct UTC instant, so it stores +
+                round-trips without the +offset drift a naive string re-parsed as
+                UTC on the server would cause (which also logged phantom reschedules). */}
+            <Input id="scheduledAt" type="datetime-local" value={fields.scheduledAt} onChange={set("scheduledAt")} required />
+            <input
+              type="hidden"
+              name="scheduledAt"
+              value={fields.scheduledAt ? new Date(fields.scheduledAt).toISOString() : ""}
+            />
           </Field>
 
           <NullableField label="Time zone" htmlFor="scheduledTimezone" name="scheduledTimezone" na={fields.scheduledTimezoneNa} onToggleNa={naToggle("scheduledTimezone", "scheduledTimezoneNa")} error={errors.scheduledTimezone} hint="IANA name — e.g. America/New_York, Asia/Kolkata.">

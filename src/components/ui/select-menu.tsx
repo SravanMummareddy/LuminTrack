@@ -59,6 +59,7 @@ export function Select({
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const rootRef = useRef<HTMLDivElement>(null);
+  const hiddenRef = useRef<HTMLInputElement>(null);
   const typeahead = useRef({ buffer: "", at: 0 });
 
   const selectedOpt = options.find((o) => o.value === selected);
@@ -79,6 +80,11 @@ export function Select({
     onChange?.({
       target: { value: opt.value, name },
     } as unknown as React.ChangeEvent<HTMLSelectElement>);
+    // Updating the hidden input via React state fires no native event, so a
+    // form-level `onInput` (the unsaved-changes dirty guard) wouldn't notice a
+    // dropdown-only change → Cancel would navigate with no "discard?" prompt.
+    // Emit a bubbling input event so it does (mirrors SearchSelect).
+    hiddenRef.current?.dispatchEvent(new Event("input", { bubbles: true }));
     setOpen(false);
   }
 
@@ -134,7 +140,7 @@ export function Select({
 
   return (
     <div ref={rootRef} className="relative">
-      <input type="hidden" name={name} value={selected} required={required} />
+      <input ref={hiddenRef} type="hidden" name={name} value={selected} required={required} />
       <button
         type="button"
         id={id}
