@@ -410,6 +410,18 @@ export async function updateSubmission(
       if (String(before ?? "") !== String(after ?? "")) changed.push(label);
     };
     compare("notes", existing.submissionNotes, d.submissionNotes);
+    // Commercial terms + duties are written unconditionally below, so they must
+    // be in the change detector too — otherwise an edit that touches ONLY a rate
+    // (or engagement / team lead) commits with no audit row and silently drops
+    // the rate-override reason. Money fields mutating with no trail is exactly
+    // what the audit log exists to prevent.
+    compare("engagement", existing.engagement, d.engagement);
+    compare("vendor recruiter", existing.vendorRecruiterName, d.vendorRecruiterName);
+    compare("job duties", existing.jobDuties, d.jobDuties);
+    compare("pay rate", existing.payRate, d.payRate);
+    compare("bill rate", existing.billRate, d.billRate);
+    compare("client rate", existing.clientRate, d.clientRate);
+    compare("team lead", existing.teamLead, d.teamLead);
     // Compare the submitted date at minute precision — the datetime-local input
     // only carries minutes, so a stored seconds component must not count as a change.
     if (
@@ -445,7 +457,11 @@ export async function updateSubmission(
       },
     });
 
-    if (changed.length) {
+    // Log whenever a tracked field changed, OR a rate-override reason was
+    // supplied (a broken chain saved with justification must always be recorded,
+    // even in the edge case where the offending rate equals its prior value).
+    if (changed.length || rateOverrideReason) {
+      const summary = changed.length ? changed.join(", ") : "rate override";
       // Spell out the re-attribution (old → new) so the audit trail is
       // legible without cross-referencing — scorecards depend on it.
       const reattrNote = newSubmittedById
@@ -454,8 +470,8 @@ export async function updateSubmission(
       await logActivity(tx, {
         entityType: "SUBMISSION",
         action: "SUBMISSION_UPDATED",
-        description: `${existing.candidate.fullName} on "${existing.job.title}": submission updated (${changed.join(", ")})${reattrNote}`,
-        newValue: changed.join(", "),
+        description: `${existing.candidate.fullName} on "${existing.job.title}": submission updated (${summary})${reattrNote}`,
+        newValue: summary,
         note: rateOverrideReason ? `rate-override:${rateOverrideReason}` : null,
         performedById: user.id,
         submissionId,

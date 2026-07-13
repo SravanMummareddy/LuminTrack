@@ -122,6 +122,16 @@ export async function createCandidate(
     };
   const d = parsed.data;
 
+  // "Placed" is derived from a placement (see updateCandidate) — a brand-new
+  // candidate has none, so creating one as PLACED would be an instant desync.
+  if (d.status === "PLACED") {
+    return {
+      error:
+        "“Placed” is set automatically when a candidate joins a role — a new candidate can't start as Placed.",
+      fieldErrors: { status: "Set automatically when the candidate joins." },
+    };
+  }
+
   if (formData.get("confirmed") !== "true") {
     const dups = await findCandidateDuplicates({ email: d.email, phone: d.phone });
     if (dups.length) return { needsConfirm: true, error: duplicateMessage(dups) };
@@ -199,6 +209,19 @@ export async function updateCandidate(
         fieldErrors: { status: "End the active placement first." },
       };
     }
+  }
+
+  // Guard the other direction: "Placed" is a DERIVED status owned by the
+  // placement lifecycle (set when a submission joins). Letting a manual edit set
+  // it produces a candidate marked PLACED with no Placement row and a bench still
+  // marketing them as active — a silent three-way desync. Allow it only as a
+  // no-op (already PLACED, editing other fields).
+  if (d.status === "PLACED" && existing.status !== "PLACED") {
+    return {
+      error:
+        "“Placed” is set automatically when a candidate joins a role — it can't be set by hand. Record the join on the submission instead.",
+      fieldErrors: { status: "Set automatically when the candidate joins." },
+    };
   }
 
   if (formData.get("confirmed") !== "true") {

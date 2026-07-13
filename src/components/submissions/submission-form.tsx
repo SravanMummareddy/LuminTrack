@@ -301,6 +301,11 @@ export function SubmissionForm({
   // (a reason logged to the wrong candidate is a real data-integrity slip).
   const dismissStaleGate = () => {
     setGateDismissed(true);
+    // The self-claim consent is scoped to the job it was granted for. Clearing it
+    // on any context change (candidate OR job) stops a claim approved for job X
+    // from silently riding into — and suppressing the not-assigned gate of — a
+    // different unassigned job Y after the picker changes.
+    setClaimIntent(false);
     setFields((f) => ({
       ...f,
       rateReason: "",

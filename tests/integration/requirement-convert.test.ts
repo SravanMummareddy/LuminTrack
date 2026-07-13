@@ -180,6 +180,34 @@ describe.skipIf(!dbReachable)("vendor requirement actions", () => {
     expect(logged).not.toBeNull();
   });
 
+  it("persists the convert-override reason in the submission audit note", async () => {
+    // Regression: convertOverrideReason gated the save but was threaded nowhere,
+    // so the justification for overriding a convert-only warning vanished.
+    // Pay > Bill (negative margin) trips the convert_warn gate; the reason clears
+    // it AND must land in the CANDIDATE_SUBMITTED audit note.
+    const req = await makeRequirement(ctx, { payRate: 120, billRate: 100 });
+    mockedRequireUser.mockResolvedValue(ctx.recruiter as never);
+
+    const res = await convertRequirementToSubmission(
+      {},
+      convertForm(req.id, ctx, {
+        payRate: "120",
+        billRate: "100",
+        convertOverrideReason: "client-approved loss leader; rolling off next week",
+      }),
+    );
+
+    // Success redirect()s → the action returns undefined; a live gate would
+    // instead return { pendingGates }. So no gate remained and it was created.
+    expect(res?.pendingGates ?? []).toHaveLength(0);
+    expect(await testPrisma.submission.count()).toBe(1);
+
+    const audit = await testPrisma.activity.findFirst({
+      where: { action: "CANDIDATE_SUBMITTED" },
+    });
+    expect(audit?.note).toContain("convert-override:client-approved loss leader");
+  });
+
   it("accepts multiple candidates against the same OPEN requirement", async () => {
     const req = await makeRequirement(ctx);
     mockedRequireUser.mockResolvedValue(ctx.recruiter as never);

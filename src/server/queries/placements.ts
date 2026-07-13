@@ -236,38 +236,6 @@ export async function getPredecessorPlacement(submissionId: string) {
   });
 }
 
-/** Top-strip summary for /placements: active count, total weekly margin,
- *  ending-within-14-days count. Weekly margin assumes 40-hour weeks. */
-export async function getPlacementsSummary() {
-  const db = await getScopedPrisma();
-  const today = new Date();
-  const in14 = new Date(today.getTime() + 14 * 86_400_000);
-
-  const [activeRows, endingSoon] = await Promise.all([
-    db.placement.findMany({
-      where: { status: { in: ["ACTIVE", "EXTENDED"] } },
-      select: { billRate: true, payRate: true },
-    }),
-    db.placement.count({
-      where: {
-        status: { in: ["ACTIVE", "EXTENDED"] },
-        endDate: { gte: today, lte: in14 },
-      },
-    }),
-  ]);
-
-  const weeklyMargin = activeRows.reduce(
-    (sum, p) => sum + (Number(p.billRate) - Number(p.payRate)) * 40,
-    0,
-  );
-
-  return {
-    activeCount: activeRows.length,
-    weeklyMargin,
-    endingSoonCount: endingSoon,
-  };
-}
-
 /** Placements with both rates still at 0 — surfaces on the Dashboard
  *  "Needs attention" card so admins close the loop on JOINED transitions. */
 export async function getRatesPendingPlacements(opts: { limit?: number } = {}) {
