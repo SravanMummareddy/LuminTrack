@@ -255,6 +255,7 @@ enum BenchEngagement {
 // manages orgs across the boundary — see canManageOrganizations in permissions.ts.
 model Organization {
   id        String   @id @default(cuid())
+  seq       Int      @unique @default(autoincrement())
   name      String
   // Stable url-safe key (subdomain-ready). Globally unique — orgs are the apex.
   slug      String   @unique
@@ -292,6 +293,7 @@ model Organization {
 
 model User {
   id              String       @id @default(cuid())
+  seq             Int          @unique @default(autoincrement())
   organizationId  String       @default("")
   organization    Organization @relation(fields: [organizationId], references: [id])
   fullName        String
@@ -373,6 +375,7 @@ model User {
 // `User.teamLabel` (Wave 1b). All FKs SetNull so a lead leaving never cascades.
 model Team {
   id             String       @id @default(cuid())
+  seq            Int          @unique @default(autoincrement())
   organizationId String       @default("")
   organization   Organization @relation(fields: [organizationId], references: [id])
   name           String
@@ -404,6 +407,7 @@ model Permission {
 
 model Role {
   id             String           @id @default(cuid())
+  seq            Int              @unique @default(autoincrement())
   organizationId String           @default("")
   organization   Organization     @relation(fields: [organizationId], references: [id])
   name           String
@@ -1335,6 +1339,7 @@ model GlossaryNote {
 /// recovered. `term` is the stable slug the per-user note anchors to.
 model CustomGlossaryTerm {
   id             String       @id @default(cuid())
+  seq            Int          @unique @default(autoincrement())
   organizationId String       @default("")
   organization   Organization @relation(fields: [organizationId], references: [id])
   term           String

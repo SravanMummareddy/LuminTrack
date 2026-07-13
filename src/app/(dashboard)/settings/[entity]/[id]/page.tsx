@@ -1,8 +1,14 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/session";
-import { isManagerTier } from "@/lib/permissions";
+import { isManagerTier, canManageOrganizations } from "@/lib/permissions";
 import { Forbidden } from "@/components/ui/forbidden";
+import { AdminEntityDetailView } from "@/components/settings/admin-entity-detail";
+import {
+  getAdminEntityDetail,
+  ADMIN_ENTITY_KINDS,
+  type AdminEntityKind,
+} from "@/server/queries/admin-entities";
 import { BackLink } from "@/components/ui/back-link";
 import { Badge } from "@/components/ui/badge";
 import { LinkButton } from "@/components/ui/button";
@@ -59,6 +65,18 @@ export default async function OrgEntityDetailPage({
   const user = await getCurrentUser();
   // Manager-only, per owner decision — a recruiter who lands here directly is refused.
   if (!isManagerTier(user)) return <Forbidden />;
+
+  // WS4 — admin-entity detail (Users / Teams / Roles / Organizations / Glossary),
+  // one renderer over a normalised shape. Organizations are platform-admin only,
+  // matching the Settings tab.
+  if (ADMIN_ENTITY_KINDS.includes(entity as AdminEntityKind)) {
+    if (entity === "organization" && !canManageOrganizations(user))
+      return <Forbidden />;
+    const adminDetail = await getAdminEntityDetail(entity, id);
+    if (!adminDetail) notFound();
+    return <AdminEntityDetailView detail={adminDetail} />;
+  }
+
   if (!(entity in META)) notFound();
 
   const detail = await getOrgEntityDetail(entity, id);

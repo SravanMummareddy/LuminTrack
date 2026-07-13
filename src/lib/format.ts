@@ -186,6 +186,23 @@ export function formatReferrerDisplayId(r: { seq: number }): string {
   return `REF-${String(r.seq).padStart(3, "0")}`;
 }
 
+// WS4 — admin-entity display IDs (Users / Teams / Roles / Organizations / Glossary).
+export function formatUserDisplayId(u: { seq: number }): string {
+  return `USR-${String(u.seq).padStart(3, "0")}`;
+}
+export function formatTeamDisplayId(t: { seq: number }): string {
+  return `TEAM-${String(t.seq).padStart(3, "0")}`;
+}
+export function formatRoleDisplayId(r: { seq: number }): string {
+  return `ROLE-${String(r.seq).padStart(3, "0")}`;
+}
+export function formatOrganizationDisplayId(o: { seq: number }): string {
+  return `ORG-${String(o.seq).padStart(3, "0")}`;
+}
+export function formatGlossaryDisplayId(g: { seq: number }): string {
+  return `GLO-${String(g.seq).padStart(3, "0")}`;
+}
+
 /** Formats a years-of-experience value (Prisma Decimal or number). */
 export function formatExperience(
   value: { toString(): string } | number | null | undefined,
