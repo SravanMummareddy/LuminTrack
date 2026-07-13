@@ -34,8 +34,10 @@ Consult it for *why* a feature was built the way it was; it is NOT auto-loaded.
   layer** carrying commercial terms (Bill/Pay/engagement/team-lead), `status`
   OPEN/CONVERTED/CANCELLED. A separate `VendorRequirement` table (not Submission+status) so it
   is **invisible to all submission analytics by construction**. Team lead = `User.isTeamLead`
-  flag (not a 3rd role); `canManageRequirements = ADMIN || isTeamLead`. A recruiter "moves it
-  to a submission" (prefilled + editable) via the extracted `createSubmissionRecord(tx, …)`
+  flag (not a 3rd role). `canManageRequirements = can(viewer, "requirement:manage")`, granted to
+  **Recruiter + Team Lead + Manager** (owner decision 2026-07-13 — recruiters create/edit their own
+  VPRs; safe because VPRs never touch submission analytics). A recruiter can also "move a VPR to a
+  submission" (prefilled + editable) via the extracted `createSubmissionRecord(tx, …)`
   (`src/server/submission-create.ts`). Display id `VPR-###`.
 - **Submission** = the tracked record that drives recruiter performance analytics.
 

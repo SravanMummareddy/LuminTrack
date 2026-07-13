@@ -86,10 +86,10 @@ export const jobSchema = z
   .superRefine((val, ctx) => {
     // Source-type-conditional required detail.
     if (val.sourceType === "JOB_BOARD") {
+      // The board name identifies the source; the posting URL is optional
+      // (not always on hand when logging the job).
       if (!val.jobBoard)
         ctx.addIssue({ code: "custom", path: ["jobBoard"], message: "Pick or type a job board." });
-      if (!val.postingUrl)
-        ctx.addIssue({ code: "custom", path: ["postingUrl"], message: "Add the posting URL." });
     } else if (val.sourceType === "REFERRAL" && !val.referrerId) {
       ctx.addIssue({ code: "custom", path: ["referrerId"], message: "Pick a referrer, or add one." });
     } else if (val.sourceType === "SISTER_COMPANY" && !val.sisterCompanySourceId) {

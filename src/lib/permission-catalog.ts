@@ -163,12 +163,15 @@ export const CATEGORY_LABEL: Record<PermissionCategory, string> = {
 const RECRUITER_GRANTS: PermissionKey[] = [
   "orgentity:quickadd",
   "bench:view_credentials",
+  // Recruiters create/edit their own VendorPortalRequirements (owner decision
+  // 2026-07-13). VPRs are a separate table, invisible to submission analytics by
+  // construction, so this doesn't affect any recruiter performance metric.
+  "requirement:manage",
 ];
 
 const TEAM_LEAD_GRANTS: PermissionKey[] = [
   ...RECRUITER_GRANTS,
   "tier:full",
-  "requirement:manage",
   "job:edit_rates",
   "submission:reattribute",
   "financials:view",

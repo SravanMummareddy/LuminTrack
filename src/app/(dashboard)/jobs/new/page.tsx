@@ -9,16 +9,18 @@ import {
 } from "@/server/queries/org";
 import { getCurrentUser } from "@/lib/session";
 import { canQuickAddOrgEntities, hasFullAccess } from "@/lib/permissions";
-import { JOB_BOARD_SEED } from "@/lib/labels";
+import { listLookupValues } from "@/server/queries/lookups";
 
 export default async function NewJobPage() {
-  const [clients, vendors, sources, referrers, user] = await Promise.all([
-    listClients(),
-    listVendors(),
-    listSisterCompanies(),
-    listReferrers(),
-    getCurrentUser(),
-  ]);
+  const [clients, vendors, sources, referrers, jobBoards, user] =
+    await Promise.all([
+      listClients(),
+      listVendors(),
+      listSisterCompanies(),
+      listReferrers(),
+      listLookupValues("JOB_BOARD"),
+      getCurrentUser(),
+    ]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -29,7 +31,7 @@ export default async function NewJobPage() {
         vendors={vendors}
         sources={sources}
         referrers={referrers}
-        jobBoards={[...JOB_BOARD_SEED]}
+        jobBoards={jobBoards}
         todayIso={new Date().toISOString().slice(0, 10)}
         submitLabel="Create job"
         canQuickAdd={canQuickAddOrgEntities(user)}

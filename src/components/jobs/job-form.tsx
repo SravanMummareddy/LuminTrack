@@ -6,6 +6,7 @@ import { DateField } from "@/components/ui/date-field";
 import { LocationInput } from "@/components/ui/location-input";
 import { SearchSelect } from "@/components/ui/search-select";
 import { SuggestInput } from "@/components/ui/suggest-input";
+import { VISA_OPTIONS } from "@/lib/visa-options";
 import { Button } from "@/components/ui/button";
 import { NullableField } from "@/components/ui/nullable-field";
 import { RateChainWarning } from "@/components/ui/rate-chain-warning";
@@ -327,7 +328,7 @@ export function JobForm({
                 placeholder="LinkedIn, Indeed, Dice…"
               />
             </Field>
-            <Field label="Posting URL" htmlFor="postingUrl" required error={errors.postingUrl}>
+            <Field label="Posting URL" htmlFor="postingUrl" error={errors.postingUrl} hint="Optional — the board name is enough.">
               <Input id="postingUrl" name="postingUrl" type="url" value={fields.postingUrl} onChange={setField("postingUrl")} placeholder="https://…" />
             </Field>
           </div>
@@ -429,7 +430,7 @@ export function JobForm({
             <DateField id="targetCloseDate" name="targetCloseDate" value={fields.targetCloseDate} onChange={(v) => setFields((f) => ({ ...f, targetCloseDate: v }))} disabled={na.targetCloseDate} className={na.targetCloseDate ? "bg-slate-50" : ""} />
           </NullableField>
           <NullableField label="Work-auth requirement" htmlFor="workAuthRequirement" name="workAuthRequirement" na={na.workAuthRequirement} onToggleNa={toggleNa("workAuthRequirement")} error={errors.workAuthRequirement}>
-            <Input id="workAuthRequirement" name="workAuthRequirement" value={fields.workAuthRequirement} onChange={setField("workAuthRequirement")} placeholder="e.g. USC / GC / H-1B ok" disabled={na.workAuthRequirement} className={na.workAuthRequirement ? "bg-slate-50" : ""} />
+            <SuggestInput id="workAuthRequirement" name="workAuthRequirement" value={fields.workAuthRequirement} options={VISA_OPTIONS} maxResults={VISA_OPTIONS.length} onChange={setField("workAuthRequirement")} placeholder="e.g. USC / GC / H-1B ok" disabled={na.workAuthRequirement} className={na.workAuthRequirement ? "bg-slate-50" : ""} />
           </NullableField>
         </div>
         <Field label="Skills" htmlFor="skills" required error={errors.skills} hint="Separate skills with commas.">

@@ -7,6 +7,7 @@
  *   CALL_TYPE     — bench call type
  *   PAYROLL_TYPE  — bench payroll type
  *   PROJECT_TYPE  — bench project type (nature / duration of the engagement)
+ *   JOB_BOARD     — where a job-board-sourced requisition was posted (job form)
  */
 export const LOOKUP_CATEGORIES = [
   "WORK_AUTH",
@@ -14,6 +15,7 @@ export const LOOKUP_CATEGORIES = [
   "CALL_TYPE",
   "PAYROLL_TYPE",
   "PROJECT_TYPE",
+  "JOB_BOARD",
 ] as const;
 
 export type LookupCategory = (typeof LOOKUP_CATEGORIES)[number];
@@ -38,6 +40,17 @@ export const LOOKUP_DEFAULTS: Record<LookupCategory, string[]> = {
   CALL_TYPE: ["C2C", "W2", "1099", "Any"],
   PAYROLL_TYPE: ["W2", "C2C", "1099"],
   PROJECT_TYPE: ["Contract", "Contract-to-Hire", "Full-time", "Part-time"],
+  JOB_BOARD: [
+    "LinkedIn",
+    "Indeed",
+    "Dice",
+    "Monster",
+    "CareerBuilder",
+    "ZipRecruiter",
+    "Glassdoor",
+    "Naukri",
+    "Company careers page",
+  ],
 };
 
 /** Curated defaults first, then learned values (not already in defaults),
