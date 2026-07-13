@@ -1,7 +1,9 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Search, Plus, Pencil, Trash2 } from "lucide-react";
+import { formatGlossaryDisplayId } from "@/lib/format";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -104,11 +106,25 @@ export function GlossarySection({
                     }`}
                   >
                     <div>
-                      <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
-                        {r.label}
+                      <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-800">
+                        {r.isCustom && r.customId ? (
+                          <Link
+                            href={`/settings/glossary/${r.customId}`}
+                            className="text-indigo-600 hover:underline"
+                          >
+                            {r.label}
+                          </Link>
+                        ) : (
+                          r.label
+                        )}
                         {r.isCustom && (
                           <span className="rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600">
                             Custom
+                          </span>
+                        )}
+                        {r.isCustom && r.customSeq != null && (
+                          <span className="font-mono text-[10px] text-slate-400">
+                            {formatGlossaryDisplayId({ seq: r.customSeq })}
                           </span>
                         )}
                       </div>

@@ -10,6 +10,11 @@ import {
   formatVendorDisplayId,
   formatSourceDisplayId,
   formatReferrerDisplayId,
+  formatUserDisplayId,
+  formatTeamDisplayId,
+  formatRoleDisplayId,
+  formatOrganizationDisplayId,
+  formatGlossaryDisplayId,
   splitFullName,
 } from "@/lib/format";
 
@@ -38,6 +43,16 @@ describe("org-entity display IDs", () => {
     expect(formatVendorDisplayId({ seq: 14 })).toBe("VEN-014");
     expect(formatSourceDisplayId({ seq: 7 })).toBe("SRC-007");
     expect(formatReferrerDisplayId({ seq: 123 })).toBe("REF-123");
+  });
+});
+
+describe("admin-entity display IDs (WS4)", () => {
+  it("pads to 3 digits with the right prefix", () => {
+    expect(formatUserDisplayId({ seq: 4 })).toBe("USR-004");
+    expect(formatTeamDisplayId({ seq: 1 })).toBe("TEAM-001");
+    expect(formatRoleDisplayId({ seq: 12 })).toBe("ROLE-012");
+    expect(formatOrganizationDisplayId({ seq: 1 })).toBe("ORG-001");
+    expect(formatGlossaryDisplayId({ seq: 99 })).toBe("GLO-099");
   });
 });
 

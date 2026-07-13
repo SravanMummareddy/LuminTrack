@@ -2,6 +2,7 @@ import { getScopedPrisma } from "@/lib/session";
 
 export type RoleRow = {
   id: string;
+  seq: number;
   name: string;
   description: string | null;
   isSystem: boolean;
@@ -16,6 +17,7 @@ export async function listRoles(): Promise<RoleRow[]> {
     orderBy: [{ isSystem: "desc" }, { name: "asc" }],
     select: {
       id: true,
+      seq: true,
       name: true,
       description: true,
       isSystem: true,
@@ -25,6 +27,7 @@ export async function listRoles(): Promise<RoleRow[]> {
   });
   return roles.map((r) => ({
     id: r.id,
+    seq: r.seq,
     name: r.name,
     description: r.description,
     isSystem: r.isSystem,

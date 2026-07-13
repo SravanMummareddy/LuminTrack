@@ -1,16 +1,19 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
+import Link from "next/link";
 import { Plus } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/field";
 import { Table, Th, Td } from "@/components/ui/table";
 import { saveTeam } from "@/server/actions/org";
+import { formatTeamDisplayId } from "@/lib/format";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
 
 export type TeamRow = {
   id: string;
+  seq: number;
   name: string;
   leadId: string | null;
   lead: { fullName: string } | null;
@@ -59,6 +62,7 @@ export function TeamSection({
         <Table>
           <thead className="border-b border-slate-200 bg-slate-50">
             <tr>
+              <Th>ID</Th>
               <Th>Team</Th>
               <Th>Lead</Th>
               <Th>Members</Th>
@@ -68,8 +72,13 @@ export function TeamSection({
           <tbody className="divide-y divide-slate-100">
             {items.map((item) => (
               <tr key={item.id}>
+                <Td label="ID" className="font-mono text-xs text-slate-500">
+                  {formatTeamDisplayId(item)}
+                </Td>
                 <Td label="Team" className="font-medium text-slate-900">
-                  {item.name}
+                  <Link href={`/settings/team/${item.id}`} className="text-indigo-600 hover:underline">
+                    {item.name}
+                  </Link>
                 </Td>
                 <Td label="Lead" className="text-slate-600">
                   {item.lead?.fullName ?? <span className="text-slate-300">—</span>}

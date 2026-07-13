@@ -146,6 +146,7 @@ export default async function SettingsPage({
       <UserSection
         items={users.map((u) => ({
           id: u.id,
+          seq: u.seq,
           fullName: u.fullName,
           email: u.email,
           role: u.role,

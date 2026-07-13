@@ -6,8 +6,10 @@ import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Field, Input } from "@/components/ui/field";
+import Link from "next/link";
 import { Table, Th, Td } from "@/components/ui/table";
 import { saveOrganization } from "@/server/actions/organizations";
+import { formatOrganizationDisplayId } from "@/lib/format";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
 import type { OrganizationRow } from "@/server/queries/organizations";
 
@@ -46,6 +48,7 @@ export function OrganizationsSection({
       <Table>
         <thead className="border-b border-slate-200 bg-slate-50">
           <tr>
+            <Th>ID</Th>
             <Th>Name</Th>
             <Th>Slug</Th>
             <Th>Users</Th>
@@ -56,8 +59,13 @@ export function OrganizationsSection({
         <tbody className="divide-y divide-slate-100">
           {organizations.map((o) => (
             <tr key={o.id}>
+              <Td label="ID" className="font-mono text-xs text-slate-500">
+                {formatOrganizationDisplayId(o)}
+              </Td>
               <Td label="Name" className="font-medium text-slate-900">
-                {o.name}
+                <Link href={`/settings/organization/${o.id}`} className="text-indigo-600 hover:underline">
+                  {o.name}
+                </Link>
                 {o.isDefault && (
                   <Badge tone="slate" className="ml-2 align-middle">
                     Default
