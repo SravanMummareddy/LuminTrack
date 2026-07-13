@@ -3,18 +3,14 @@
  * <style>). Pure string builders, unit-tested. No React-Email dependency until
  * we outgrow ~5 templates.
  */
-
-export type DigestItem = {
-  title: string;
-  meta: string;
-  href: string; // absolute URL
-};
+import type { TodoItem, TodoUrgency } from "@/server/pending";
 
 const BRAND = "#16794a";
 const INK = "#1c1c1a";
 const SOFT = "#55554f";
 const FAINT = "#8b8b83";
 const LINE = "#e4e2da";
+const BLUE = "#2f6db3";
 
 function esc(s: string): string {
   return s.replace(/[&<>"]/g, (c) =>
@@ -34,33 +30,94 @@ ${inner}
 </td></tr></table></td></tr></table></div>`;
 }
 
-/** The weekday-morning action-item digest. Returns null when there are no items
- *  (caller skips the send). */
+export type DigestTeamSummary = {
+  totalOpen: number;
+  members: { name: string; open: number; overdue: number }[];
+  topItems: { primary: string; secondary: string }[];
+};
+
+const DIGEST_TIERS: { key: TodoUrgency; label: string; color: string }[] = [
+  { key: "overdue", label: "Overdue — action now", color: "#d85a30" },
+  { key: "soon", label: "This week", color: "#b7791f" },
+  { key: "backlog", label: "Backlog", color: "#8b8b83" },
+];
+
+/**
+ * The weekday-morning action-item digest, grouped by urgency (Wave 7.2 — reads
+ * the same canonical pending set as the dashboard). Item hrefs must already be
+ * absolute. A team lead gets an extra "Your team" section. Returns null when the
+ * recipient has neither personal items nor a non-empty team summary (skip send).
+ */
 export function digestEmail(opts: {
   recipientName: string;
-  items: DigestItem[];
+  grouped: Record<TodoUrgency, TodoItem[]>;
   dashboardUrl: string;
+  teamSummary?: DigestTeamSummary | null;
 }): { subject: string; html: string } | null {
-  if (opts.items.length === 0) return null;
+  const g = opts.grouped;
+  const total = g.overdue.length + g.soon.length + g.backlog.length;
+  const team =
+    opts.teamSummary && opts.teamSummary.totalOpen > 0 ? opts.teamSummary : null;
+  if (total === 0 && !team) return null;
+
   const first = opts.recipientName.split(" ")[0] || opts.recipientName;
-  const n = opts.items.length;
-  const rows = opts.items
-    .map(
-      (it) => `<tr><td style="padding:13px 0;border-top:1px solid ${LINE}">
+  const overdueN = g.overdue.length;
+
+  const tierBlocks = DIGEST_TIERS.map((t) => {
+    const items = g[t.key];
+    if (items.length === 0) return "";
+    const rows = items
+      .map(
+        (it) => `<tr><td style="padding:9px 0;border-top:1px solid ${LINE}">
 <a href="${esc(it.href)}" style="text-decoration:none">
-<div style="font-size:14px;font-weight:600;color:${INK}">${esc(it.title)}</div>
-<div style="font-size:12.5px;color:${SOFT};margin-top:2px">${esc(it.meta)}</div></a></td></tr>`,
-    )
-    .join("");
-  const inner = `<p style="font-size:15px;color:${INK};margin:0 0 4px">Good morning, ${esc(first)}.</p>
-<p style="font-size:13.5px;color:${SOFT};margin:0 0 16px">Here's what's waiting on you — ${n} item${n === 1 ? "" : "s"} across your desk.</p>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}
-<tr><td style="border-top:1px solid ${LINE}"></td></tr></table>
-<a href="${esc(opts.dashboardUrl)}" style="display:inline-block;margin-top:20px;background:${BRAND};color:#fff;font-weight:700;font-size:13.5px;padding:9px 18px;border-radius:8px;text-decoration:none">Open my dashboard →</a>
-<p style="font-size:11.5px;color:${FAINT};margin-top:18px;border-top:1px solid ${LINE};padding-top:12px">You're getting this because you have open items in LuminTrack. Turn off the daily digest in Settings › My account.</p>`;
+<div style="font-size:13.5px;font-weight:600;color:${INK}">${esc(it.primary)}</div>
+<div style="font-size:12px;color:${SOFT};margin-top:1px">${esc(it.secondary)}</div></a></td></tr>`,
+      )
+      .join("");
+    return `<div style="margin-top:16px">
+<div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:800;color:${t.color}">${esc(t.label)}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}</table></div>`;
+  }).join("");
+
+  let teamBlock = "";
+  if (team) {
+    const memberRows = team.members
+      .map(
+        (m) => `<tr><td style="font-size:12.5px;padding:3px 8px;color:${INK}">${esc(m.name)}</td>
+<td align="right" style="font-size:12.5px;font-weight:700;color:${BLUE};padding:3px 8px">${m.open} open${m.overdue ? ` · ${m.overdue} overdue` : ""}</td></tr>`,
+      )
+      .join("");
+    const topRows = team.topItems
+      .map(
+        (it) => `<div style="padding:7px 0;border-top:1px solid ${LINE}">
+<div style="font-size:13px;font-weight:600;color:${INK}">${esc(it.primary)}</div>
+<div style="font-size:12px;color:${SOFT}">${esc(it.secondary)}</div></div>`,
+      )
+      .join("");
+    teamBlock = `<div style="margin-top:18px">
+<div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:800;color:${BLUE}">Your team — ${team.totalOpen} open item${team.totalOpen === 1 ? "" : "s"}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:6px;border:1px solid #e8f0f8;border-radius:8px">${memberRows}</table>
+${topRows ? `<div style="margin-top:8px">${topRows}</div>` : ""}</div>`;
+  }
+
+  const line =
+    total > 0
+      ? `${total} item${total === 1 ? "" : "s"} on your plate${overdueN ? ` — ${overdueN} need${overdueN === 1 ? "s" : ""} action today` : ""}.`
+      : `Your team has ${team!.totalOpen} open item${team!.totalOpen === 1 ? "" : "s"}.`;
+
+  const inner = `<p style="font-size:15px;color:${INK};margin:0 0 3px">Good morning, ${esc(first)}.</p>
+<p style="font-size:13px;color:${SOFT};margin:0 0 4px">${esc(line)}</p>
+${tierBlocks}${teamBlock}
+<a href="${esc(opts.dashboardUrl)}" style="display:inline-block;margin-top:18px;background:${BRAND};color:#fff;font-weight:700;font-size:13.5px;padding:9px 18px;border-radius:8px;text-decoration:none">Open my dashboard →</a>
+<p style="font-size:11.5px;color:${FAINT};margin-top:16px;border-top:1px solid ${LINE};padding-top:12px">You're getting this because you have open items in LuminTrack. Turn off the daily digest in Settings › My account.</p>`;
+
   const subject =
-    n === 1 ? "Your day: 1 item needs attention" : `Your day: ${n} items need attention`;
-  return { subject, html: shell(inner) };
+    total === 0
+      ? `Your team: ${team!.totalOpen} open item${team!.totalOpen === 1 ? "" : "s"}`
+      : total === 1
+        ? "Your day: 1 item needs attention"
+        : `Your day: ${total} items need attention`;
+  return { subject, html: shell(inner, total === 0 && team ? BLUE : BRAND) };
 }
 
 /** Immediate email: a recruiter submitted a candidate on a requirement the

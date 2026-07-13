@@ -4,35 +4,85 @@ import {
   newSubmissionEmail,
   recruiterAssignedEmail,
 } from "@/server/email-templates";
+import { groupByUrgency, type TodoItem } from "@/server/pending";
+
+function todo(over: Partial<TodoItem>): TodoItem {
+  return {
+    kind: "submission_stale",
+    urgency: "backlog",
+    href: "https://x/submissions/1",
+    primary: "An item",
+    secondary: "detail",
+    ownerId: "u1",
+    ownerName: "Someone",
+    at: 0,
+    ...over,
+  };
+}
 
 describe("digestEmail", () => {
-  const items = [
-    { title: "Senior Data Engineer — under 2 submissions", meta: "JOB-118 · 1 submission so far", href: "https://x/jobs/1" },
-    { title: "Interview Tue 11:00 AM", meta: "Priya Nair · SUB-341", href: "https://x/submissions/2" },
+  const items: TodoItem[] = [
+    todo({ urgency: "overdue", primary: "Join date slipped", href: "https://x/submissions/2" }),
+    todo({ urgency: "soon", primary: "Interview tomorrow" }),
+    todo({ urgency: "backlog", primary: "Job under 2 submissions" }),
   ];
 
-  it("returns null on an empty item list (caller skips the send)", () => {
-    expect(digestEmail({ recipientName: "Hrishikesh", items: [], dashboardUrl: "https://x/" })).toBeNull();
+  it("returns null with no personal items and no team (caller skips the send)", () => {
+    expect(
+      digestEmail({
+        recipientName: "Hrishikesh",
+        grouped: groupByUrgency([]),
+        dashboardUrl: "https://x/",
+      }),
+    ).toBeNull();
   });
 
-  it("renders the items, greets by first name, and counts them", () => {
-    const out = digestEmail({ recipientName: "Hrishikesh Rao", items, dashboardUrl: "https://x/" })!;
-    expect(out).not.toBeNull();
-    expect(out.subject).toBe("Your day: 2 items need attention");
+  it("renders each non-empty urgency tier, greets by first name, counts items", () => {
+    const out = digestEmail({
+      recipientName: "Hrishikesh Rao",
+      grouped: groupByUrgency(items),
+      dashboardUrl: "https://x/",
+    })!;
+    expect(out.subject).toBe("Your day: 3 items need attention");
     expect(out.html).toContain("Good morning, Hrishikesh.");
-    expect(out.html).toContain("Senior Data Engineer — under 2 submissions");
+    expect(out.html).toContain("1 need"); // 1 overdue → "1 need action today"
+    expect(out.html).toContain("Overdue — action now");
+    expect(out.html).toContain("This week");
+    expect(out.html).toContain("Backlog");
+    expect(out.html).toContain("Join date slipped");
     expect(out.html).toContain("https://x/submissions/2");
   });
 
   it("singularizes the subject for one item", () => {
-    const out = digestEmail({ recipientName: "A", items: [items[0]], dashboardUrl: "https://x/" })!;
+    const out = digestEmail({
+      recipientName: "A",
+      grouped: groupByUrgency([items[0]]),
+      dashboardUrl: "https://x/",
+    })!;
     expect(out.subject).toBe("Your day: 1 item needs attention");
+  });
+
+  it("sends a team-only digest when the lead has no personal items but the team does", () => {
+    const out = digestEmail({
+      recipientName: "Sriman",
+      grouped: groupByUrgency([]),
+      dashboardUrl: "https://x/",
+      teamSummary: {
+        totalOpen: 5,
+        members: [{ name: "Sameer", open: 5, overdue: 2 }],
+        topItems: [{ primary: "Unlogged interview", secondary: "Sameer · SUB-1" }],
+      },
+    })!;
+    expect(out).not.toBeNull();
+    expect(out.subject).toBe("Your team: 5 open items");
+    expect(out.html).toContain("Your team — 5 open items");
+    expect(out.html).toContain("Sameer");
   });
 
   it("escapes HTML in item content", () => {
     const out = digestEmail({
       recipientName: "A",
-      items: [{ title: "<script>bad</script>", meta: "x & y", href: "https://x/1" }],
+      grouped: groupByUrgency([todo({ primary: "<script>bad</script>", secondary: "x & y" })]),
       dashboardUrl: "https://x/",
     })!;
     expect(out.html).not.toContain("<script>bad");

@@ -1,135 +1,72 @@
 /**
- * Wave 7 — the weekday-morning digest. Runs from a Vercel Cron with NO user
- * session, so it can't use the request-scoped dashboard queries; instead it
- * iterates active orgs, scopes a client per org (mirrors the purge cron), and
- * builds each recruiter's action items directly. One email per recipient, sent
- * only when they have items AND haven't opted out.
+ * Wave 7.2 — the weekday-morning digest. Runs from a Vercel Cron with NO user
+ * session, so it iterates active orgs and scopes a client per org (mirrors the
+ * purge cron). Reads the SAME canonical pending set as the dashboard
+ * (`getPendingTodos`), grouped by urgency. A team lead also gets a "Your team"
+ * section. One email per opted-in recipient, sent only when they have items.
  */
 import { prisma, scopedPrisma, type ScopedPrisma } from "@/server/db";
 import { sendEmail, appUrl } from "@/server/email";
-import { digestEmail, type DigestItem } from "@/server/email-templates";
 import {
-  formatJobDisplayId,
-  formatSubmissionDisplayId,
-  formatCandidateDisplayId,
-} from "@/lib/format";
+  digestEmail,
+  type DigestTeamSummary,
+} from "@/server/email-templates";
+import {
+  getPendingTodos,
+  groupByUrgency,
+  sortTodos,
+  type TodoItem,
+} from "@/server/pending";
+import { leadsAnyTeam, ledTeamMemberIds } from "@/server/team-lead";
+import { canViewSensitiveDocs } from "@/lib/permissions";
+import type { UserRole } from "@/generated/prisma/enums";
 
-function fmtDate(d: Date): string {
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-function fmtDateTime(d: Date): string {
-  return d.toLocaleString("en-US", {
-    weekday: "short",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-/** Build the digest items for one recruiter using an already-org-scoped client. */
-export async function buildDigestItems(
-  db: ScopedPrisma,
-  userId: string,
-): Promise<DigestItem[]> {
+/** Absolutize the relative hrefs the pending module produces (email needs them). */
+function absolutize(items: TodoItem[]): TodoItem[] {
   const base = appUrl();
-  const now = new Date();
-  const in2Days = new Date(now.getTime() + 2 * 86_400_000);
-  const in30Days = new Date(now.getTime() + 30 * 86_400_000);
-
-  const [assigned, rounds, expiringDocs, noResume] = await Promise.all([
-    db.jobAssignment.findMany({
-      where: { recruiterId: userId, job: { status: { in: ["OPEN", "ON_HOLD"] } } },
-      take: 20,
-      select: {
-        job: {
-          select: {
-            id: true,
-            seq: true,
-            title: true,
-            _count: { select: { submissions: true } },
-          },
-        },
-      },
-    }),
-    db.interviewRound.findMany({
-      where: {
-        scheduledAt: { gte: now, lte: in2Days },
-        result: { in: ["WAITING", "NEED_ANOTHER_ROUND"] },
-        submission: { submittedById: userId },
-      },
-      orderBy: { scheduledAt: "asc" },
-      take: 5,
-      select: {
-        scheduledAt: true,
-        submission: {
-          select: { id: true, seq: true, candidate: { select: { fullName: true } } },
-        },
-      },
-    }),
-    db.candidateDocument.findMany({
-      where: {
-        category: "WORK_AUTH",
-        expiresAt: { gte: now, lte: in30Days },
-        candidate: { submissions: { some: { submittedById: userId } } },
-      },
-      orderBy: { expiresAt: "asc" },
-      take: 5,
-      select: {
-        label: true,
-        expiresAt: true,
-        candidate: { select: { id: true, seq: true, fullName: true } },
-      },
-    }),
-    db.submission.findMany({
-      where: {
-        submittedById: userId,
-        status: { notIn: ["REJECTED", "JOINED", "BACKED_OUT"] },
-        candidateResumeId: null,
-        resumeBlobUrl: null,
-        resumeWaivedAt: null,
-      },
-      orderBy: { submittedAt: "asc" },
-      take: 5,
-      select: { id: true, seq: true, candidate: { select: { fullName: true } } },
-    }),
-  ]);
-
-  const items: DigestItem[] = [];
-
-  for (const a of assigned.filter((x) => x.job._count.submissions < 2).slice(0, 5)) {
-    const n = a.job._count.submissions;
-    items.push({
-      title: `${a.job.title} — under 2 submissions`,
-      meta: `${formatJobDisplayId(a.job)} · ${n} submission${n === 1 ? "" : "s"} so far`,
-      href: `${base}/jobs/${a.job.id}`,
-    });
-  }
-  for (const r of rounds) {
-    items.push({
-      title: `Interview ${fmtDateTime(r.scheduledAt!)}`,
-      meta: `${r.submission.candidate?.fullName ?? "Candidate"} · ${formatSubmissionDisplayId(r.submission)} — log the outcome after`,
-      href: `${base}/submissions/${r.submission.id}`,
-    });
-  }
-  for (const d of expiringDocs) {
-    items.push({
-      title: `Work authorization expiring ${d.expiresAt ? fmtDate(d.expiresAt) : "soon"}`,
-      meta: `${d.candidate.fullName} · ${d.label} · ${formatCandidateDisplayId(d.candidate)}`,
-      href: `${base}/candidates/${d.candidate.id}`,
-    });
-  }
-  for (const s of noResume) {
-    items.push({
-      title: `Submission missing a résumé`,
-      meta: `${formatSubmissionDisplayId(s)} ${s.candidate?.fullName ?? ""} — attach or waive before it advances`,
-      href: `${base}/submissions/${s.id}`,
-    });
-  }
-
-  return items;
+  return items.map((t) => ({ ...t, href: `${base}${t.href}` }));
 }
 
-/** Orchestrate the whole run: every active org → every opted-in recruiter with
- *  items → one email. Returns a small summary for the cron response. */
+/** Per-team rollup for a lead's digest: member open/overdue counts + the top few
+ *  most-urgent items across the team. Null when the lead's team has nothing. */
+async function buildTeamSummary(
+  db: ScopedPrisma,
+  lead: { id: string; role: UserRole },
+): Promise<DigestTeamSummary | null> {
+  const memberIds = await ledTeamMemberIds(db, lead.id);
+  if (memberIds.length === 0) return null;
+  const todos = await getPendingTodos(db, memberIds, {
+    canSensitive: canViewSensitiveDocs({ role: lead.role }),
+  });
+  if (todos.length === 0) return null;
+
+  const members = await db.user.findMany({
+    where: { id: { in: memberIds } },
+    select: { id: true, fullName: true },
+  });
+  const open = new Map<string, number>();
+  const overdue = new Map<string, number>();
+  for (const t of todos) {
+    open.set(t.ownerId, (open.get(t.ownerId) ?? 0) + 1);
+    if (t.urgency === "overdue")
+      overdue.set(t.ownerId, (overdue.get(t.ownerId) ?? 0) + 1);
+  }
+  const memberRows = members
+    .map((m) => ({
+      name: m.fullName,
+      open: open.get(m.id) ?? 0,
+      overdue: overdue.get(m.id) ?? 0,
+    }))
+    .sort((a, b) => b.open - a.open);
+  const topItems = sortTodos(todos)
+    .slice(0, 3)
+    .map((t) => ({ primary: t.primary, secondary: `${t.ownerName} · ${t.secondary}` }));
+
+  return { totalOpen: todos.length, members: memberRows, topItems };
+}
+
+/** Orchestrate the whole run: every active org → every opted-in user with items
+ *  (or a team) → one email. Returns a small summary for the cron response. */
 export async function runDigest(): Promise<{ sent: number; skipped: number }> {
   const orgs = await prisma.organization.findMany({
     where: { isActive: true },
@@ -143,17 +80,27 @@ export async function runDigest(): Promise<{ sent: number; skipped: number }> {
     const db = scopedPrisma(org.id);
     const users = await db.user.findMany({
       where: { isActive: true, notifyDigest: true },
-      select: { id: true, fullName: true, email: true },
+      select: { id: true, fullName: true, email: true, role: true },
     });
     for (const u of users) {
-      const items = await buildDigestItems(db, u.id);
-      const email = digestEmail({ recipientName: u.fullName, items, dashboardUrl });
+      const canSensitive = canViewSensitiveDocs({ role: u.role });
+      const todos = await getPendingTodos(db, [u.id], { canSensitive });
+      const teamSummary = (await leadsAnyTeam(db, u.id))
+        ? await buildTeamSummary(db, u)
+        : null;
+      const email = digestEmail({
+        recipientName: u.fullName,
+        grouped: groupByUrgency(absolutize(todos)),
+        dashboardUrl,
+        teamSummary,
+      });
       if (!email) {
         skipped++;
         continue;
       }
       const ok = await sendEmail({ to: u.email, subject: email.subject, html: email.html });
-      ok ? sent++ : skipped++;
+      if (ok) sent++;
+      else skipped++;
     }
   }
   return { sent, skipped };
