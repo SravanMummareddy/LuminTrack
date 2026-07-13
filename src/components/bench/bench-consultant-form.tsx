@@ -48,7 +48,6 @@ export type BenchConsultantFormValues = {
   marketingEmail: string;
   marketingPassword: string;
   marketingNumber: string;
-  personalNumber: string;
   priority: string;
   marketingStatus: string;
   notes: string;
@@ -347,7 +346,7 @@ export function BenchConsultantForm({
         )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Marketing email (contact)" htmlFor="email" required error={errors.email}>
+          <Field label="Contact email" htmlFor="email" required error={errors.email}>
             <Input id="email" name="email" type="email" value={fields.email} onChange={set("email")} />
           </Field>
           <Field label="Phone" htmlFor="phone" required error={errors.phone}>

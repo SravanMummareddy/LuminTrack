@@ -53,7 +53,6 @@ function readBenchConsultant(formData: FormData) {
     marketingPassword: formData.get("marketingPassword") ?? "",
     marketingNumber: formData.get("marketingNumber") ?? "",
     credentialsNa: formData.get("credentials__na") ?? "",
-    personalNumber: formData.get("personalNumber") ?? "",
     priority: formData.get("priority") ?? "SECOND",
     marketingStatus: formData.get("marketingStatus") ?? "ACTIVE",
     notes: formData.get("notes") ?? "",
@@ -94,9 +93,6 @@ function benchData(d: BenchConsultantInput) {
     marketingEmail: d.marketingEmail ?? null,
     marketingPassword: d.marketingPassword ?? null,
     marketingNumber: d.marketingNumber ?? null,
-    // Redundant with the contact phone — default to it when left blank so the
-    // marketing card always has a reachable personal number.
-    personalNumber: d.personalNumber ?? d.phone ?? null,
     priority: d.priority,
     marketingStatus: d.marketingStatus,
     notes: d.notes ?? null,
@@ -111,7 +107,6 @@ const CREDENTIAL_FIELDS = [
   "marketingEmail",
   "marketingPassword",
   "marketingNumber",
-  "personalNumber",
 ] as const;
 
 /** Remove credential fields from an update/create payload so a user who can't

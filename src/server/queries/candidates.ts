@@ -44,6 +44,7 @@ const CANDIDATE_SORTS: Record<
   workAuthorization: (d) => ({ workAuthorization: d }),
   currentCompany: (d) => ({ currentCompany: d }),
   technology: (d) => ({ technology: d }),
+  status: (d) => ({ status: d }),
 };
 
 export const CANDIDATE_SORT_KEYS = Object.keys(CANDIDATE_SORTS);

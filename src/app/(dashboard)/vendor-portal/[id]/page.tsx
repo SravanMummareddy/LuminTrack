@@ -154,13 +154,13 @@ export default async function RequirementDetailPage({
               <ConfirmSubmit
                 action={cancelVendorRequirement}
                 fields={{ id: requirement.id }}
-                title="Cancel this requirement?"
+                title="Discard this requirement?"
                 description="It will be marked cancelled and removed from the planning queue. This can't be undone."
-                confirmLabel="Cancel requirement"
+                confirmLabel="Discard requirement"
                 trigger={
                   <span className="inline-flex items-center gap-1.5">
                     <X className="h-4 w-4" />
-                    Cancel
+                    Discard
                   </span>
                 }
                 triggerClassName={buttonClass("danger", "sm")}
@@ -277,8 +277,8 @@ export default async function RequirementDetailPage({
               : "—"}
           </SummaryItem>
           <SummaryItem label="Client rate">{formatRate(requirement.clientRate, "Undisclosed")}</SummaryItem>
-          <SummaryItem label="Bill rate">{formatRate(requirement.billRate)}</SummaryItem>
-          <SummaryItem label="Pay rate">{formatRate(requirement.payRate)}</SummaryItem>
+          <SummaryItem label="Bill rate">{formatRate(requirement.billRate, "Pending")}</SummaryItem>
+          <SummaryItem label="Pay rate">{formatRate(requirement.payRate, "Pending")}</SummaryItem>
           <SummaryItem label="Recruiter">
             {requirement.recruiter ? (
               <span className="inline-flex items-center gap-2">

@@ -7,6 +7,7 @@ import { SortableHeader } from "@/components/ui/sortable-header";
 import { MobileSort } from "@/components/ui/mobile-sort";
 import { Badge } from "@/components/ui/badge";
 import { DisciplineBadge } from "@/components/ui/discipline-badge";
+import { CANDIDATE_STATUS_LABEL, CANDIDATE_STATUS_TONE } from "@/lib/labels";
 import { ColumnsMenu } from "@/components/ui/columns-menu";
 import {
   formatDate,
@@ -235,12 +236,27 @@ const COLUMNS: Column[] = [
       </Td>
     ),
   },
+  {
+    key: "status",
+    label: "Status",
+    sortKey: "status",
+    defaultVisible: false,
+    render: (c) => (
+      <Td label="Status" secondary>
+        <Badge tone={CANDIDATE_STATUS_TONE[c.status]}>
+          {CANDIDATE_STATUS_LABEL[c.status]}
+        </Badge>
+      </Td>
+    ),
+  },
 ];
 
 const STORAGE_KEY = "lumintrack.candidates.columns";
 // Bumped to 2 in Round 3.5 — Skills column flipped to hidden-by-default, so
 // existing prefs (which assumed Skills was visible) reset cleanly once.
-const STORAGE_VERSION = 2;
+// Bumped to 3 — added a hidden-by-default Status column; reset so existing prefs
+// pick it up in the columns menu.
+const STORAGE_VERSION = 3;
 const DEFAULTS: ColumnPrefs = {
   visible: COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key),
   order: COLUMNS.map((c) => c.key),

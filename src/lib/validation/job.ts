@@ -104,6 +104,10 @@ export const jobSchema = z
       val.receivedAt.getTime() > Date.now()
     )
       ctx.addIssue({ code: "custom", path: ["receivedAt"], message: "Received date can't be in the future." });
+    // A projected end before the projected start is a typo — it also renders a
+    // blank "duration" with no explanation. Only checked when both are present.
+    if (val.startDate && val.endDate && val.endDate < val.startDate)
+      ctx.addIssue({ code: "custom", path: ["endDate"], message: "End date can't be before the start date." });
     // Required-with-N/A: satisfied by a value OR the explicit N/A flag.
     if (!val.targetCloseDate && !val.targetCloseDateNa)
       ctx.addIssue({ code: "custom", path: ["targetCloseDate"], message: "Enter a date, or mark N/A." });

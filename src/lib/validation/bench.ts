@@ -78,7 +78,6 @@ export const benchConsultantSchema = z
     marketingPassword: optionalText,
     marketingNumber: optionalText,
     credentialsNa: naFlag,
-    personalNumber: optionalText,
     priority: z.enum(PRIORITY_VALUES).default("SECOND"),
     marketingStatus: z.enum(MARKETING_STATUS_VALUES).default("ACTIVE"),
     notes: optionalText,

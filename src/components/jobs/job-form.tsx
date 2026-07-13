@@ -255,7 +255,13 @@ export function JobForm({
           </Field>
           <Field label="Status" htmlFor="status" required error={errors.status}>
             <Select id="status" name="status" defaultValue={values?.status ?? "OPEN"} required>
-              {JOB_STATUSES.map((s) => (
+              {/* A brand-new requisition can only start Open or On hold — Closed/
+                  Filled/Cancelled are reached later via the status controls. Edit
+                  keeps the full set so an existing job can be moved anywhere. */}
+              {(editing
+                ? JOB_STATUSES
+                : JOB_STATUSES.filter((s) => s === "OPEN" || s === "ON_HOLD")
+              ).map((s) => (
                 <option key={s} value={s}>{JOB_STATUS_LABEL[s]}</option>
               ))}
             </Select>
@@ -384,7 +390,7 @@ export function JobForm({
 
         <FormSection n={3} title="Requirement details">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Positions" htmlFor="positions" required error={errors.positions}>
+          <Field label="Positions" htmlFor="positions" error={errors.positions}>
             <Input id="positions" name="positions" type="number" min="1" step="1" value={fields.positions} onChange={setField("positions")} />
           </Field>
           <Field label="Priority" htmlFor="priority" required error={errors.priority}>

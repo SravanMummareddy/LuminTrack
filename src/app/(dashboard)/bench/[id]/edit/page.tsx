@@ -72,7 +72,6 @@ export default async function EditBenchConsultantPage({
     marketingEmail: canCreds ? c.marketingEmail ?? "" : "",
     marketingPassword: canCreds ? c.marketingPassword ?? "" : "",
     marketingNumber: canCreds ? c.marketingNumber ?? "" : "",
-    personalNumber: canCreds ? c.personalNumber ?? "" : "",
     priority: c.priority,
     marketingStatus: c.marketingStatus,
     notes: c.notes ?? "",
