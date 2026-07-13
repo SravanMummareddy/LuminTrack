@@ -13,6 +13,7 @@ import {
   advanceBlock,
   stageForRoundType,
   highestInterviewStage,
+  statusForResult,
 } from "@/lib/submission-flow";
 
 describe("primaryAdvance", () => {
@@ -290,6 +291,56 @@ describe("advanceBlock (SB-5 strict gate)", () => {
     expect(advanceBlock("CLIENT_INTERVIEW", "REJECTED", [])).toBeNull();
     expect(advanceBlock("CLIENT_INTERVIEW", "ON_HOLD", [])).toBeNull();
     expect(advanceBlock("CLIENT_INTERVIEW", "VENDOR_SCREENING_CALL", [])).toBeNull();
+  });
+
+  it("lets an OTHER-type client round reach Selected (F10 — OTHER is client-family)", () => {
+    // OTHER enters CLIENT_INTERVIEW via stageForRoundType, so the client-stage
+    // gates must accept it too — else an OTHER-only submission dead-ends short of
+    // Selected, the same class of bug F7 fixed for Manager/HR/Final.
+    const other = (result: InterviewResult): RoundLite => ({
+      interviewType: "OTHER",
+      result,
+      roundOrder: 1,
+    });
+    expect(
+      advanceBlock("RESUME_PICKED", "CLIENT_INTERVIEW", [other("WAITING")]),
+    ).toBeNull();
+    expect(
+      advanceBlock("CLIENT_INTERVIEW", "SELECTED", [other("SELECTED")]),
+    ).toBeNull();
+    expect(highestInterviewStage([{ interviewType: "OTHER" }])).toBe(
+      "CLIENT_INTERVIEW",
+    );
+  });
+
+  it("no longer treats COMPLETED as a passing result (H2)", () => {
+    const ci: RoundLite = {
+      interviewType: "CLIENT_INTERVIEW",
+      result: "COMPLETED",
+      roundOrder: 1,
+    };
+    expect(advanceBlock("CLIENT_INTERVIEW", "SELECTED", [ci])).toMatch(
+      /passing interview result/i,
+    );
+  });
+});
+
+describe("statusForResult (H2 coupling)", () => {
+  it("maps the decisive outcomes to their submission status", () => {
+    expect(statusForResult("SELECTED")).toBe("SELECTED");
+    expect(statusForResult("REJECTED")).toBe("REJECTED");
+    expect(statusForResult("ON_HOLD")).toBe("ON_HOLD");
+  });
+
+  it("keeps the submission put for the in-stage / legacy outcomes", () => {
+    for (const r of [
+      "WAITING",
+      "NEED_ANOTHER_ROUND",
+      "NO_SHOW",
+      "CANCELLED",
+      "COMPLETED",
+    ] as InterviewResult[])
+      expect(statusForResult(r)).toBeNull();
   });
 });
 

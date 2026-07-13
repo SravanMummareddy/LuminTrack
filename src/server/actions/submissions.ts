@@ -23,10 +23,6 @@ import {
 import { rateChainWarnings } from "@/lib/rates";
 import { formatDate } from "@/lib/format";
 import type { FormState } from "@/lib/form-state";
-import {
-  ensurePlacementOnJoined,
-  terminatePlacementOnRevert,
-} from "@/server/placement-lifecycle";
 import { createSubmissionRecord } from "@/server/submission-create";
 import { applySubmissionStatus } from "@/server/submission-status";
 import { notifyNewSubmission } from "@/server/notify";

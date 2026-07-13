@@ -11,6 +11,7 @@ import {
   InterviewRoundForm,
   type InterviewRoundData,
 } from "./interview-round-form";
+import { LogResultForm } from "./log-result-form";
 import {
   INTERVIEW_TYPE_LABEL,
   INTERVIEW_RESULT_LABEL,
@@ -112,21 +113,17 @@ export function InterviewRoundsManager({
   const [editing, setEditing] = useState<InterviewRoundData | "new" | null>(
     null,
   );
-  // "Log result" opens an awaiting round's form straight in done mode.
-  const [startMode, setStartMode] = useState<"scheduling" | "done" | undefined>(
-    undefined,
-  );
+  // "Log result" opens the focused Log-result dialog (H2) — records the outcome
+  // AND drives the submission status in one step, separate from the full form.
+  const [logging, setLogging] = useState<InterviewRoundData | null>(null);
   function openAdd() {
-    setStartMode(undefined);
     setEditing("new");
   }
   function openEdit(r: InterviewRoundData) {
-    setStartMode(undefined);
     setEditing(r);
   }
   function openLogResult(r: InterviewRoundData) {
-    setStartMode("done");
-    setEditing(r);
+    setLogging(r);
   }
 
   return (
@@ -287,22 +284,16 @@ export function InterviewRoundsManager({
         <p className="mt-3 rounded-md border border-dashed border-slate-200 px-3 py-2 text-xs text-slate-500">
           <strong className="text-slate-600">After this round:</strong> another
           round coming up? <em>Add round</em> — it moves the submission into that
-          interview stage. Interview done? <em>Log result</em> on the round above,
-          then mark the candidate <strong>Selected</strong> (or reject / hold) in
-          the Status pipeline.
+          interview stage. Interview done? <em>Log result</em> — a passing outcome
+          marks the candidate <strong>Selected</strong>, a rejection or hold moves
+          the submission for you. No second trip to the Status pipeline.
         </p>
       )}
 
       <Dialog
         open={editing !== null}
         onClose={() => setEditing(null)}
-        title={
-          editing === "new"
-            ? "Add interview round"
-            : startMode === "done"
-              ? "Log interview result"
-              : "Edit interview round"
-        }
+        title={editing === "new" ? "Add interview round" : "Edit interview round"}
       >
         {editing !== null && (
           <InterviewRoundForm
@@ -310,8 +301,17 @@ export function InterviewRoundsManager({
             round={editing === "new" ? undefined : editing}
             supportProviders={supportProviders}
             onDone={() => setEditing(null)}
-            startMode={startMode}
           />
+        )}
+      </Dialog>
+
+      <Dialog
+        open={logging !== null}
+        onClose={() => setLogging(null)}
+        title="Log interview result"
+      >
+        {logging !== null && (
+          <LogResultForm round={logging} onDone={() => setLogging(null)} />
         )}
       </Dialog>
     </section>

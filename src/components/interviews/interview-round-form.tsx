@@ -106,12 +106,11 @@ export function InterviewRoundForm({
   const [fields, setFields] = useState({
     roundName: round?.roundName ?? "",
     interviewType: (round?.interviewType as string) ?? "",
-    // In done mode the result must be a real outcome (WAITING is excluded), so a
-    // round opened to "log the result" defaults to Completed for the recruiter to
-    // confirm or change.
+    // In done mode the result must be a real outcome (WAITING is excluded). H2:
+    // no silent Completed default — a blank forces the recruiter to pick.
     result:
       initialMode === "done" && ((round?.result as string) ?? "WAITING") === "WAITING"
-        ? "COMPLETED"
+        ? ""
         : ((round?.result as string) ?? "WAITING"),
     interviewerName: round?.interviewerName ?? "",
     interviewerNameNa: naInit(round?.interviewerName),
@@ -168,7 +167,7 @@ export function InterviewRoundForm({
         next === "scheduling"
           ? "WAITING"
           : f.result === "WAITING"
-            ? "COMPLETED"
+            ? "" // force an explicit outcome pick in done mode (H2)
             : f.result,
     }));
   }
@@ -194,10 +193,17 @@ export function InterviewRoundForm({
     return opts;
   }, [fields.scheduledTimezone]);
 
+  // Done mode excludes WAITING (that's the scheduling state) and COMPLETED
+  // (dropped in H2 — a passing outcome is SELECTED), keeping COMPLETED only when
+  // editing a legacy round that already carries it.
   const resultOptions =
     mode === "scheduling"
       ? INTERVIEW_RESULTS
-      : INTERVIEW_RESULTS.filter((r) => r !== "WAITING");
+      : INTERVIEW_RESULTS.filter(
+          (r) =>
+            r !== "WAITING" &&
+            (r !== "COMPLETED" || round?.result === "COMPLETED"),
+        );
 
   return (
     <form action={formAction} className="space-y-4">
@@ -265,7 +271,13 @@ export function InterviewRoundForm({
               value={fields.result}
               onChange={set("result")}
               disabled={mode === "scheduling"}
+              required={mode === "done"}
             >
+              {mode === "done" && (
+                <option value="" disabled>
+                  Select an outcome…
+                </option>
+              )}
               {resultOptions.map((r) => (
                 <option key={r} value={r}>
                   {INTERVIEW_RESULT_LABEL[r]}

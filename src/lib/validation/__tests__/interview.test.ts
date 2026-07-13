@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { interviewRoundSchema } from "@/lib/validation/interview";
+import {
+  interviewRoundSchema,
+  logResultSchema,
+} from "@/lib/validation/interview";
 
 // Minimal valid round (Wave 4 strict): mode / interviewer / date are now HARD
 // required, so the base fills them with a non-video interview; time zone,
@@ -164,5 +167,70 @@ describe("interviewRoundSchema — support pair required-or-N/A", () => {
         supportMethodNa: "1",
       }).success,
     ).toBe(true);
+  });
+});
+
+describe("logResultSchema (H2 focused Log-result dialog)", () => {
+  it("requires an outcome", () => {
+    expect(logResultSchema.safeParse({ roundId: "r1" }).success).toBe(false);
+  });
+
+  it("rejects COMPLETED (dropped from the picker)", () => {
+    expect(
+      logResultSchema.safeParse({ roundId: "r1", result: "COMPLETED" }).success,
+    ).toBe(false);
+  });
+
+  it("requires feedback (or N/A) for a verdict outcome", () => {
+    expect(
+      logResultSchema.safeParse({ roundId: "r1", result: "SELECTED" }).success,
+    ).toBe(false);
+    expect(
+      logResultSchema.safeParse({
+        roundId: "r1",
+        result: "SELECTED",
+        feedbackNa: "1",
+      }).success,
+    ).toBe(true);
+    expect(
+      logResultSchema.safeParse({
+        roundId: "r1",
+        result: "SELECTED",
+        feedback: "Strong hire",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("does not require feedback for a didn't-happen or awaiting outcome", () => {
+    for (const result of ["NO_SHOW", "CANCELLED", "WAITING"]) {
+      expect(logResultSchema.safeParse({ roundId: "r1", result }).success).toBe(
+        true,
+      );
+    }
+  });
+
+  it("requires a reason for a rejection or hold", () => {
+    expect(
+      logResultSchema.safeParse({
+        roundId: "r1",
+        result: "REJECTED",
+        feedbackNa: "1",
+      }).success,
+    ).toBe(false);
+    expect(
+      logResultSchema.safeParse({
+        roundId: "r1",
+        result: "REJECTED",
+        feedbackNa: "1",
+        reason: "Failed the system-design round",
+      }).success,
+    ).toBe(true);
+    expect(
+      logResultSchema.safeParse({
+        roundId: "r1",
+        result: "ON_HOLD",
+        feedbackNa: "1",
+      }).success,
+    ).toBe(false);
   });
 });
