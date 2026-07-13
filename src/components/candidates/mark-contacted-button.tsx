@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Check, UserRoundCheck } from "lucide-react";
 import { markCandidateContacted } from "@/server/actions/candidates";
 import { buttonClass } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
 
 /**
@@ -17,14 +18,19 @@ import { cn } from "@/lib/cn";
 export function MarkContactedButton({ candidateId }: { candidateId: string }) {
   const [pending, startTransition] = useTransition();
   const [justMarked, setJustMarked] = useState(false);
+  const { toast } = useToast();
 
   function onClick() {
     startTransition(async () => {
       const fd = new FormData();
       fd.set("id", candidateId);
-      await markCandidateContacted(fd);
-      setJustMarked(true);
-      setTimeout(() => setJustMarked(false), 2500);
+      try {
+        await markCandidateContacted(fd);
+        setJustMarked(true);
+        setTimeout(() => setJustMarked(false), 2500);
+      } catch {
+        toast({ tone: "error", title: "Could not record contact" });
+      }
     });
   }
 

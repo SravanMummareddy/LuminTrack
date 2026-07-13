@@ -36,9 +36,13 @@ export function CandidateBulkBar({
     for (const id of selectedIds) fd.append("ids", id);
     fill?.(fd);
     startTransition(async () => {
-      await action(fd);
-      toast({ tone: "success", title: successTitle });
-      onDone();
+      try {
+        await action(fd);
+        toast({ tone: "success", title: successTitle });
+        onDone();
+      } catch {
+        toast({ tone: "error", title: "Bulk action failed — please try again." });
+      }
     });
   }
 
@@ -46,7 +50,14 @@ export function CandidateBulkBar({
     const fd = new FormData();
     for (const id of selectedIds) fd.append("ids", id);
     startTransition(async () => {
-      const { moved, skipped } = await bulkTrashCandidates(fd);
+      let result: { moved: number; skipped: number };
+      try {
+        result = await bulkTrashCandidates(fd);
+      } catch {
+        toast({ tone: "error", title: "Could not move to trash — please try again." });
+        return;
+      }
+      const { moved, skipped } = result;
       if (moved === 0) {
         toast({
           tone: "error",

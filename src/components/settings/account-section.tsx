@@ -48,11 +48,13 @@ function NotificationsForm({
     EMPTY_FORM_STATE,
   );
   const { toast } = useToast();
+  // Depend on the fresh `state` object (a new ref per submit) so the toast
+  // re-fires on every successful save, not just the first — `state.ok` stays
+  // true across consecutive saves and would suppress later confirmations.
   useEffect(() => {
     if (state.ok)
       toast({ tone: "success", title: state.toast?.title ?? "Preferences saved" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.ok]);
+  }, [state, toast]);
 
   return (
     <section className="max-w-md space-y-4">
@@ -127,8 +129,7 @@ function ProfileForm({
   useEffect(() => {
     if (state.ok)
       toast({ tone: "success", title: state.toast?.title ?? "Profile updated" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.ok]);
+  }, [state, toast]);
 
   return (
     <section className="max-w-md space-y-4">
@@ -200,8 +201,7 @@ function PasswordForm({ onDone }: { onDone: () => void }) {
       toast({ tone: "success", title: state.toast?.title ?? "Password updated" });
       onDone();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.ok]);
+  }, [state, toast, onDone]);
 
   return (
     <section className="max-w-md space-y-4">

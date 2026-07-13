@@ -182,7 +182,12 @@ export function buildSubmissionWhere(
   if (f.submissionStatus) where.status = f.submissionStatus;
   if (f.recruiterId?.length) where.submittedById = { in: f.recruiterId };
 
-  const job: Prisma.JobWhereInput = {};
+  // Submissions to a trashed/erased job or candidate never count toward
+  // analytics — mirror buildJobWhere's `deletedAt: null` so the recruiter table
+  // + conversions reconcile with the source scoreboard (buildJobWhere).
+  where.candidate = { deletedAt: null };
+
+  const job: Prisma.JobWhereInput = { deletedAt: null };
   if (f.clientId?.length) job.clientId = { in: f.clientId };
   if (f.vendorId?.length) job.vendorId = { in: f.vendorId };
   if (f.sisterCompanySourceId)

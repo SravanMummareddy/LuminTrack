@@ -1,5 +1,6 @@
 import { RotateCcw, Download, AlertTriangle } from "lucide-react";
 import { buttonClass } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { restoreJobFromTrash } from "@/server/actions/jobs";
 import { JobEraseButton } from "@/components/jobs/job-erase-button";
 
@@ -56,10 +57,10 @@ export function JobTrashBanner({
             </a>
             <form action={restoreJobFromTrash}>
               <input type="hidden" name="id" value={jobId} />
-              <button type="submit" className={buttonClass("primary")}>
+              <SubmitButton pendingLabel="Restoring…">
                 <RotateCcw className="h-4 w-4" aria-hidden />
                 Restore
-              </button>
+              </SubmitButton>
             </form>
             <JobEraseButton jobId={jobId} jobTitle={jobTitle} />
           </div>
