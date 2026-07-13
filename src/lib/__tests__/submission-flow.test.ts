@@ -11,6 +11,7 @@ import {
   previousStage,
   isBackwardCorrection,
   advanceBlock,
+  stageForRoundType,
 } from "@/lib/submission-flow";
 
 describe("primaryAdvance", () => {
@@ -288,5 +289,23 @@ describe("advanceBlock (SB-5 strict gate)", () => {
     expect(advanceBlock("CLIENT_INTERVIEW", "REJECTED", [])).toBeNull();
     expect(advanceBlock("CLIENT_INTERVIEW", "ON_HOLD", [])).toBeNull();
     expect(advanceBlock("CLIENT_INTERVIEW", "VENDOR_SCREENING_CALL", [])).toBeNull();
+  });
+});
+
+describe("stageForRoundType (Model B rounds-first)", () => {
+  it("a vendor-screening round enters the vendor-screening stage", () => {
+    expect(stageForRoundType("VENDOR_SCREENING")).toBe("VENDOR_SCREENING_CALL");
+  });
+
+  it("every client-side round type enters the client-interview stage", () => {
+    for (const t of [
+      "CLIENT_INTERVIEW",
+      "MANAGER_ROUND",
+      "HR_ROUND",
+      "FINAL_ROUND",
+      "OTHER",
+    ] as const) {
+      expect(stageForRoundType(t)).toBe("CLIENT_INTERVIEW");
+    }
   });
 });

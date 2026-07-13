@@ -64,11 +64,15 @@ export function InterviewRoundForm({
   round,
   supportProviders,
   onDone,
+  startMode,
 }: {
   submissionId: string;
   round?: InterviewRoundData;
   supportProviders: { id: string; name: string; skills: string[] }[];
   onDone: () => void;
+  /** Force the initial scheduling/done mode — "Log result" opens an awaiting
+   *  round straight in "done" mode so the recruiter just records the outcome. */
+  startMode?: "scheduling" | "done";
 }) {
   const [state, formAction, pending] = useActionState(
     round ? updateInterviewRound : createInterviewRound,
@@ -87,10 +91,21 @@ export function InterviewRoundForm({
   // NEW round nothing is pre-marked, so each field must get a value or an N/A.
   const isEdit = round != null;
   const naInit = (v: string | null | undefined) => isEdit && !v;
+  // The effective initial mode: an explicit startMode ("Log result" → done) wins,
+  // else a round already carrying an outcome opens in done, otherwise scheduling.
+  const initialMode: "scheduling" | "done" =
+    startMode ??
+    (round && (round.result !== "WAITING" || round.feedback) ? "done" : "scheduling");
   const [fields, setFields] = useState({
     roundName: round?.roundName ?? "",
     interviewType: (round?.interviewType as string) ?? "",
-    result: (round?.result as string) ?? "WAITING",
+    // In done mode the result must be a real outcome (WAITING is excluded), so a
+    // round opened to "log the result" defaults to Completed for the recruiter to
+    // confirm or change.
+    result:
+      initialMode === "done" && ((round?.result as string) ?? "WAITING") === "WAITING"
+        ? "COMPLETED"
+        : ((round?.result as string) ?? "WAITING"),
     interviewerName: round?.interviewerName ?? "",
     interviewerNameNa: naInit(round?.interviewerName),
     interviewMode: round?.interviewMode ?? "",
@@ -137,9 +152,7 @@ export function InterviewRoundForm({
   // Model B: is the recruiter *scheduling* a future interview or *logging* one
   // that happened? Scheduling locks the result to Waiting and hides the outcome
   // section; a round that already carries a real result opens in "done" mode.
-  const [mode, setMode] = useState<"scheduling" | "done">(
-    round && (round.result !== "WAITING" || round.feedback) ? "done" : "scheduling",
-  );
+  const [mode, setMode] = useState<"scheduling" | "done">(initialMode);
   function switchMode(next: "scheduling" | "done") {
     setMode(next);
     setFields((f) => ({

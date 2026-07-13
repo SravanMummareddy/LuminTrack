@@ -74,6 +74,18 @@ export function stageStatus(index: number): SubmissionStatus | undefined {
 }
 
 /**
+ * Model B (rounds-first): the pipeline stage a newly-added interview round moves
+ * the submission INTO — a vendor-screening round enters VENDOR_SCREENING_CALL,
+ * any client-side round (client / manager / HR / final / other) enters
+ * CLIENT_INTERVIEW. Adding a round is what advances the status, so the create
+ * action maps the round's type → its entry stage. Pure so the mapping is
+ * unit-tested apart from the action.
+ */
+export function stageForRoundType(type: InterviewType): SubmissionStatus {
+  return type === "VENDOR_SCREENING" ? "VENDOR_SCREENING_CALL" : "CLIENT_INTERVIEW";
+}
+
+/**
  * SB-6: the single stage a submission moves back to for a correction. Controlled
  * transitions mean corrections step back exactly one visual stage (never an
  * arbitrary jump); the Decision-branch statuses (Rejected / Hold / Backed-out,
