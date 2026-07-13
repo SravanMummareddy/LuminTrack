@@ -10,7 +10,27 @@ import {
   formatVendorDisplayId,
   formatSourceDisplayId,
   formatReferrerDisplayId,
+  splitFullName,
 } from "@/lib/format";
+
+describe("splitFullName", () => {
+  it("splits first token vs remainder", () => {
+    expect(splitFullName("Jane Smith")).toEqual({ firstName: "Jane", lastName: "Smith" });
+    expect(splitFullName("Mary Jane Watson")).toEqual({
+      firstName: "Mary",
+      lastName: "Jane Watson",
+    });
+  });
+  it("puts a single word entirely in firstName (never leaves both blank)", () => {
+    expect(splitFullName("Cher")).toEqual({ firstName: "Cher", lastName: "" });
+  });
+  it("trims surrounding and internal extra whitespace", () => {
+    expect(splitFullName("  Jane   Smith  ")).toEqual({
+      firstName: "Jane",
+      lastName: "Smith",
+    });
+  });
+});
 
 describe("org-entity display IDs", () => {
   it("pads to 3 digits with the right prefix", () => {

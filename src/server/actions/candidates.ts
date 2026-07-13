@@ -263,11 +263,20 @@ export async function updateCandidate(
   compare("working now", existing.isWorking, d.isWorking);
   compare("working type", existing.workingType, d.isWorking ? d.workingType : null);
 
+  const newFullName = `${d.firstName} ${d.lastName}`.trim();
   await db.$transaction(async (tx) => {
     await tx.candidate.update({
       where: { id: candidateId },
       data: candidateData(d),
     });
+    // The candidate is the source of truth for the name — keep the linked bench
+    // row's own fullName copy in sync (the bench list/search/detail read it), so
+    // a rename doesn't leave the consultant findable only under the old name.
+    if (existing.fullName !== newFullName)
+      await tx.benchConsultant.updateMany({
+        where: { candidateId },
+        data: { fullName: newFullName },
+      });
     if (d.isWorking) await rememberLookup(tx, user.organizationId, "WORKING_TYPE", d.workingType);
     if (changed.length)
       await logActivity(tx, {
@@ -326,6 +335,15 @@ export async function setCandidateArchived(formData: FormData): Promise<void> {
       where: { id: candidateId },
       data: { isActive: !archived },
     });
+    // Archiving takes the candidate off view, so take them off the marketing
+    // bench too (same rule the trash path enforces) — otherwise the bench roster
+    // keeps marketing an archived person. Restoring does NOT auto-remarket;
+    // re-marketing is an explicit action.
+    if (archived)
+      await tx.benchConsultant.updateMany({
+        where: { candidateId, marketingStatus: { in: ["ACTIVE", "PAUSED"] } },
+        data: { marketingStatus: "INACTIVE" },
+      });
     await logActivity(tx, {
       entityType: "CANDIDATE",
       action: "CANDIDATE_UPDATED",
@@ -490,6 +508,12 @@ export async function bulkArchiveCandidates(formData: FormData): Promise<void> {
     await tx.candidate.updateMany({
       where: { id: { in: ids }, deletedAt: null },
       data: { isActive: false },
+    });
+    // Take the archived candidates off the marketing bench too (see
+    // setCandidateArchived) — an archived person must not stay actively marketed.
+    await tx.benchConsultant.updateMany({
+      where: { candidateId: { in: ids }, marketingStatus: { in: ["ACTIVE", "PAUSED"] } },
+      data: { marketingStatus: "INACTIVE" },
     });
     for (const id of ids) {
       await logActivity(tx, {

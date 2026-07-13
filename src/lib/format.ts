@@ -193,3 +193,21 @@ export function formatExperience(
   if (value === null || value === undefined) return "—";
   return `${value.toString()} yrs`;
 }
+
+/** Splits a single full name into first/last for surfaces that only capture a
+ *  combined name (e.g. the bench form) but write to the Candidate model, which
+ *  requires both parts (fullName is derived from them). First token → firstName,
+ *  remainder → lastName; a single word puts everything in firstName. Matches the
+ *  name-split migration backfill. */
+export function splitFullName(fullName: string): {
+  firstName: string;
+  lastName: string;
+} {
+  const trimmed = fullName.trim();
+  const sp = trimmed.indexOf(" ");
+  if (sp === -1) return { firstName: trimmed, lastName: "" };
+  return {
+    firstName: trimmed.slice(0, sp),
+    lastName: trimmed.slice(sp + 1).trim(),
+  };
+}

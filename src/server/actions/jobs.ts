@@ -321,7 +321,9 @@ export async function changeJobStatus(
   if (!(JOB_STATUS_VALUES as readonly string[]).includes(status))
     return { error: "That status is not valid." };
 
-  const job = await db.job.findUnique({ where: { id: jobId } });
+  // Exclude trashed/erased jobs — a crafted POST must not flip an erased
+  // tombstone (which the erase set to CANCELLED + deletedAt) back to OPEN.
+  const job = await db.job.findFirst({ where: { id: jobId, deletedAt: null } });
   if (!job) return { error: "This job no longer exists." };
   if (job.status === status)
     return { error: "Status is already set to that value." };
@@ -405,11 +407,16 @@ export async function bulkChangeJobStatus(
   if (!ids.length) return { changed: 0, skipped: 0 };
 
   const jobs = await db.job.findMany({
-    where: { id: { in: ids }, status: { not: next } },
-    select: { id: true, status: true },
+    where: { id: { in: ids }, status: { not: next }, deletedAt: null },
+    select: { id: true, status: true, startDate: true, startDateEstimated: true },
   });
+  let changed = 0;
   await db.$transaction(async (tx) => {
     for (const j of jobs) {
+      // Same confirmed-start-date gate as the single-job path (changeJobStatus):
+      // a bulk close/fill must not skip it. Gated jobs are left untouched and
+      // reported as skipped.
+      if (startGate(next, j.startDate, j.startDateEstimated)) continue;
       await tx.job.update({ where: { id: j.id }, data: { status: next } });
       // Same cascade as the single close/trash: retire the job's open reqs.
       let closedVprs = 0;
@@ -433,11 +440,12 @@ export async function bulkChangeJobStatus(
         performedById: user.id,
         jobId: j.id,
       });
+      changed++;
     }
   });
   revalidatePath("/jobs");
   if (closing) revalidatePath("/vendor-portal");
-  return { changed: jobs.length, skipped: ids.length - jobs.length };
+  return { changed, skipped: ids.length - changed };
 }
 
 // ── Job lifecycle: trash → restore → erase (admin/manager only) ─────────────

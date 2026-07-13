@@ -21,7 +21,11 @@ export async function globalSearch(q: string): Promise<SearchResult[]> {
   // A bare number matches every entity type's seq; a prefixed one only its own.
   const trimmed = q.trim();
   const numericPart = trimmed.replace(/^[A-Za-z]+-?/, "");
-  const parsedSeq = /^\d+$/.test(numericPart) ? Number(numericPart) : null;
+  // `seq` is a Postgres Int (32-bit) — a value past its max makes Prisma throw,
+  // 500-ing the typeahead on a long number. Bound it so anything too big just
+  // matches no row (which it would anyway).
+  const rawSeq = /^\d+$/.test(numericPart) ? Number(numericPart) : null;
+  const parsedSeq = rawSeq != null && rawSeq <= 2_147_483_647 ? rawSeq : null;
   const upper = trimmed.toUpperCase();
   const bare = /^\d+$/.test(trimmed);
   const seqFor = (prefix: string) =>
@@ -104,19 +108,21 @@ export async function globalSearch(q: string): Promise<SearchResult[]> {
             },
           }),
       db.client.findMany({
-        where: { OR: [{ name: like }, { location: like }] },
+        // isActive: true — don't surface retired entities in typeahead (matches
+        // the users query below).
+        where: { isActive: true, OR: [{ name: like }, { location: like }] },
         take: 4,
         orderBy: { name: "asc" },
         select: { id: true, name: true, location: true },
       }),
       db.vendor.findMany({
-        where: { name: like },
+        where: { isActive: true, name: like },
         take: 4,
         orderBy: { name: "asc" },
         select: { id: true, name: true },
       }),
       db.sisterCompanySource.findMany({
-        where: { name: like },
+        where: { isActive: true, name: like },
         take: 4,
         orderBy: { name: "asc" },
         select: { id: true, name: true },

@@ -113,8 +113,12 @@ export async function getReportsData(
   const selectedAfterInterview = submissions.filter(
     (s) =>
       s._count.interviewRounds > 0 &&
+      // Every stage at or past SELECTED counts as "selected after interview".
+      // OFFER_ACCEPTED (rank 6) sits between OFFER_RELEASED and JOINED — omitting
+      // it while counting both neighbours deflated the interview→selection rate.
       (s.status === "SELECTED" ||
         s.status === "OFFER_RELEASED" ||
+        s.status === "OFFER_ACCEPTED" ||
         s.status === "JOINED"),
   ).length;
   // V-5: overall avg time-to-submit + how many jobs it spans (for the caption).
