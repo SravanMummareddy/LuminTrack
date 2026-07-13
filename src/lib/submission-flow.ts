@@ -86,6 +86,23 @@ export function stageForRoundType(type: InterviewType): SubmissionStatus {
 }
 
 /**
+ * The highest interview stage a set of rounds can support (Model B): CLIENT_INTERVIEW
+ * if any client-family round exists, else VENDOR_SCREENING_CALL if any vendor round,
+ * else null (no interview rounds → no interview stage). Used to revert a submission
+ * when deleting the round that had auto-advanced it, so it can't sit at an interview
+ * stage with no record (SB-5). Pure + unit-tested.
+ */
+export function highestInterviewStage(
+  rounds: { interviewType: InterviewType }[],
+): SubmissionStatus | null {
+  if (rounds.some((r) => CLIENT_FAMILY.includes(r.interviewType)))
+    return "CLIENT_INTERVIEW";
+  if (rounds.some((r) => r.interviewType === "VENDOR_SCREENING"))
+    return "VENDOR_SCREENING_CALL";
+  return null;
+}
+
+/**
  * SB-6: the single stage a submission moves back to for a correction. Controlled
  * transitions mean corrections step back exactly one visual stage (never an
  * arbitrary jump); the Decision-branch statuses (Rejected / Hold / Backed-out,
@@ -135,6 +152,26 @@ function latestOfType(
     .at(-1);
 }
 
+/** The interview types that live at the CLIENT_INTERVIEW pipeline stage — a
+ *  client interview and every later panel. `stageForRoundType` sends all of these
+ *  into CLIENT_INTERVIEW, so the client-stage gates must accept the latest of the
+ *  whole family (not only a literal CLIENT_INTERVIEW round), or a submission whose
+ *  only client-side round is a Manager/HR/Final round can never reach Selected. */
+const CLIENT_FAMILY: InterviewType[] = [
+  "CLIENT_INTERVIEW",
+  "MANAGER_ROUND",
+  "HR_ROUND",
+  "FINAL_ROUND",
+];
+
+/** The latest client-stage round (any CLIENT_FAMILY type), or undefined. */
+function latestClientRound(rounds: RoundLite[]): RoundLite | undefined {
+  return rounds
+    .filter((r) => CLIENT_FAMILY.includes(r.interviewType))
+    .sort((a, b) => a.roundOrder - b.roundOrder)
+    .at(-1);
+}
+
 /**
  * SB-5 strict gate: the reason a forward advance is blocked, or `null` if it's
  * allowed. The owner's rule — "if it's lenient, recruiters won't do the job" —
@@ -159,7 +196,7 @@ export function advanceBlock(
   // Enter-gates: the stage's record must exist.
   if (next === "VENDOR_SCREENING_CALL" && !latestOfType(rounds, "VENDOR_SCREENING"))
     return "Record the vendor screening call first — or skip it as client-waived.";
-  if (next === "CLIENT_INTERVIEW" && !latestOfType(rounds, "CLIENT_INTERVIEW"))
+  if (next === "CLIENT_INTERVIEW" && !latestClientRound(rounds))
     return "Schedule the client interview first.";
 
   // Leave-gates: no progressing past a scheduled event with no outcome yet.
@@ -169,14 +206,14 @@ export function advanceBlock(
       return "Record the vendor screening outcome before moving on.";
   }
   if (prev === "CLIENT_INTERVIEW") {
-    const ci = latestOfType(rounds, "CLIENT_INTERVIEW");
+    const ci = latestClientRound(rounds);
     if (ci && ci.result === "WAITING")
       return "Record the interview result before moving on.";
   }
 
   // Selected must mean the interview passed (also blocks "needs another round").
   if (next === "SELECTED") {
-    const ci = latestOfType(rounds, "CLIENT_INTERVIEW");
+    const ci = latestClientRound(rounds);
     if (!ci || !PASS_RESULTS.includes(ci.result))
       return "Record a passing interview result — or add the next round — before marking the candidate selected.";
   }

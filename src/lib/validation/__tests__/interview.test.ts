@@ -119,30 +119,32 @@ describe("interviewRoundSchema — Model B: feedback only once the result is log
   });
 });
 
-describe("interviewRoundSchema — video needs platform + link (hard)", () => {
-  it("VIDEO mode requires a platform and a meeting link — N/A does not help", () => {
-    const video = { ...base, interviewMode: "VIDEO" };
-    expect(interviewRoundSchema.safeParse(video).success).toBe(false);
-    // N/A flags no longer satisfy the video requirements.
+describe("interviewRoundSchema — video platform + link are optional", () => {
+  it("VIDEO mode with no platform or link is valid (both optional)", () => {
+    expect(
+      interviewRoundSchema.safeParse({ ...base, interviewMode: "VIDEO" }).success,
+    ).toBe(true);
+  });
+
+  it("VIDEO with a real platform + link is valid", () => {
     expect(
       interviewRoundSchema.safeParse({
-        ...video,
-        interviewPlatformNa: "1",
-        meetingLinkNa: "1",
-      }).success,
-    ).toBe(false);
-    // Real platform + link passes.
-    expect(
-      interviewRoundSchema.safeParse({
-        ...video,
+        ...base,
+        interviewMode: "VIDEO",
         interviewPlatform: "ZOOM",
         meetingLink: "https://zoom.us/j/123",
       }).success,
     ).toBe(true);
   });
 
-  it("a non-video mode needs neither platform nor link", () => {
-    expect(interviewRoundSchema.safeParse({ ...base, interviewMode: "PHONE" }).success).toBe(true);
+  it("a platform on a non-video mode is still rejected (applies to video only)", () => {
+    expect(
+      interviewRoundSchema.safeParse({
+        ...base,
+        interviewMode: "PHONE",
+        interviewPlatform: "ZOOM",
+      }).success,
+    ).toBe(false);
   });
 });
 

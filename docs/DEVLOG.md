@@ -10,6 +10,33 @@ short instead of long.
 
 ---
 
+## 2026-07-13 · Model B pipeline — a type-family mismatch dead-ended "Selected"
+
+**Situation.** After the rounds-first (Model B) redesign, an owner review + adversarial
+subagent audit found a hard dead-end: add a "Manager Round" (or HR/Final) with result
+Selected, and the submission entered *Client interview* but could **never** reach *Selected* —
+the gate kept saying "record a passing result" even though one was recorded.
+
+**Diagnosis.** `stageForRoundType` maps **every** non-vendor round type (CLIENT_INTERVIEW,
+MANAGER_ROUND, HR_ROUND, FINAL_ROUND, OTHER) into the CLIENT_INTERVIEW *stage*. But
+`advanceBlock`'s Selected gate — and the client-stage enter/leave gates — checked
+`latestOfType(rounds, "CLIENT_INTERVIEW")`, an **exact** interviewType match. So a submission
+whose only client-side round was a Manager/HR/Final round satisfied the stage but not the gate.
+The write side (which stage to enter) and the read side (which round proves the stage) disagreed
+on what "a client round" is.
+
+**Fix.** A single `CLIENT_FAMILY` set + `latestClientRound()` used by all three client-stage
+gates, so the gate accepts the same family `stageForRoundType` routes in. Plus a
+`highestInterviewStage()` helper so deleting the round that auto-advanced a submission reverts it
+(no orphaned stage). Both pure + unit-tested.
+
+**Lesson.** When one function decides "which bucket does X belong to" and another decides "is the
+bucket satisfied," they must share the *same membership definition*. A literal-equality check on
+one side and a family mapping on the other is an invariant split waiting to strand a record —
+extract the membership set once and have both sides read it.
+
+---
+
 ## 2026-07-13 · Demo reseed blocked — Referrer missing from the wipe order
 
 **Situation.** Extending `seed-demo.ts` with edge-case data (WS1), the reseed died on the

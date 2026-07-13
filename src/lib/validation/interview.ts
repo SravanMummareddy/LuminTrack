@@ -115,11 +115,9 @@ export const interviewRoundSchema = z
     if (d.result !== "WAITING")
       req(!d.feedback, d.feedbackNa, "feedback", "Enter feedback, or mark N/A.");
 
-    // A video call must carry its platform + a join link (no N/A escape).
-    if (d.interviewMode === "VIDEO") {
-      hard(!d.interviewPlatform, "interviewPlatform", "Pick the video platform.");
-      hard(!d.meetingLink, "meetingLink", "Add the join link for the video call.");
-    }
+    // Video platform + join link are OPTIONAL (owner, 2026-07-13) — neither is
+    // always known when a slot is first booked. `interviewPlatform` still only
+    // *applies* to a video call (the superRefine above rejects it on non-video).
 
     // Conditional-required: the support pair only when support was used.
     if (d.supportNeeded) {
