@@ -6,6 +6,7 @@ import type {
   Discipline,
 } from "@/generated/prisma/enums";
 import { PAGE_SIZE, searchTerms, type SortDir, type SortState } from "@/lib/filters";
+import { missingCandidateDetails } from "@/lib/bench-readiness";
 
 export type BenchListFilters = {
   q?: string;
@@ -125,13 +126,47 @@ export async function listBenchConsultants(filters: BenchListFilters) {
       // technology; the bench's own `company` is only a fallback for unlinked
       // identities.
       candidate: {
-        select: { currentCompany: true, discipline: true, technology: true },
+        select: {
+          currentCompany: true,
+          discipline: true,
+          technology: true,
+          // Readiness-only (stripped from the returned row below so no Decimal
+          // crosses the RSC→client boundary): drives the "Needs details" flag.
+          totalExperienceYears: true,
+          workAuthorization: true,
+          currentLocation: true,
+          resumes: { where: { isActive: true }, select: { id: true }, take: 1 },
+        },
       },
       recruiter: { select: { id: true, fullName: true } },
     },
   });
 
-  return { rows: raw.map(flattenBench), total, page };
+  const rows = raw.map((r) => {
+    const c = r.candidate;
+    const missingDetails = missingCandidateDetails({
+      hasResume: Boolean(c && c.resumes.length > 0),
+      totalExperienceYears: c?.totalExperienceYears ?? null,
+      technology: c?.technology ?? null,
+      workAuthorization: c?.workAuthorization ?? null,
+      currentLocation: c?.currentLocation ?? null,
+    });
+    return {
+      ...flattenBench(r),
+      // Re-project candidate to display-only fields — drops the Decimal +
+      // résumé rows the readiness check needed so they never reach the client.
+      candidate: c
+        ? {
+            currentCompany: c.currentCompany,
+            discipline: c.discipline,
+            technology: c.technology,
+          }
+        : c,
+      missingDetails,
+    };
+  });
+
+  return { rows, total, page };
 }
 
 export type BenchListRow = Awaited<

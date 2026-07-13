@@ -4,6 +4,7 @@ import { Fragment } from "react";
 import Link from "next/link";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { MobileSort } from "@/components/ui/mobile-sort";
+import { AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ColumnsMenu } from "@/components/ui/columns-menu";
 import { Pagination } from "@/components/ui/pagination";
@@ -108,12 +109,28 @@ const COLUMNS: Column[] = [
     defaultVisible: true,
     cell: (c) => (
       <>
-        <Link
-          href={`/bench/${c.id}`}
-          className="font-medium text-indigo-600 hover:underline"
-        >
-          {c.fullName}
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/bench/${c.id}`}
+            className="font-medium text-indigo-600 hover:underline"
+          >
+            {c.fullName}
+          </Link>
+          {c.missingDetails.length > 0 && (
+            <span
+              title={`Missing: ${c.missingDetails.join(", ")}`}
+              className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700"
+            >
+              <AlertTriangle className="h-3 w-3" aria-hidden />
+              Needs details
+            </span>
+          )}
+        </div>
+        {c.missingDetails.length > 0 && (
+          <p className="mt-0.5 text-[11px] text-amber-600">
+            Missing: {c.missingDetails.join(" · ")}
+          </p>
+        )}
       </>
     ),
   },

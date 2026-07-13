@@ -57,6 +57,9 @@ export type SubmissionRecordInput = {
   /** Free-text reason logged when submitting an Off-bench candidate. The gate
    *  lives in the calling action; this only records it. */
   benchOverrideReason?: string;
+  /** Free-text reason logged when submitting a candidate whose bench profile is
+   *  missing required details. The gate lives in the calling action. */
+  incompleteProfileOverrideReason?: string;
   /** Free-text reason logged when a VPR→submission convert overrides its
    *  convert-only warnings (active placement / archived résumé / zero rates /
    *  negative margin). The gate lives in the convert action; this records it. */
@@ -178,6 +181,8 @@ export async function createSubmissionRecord(
     notes.push(`original-resume-override:${input.originalResumeOverrideReason}`);
   if (input.benchOverrideReason)
     notes.push(`bench-override:${input.benchOverrideReason}`);
+  if (input.incompleteProfileOverrideReason)
+    notes.push(`incomplete-profile-override:${input.incompleteProfileOverrideReason}`);
   if (input.convertOverrideReason)
     notes.push(`convert-override:${input.convertOverrideReason}`);
   const description = existing

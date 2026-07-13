@@ -12,11 +12,13 @@ const NO_REASONS = {
   bench: "",
   convert: "",
   duplicate: "",
+  incompleteProfile: "",
 };
 
 const clean = {
   isConvert: false,
   assignmentOk: true,
+  incompleteFields: [] as string[],
   rateWarnings: [] as string[],
   candidateStatusLabel: null as string | null,
   workAuthExpiredOn: null as string | null,
@@ -30,6 +32,19 @@ const clean = {
 describe("collectSubmissionGates", () => {
   it("returns no gates when everything is clean", () => {
     expect(collectSubmissionGates(clean)).toEqual([]);
+  });
+
+  it("fires incomplete_profile with the missing fields, and drops it once a reason is given", () => {
+    const input = { ...clean, incompleteFields: ["experience", "visa"] };
+    expect(collectSubmissionGates(input)).toEqual([
+      { kind: "incomplete_profile", missing: ["experience", "visa"] },
+    ]);
+    expect(
+      collectSubmissionGates({
+        ...input,
+        reasons: { ...NO_REASONS, incompleteProfile: "vendor deadline" },
+      }),
+    ).toEqual([]);
   });
 
   it("stacks every gate that fires, in render order", () => {

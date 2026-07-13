@@ -16,6 +16,7 @@ import {
   gatesFromCreateResult,
   workAuthExpiredOn,
 } from "@/server/submission-gates";
+import { missingCandidateDetails } from "@/lib/bench-readiness";
 import { formatDate } from "@/lib/format";
 import {
   requirementSchema,
@@ -406,6 +407,9 @@ export async function convertRequirementToSubmission(
   const benchOverrideReason = String(
     formData.get("benchOverrideReason") ?? "",
   ).trim();
+  const incompleteProfileOverrideReason = String(
+    formData.get("incompleteProfileOverrideReason") ?? "",
+  ).trim();
 
   const requirement = await db.vendorRequirement.findUnique({
     where: { id: requirementId },
@@ -431,6 +435,10 @@ export async function convertRequirementToSubmission(
         fullName: true,
         status: true,
         isActive: true,
+        technology: true,
+        totalExperienceYears: true,
+        workAuthorization: true,
+        currentLocation: true,
         benchConsultant: { select: { marketingStatus: true } },
         documents: {
           where: { category: "WORK_AUTH" },
@@ -505,6 +513,14 @@ export async function convertRequirementToSubmission(
   const missingOriginalResume = candidate.resumes.length === 0;
   const bench = candidate.benchConsultant;
   const notMarketed = !bench || bench.marketingStatus === "INACTIVE";
+  // Résumé is already gated (no_original_resume); nag only the other four.
+  const incompleteFields = missingCandidateDetails({
+    hasResume: true,
+    totalExperienceYears: candidate.totalExperienceYears,
+    technology: candidate.technology,
+    workAuthorization: candidate.workAuthorization,
+    currentLocation: candidate.currentLocation,
+  });
 
   // Convert-only warnings share a single `convertOverrideReason`.
   const pay = d.payRate ?? 0;
@@ -528,6 +544,7 @@ export async function convertRequirementToSubmission(
   const gates = collectSubmissionGates({
     isConvert: true,
     assignmentOk: true,
+    incompleteFields,
     rateWarnings: [],
     candidateStatusLabel: candidateBlocked
       ? CANDIDATE_STATUS_LABEL[candidate.status]
@@ -545,6 +562,7 @@ export async function convertRequirementToSubmission(
       bench: benchOverrideReason,
       convert: convertOverrideReason,
       duplicate: duplicateReason,
+      incompleteProfile: incompleteProfileOverrideReason,
     },
   });
   if (gates.length > 0)
@@ -574,6 +592,7 @@ export async function convertRequirementToSubmission(
         workAuthOverrideReason,
         originalResumeOverrideReason,
         benchOverrideReason,
+        incompleteProfileOverrideReason,
         convertOverrideReason,
         job,
         candidateFullName: candidate.fullName,

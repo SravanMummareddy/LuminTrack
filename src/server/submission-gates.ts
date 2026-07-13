@@ -49,6 +49,8 @@ export function collectSubmissionGates(input: {
   isConvert: boolean;
   /** Direct path: assigned/admin/claimed. Convert path: always true. */
   assignmentOk: boolean;
+  /** Required candidate details still blank (experience/technology/visa/location). Empty to skip. */
+  incompleteFields: string[];
   /** Broken rate-chain rungs (direct path). Empty to skip. */
   rateWarnings: string[];
   /** The candidate's blocking status label (Not-interested / Do-not-contact), or null. */
@@ -73,12 +75,16 @@ export function collectSubmissionGates(input: {
     bench: string;
     convert: string;
     duplicate: string;
+    incompleteProfile: string;
   };
 }): PendingGate[] {
   const gates: PendingGate[] = [];
   const r = input.reasons;
 
   if (!input.assignmentOk) gates.push({ kind: "not_assigned" });
+
+  if (input.incompleteFields.length > 0 && !r.incompleteProfile)
+    gates.push({ kind: "incomplete_profile", missing: input.incompleteFields });
 
   if (input.rateWarnings.length > 0 && !r.rate)
     gates.push({ kind: "rate_chain", warnings: input.rateWarnings });
