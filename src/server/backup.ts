@@ -99,11 +99,11 @@ export async function runScheduledBackup(
   });
   const merged: BackupJson = {
     exportedAt: now.toISOString(),
-    version: 2,
+    version: 3,
     tables: {},
   };
   for (const org of orgs) {
-    const part = await buildBackupJson(scopedPrisma(org.id));
+    const part = await buildBackupJson(scopedPrisma(org.id), org.id);
     for (const [table, rows] of Object.entries(part.tables)) {
       (merged.tables[table] ??= []).push(...rows);
     }

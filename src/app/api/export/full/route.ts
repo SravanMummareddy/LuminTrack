@@ -12,7 +12,7 @@ export async function POST(): Promise<Response> {
 
   const db = await getScopedPrisma();
 
-  const backup = await buildBackupJson(db);
+  const backup = await buildBackupJson(db, user.organizationId);
   const json = JSON.stringify(backup, null, 2);
   const filename = `lumintrack-backup-${new Date().toISOString().slice(0, 10)}.json`;
 
