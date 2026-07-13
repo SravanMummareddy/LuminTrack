@@ -137,9 +137,32 @@ export type RoundLite = {
   roundOrder: number;
 };
 
-/** Client-interview results that count as "passed" — the only ones that let a
- *  submission be marked Selected. */
-const PASS_RESULTS: InterviewResult[] = ["SELECTED", "COMPLETED"];
+/** Client-interview results that count as "passed" — the only one that lets a
+ *  submission be marked Selected. `COMPLETED` was dropped here (H2): with the
+ *  result→status coupling, a passing outcome is logged explicitly as `SELECTED`
+ *  (which drives the submission to Selected). `COMPLETED` stays a valid enum
+ *  value for legacy rows but is no longer offered in the Log-result picker and
+ *  no longer unlocks Selected on its own. */
+const PASS_RESULTS: InterviewResult[] = ["SELECTED"];
+
+/**
+ * H2 result→status coupling: the submission status that logging a given
+ * interview result drives the submission to, or `null` when the outcome keeps
+ * the submission in its current stage (WAITING = awaiting decision,
+ * NEED_ANOTHER_ROUND = add another round, NO_SHOW / CANCELLED = didn't happen,
+ * COMPLETED = legacy neutral). SELECTED / REJECTED / ON_HOLD are the decisive
+ * outcomes that move the submission. Pure so the mapping is unit-tested apart
+ * from the action; the caller enforces the résumé / terminal / same-status
+ * guards (see applyResultCoupling in submission-status.ts).
+ */
+export function statusForResult(
+  result: InterviewResult,
+): SubmissionStatus | null {
+  if (result === "SELECTED") return "SELECTED";
+  if (result === "REJECTED") return "REJECTED";
+  if (result === "ON_HOLD") return "ON_HOLD";
+  return null;
+}
 
 /** The latest round of a given type (highest roundOrder), or undefined. */
 function latestOfType(
@@ -153,15 +176,17 @@ function latestOfType(
 }
 
 /** The interview types that live at the CLIENT_INTERVIEW pipeline stage — a
- *  client interview and every later panel. `stageForRoundType` sends all of these
- *  into CLIENT_INTERVIEW, so the client-stage gates must accept the latest of the
- *  whole family (not only a literal CLIENT_INTERVIEW round), or a submission whose
- *  only client-side round is a Manager/HR/Final round can never reach Selected. */
+ *  client interview and every later panel. `stageForRoundType` sends every
+ *  non-vendor type (including OTHER) into CLIENT_INTERVIEW, so this family must
+ *  match it exactly, or a submission whose only client-side round is a
+ *  Manager/HR/Final/Other round can never reach Selected (the F7 dead-end — OTHER
+ *  was the last type still missing here). */
 const CLIENT_FAMILY: InterviewType[] = [
   "CLIENT_INTERVIEW",
   "MANAGER_ROUND",
   "HR_ROUND",
   "FINAL_ROUND",
+  "OTHER",
 ];
 
 /** The latest client-stage round (any CLIENT_FAMILY type), or undefined. */
