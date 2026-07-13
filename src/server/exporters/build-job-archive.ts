@@ -31,6 +31,26 @@ export async function buildJobArchive(
       vendorRequirements: {
         select: { seq: true, status: true, payRate: true, billRate: true },
       },
+      // Note.jobId and Activity.jobId both cascade-delete on job erase, so for an
+      // empty job (deleted outright, not anonymized) these vanish — capture them
+      // in the archive or the "recoverable backup" isn't.
+      noteEntries: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          body: true,
+          createdAt: true,
+          createdBy: { select: { fullName: true } },
+        },
+      },
+      activities: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          action: true,
+          description: true,
+          createdAt: true,
+          performedBy: { select: { fullName: true } },
+        },
+      },
     },
   });
   if (!j) return null;
@@ -76,6 +96,33 @@ export async function buildJobArchive(
         status: v.status,
         payRate: v.payRate != null ? Number(v.payRate) : null,
         billRate: v.billRate != null ? Number(v.billRate) : null,
+      })),
+      null,
+      2,
+    ),
+  );
+
+  zip.file(
+    "notes.json",
+    JSON.stringify(
+      j.noteEntries.map((n) => ({
+        body: n.body,
+        by: n.createdBy.fullName,
+        at: n.createdAt,
+      })),
+      null,
+      2,
+    ),
+  );
+
+  zip.file(
+    "activity.json",
+    JSON.stringify(
+      j.activities.map((a) => ({
+        action: a.action,
+        description: a.description,
+        by: a.performedBy.fullName,
+        at: a.createdAt,
       })),
       null,
       2,

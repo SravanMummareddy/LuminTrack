@@ -150,6 +150,28 @@ export function JobForm({
   const [description, setDescription] = useState(values?.description ?? "");
   const words = description.trim() ? description.trim().split(/\s+/).length : 0;
 
+  // Plain text/number inputs kept CONTROLLED so React 19's post-action
+  // form.reset() (fired when the action returns fieldErrors without redirecting)
+  // can't silently blank them. The custom Select/Suggest/Location components
+  // already survive reset via internal state; these native inputs would not,
+  // producing a baffling partial wipe of the user's input on a validation bounce.
+  const [fields, setFields] = useState({
+    title: values?.title ?? "",
+    postingUrl: values?.postingUrl ?? "",
+    sourceOther: values?.sourceOther ?? "",
+    positions: values?.positions != null ? String(values.positions) : "1",
+    targetCloseDate: values?.targetCloseDate ?? "",
+    workAuthRequirement: values?.workAuthRequirement ?? "",
+    skills: values?.skills ?? "",
+    vendorRate: values?.vendorRate != null ? String(values.vendorRate) : "",
+    clientRate: values?.clientRate != null ? String(values.clientRate) : "",
+    notes: values?.notes ?? "",
+  });
+  const setField =
+    (k: keyof typeof fields) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setFields((f) => ({ ...f, [k]: e.target.value }));
+
   // Required-with-N/A escape flags. On edit, a blank value defaults to N/A so the
   // recruiter isn't forced to re-answer (the DB stores null for both).
   const [na, setNa] = useState({
@@ -196,7 +218,7 @@ export function JobForm({
         {/* ── 1. The role ─────────────────────────────────────────── */}
         <FormSection n={1} title="The role">
         <Field label="Job title" htmlFor="title" required error={errors.title}>
-          <Input id="title" name="title" defaultValue={values?.title ?? ""} required />
+          <Input id="title" name="title" value={fields.title} onChange={setField("title")} required />
         </Field>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Client" htmlFor="clientId" required error={errors.clientId}>
@@ -298,7 +320,7 @@ export function JobForm({
               />
             </Field>
             <Field label="Posting URL" htmlFor="postingUrl" required error={errors.postingUrl}>
-              <Input id="postingUrl" name="postingUrl" type="url" defaultValue={values?.postingUrl ?? ""} placeholder="https://…" />
+              <Input id="postingUrl" name="postingUrl" type="url" value={fields.postingUrl} onChange={setField("postingUrl")} placeholder="https://…" />
             </Field>
           </div>
         )}
@@ -327,7 +349,7 @@ export function JobForm({
         )}
         {sourceType === "OTHER" && (
           <Field label="Where from" htmlFor="sourceOther" required error={errors.sourceOther}>
-            <Input id="sourceOther" name="sourceOther" defaultValue={values?.sourceOther ?? ""} placeholder="Describe the source" />
+            <Input id="sourceOther" name="sourceOther" value={fields.sourceOther} onChange={setField("sourceOther")} placeholder="Describe the source" />
           </Field>
         )}
 
@@ -362,7 +384,7 @@ export function JobForm({
         <FormSection n={3} title="Requirement details">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Positions" htmlFor="positions" required error={errors.positions}>
-            <Input id="positions" name="positions" type="number" min="1" step="1" defaultValue={values?.positions || "1"} />
+            <Input id="positions" name="positions" type="number" min="1" step="1" value={fields.positions} onChange={setField("positions")} />
           </Field>
           <Field label="Priority" htmlFor="priority" required error={errors.priority}>
             <Select id="priority" name="priority" defaultValue={values?.priority ?? "MEDIUM"} required>
@@ -397,22 +419,22 @@ export function JobForm({
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <NullableField label="Target hire-by" htmlFor="targetCloseDate" name="targetCloseDate" na={na.targetCloseDate} onToggleNa={toggleNa("targetCloseDate")} error={errors.targetCloseDate}>
-            <Input id="targetCloseDate" name="targetCloseDate" type="date" defaultValue={values?.targetCloseDate ?? ""} disabled={na.targetCloseDate} className={na.targetCloseDate ? "bg-slate-50" : ""} />
+            <Input id="targetCloseDate" name="targetCloseDate" type="date" value={fields.targetCloseDate} onChange={setField("targetCloseDate")} disabled={na.targetCloseDate} className={na.targetCloseDate ? "bg-slate-50" : ""} />
           </NullableField>
           <NullableField label="Work-auth requirement" htmlFor="workAuthRequirement" name="workAuthRequirement" na={na.workAuthRequirement} onToggleNa={toggleNa("workAuthRequirement")} error={errors.workAuthRequirement}>
-            <Input id="workAuthRequirement" name="workAuthRequirement" defaultValue={values?.workAuthRequirement ?? ""} placeholder="e.g. USC / GC / H-1B ok" disabled={na.workAuthRequirement} className={na.workAuthRequirement ? "bg-slate-50" : ""} />
+            <Input id="workAuthRequirement" name="workAuthRequirement" value={fields.workAuthRequirement} onChange={setField("workAuthRequirement")} placeholder="e.g. USC / GC / H-1B ok" disabled={na.workAuthRequirement} className={na.workAuthRequirement ? "bg-slate-50" : ""} />
           </NullableField>
         </div>
         <Field label="Skills" htmlFor="skills" required error={errors.skills} hint="Separate skills with commas.">
-          <Input id="skills" name="skills" defaultValue={values?.skills ?? ""} placeholder="e.g. React, TypeScript, AWS" />
+          <Input id="skills" name="skills" value={fields.skills} onChange={setField("skills")} placeholder="e.g. React, TypeScript, AWS" />
         </Field>
         {canManageRatesAndAssignment && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <NullableField label="Vendor rate" htmlFor="vendorRate" name="vendorRate" naLabel="Don't know" required={false} na={na.vendorRate} onToggleNa={toggleNa("vendorRate")} error={errors.vendorRate} hint="$/hr the vendor releases to us.">
-              <Input id="vendorRate" name="vendorRate" type="number" min="0" step="0.01" defaultValue={values?.vendorRate ?? ""} disabled={na.vendorRate} className={na.vendorRate ? "bg-slate-50" : ""} />
+              <Input id="vendorRate" name="vendorRate" type="number" min="0" step="0.01" value={fields.vendorRate} onChange={setField("vendorRate")} disabled={na.vendorRate} className={na.vendorRate ? "bg-slate-50" : ""} />
             </NullableField>
             <NullableField label="Client rate" htmlFor="clientRate" name="clientRate" naLabel="Not disclosed" required={false} na={na.clientRate} onToggleNa={toggleNa("clientRate")} error={errors.clientRate} hint="$/hr the end client releases.">
-              <Input id="clientRate" name="clientRate" type="number" min="0" step="0.01" defaultValue={values?.clientRate ?? ""} disabled={na.clientRate} className={na.clientRate ? "bg-slate-50" : ""} />
+              <Input id="clientRate" name="clientRate" type="number" min="0" step="0.01" value={fields.clientRate} onChange={setField("clientRate")} disabled={na.clientRate} className={na.clientRate ? "bg-slate-50" : ""} />
             </NullableField>
           </div>
         )}
@@ -435,7 +457,7 @@ export function JobForm({
           {errors.description && <p className="text-xs font-medium text-red-600">{errors.description}</p>}
         </div>
         <Field label="Notes" htmlFor="notes" hint="The only optional field." error={errors.notes}>
-          <Textarea id="notes" name="notes" rows={3} defaultValue={values?.notes ?? ""} />
+          <Textarea id="notes" name="notes" rows={3} value={fields.notes} onChange={setField("notes")} />
         </Field>
 
         </FormSection>
