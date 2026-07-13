@@ -14,6 +14,13 @@ import { rateLimit, resetRateLimit } from "@/lib/rate-limit";
 
 export type LoginState = { error?: string };
 
+// A real cost-12 bcrypt hash to compare against when the account doesn't exist
+// or is inactive, so the login response takes the same time as a wrong-password
+// attempt on a real account. Without it, the missing-account branch returns
+// before the (deliberately slow) hash compare, and an attacker can time-probe
+// which emails are active. Never matches a real password.
+const DUMMY_HASH = "$2b$12$KS900n4p1bv94RxkdtTQWeLmb/RF4BE8w4emS3UwYBr7m2vjX33fC";
+
 // 5 attempts per 15 minutes per email+IP. Slows credential stuffing without
 // locking out legitimate users who fat-finger their password. A looser
 // per-account bucket catches a distributed / IP-rotating attack on one account
@@ -78,12 +85,13 @@ export async function loginAction(
   const user = await prisma.user.findUnique({ where: { email } });
 
   // Same generic message whether the email is unknown, inactive, or the
-  // password is wrong — avoids revealing which accounts exist.
-  if (!user || !user.isActive) {
-    return { error: "Invalid email or password." };
-  }
-  const ok = await verifyPassword(parsed.data.password, user.passwordHash);
-  if (!ok) {
+  // password is wrong — avoids revealing which accounts exist. Run the hash
+  // compare in every branch (against a dummy hash when there's no usable
+  // account) so response timing can't distinguish a real account from a missing
+  // one. `false || …` short-circuits to a wrong-password result either way.
+  const hashToCheck = user && user.isActive ? user.passwordHash : DUMMY_HASH;
+  const ok = await verifyPassword(parsed.data.password, hashToCheck);
+  if (!user || !user.isActive || !ok) {
     return { error: "Invalid email or password." };
   }
 

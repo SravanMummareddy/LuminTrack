@@ -10,6 +10,63 @@ short instead of long.
 
 ---
 
+## 2026-07-13 · Pilot bug-hunt round 2 — jobs, bench, reports, auth, search (5-agent sweep)
+
+**Situation.** Second adversarial fan-out covering everything the first round didn't: jobs · candidates/
+résumés/docs/bench · auth/RBAC/admin · dashboard/analytics/reports/search · VPR/org-entities/file-APIs/
+cron. Every finding hand-verified before fixing. The two scariest areas came back **clean**: the file-
+serving routes have no cross-tenant IDOR (both `/api/resumes/[id]` and `/api/documents/[id]` fetch via
+`getScopedPrisma`, and the sensitive-doc gate is enforced on the *serve* route, not just the query), and
+auth/RBAC held (no privilege escalation or cross-tenant write in the default config — cross-org writes
+0-row via the scoped `where`, `isPlatformAdmin` isn't writable via `saveUser`, permissions re-read fresh
+from the DB each request). The real defects clustered in the bench module and a few analytics/robustness
+spots.
+
+**Diagnosis + fix (confirmed bugs).**
+- **Bench "create new candidate" was a second candidate-write path that skipped the Candidate form's
+  guarantees.** It (a) wrote `fullName` but null `firstName`/`lastName` — and the Candidate model requires
+  both (fullName is derived), so the bench-born candidate was **un-editable** (edit form blocks on the
+  blank required name parts) and rendered blank on name-part surfaces; and (b) never ran
+  `findCandidateDuplicates`, silently minting duplicate candidates. Fix: split `fullName` via a shared
+  `splitFullName` helper (`lib/format.ts`, unit-tested), and run the dup check — the bench form has no
+  "save anyway" flow, so a match returns an error directing the user to link the existing person.
+- **Candidate rename never propagated to the linked `BenchConsultant.fullName`** (the bench reads its own
+  copy for list/search/detail), so a renamed consultant stayed findable only under the old name. Fix:
+  `updateCandidate` now mirrors the new name onto the bench row when it changes.
+- **Archiving a candidate left them ACTIVE on the marketing bench** — the trash path flips
+  `marketingStatus` to INACTIVE but archive/bulk-archive didn't, violating the same "a deactivated person
+  must not still be marketed" invariant. Fix: flip the bench row on archive (both single + bulk); restore
+  doesn't auto-remarket (that's an explicit action).
+- **Bulk job status change bypassed the confirmed-start-date close-gate** the single path enforces —
+  multi-selecting jobs and clicking Close skipped it. Fix: apply `startGate` per job in the bulk loop,
+  skipping gated jobs and reporting them as skipped.
+- **Reports interview→selection conversion omitted `OFFER_ACCEPTED`** (rank 6) while counting its
+  neighbours OFFER_RELEASED and JOINED — deflating the rate for any candidate sitting in an accepted
+  offer. Fix: include it.
+- **Login user-enumeration via timing** — the missing/inactive-account branch returned before the
+  (deliberately slow) bcrypt compare, so response time distinguished real accounts. Fix: compare against
+  a constant dummy hash in every branch to equalize timing.
+- **Global search 500'd on a 10+ digit number** (`Number()` past Postgres Int32 max makes Prisma throw).
+  Fix: bound the parsed seq; also filter retired (inactive) clients/vendors/sources out of typeahead.
+- **Quick-add of a client/vendor/referrer 500'd on a concurrent same-name race** (check-then-create with
+  no P2002 catch, unlike its `save*` twins). Fix: a shared `createOrReuse` that catches the unique
+  constraint and returns the winner's row.
+
+**Deferred (flagged to owner).** Multi-tenant-only latent gaps with no live instance in the single-org
+pilot: cross-org FK validation on `saveContact`/VPR `candidateId`/`recruiterId`, and the governance
+guard keying off the `tier:manager` enum instead of the actual `user:grant_manager`/`role:manage`
+permissions (only reachable once someone composes a custom role that splits governance perms from the
+tier key). Both are real to close before a second org onboards, neither is exploitable today. Also
+by-design/low: SRC-2 source breakdown ignoring submission-level filters, phone-dup normalization.
+
+**Lesson.** A *second write path to the same model* (bench → candidate) is where invariants quietly die —
+it skipped the name-split and dup-check the primary form guarantees, so the model-level rule ("fullName
+is derived from required parts") held on one path and silently broke on the other. When a model has an
+invariant, every writer must honour it; the lazy enforcement is a shared helper (`splitFullName`) both
+paths call, not a second hand-rolled copy. And a guard added on the single-item action (close-gate,
+audit) must be mirrored on its bulk twin — bulk paths are the recurring blind spot (this round's job
+close-gate, last round's — check the bulk sibling every time).
+
 ## 2026-07-13 · Pilot bug-hunt — audit-integrity holes on the money path (4-agent adversarial sweep)
 
 **Situation.** Ahead of the pilot, a 4-agent adversarial fan-out over the submission flow + lifecycle

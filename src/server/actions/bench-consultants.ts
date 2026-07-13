@@ -7,6 +7,8 @@ import { canViewBenchCredentials } from "@/lib/permissions";
 import { logActivity } from "@/server/activity";
 import { rememberLookup } from "@/server/lookups";
 import { ensureBenchForCandidate } from "@/server/bench-lifecycle";
+import { findCandidateDuplicates } from "@/server/queries/candidates";
+import { splitFullName } from "@/lib/format";
 import {
   benchConsultantSchema,
   type BenchConsultantInput,
@@ -173,6 +175,19 @@ export async function createBenchConsultant(
       },
     };
   }
+  // Don't silently mint a duplicate candidate from the bench — the Candidate form
+  // runs this same check. The bench form has no "save anyway" flow, so require
+  // linking the existing person (pick them in the candidate box) instead.
+  if (!linkExisting) {
+    const dups = await findCandidateDuplicates({ email: d.email, phone: d.phone });
+    if (dups.length) {
+      const names = dups.map((c) => c.fullName).join(", ");
+      return {
+        error: `A candidate with this email or phone already exists (${names}). Pick them in the candidate box instead of creating a new one.`,
+        fieldErrors: { candidateId: "This person already exists — link them." },
+      };
+    }
+  }
   if (linkExisting) {
     const already = await db.benchConsultant.findUnique({
       where: { candidateId: d.candidateId as string },
@@ -224,8 +239,15 @@ export async function createBenchConsultant(
     consultant = await db.$transaction(async (tx) => {
       let candidateId = linkExisting ? (d.candidateId as string) : null;
       if (!linkExisting) {
+        const { firstName, lastName } = splitFullName(d.fullName);
         const cand = await tx.candidate.create({
           data: {
+            // firstName/lastName are required by the Candidate model (fullName is
+            // derived from them); the bench form only supplies fullName, so split
+            // it — otherwise the candidate is un-editable (the edit form requires
+            // both name parts) and renders blank on name-part surfaces.
+            firstName,
+            lastName,
             fullName: d.fullName,
             email: d.email ?? null,
             phone: d.phone ?? null,
