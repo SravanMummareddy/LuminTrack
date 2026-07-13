@@ -8,6 +8,7 @@ import { interviewRoundSchema, logResultSchema } from "@/lib/validation/intervie
 import { toFieldErrors } from "@/lib/validation/common";
 import {
   applyResultCoupling,
+  reconcileSubmissionStage,
   type CouplingOutcome,
   type SubmissionForStatus,
 } from "@/server/submission-status";
@@ -22,7 +23,6 @@ import {
   stageForRoundType,
   isTerminal,
   resumeFlag,
-  highestInterviewStage,
   statusForResult,
 } from "@/lib/submission-flow";
 import { formatDateTime } from "@/lib/format";
@@ -542,6 +542,12 @@ export async function updateInterviewRound(
           eventAt: couplingEventAt(d.scheduledAt ?? null),
         },
       );
+      // Editing a decided result DOWN (e.g. Selected → Waiting) doesn't advance,
+      // so it can't leave the submission ahead of what the rounds now support —
+      // pull it back if the edit stranded it. (Coupling above handles the forward
+      // case; this is its mirror.)
+      if (!outcome.coupled)
+        await reconcileSubmissionStage(tx, existing.submission.id, user.id);
     }
   });
 
@@ -584,36 +590,10 @@ export async function deleteInterviewRound(formData: FormData): Promise<void> {
       submissionId: existing.submissionId,
     });
 
-    // If the submission sits at an interview stage that this deleted round was
-    // holding up, and no remaining round supports that stage, revert it — a
-    // submission must not sit at an interview stage with no record (SB-5).
-    const status = existing.submission.status;
-    if (status === "VENDOR_SCREENING_CALL" || status === "CLIENT_INTERVIEW") {
-      const remaining = await tx.interviewRound.findMany({
-        where: { submissionId: existing.submissionId },
-        select: { interviewType: true },
-      });
-      const supported = highestInterviewStage(remaining);
-      const supportedIdx = supported
-        ? SUBMISSION_STAGE_INDEX[supported]
-        : SUBMISSION_STAGE_INDEX["RESUME_PICKED"];
-      if (supportedIdx < SUBMISSION_STAGE_INDEX[status]) {
-        const revertTo = supported ?? "RESUME_PICKED";
-        await tx.submission.update({
-          where: { id: existing.submissionId },
-          data: { status: revertTo },
-        });
-        await logActivity(tx, {
-          entityType: "SUBMISSION",
-          action: "SUBMISSION_STATUS_CHANGED",
-          description: `Status reverted from ${SUBMISSION_STATUS_LABEL[status]} to ${SUBMISSION_STATUS_LABEL[revertTo]} (interview round removed)`,
-          oldValue: SUBMISSION_STATUS_LABEL[status],
-          newValue: SUBMISSION_STATUS_LABEL[revertTo],
-          performedById: user.id,
-          submissionId: existing.submissionId,
-        });
-      }
-    }
+    // A submission must not sit at an interview/decision stage its remaining
+    // rounds no longer support (SB-5) — including a Selected whose only passing
+    // client round was just deleted. reconcile pulls it back if so.
+    await reconcileSubmissionStage(tx, existing.submissionId, user.id);
   });
 
   revalidatePath(`/submissions/${existing.submissionId}`);

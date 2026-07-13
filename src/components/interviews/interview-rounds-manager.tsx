@@ -19,6 +19,8 @@ import {
   interviewModeLabel,
 } from "@/lib/labels";
 import { formatDateTime } from "@/lib/format";
+import { isTerminal } from "@/lib/submission-flow";
+import type { SubmissionStatus } from "@/generated/prisma/enums";
 
 /** Inline support-provider contact popover — recruiters need the supporter's
  *  email/phone during the interview but can't open the manager-only Settings page
@@ -103,13 +105,19 @@ function RoundItem({
  */
 export function InterviewRoundsManager({
   submissionId,
+  submissionStatus,
   rounds,
   supportProviders,
 }: {
   submissionId: string;
+  submissionStatus: SubmissionStatus;
   rounds: InterviewRoundData[];
   supportProviders: { id: string; name: string; skills: string[] }[];
 }) {
+  // A closed submission (Joined / Rejected / Backed out) can't be advanced, so
+  // logging a result would only no-op the coupling — hide the affordance
+  // (mirrors the "can't add rounds to a closed submission" rule server-side).
+  const closed = isTerminal(submissionStatus);
   const [editing, setEditing] = useState<InterviewRoundData | "new" | null>(
     null,
   );
@@ -169,7 +177,7 @@ export function InterviewRoundsManager({
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
-                  {r.result === "WAITING" && (
+                  {r.result === "WAITING" && !closed && (
                     <button
                       type="button"
                       onClick={() => openLogResult(r)}
