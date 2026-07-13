@@ -8,6 +8,7 @@ import { SearchSelect } from "@/components/ui/search-select";
 import { SuggestInput } from "@/components/ui/suggest-input";
 import { Button } from "@/components/ui/button";
 import { NullableField } from "@/components/ui/nullable-field";
+import { RateChainWarning } from "@/components/ui/rate-chain-warning";
 import { FormSection } from "@/components/ui/form-section";
 import {
   useUnsavedChanges,
@@ -436,6 +437,16 @@ export function JobForm({
             <NullableField label="Client rate" htmlFor="clientRate" name="clientRate" naLabel="Not disclosed" required={false} na={na.clientRate} onToggleNa={toggleNa("clientRate")} error={errors.clientRate} hint="$/hr the end client releases.">
               <Input id="clientRate" name="clientRate" type="number" min="0" step="0.01" value={fields.clientRate} onChange={setField("clientRate")} disabled={na.clientRate} className={na.clientRate ? "bg-slate-50" : ""} />
             </NullableField>
+            {/* Vendor (bill) rate is what we receive; it can't exceed the client
+                rate. Live, non-blocking warning — same helper the submission form uses. */}
+            <div className="sm:col-span-2">
+              <RateChainWarning
+                rates={{
+                  billRate: na.vendorRate ? null : fields.vendorRate,
+                  clientRate: na.clientRate ? null : fields.clientRate,
+                }}
+              />
+            </div>
           </div>
         )}
 

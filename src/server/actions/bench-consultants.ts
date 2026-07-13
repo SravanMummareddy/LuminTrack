@@ -333,7 +333,16 @@ export async function updateBenchConsultant(
 
   const existing = await db.benchConsultant.findUnique({
     where: { id },
-    include: { candidate: { select: { id: true, technology: true } } },
+    include: {
+      candidate: {
+        select: {
+          id: true,
+          technology: true,
+          workAuthorization: true,
+          currentLocation: true,
+        },
+      },
+    },
   });
   if (!existing) return { error: "This consultant no longer exists." };
 
@@ -364,25 +373,42 @@ export async function updateBenchConsultant(
 
   await db.$transaction(async (tx) => {
     await tx.benchConsultant.update({ where: { id }, data });
-    // Technology is candidate-owned. Only write a NON-BLANK change through to the
-    // candidate — the bench form must never blank-wipe the candidate's technology
-    // (clearing it is done on the Candidate form, its source of truth). This also
-    // avoids a stale/concurrent bench-edit tab nulling a value set elsewhere.
+    // Technology / work authorization / current location are candidate-owned (the
+    // bench form labels them "from the candidate"). Push NON-BLANK changes back to
+    // the candidate — the source of truth the roster "Needs details" flag reads —
+    // so editing them on the bench actually clears the flag. Never blank-wipe (a
+    // blank leaves the candidate's value intact; clearing is done on the Candidate
+    // form), which also protects against a stale bench tab nulling a fresher value.
+    const candChanges: string[] = [];
+    const candPatch: Prisma.CandidateUpdateInput = {};
+    if (d.technology && d.technology !== (existing.candidate?.technology ?? "")) {
+      candPatch.technology = d.technology;
+      candChanges.push(`technology "${d.technology}"`);
+    }
     if (
-      existing.candidateId &&
-      d.technology &&
-      d.technology !== (existing.candidate?.technology ?? "")
+      d.workAuthorization &&
+      d.workAuthorization !== (existing.candidate?.workAuthorization ?? "")
     ) {
+      candPatch.workAuthorization = d.workAuthorization;
+      candChanges.push(`work authorization "${d.workAuthorization}"`);
+    }
+    if (
+      d.currentLocation &&
+      d.currentLocation !== (existing.candidate?.currentLocation ?? "")
+    ) {
+      candPatch.currentLocation = d.currentLocation;
+      candChanges.push(`location "${d.currentLocation}"`);
+    }
+    if (existing.candidateId && candChanges.length) {
       await tx.candidate.update({
         where: { id: existing.candidateId },
-        data: { technology: d.technology },
+        data: candPatch,
       });
       await logActivity(tx, {
         entityType: "CANDIDATE",
         action: "CANDIDATE_UPDATED",
-        description: `Technology set to "${d.technology}" (from bench)`,
-        oldValue: existing.candidate?.technology ?? null,
-        newValue: d.technology,
+        description: `Updated from bench: ${candChanges.join(", ")}`,
+        newValue: candChanges.join(", "),
         performedById: user.id,
         candidateId: existing.candidateId,
       });

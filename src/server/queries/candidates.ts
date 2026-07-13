@@ -324,6 +324,9 @@ export type BenchCandidateOption = {
   currentCompany: string;
   reference: string;
   realTimeExpYears: string;
+  /** Already actively on the bench (ACTIVE/PAUSED/PLACED) — picking them errors.
+   *  An INACTIVE row is NOT flagged: picking it reactivates the stored row. */
+  onBench: boolean;
 };
 
 /** Candidates for the bench form's picker, carrying the fields the bench
@@ -348,6 +351,7 @@ export async function listCandidatesForBench(): Promise<BenchCandidateOption[]> 
       source: true,
       realTimeExperienceYears: true,
       referrer: { select: { name: true } },
+      benchConsultant: { select: { marketingStatus: true } },
     },
   });
   return rows.map((c) => ({
@@ -362,6 +366,9 @@ export async function listCandidatesForBench(): Promise<BenchCandidateOption[]> 
     currentCompany: c.currentCompany ?? "",
     reference: c.referrer?.name ?? c.source ?? "",
     realTimeExpYears: c.realTimeExperienceYears?.toString() ?? "",
+    onBench: Boolean(
+      c.benchConsultant && c.benchConsultant.marketingStatus !== "INACTIVE",
+    ),
   }));
 }
 

@@ -15,6 +15,7 @@ import { getNotesFor } from "@/server/queries/notes";
 import { getCurrentUser, getScopedPrisma } from "@/lib/session";
 import { canManageRequirements, isManagerTier } from "@/lib/permissions";
 import { OrgEntityLink } from "@/components/settings/org-entity-link";
+import { DisciplineBadge } from "@/components/ui/discipline-badge";
 import { JobStatusForm } from "@/components/jobs/job-status-form";
 import { JobPipelineSteps } from "@/components/jobs/job-pipeline-steps";
 import { JobTrashBanner } from "@/components/jobs/job-trash-banner";
@@ -238,6 +239,7 @@ export default async function JobDetailPage({
             )}
           </SummaryItem>
           <SummaryItem label="Location">{job.location || "—"}</SummaryItem>
+          <SummaryItem label="Discipline"><DisciplineBadge discipline={job.discipline} /></SummaryItem>
           <SummaryItem label="Client rate">{formatRate(job.clientRate, "Undisclosed")}</SummaryItem>
           <SummaryItem label="Vendor rate">{formatRate(job.vendorRate)}</SummaryItem>
           <SummaryItem label="Created by">{job.createdBy.fullName}</SummaryItem>

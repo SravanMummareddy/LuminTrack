@@ -5,6 +5,7 @@ import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { SearchSelect } from "@/components/ui/search-select";
 import { LocationInput } from "@/components/ui/location-input";
 import { NullableField } from "@/components/ui/nullable-field";
+import { RateChainWarning } from "@/components/ui/rate-chain-warning";
 import { FormSection } from "@/components/ui/form-section";
 import { Button } from "@/components/ui/button";
 import {
@@ -456,6 +457,15 @@ export function RequirementForm({
             )}
             {rateField("payRate", "Pay rate", "Pending", "$/hr to the consultant.")}
           </div>
+          {/* Live, non-blocking check so a broken chain (e.g. Pay > Bill) is
+              caught here rather than at convert time. */}
+          <RateChainWarning
+            rates={{
+              clientRate: na.clientRate ? null : fields.clientRate,
+              billRate: na.billRate ? null : fields.billRate,
+              payRate: na.payRate ? null : fields.payRate,
+            }}
+          />
         </FormSection>
 
         <FormSection n={3} title="Duties & notes">

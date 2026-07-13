@@ -263,16 +263,6 @@ const COLUMNS: Column[] = [
     ),
   },
   {
-    key: "company",
-    label: "Company",
-    defaultVisible: false,
-    render: (r) => (
-      <Td label="Company" secondary>
-        {r.candidate?.currentCompany ?? "—"}
-      </Td>
-    ),
-  },
-  {
     key: "vendorRecruiter",
     label: "Vendor recruiter",
     sortKey: "vendorRecruiter",
@@ -283,26 +273,6 @@ const COLUMNS: Column[] = [
           r.job.vendor?.recruitedBy?.fullName ||
           r.job.vendor?.recruitedByName ||
           "—"}
-      </Td>
-    ),
-  },
-  {
-    key: "email",
-    label: "Email",
-    defaultVisible: false,
-    render: (r) => (
-      <Td label="Email" secondary>
-        {r.candidate?.email ?? "—"}
-      </Td>
-    ),
-  },
-  {
-    key: "phone",
-    label: "Phone",
-    defaultVisible: false,
-    render: (r) => (
-      <Td label="Phone" secondary className="whitespace-nowrap">
-        {r.candidate?.phone ?? "—"}
       </Td>
     ),
   },

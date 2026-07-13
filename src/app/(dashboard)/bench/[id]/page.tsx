@@ -53,10 +53,13 @@ export default async function BenchConsultantDetailPage({
     { label: "Current location", value: c.currentLocation ?? "—" },
     {
       label: "Relocation",
-      value: c.relocation
-        ? "Yes — open to relocate"
-        : c.relocationCities
-          ? `Only to: ${c.relocationCities}`
+      // "Specific cities" stores relocation=true AND cities, so check cities
+      // first — otherwise the specific-cities case reads as "anywhere" and the
+      // cities the user typed never show.
+      value: c.relocationCities
+        ? `Only to: ${c.relocationCities}`
+        : c.relocation
+          ? "Yes — anywhere"
           : "No",
     },
     { label: "Least rate on C2C", value: formatRate(c.leastRateC2C) },

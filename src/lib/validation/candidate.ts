@@ -48,17 +48,18 @@ export const candidateSchema = z
     currentCompany: optionalText,
     skills: z.array(z.string().trim().min(1)).min(1, "Add at least one skill.").max(60),
     featuredSkills: z.array(z.string().trim().min(1)).max(3).default([]),
-    linkedinUrl: z
-      .string()
-      .trim()
-      .min(1, "LinkedIn URL is required.")
-      .pipe(z.url("Enter a valid URL.")),
+    // Optional — many candidates are sourced without a LinkedIn on hand. Still
+    // validated as a URL when provided.
+    linkedinUrl: z.preprocess(emptyToUndefined, z.url("Enter a valid URL.").optional()),
     notes: optionalText,
     isActive: z.boolean(),
     status: z.enum(CANDIDATE_STATUS_VALUES).default("AVAILABLE"),
     tags: z.array(z.string().trim().min(1)).max(30).default([]),
     lastContactedAt: optionalDate,
-    referrerId: z.string().trim().min(1, "Pick a reference, or add one."),
+    // Required for new/normal candidates, but legacy rows carry only free-text
+    // `source` and no referrer — the superRefine exempts those so old records
+    // stay editable. (Made optional here; the conditional check lives below.)
+    referrerId: optionalText,
     // Legacy free-text source — kept, read-only, for rows that predate referrerId.
     source: optionalText,
     isWorking: z.boolean().default(false),
@@ -78,11 +79,14 @@ export const candidateSchema = z
         path: ["totalExperienceYears"],
         message: "Total experience is required.",
       });
-    if (d.lastContactedAt == null)
+    // Reference is required for new/normal candidates. Legacy rows (free-text
+    // `source`, no referrer) are exempt so they stay editable without forcing a
+    // referrer onto a historical record.
+    if (!d.referrerId && !d.source)
       ctx.addIssue({
         code: "custom",
-        path: ["lastContactedAt"],
-        message: "Enter when they were last contacted.",
+        path: ["referrerId"],
+        message: "Pick a reference, or add one.",
       });
     // Company + engagement type are required only while the candidate is working
     // (owner: "required, if not working → on-bench tag").

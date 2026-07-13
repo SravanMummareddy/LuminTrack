@@ -95,7 +95,7 @@ function candidateData(d: CandidateInput) {
     lastContactedAt: d.lastContactedAt ?? null,
     // Reference is now a managed Referrer entity. Legacy free-text `source` is
     // intentionally NOT written here — it's preserved read-only for old rows.
-    referrerId: d.referrerId,
+    referrerId: d.referrerId ?? null,
     isWorking: d.isWorking,
     // Working type only meaningful when working; blank it otherwise.
     workingType: d.isWorking ? d.workingType ?? null : null,

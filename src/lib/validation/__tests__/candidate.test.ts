@@ -41,14 +41,23 @@ describe("candidateSchema — required fields", () => {
     expect(candidateSchema.safeParse({ ...full, email: "not-an-email" }).success).toBe(false);
   });
 
-  it("requires a valid LinkedIn URL", () => {
-    expect(candidateSchema.safeParse({ ...full, linkedinUrl: "" }).success).toBe(false);
+  it("allows a blank LinkedIn URL but rejects an invalid one", () => {
+    expect(candidateSchema.safeParse({ ...full, linkedinUrl: "" }).success).toBe(true);
     expect(candidateSchema.safeParse({ ...full, linkedinUrl: "notaurl" }).success).toBe(false);
   });
 
-  it("requires total experience and a last-contacted date", () => {
+  it("requires total experience but allows a blank last-contacted date", () => {
     expect(candidateSchema.safeParse({ ...full, totalExperienceYears: "" }).success).toBe(false);
-    expect(candidateSchema.safeParse({ ...full, lastContactedAt: "" }).success).toBe(false);
+    expect(candidateSchema.safeParse({ ...full, lastContactedAt: "" }).success).toBe(true);
+  });
+
+  it("exempts the Reference requirement for legacy rows that carry a source", () => {
+    // No referrer, no source → still blocked.
+    expect(candidateSchema.safeParse({ ...full, referrerId: "" }).success).toBe(false);
+    // No referrer, but a legacy free-text source present → allowed (old record).
+    expect(
+      candidateSchema.safeParse({ ...full, referrerId: "", source: "Dice" }).success,
+    ).toBe(true);
   });
 
   it("requires at least one skill and a discipline", () => {

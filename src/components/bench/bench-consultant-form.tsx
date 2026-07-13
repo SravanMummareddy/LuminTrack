@@ -70,6 +70,8 @@ export type BenchCandidateOption = {
   currentCompany: string;
   reference: string;
   realTimeExpYears: string;
+  /** Already actively on the bench — shown greyed + non-selectable in the picker. */
+  onBench?: boolean;
 };
 
 type BenchAction = (prev: FormState, formData: FormData) => Promise<FormState>;
@@ -190,7 +192,9 @@ export function BenchConsultantForm({
     values ? !values.leastRateC2C : false,
   );
   const [credsNa, setCredsNa] = useState(
-    values ? !(values.marketingEmail || values.marketingPassword || values.marketingNumber) : false,
+    // Fresh add → default to "not set up yet": a portal login usually doesn't
+    // exist yet when someone is first put on the bench, so don't force it.
+    values ? !(values.marketingEmail || values.marketingPassword || values.marketingNumber) : true,
   );
 
   const set =
@@ -296,7 +300,14 @@ export function BenchConsultantForm({
                 value={fields.candidateId}
                 onChange={onCandidatePick}
                 placeholder="Search candidates…"
-                options={candidates.map((c) => ({ value: c.id, label: c.fullName }))}
+                options={candidates.map((c) => ({
+                  value: c.id,
+                  label: c.fullName,
+                  // Already-benched candidates can't be re-added — grey them out
+                  // instead of letting the user fill the whole form then error.
+                  disabled: c.onBench,
+                  hint: c.onBench ? "already on the bench" : undefined,
+                }))}
                 actionOption={{ value: NEW_CAND, label: "➕ Create new candidate" }}
               />
             </Field>

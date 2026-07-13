@@ -20,7 +20,6 @@ const REQUIREMENT_SORTS: Record<
 > = {
   created: (d) => ({ createdAt: d }),
   updated: (d) => ({ updatedAt: d }),
-  candidate: (d) => ({ candidate: { fullName: d } }),
   job: (d) => ({ job: { title: d } }),
   status: (d) => ({ status: d }),
   submissions: (d) => ({ submissions: { _count: d } }),
@@ -118,7 +117,14 @@ export async function listVendorRequirements(filters: VendorRequirementFilters) 
     where.AND = terms.map((t) => ({
       OR: [
         { job: { title: { contains: t, mode: "insensitive" } } },
-        { candidate: { fullName: { contains: t, mode: "insensitive" } } },
+        // Match the candidates actually SUBMITTED against this VPR (shown in the
+        // "Candidates" column). The legacy VendorRequirement.candidate is never
+        // set by the current flow, so searching it returned nothing.
+        {
+          submissions: {
+            some: { candidate: { fullName: { contains: t, mode: "insensitive" } } },
+          },
+        },
         { vendorRecruiterName: { contains: t, mode: "insensitive" } },
       ],
     }));
