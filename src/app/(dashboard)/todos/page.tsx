@@ -68,6 +68,8 @@ export default async function TodosPage({
     grouped.overdue.length + grouped.soon.length + grouped.backlog.length;
 
   const filter = first(sp.filter) ?? "all";
+  // Server component: renders once per request, so Date.now() is deterministic.
+  // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
   const showOwner = scope === "team" || scope === "org";
 

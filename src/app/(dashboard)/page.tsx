@@ -17,7 +17,6 @@ import {
   getOnboardingStatus,
   type MyRecentActivity,
 } from "@/server/queries/dashboard";
-import { ledTeamMemberIds } from "@/server/team-lead";
 import { resolveTodoScope, type Scope } from "@/server/pending-scope";
 import {
   getPendingTodos,
@@ -186,6 +185,10 @@ export default async function DashboardPage({
   ]);
 
   const grouped = groupByUrgency([...todos, ...managerActionItems]);
+  // Server component renders once per request, so Date.now() is deterministic
+  // here — pass it down so the age badge is hydration-stable.
+  // eslint-disable-next-line react-hooks/purity
+  const now = Date.now();
   // Team per-member counts (worst-first), for the "who's drowning" strip.
   const memberCounts =
     scope === "team" && user
@@ -260,7 +263,7 @@ export default async function DashboardPage({
             grouped={grouped}
             showOwner={scope === "team"}
             scope={scope}
-            now={Date.now()}
+            now={now}
           />
         </Card>
       ) : (
@@ -274,7 +277,7 @@ export default async function DashboardPage({
                 grouped={groupByUrgency(teamRollup.topUrgent)}
                 showOwner
                 scope={scope}
-                now={Date.now()}
+                now={now}
               />
             </Card>
           )}
