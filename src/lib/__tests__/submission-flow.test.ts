@@ -14,6 +14,7 @@ import {
   stageForRoundType,
   highestInterviewStage,
   statusForResult,
+  resolveCouplingTarget,
 } from "@/lib/submission-flow";
 
 describe("primaryAdvance", () => {
@@ -341,6 +342,50 @@ describe("statusForResult (H2 coupling)", () => {
       "COMPLETED",
     ] as InterviewResult[])
       expect(statusForResult(r)).toBeNull();
+  });
+});
+
+describe("resolveCouplingTarget (H2 coupling validity gate)", () => {
+  it("drives SELECTED forward from an interview stage", () => {
+    expect(resolveCouplingTarget("CLIENT_INTERVIEW", "SELECTED")).toBe(
+      "SELECTED",
+    );
+    expect(resolveCouplingTarget("VENDOR_SCREENING_CALL", "SELECTED")).toBe(
+      "SELECTED",
+    );
+  });
+
+  it("never drags an offer-stage submission BACK to Selected (correctness #1)", () => {
+    expect(resolveCouplingTarget("OFFER_RELEASED", "SELECTED")).toBeNull();
+    expect(resolveCouplingTarget("OFFER_ACCEPTED", "SELECTED")).toBeNull();
+  });
+
+  it("allows Reject from any live stage but not once terminal", () => {
+    expect(resolveCouplingTarget("CLIENT_INTERVIEW", "REJECTED")).toBe(
+      "REJECTED",
+    );
+    expect(resolveCouplingTarget("OFFER_RELEASED", "REJECTED")).toBe("REJECTED");
+    expect(resolveCouplingTarget("JOINED", "REJECTED")).toBeNull();
+    expect(resolveCouplingTarget("REJECTED", "REJECTED")).toBeNull();
+  });
+
+  it("allows Hold through the decision stage but not past it (correctness #2)", () => {
+    expect(resolveCouplingTarget("CLIENT_INTERVIEW", "ON_HOLD")).toBe("ON_HOLD");
+    expect(resolveCouplingTarget("SELECTED", "ON_HOLD")).toBe("ON_HOLD");
+    // Past the decision the manual pipeline offers no Hold, so coupling won't either.
+    expect(resolveCouplingTarget("OFFER_RELEASED", "ON_HOLD")).toBeNull();
+    expect(resolveCouplingTarget("ON_HOLD", "ON_HOLD")).toBeNull();
+  });
+
+  it("is a no-op for the non-decisive outcomes", () => {
+    for (const r of [
+      "WAITING",
+      "NEED_ANOTHER_ROUND",
+      "NO_SHOW",
+      "CANCELLED",
+      "COMPLETED",
+    ] as InterviewResult[])
+      expect(resolveCouplingTarget("CLIENT_INTERVIEW", r)).toBeNull();
   });
 });
 

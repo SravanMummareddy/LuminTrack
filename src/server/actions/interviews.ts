@@ -93,6 +93,13 @@ const SUBMISSION_COUPLING_SELECT = {
   placement: { select: { id: true, status: true } },
 } as const;
 
+/** The eventAt for a round-driven status change: the interview's own time when it
+ *  already happened (so a backfilled Selected/Rejected dates to the interview,
+ *  not to "now"), otherwise null (the decision is being made now). */
+function couplingEventAt(scheduledAt: Date | null): Date | null {
+  return scheduledAt && scheduledAt < new Date() ? scheduledAt : null;
+}
+
 /** The success toast for a logged result — names what the coupling did so the
  *  recruiter knows whether to add a round, reschedule, or that it's done. */
 function logResultToast(
@@ -105,13 +112,15 @@ function logResultToast(
       description:
         "Attach a résumé (or waive it) on the submission to mark the candidate Selected.",
     };
+  // Report what the coupling ACTUALLY did (outcome.coupled), not just the chosen
+  // result — a decisive result that wasn't a valid move (terminal submission,
+  // already past that stage, vendor round) falls through to a neutral notice.
+  if (outcome.coupled === "SELECTED")
+    return { title: "Candidate marked Selected" };
+  if (outcome.coupled === "REJECTED") return { title: "Candidate rejected" };
+  if (outcome.coupled === "ON_HOLD")
+    return { title: "Submission put on hold" };
   switch (result) {
-    case "SELECTED":
-      return { title: "Candidate marked Selected" };
-    case "REJECTED":
-      return { title: "Candidate rejected" };
-    case "ON_HOLD":
-      return { title: "Submission put on hold" };
     case "NEED_ANOTHER_ROUND":
       return { title: "Result logged", description: "Add the next round to continue." };
     case "WAITING":
@@ -123,7 +132,7 @@ function logResultToast(
         description: "Reschedule by adding a new round.",
       };
     default:
-      return { title: "Result logged" };
+      return { title: "Result recorded" };
   }
 }
 
@@ -161,6 +170,7 @@ export async function logInterviewResult(
       id: true,
       roundName: true,
       result: true,
+      scheduledAt: true,
       submission: { select: SUBMISSION_COUPLING_SELECT },
     },
   });
@@ -169,13 +179,24 @@ export async function logInterviewResult(
   const result = d.result as InterviewResult;
   const prevResult = round.result;
   const feedbackText = d.feedback ?? null;
+  // The focused dialog hides Feedback for the didn't-happen outcomes, so a
+  // NO_SHOW / CANCELLED post carries no feedback — don't let a blank overwrite an
+  // interim read the recruiter saved earlier.
+  const touchesFeedback = result !== "NO_SHOW" && result !== "CANCELLED";
+  // Date the decision at the interview when it already happened (backdated), so
+  // the Selected/Rejected timeline entry lines up with the round, not "now".
+  const eventAt = couplingEventAt(round.scheduledAt);
 
   let outcome: CouplingOutcome = { coupled: null, blockedNoResume: false };
 
   await db.$transaction(async (tx) => {
     await tx.interviewRound.update({
       where: { id: d.roundId },
-      data: { result, feedback: feedbackText, updatedById: user.id },
+      data: {
+        result,
+        ...(touchesFeedback ? { feedback: feedbackText } : {}),
+        updatedById: user.id,
+      },
     });
     if (prevResult !== result)
       await logActivity(tx, {
@@ -187,7 +208,7 @@ export async function logInterviewResult(
         performedById: user.id,
         interviewRoundId: d.roundId,
       });
-    if (feedbackText)
+    if (touchesFeedback && feedbackText)
       await logActivity(tx, {
         entityType: "INTERVIEW_ROUND",
         action: "FEEDBACK_ADDED",
@@ -196,9 +217,16 @@ export async function logInterviewResult(
         interviewRoundId: d.roundId,
       });
 
-    outcome = await applyResultCoupling(tx, submission, result, {
+    // advanceBlock (inside the coupling) needs the round set AS WRITTEN, so load
+    // it after the update above.
+    const rounds = await tx.interviewRound.findMany({
+      where: { submissionId: submission.id },
+      select: { interviewType: true, result: true, roundOrder: true },
+    });
+    outcome = await applyResultCoupling(tx, submission, result, rounds, {
       actorId: user.id,
       reasonNote: d.reason ?? null,
+      eventAt,
     });
   });
 
@@ -348,13 +376,23 @@ export async function createInterviewRound(
         where: { id: d.submissionId },
         select: SUBMISSION_COUPLING_SELECT,
       });
-      if (full)
+      if (full) {
+        const rounds = await tx.interviewRound.findMany({
+          where: { submissionId: d.submissionId },
+          select: { interviewType: true, result: true, roundOrder: true },
+        });
         couplingOutcome = await applyResultCoupling(
           tx,
           full as SubmissionForStatus,
           created.result,
-          { actorId: user.id, reasonNote: null },
+          rounds,
+          {
+            actorId: user.id,
+            reasonNote: null,
+            eventAt: couplingEventAt(created.scheduledAt),
+          },
         );
+      }
     }
   });
 
@@ -488,13 +526,23 @@ export async function updateInterviewRound(
     // The full edit form has no dedicated reject/hold reason field — that reason
     // is captured on the focused Log-result dialog. A rejection made through this
     // path lands reason-less (same as the manual pipeline's optional reason).
-    if (resultChanged)
+    if (resultChanged) {
+      const rounds = await tx.interviewRound.findMany({
+        where: { submissionId: existing.submission.id },
+        select: { interviewType: true, result: true, roundOrder: true },
+      });
       outcome = await applyResultCoupling(
         tx,
         existing.submission as SubmissionForStatus,
         d.result,
-        { actorId: user.id, reasonNote: null },
+        rounds,
+        {
+          actorId: user.id,
+          reasonNote: null,
+          eventAt: couplingEventAt(d.scheduledAt ?? null),
+        },
       );
+    }
   });
 
   revalidatePath(`/submissions/${d.submissionId}`);

@@ -22,10 +22,11 @@ import {
 } from "@/server/placement-lifecycle";
 import { SUBMISSION_STATUS_LABEL } from "@/lib/labels";
 import {
-  statusForResult,
+  resolveCouplingTarget,
+  advanceBlock,
   resumeFlag,
   isForwardAdvance,
-  isTerminal,
+  type RoundLite,
 } from "@/lib/submission-flow";
 
 /** The submission shape every transition needs — the rate trio for the
@@ -173,28 +174,44 @@ export type CouplingOutcome = {
  * H2 coupling: given an interview result just logged on a round, drive the
  * submission's status when the result is decisive (SELECTED / REJECTED /
  * ON_HOLD). Keeps the submission put for the in-stage outcomes (awaiting
- * decision / need another round / didn't happen). Never reverts and never fires
- * on a terminal submission — logging a result can only move a live submission
- * forward to its decision, matching the manual pipeline. SELECTED is a forward
- * advance, so it honours the SB-3 résumé gate (soft: the result is still logged,
- * the advance is skipped with a notice). REJECTED / ON_HOLD are branch outcomes
- * and never gate.
+ * decision / need another round / didn't happen).
+ *
+ * Coupling is gated by the SAME rules the manual pipeline runs, so the two routes
+ * can't disagree (`resolveCouplingTarget` handles terminal / same-status /
+ * backward-SELECTED / invalid-branch). For a forward advance to SELECTED it also
+ * runs the SB-3 résumé gate (soft: the result is still recorded, the advance is
+ * skipped with a notice) and the SB-5 `advanceBlock` — so a passing client-family
+ * round must be on file. A vendor-screening round set "Selected" therefore stays
+ * put rather than jumping past the client interview.
+ *
+ * Coupling only ever drives the submission FORWARD to its decision; a genuine
+ * reversal (un-select, un-reject) is a manual status correction, so a
+ * decisive→non-decisive result edit is a deliberate no-op here (the two can
+ * briefly differ until the recruiter corrects the status).
+ *
+ * `rounds` is the submission's full round set AFTER the result write, so
+ * `advanceBlock` sees the just-logged outcome.
  */
 export async function applyResultCoupling(
   tx: Tx,
   submission: SubmissionForStatus,
   result: InterviewResult,
+  rounds: RoundLite[],
   opts: { actorId: string; reasonNote?: string | null; eventAt?: Date | null },
 ): Promise<CouplingOutcome> {
-  const target = statusForResult(result);
-  if (!target || isTerminal(submission.status) || target === submission.status)
-    return { coupled: null, blockedNoResume: false };
+  const target = resolveCouplingTarget(submission.status, result);
+  if (!target) return { coupled: null, blockedNoResume: false };
 
-  if (
-    isForwardAdvance(submission.status, target) &&
-    resumeFlag(submission) === "missing"
-  )
-    return { coupled: null, blockedNoResume: true };
+  // Only SELECTED is a forward advance (REJECTED / ON_HOLD are branch outcomes).
+  if (isForwardAdvance(submission.status, target)) {
+    if (resumeFlag(submission) === "missing")
+      return { coupled: null, blockedNoResume: true };
+    // SB-5: the same record/pass gate the manual advance enforces. The round
+    // result just written is the passing evidence when it's a client-family
+    // round; without one on file, stay put.
+    if (advanceBlock(submission.status, target, rounds))
+      return { coupled: null, blockedNoResume: false };
+  }
 
   await applySubmissionStatus(tx, submission, target, {
     actorId: opts.actorId,

@@ -164,6 +164,29 @@ export function statusForResult(
   return null;
 }
 
+/**
+ * H2: the submission status that logging `result` should drive a submission at
+ * `status` to — or `null` when the move is a no-op / not valid from here. Gates
+ * the coupling by the SAME rules the manual pipeline uses so the two routes
+ * agree: SELECTED only as a *forward* advance (never dragging an offer-stage
+ * submission back to Selected, and never bypassing the SB-6 backward-reason);
+ * REJECTED / ON_HOLD only where they're valid branch outcomes (e.g. ON_HOLD not
+ * past the decision stage). Terminal and same-status are no-ops. Pure +
+ * unit-tested; the caller still applies the SB-3 résumé gate on the forward move.
+ */
+export function resolveCouplingTarget(
+  status: SubmissionStatus,
+  result: InterviewResult,
+): SubmissionStatus | null {
+  const target = statusForResult(result);
+  if (!target || isTerminal(status) || target === status) return null;
+  if (target === "SELECTED")
+    return isForwardAdvance(status, target) ? target : null;
+  // REJECTED / ON_HOLD are branch outcomes — valid only where the pipeline
+  // offers them from here.
+  return branchActions(status).includes(target) ? target : null;
+}
+
 /** The latest round of a given type (highest roundOrder), or undefined. */
 function latestOfType(
   rounds: RoundLite[],

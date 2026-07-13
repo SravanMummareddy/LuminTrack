@@ -182,6 +182,8 @@ export function LogResultForm({
           label="Feedback"
           htmlFor="feedback"
           name="feedback"
+          // "Awaiting decision" saves an interim read but doesn't require one.
+          required={result !== "WAITING"}
           na={feedbackNa}
           onToggleNa={(v) => {
             setFeedbackNa(v);
