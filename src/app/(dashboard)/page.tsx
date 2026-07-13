@@ -9,12 +9,14 @@ import {
   CircleX,
   CirclePause,
 } from "lucide-react";
-import { getCurrentUser } from "@/lib/session";
-import { hasFullAccess, isManagerTier } from "@/lib/permissions";
+import { getCurrentUser, getScopedPrisma } from "@/lib/session";
+import {
+  hasFullAccess,
+  isManagerTier,
+  canViewSensitiveDocs,
+} from "@/lib/permissions";
 import {
   getDashboardData,
-  getMyWork,
-  getMyAssignedJobs,
   getMyRecentActivity,
   getMissingResumeSubmissions,
   getOnboardingStatus,
@@ -22,12 +24,20 @@ import {
 } from "@/server/queries/dashboard";
 import { getExpiringDocuments } from "@/server/queries/candidates";
 import { getRatesPendingPlacements } from "@/server/queries/placements";
+import { leadsAnyTeam, ledTeamMemberIds } from "@/server/team-lead";
+import {
+  getPendingTodos,
+  groupByUrgency,
+  type TodoItem,
+} from "@/server/pending";
+import {
+  PendingTodos,
+  MemberCountStrip,
+} from "@/components/dashboard/pending-todos";
 import {
   formatDate,
-  formatJobDisplayId,
   formatPlacementDisplayId,
   formatSubmissionDisplayId,
-  formatVendorRequirementDisplayId,
 } from "@/lib/format";
 import {
   listClients,
@@ -62,13 +72,24 @@ function Card({
   );
 }
 
-/** Switches the dashboard between the acting user's queue and the org view.
- *  Preserves all other filter params; only `?scope=` changes. */
+type Scope = "me" | "team" | "org";
+
+const SCOPE_LABEL: Record<Scope, string> = {
+  me: "My work",
+  team: "My team",
+  org: "Org-wide",
+};
+
+/** Switches the dashboard between the acting user's queue, their team (leads),
+ *  and the org view (managers). Preserves all other filter params; only
+ *  `?scope=` changes. `scopes` is the set available to this viewer. */
 function ScopeToggle({
   scope,
+  scopes,
   sp,
 }: {
-  scope: "me" | "org";
+  scope: Scope;
+  scopes: Scope[];
   sp: { [key: string]: string | string[] | undefined };
 }) {
   const params = new URLSearchParams();
@@ -77,7 +98,7 @@ function ScopeToggle({
     if (Array.isArray(v)) v.forEach((x) => x && params.append(k, x));
     else params.set(k, v);
   }
-  const hrefFor = (next: "me" | "org") => {
+  const hrefFor = (next: Scope) => {
     const copy = new URLSearchParams(params);
     copy.set("scope", next);
     return `/?${copy.toString()}`;
@@ -92,22 +113,17 @@ function ScopeToggle({
       aria-label="Dashboard scope"
       className="inline-flex rounded-md border border-slate-300 p-0.5"
     >
-      <Link
-        role="tab"
-        aria-selected={scope === "me"}
-        href={hrefFor("me")}
-        className={`${base} ${scope === "me" ? on : off}`}
-      >
-        My work
-      </Link>
-      <Link
-        role="tab"
-        aria-selected={scope === "org"}
-        href={hrefFor("org")}
-        className={`${base} ${scope === "org" ? on : off}`}
-      >
-        Org-wide
-      </Link>
+      {scopes.map((s) => (
+        <Link
+          key={s}
+          role="tab"
+          aria-selected={scope === s}
+          href={hrefFor(s)}
+          className={`${base} ${scope === s ? on : off}`}
+        >
+          {SCOPE_LABEL[s]}
+        </Link>
+      ))}
     </div>
   );
 }
@@ -118,23 +134,43 @@ export default async function DashboardPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const sp = await searchParams;
-  const { current, filters } = parseAnalyticsParams(sp);
+  const { filters } = parseAnalyticsParams(sp);
   const user = await getCurrentUser();
 
-  // Dashboard tiers: only Managers get the org-wide analytics view (and the
-  // toggle to reach it). The restricted tier (recruiter + team lead) is locked
-  // to their personal "My Work" task view — a `?scope=org` URL won't flip them.
-  // When scope === "me" we force `recruiterId` to the acting user (overrides any
-  // explicit recruiter filter from the bar).
+  // Dashboard tiers: Managers get the org-wide view; team leads get a "My team"
+  // rollup; plain recruiters see only their own queue. `?scope=` can only reach
+  // a scope the viewer is entitled to. `me`/`team` drive the unified pending-todo
+  // view; `org` still drives the legacy manager card (redesigned in PR-B).
   const isManager = isManagerTier(user);
-  const scope: "me" | "org" = isManager ? (current.scope ?? "org") : "me";
+  const db = await getScopedPrisma();
+  const isLead = !isManager && user ? await leadsAnyTeam(db, user.id) : false;
+  const availableScopes: Scope[] = isManager
+    ? ["me", "org"]
+    : isLead
+      ? ["me", "team"]
+      : ["me"];
+  const requested = Array.isArray(sp.scope) ? sp.scope[0] : sp.scope;
+  const scope: Scope =
+    requested && availableScopes.includes(requested as Scope)
+      ? (requested as Scope)
+      : isManager
+        ? "org"
+        : "me";
+
+  const memberIds =
+    scope === "team" && user ? await ledTeamMemberIds(db, user.id) : [];
+  const todoUserIds = scope === "team" ? memberIds : user ? [user.id] : [];
+  const isTaskScope = scope === "me" || scope === "team";
+
   const effectiveFilters =
-    scope === "me" && user ? { ...filters, recruiterId: [user.id] } : filters;
+    scope === "me" && user
+      ? { ...filters, recruiterId: [user.id] }
+      : scope === "team"
+        ? { ...filters, recruiterId: memberIds }
+        : filters;
 
   const [
     data,
-    myWork,
-    myAssignedJobs,
     recentActivity,
     expiringDocs,
     ratesPendingPlacements,
@@ -144,40 +180,59 @@ export default async function DashboardPage({
     sources,
     recruiters,
     onboarding,
+    todos,
+    teamMembers,
   ] = await Promise.all([
     getDashboardData(effectiveFilters),
-    scope === "me" && user
-      ? getMyWork(user.id)
-      : Promise.resolve({
-          staleSubmissions: [],
-          pendingRounds: [],
-          pendingRequirements: [],
-        }),
-    // "My jobs" mini-list — see below.
-    scope === "me" && user
-      ? getMyAssignedJobs(user.id)
-      : Promise.resolve([] as Awaited<ReturnType<typeof getMyAssignedJobs>>),
     // Recent activity feed replaces the org-wide recruiter table in "My work".
     scope === "me" && user
       ? getMyRecentActivity(user.id)
       : Promise.resolve([] as MyRecentActivity),
-    user
-      ? getExpiringDocuments(user, { scope, withinDays: 30 })
-      : Promise.resolve([]),
-    // Rates-pending only matters to admins (they own the close-out). On the
-    // "me" scope or for recruiters this list is hidden — keeps the card tight.
-    user && hasFullAccess(user) && scope === "org"
+    // Legacy org-scope lists (manager card only; PR-B replaces with the rollup).
+    scope === "org" && user
+      ? getExpiringDocuments(user, { scope: "org", withinDays: 30 })
+      : Promise.resolve([] as Awaited<ReturnType<typeof getExpiringDocuments>>),
+    scope === "org" && user && hasFullAccess(user)
       ? getRatesPendingPlacements({ limit: 5 })
-      : Promise.resolve([]),
-    user
-      ? getMissingResumeSubmissions({ scope, userId: user.id, limit: 8 })
-      : Promise.resolve([]),
+      : Promise.resolve([] as Awaited<ReturnType<typeof getRatesPendingPlacements>>),
+    scope === "org" && user
+      ? getMissingResumeSubmissions({ scope: "org", userId: user.id, limit: 8 })
+      : Promise.resolve([] as Awaited<ReturnType<typeof getMissingResumeSubmissions>>),
     listClients(),
     listVendors(),
     listSisterCompanies(),
     listActiveRecruiterOptions(),
     getOnboardingStatus(),
+    // Unified pending todos for the me/team task view.
+    isTaskScope && user
+      ? getPendingTodos(db, todoUserIds, { canSensitive: canViewSensitiveDocs(user) })
+      : Promise.resolve([] as TodoItem[]),
+    scope === "team"
+      ? db.user.findMany({
+          where: { id: { in: memberIds } },
+          select: { id: true, fullName: true },
+        })
+      : Promise.resolve([] as { id: string; fullName: string }[]),
   ]);
+
+  const grouped = groupByUrgency(todos);
+  // Team per-member counts (worst-first), for the "who's drowning" strip.
+  const memberCounts =
+    scope === "team" && user
+      ? (() => {
+          const byOwner = new Map<string, number>();
+          for (const t of todos)
+            byOwner.set(t.ownerId, (byOwner.get(t.ownerId) ?? 0) + 1);
+          return teamMembers
+            .map((m) => ({
+              id: m.id,
+              name: m.fullName,
+              count: byOwner.get(m.id) ?? 0,
+              isSelf: m.id === user.id,
+            }))
+            .sort((a, b) => b.count - a.count);
+        })()
+      : [];
 
   // KPI tiles link to their filtered list. In "My work" the link also scopes to
   // the acting user (status + scope only — the bar's other filters aren't carried).
@@ -198,16 +253,20 @@ export default async function DashboardPage({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">
-            {isManager ? "Dashboard" : "My Work"}
+            {isManager ? "Dashboard" : scope === "team" ? "My Team" : "My Work"}
           </h1>
           <p className="mt-1 text-sm text-slate-500">
             Welcome back{user ? `, ${user.fullName}` : ""}.{" "}
             {scope === "me"
               ? "Your work — only submissions and jobs you own."
-              : "Org-wide recruiting overview."}
+              : scope === "team"
+                ? "Your team's pending work, across everyone you lead."
+                : "Org-wide recruiting overview."}
           </p>
         </div>
-        {isManager && <ScopeToggle scope={scope} sp={sp} />}
+        {availableScopes.length > 1 && (
+          <ScopeToggle scope={scope} scopes={availableScopes} sp={sp} />
+        )}
       </div>
 
       {!onboarding.hasSubmissions && (
@@ -217,66 +276,23 @@ export default async function DashboardPage({
         />
       )}
 
-      {(scope === "me" &&
-        (myWork.staleSubmissions.length > 0 ||
-          myWork.pendingRounds.length > 0 ||
-          myWork.pendingRequirements.length > 0 ||
-          myAssignedJobs.length > 0)) ||
-      expiringDocs.length > 0 ||
-      ratesPendingPlacements.length > 0 ||
-      missingResumeSubs.length > 0 ? (
+      {isTaskScope ? (
+        <Card title="Needs attention">
+          {scope === "team" && memberCounts.length > 0 && (
+            <div className="mb-5">
+              <p className="mb-2 text-xs text-slate-500">
+                Open items by team member — who needs a hand:
+              </p>
+              <MemberCountStrip members={memberCounts} />
+            </div>
+          )}
+          <PendingTodos grouped={grouped} showOwner={scope === "team"} />
+        </Card>
+      ) : expiringDocs.length > 0 ||
+        ratesPendingPlacements.length > 0 ||
+        missingResumeSubs.length > 0 ? (
         <Card title="Needs attention">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {scope === "me" && (
-              <>
-                <MyWorkList
-                  heading={`My active jobs (${myAssignedJobs.length})`}
-                  empty="No active jobs assigned to you."
-                  footer={
-                    user
-                      ? {
-                          href: `/jobs?recruiterId=${user.id}&status=OPEN`,
-                          label: "View all my jobs →",
-                        }
-                      : undefined
-                  }
-                  items={myAssignedJobs.map((a) => ({
-                    href: `/jobs/${a.job.id}`,
-                    primary: `${formatJobDisplayId(a.job)} · ${a.job.title}`,
-                    secondary: `${a.job.client.name} · ${a.job._count.submissions} sub${a.job._count.submissions === 1 ? "" : "s"} · assigned ${a.ageDays}d ago`,
-                  }))}
-                />
-                <MyWorkList
-                  heading={`Submissions waiting >7 days (${myWork.staleSubmissions.length})`}
-                  empty="No stale submissions — nice."
-                  items={myWork.staleSubmissions.map((s) => ({
-                    href: `/submissions/${s.id}`,
-                    primary: `${s.candidate.fullName} → ${s.job.title}`,
-                    secondary: `${formatSubmissionDisplayId(s)} · submitted ${formatDate(s.submittedAt)}`,
-                  }))}
-                />
-                <MyWorkList
-                  heading={`Interview rounds awaiting result (${myWork.pendingRounds.length})`}
-                  empty="No rounds waiting on you."
-                  items={myWork.pendingRounds.map((r) => ({
-                    href: `/submissions/${r.submission.id}`,
-                    primary: `${r.submission.candidate.fullName} · R${r.roundOrder}`,
-                    secondary: `${r.submission.job.title} · ${r.scheduledAt ? formatDate(r.scheduledAt) : "no date"}`,
-                  }))}
-                />
-                <MyWorkList
-                  heading={`Requirements to move (${myWork.pendingRequirements.length})`}
-                  empty="No vendor requirements waiting on you."
-                  items={myWork.pendingRequirements.map((r) => ({
-                    href: `/vendor-portal/${r.id}`,
-                    primary: `${formatVendorRequirementDisplayId(r)} · ${r.job.title}`,
-                    secondary: r.candidate
-                      ? `${r.candidate.fullName} — ready to move to a submission`
-                      : "No candidate yet",
-                  }))}
-                />
-              </>
-            )}
             <MyWorkList
               heading={`Documents expiring (30 days) (${expiringDocs.length})`}
               empty="No documents expiring in the next 30 days."
@@ -302,7 +318,7 @@ export default async function DashboardPage({
                 items={missingResumeSubs.map((s) => ({
                   href: `/submissions/${s.id}`,
                   primary: `${s.candidate.fullName} → ${s.job.title}`,
-                  secondary: `${formatSubmissionDisplayId(s)} · submitted ${formatDate(s.submittedAt)}${scope === "org" ? ` · ${s.submittedBy.fullName}` : ""}`,
+                  secondary: `${formatSubmissionDisplayId(s)} · submitted ${formatDate(s.submittedAt)} · ${s.submittedBy.fullName}`,
                 }))}
               />
             )}

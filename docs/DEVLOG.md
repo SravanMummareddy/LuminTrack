@@ -10,6 +10,36 @@ short instead of long.
 
 ---
 
+## 2026-07-13 · Wave 7.2a — one definition of "pending", and a team-lead scope
+
+**Situation.** "Pending todos" was computed three different ways that disagreed: the dashboard "Needs
+attention" card (7 buckets), the Wave 7 digest cron (4, a divergent subset), and the interview-schedule
+"awaiting" view (a third). They used different terminal-status sets and different staleness thresholds,
+so "stale" literally meant different things in the email vs the app. Two high-value signals were
+surfaced nowhere (past-dated interviews still WAITING; slipping offers/joins). And team leads were
+hard-locked to their own "me" scope — no view of their team's work.
+
+**Diagnosis.** Three separate implementations meant every change had to be made (and kept in sync) in
+three places — the root cause of the divergence. The fix isn't "add a fourth"; it's **one canonical
+source** both surfaces read from.
+
+**Fix.** New `src/server/pending.ts` — `getPendingTodos(db, userIds, {canSensitive})` keyed on a SET of
+owner ids (`[me]` for a recruiter, the member ids for a lead, `[uid]` per-recipient in the cron),
+returning typed `TodoItem`s each carrying an `urgency` tier (overdue/soon/backlog) and its owner. The
+dashboard "Needs attention" card and the digest email both consume it, so they finally agree; the two
+gap-fill buckets (interview-to-log, join-slipped) are now first-class. Team leads get a third `team`
+scope resolved data-driven via `leadsAnyTeam`/`ledTeamMemberIds` (there is no team-lead role/permission
+— a lead is just a user set as a Team's `leadId`, and a user can lead multiple teams), showing the
+aggregated team todos owner-tagged + a per-member count strip; the lead's digest gains a "Your team"
+section. **No schema change** — every signal derives from existing fields.
+
+**Lesson.** When the same concept is computed in N places, the bug isn't in any one of them — it's the
+duplication. Consolidate to one query layer before adding features on top, or the next feature ships to
+one surface and silently skips the other two. One deliberate simplification carried a `ponytail:` note:
+staleness = `updatedAt` age (bumps on any edit, not strictly a status change) — good enough; precise
+time-in-status via `deriveStageDates` is the upgrade path if it reads too loose. (Manager/admin org
+rollup is the follow-up PR-B.)
+
 ## 2026-07-13 · Wave 7.1 — the deferred "NT-1" turned out to be mostly built already
 
 **Situation.** In Wave 7 I deferred "email the recruiter when a VPR is assigned" (NT-1), flagging it as

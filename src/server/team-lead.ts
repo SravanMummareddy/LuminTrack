@@ -1,4 +1,31 @@
 import { getScopedPrisma } from "@/lib/session";
+import type { ScopedPrisma } from "@/server/db";
+
+/** Whether this user leads at least one team (data-driven — there is no
+ *  team-lead role/permission; a lead is just a user set as a Team's `leadId`). */
+export async function leadsAnyTeam(
+  db: ScopedPrisma,
+  userId: string,
+): Promise<boolean> {
+  return (await db.team.count({ where: { leadId: userId } })) > 0;
+}
+
+/** The user-ids whose pending work rolls up under this lead: every member of
+ *  every team they lead, plus the lead themselves (personal + team). Empty when
+ *  they lead no team. A user can lead multiple teams (`teamsLed` is a list), so
+ *  the ids are unioned. */
+export async function ledTeamMemberIds(
+  db: ScopedPrisma,
+  userId: string,
+): Promise<string[]> {
+  const teams = await db.team.findMany({
+    where: { leadId: userId },
+    select: { members: { select: { id: true } } },
+  });
+  const ids = new Set<string>([userId]);
+  for (const t of teams) for (const m of t.members) ids.add(m.id);
+  return [...ids];
+}
 
 /**
  * Derives the team-lead name for a recruiter: the designated lead of the
