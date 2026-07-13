@@ -10,6 +10,53 @@ short instead of long.
 
 ---
 
+## 2026-07-13 · Core-flow pressure test — forms had drifted from their own data
+
+**Situation.** A four-way audit of the flows the owner uses most (Jobs, VPR, Candidate, Bench —
+adding and displaying) surfaced a cluster of paper-cuts that all degraded the "add a record"
+experience. Two waves shipped: the pressure-test batch (`7996d98`) and a smaller-cuts pass
+(`0f673cd`). Highlights: the bench roster's amber "Needs details" flag could not be cleared;
+adding a candidate was a gauntlet of surprise-required fields; VPR search returned nothing for a
+name you could see in the list; rate-chain violations were silent on the Job and VPR forms.
+
+**Diagnosis.** Almost every finding was the *same* defect wearing different clothes — a piece of
+UI drifting away from the data it claims to reflect:
+- **Bench "Needs details" never cleared.** The flag reads visa/location from the **candidate**
+  (source of truth), but the bench form's fields — labeled *"from the candidate"* — wrote only to
+  the **bench row**. Only `technology` propagated back. So you'd fill visa + location, save, and
+  the flag stayed lit forever. The label promised a write that the action didn't perform.
+- **VPR search matched a dead column.** The search OR-clause looked at
+  `VendorRequirement.candidate` — a legacy field the current 1-VPR-to-many-submissions flow never
+  populates — while the "Candidates" column you actually see is sourced from `submissions[]`.
+  Search and display read different fields, so typing a visible name found nothing (same root
+  cause behind three always-"—" columns).
+- **Asterisks/labels lying about the schema.** Positions showed a required `*` over an optional
+  field; LinkedIn/Last-contacted were hard-required for no real reason; `personalNumber` was
+  declared in type/schema/action but rendered nowhere (silently defaulted to the phone).
+- **Warnings that existed but weren't wired.** `RateChainWarning` shipped months ago and was live
+  on the submission form; the Job and VPR forms just never rendered it, so a broken
+  Client ≥ Bill ≥ Pay chain only surfaced at convert time.
+
+**Fix.** Point each surface back at its real source. Bench update now propagates
+technology/work-auth/location to the candidate (non-blank only, never blank-wiping) so the flag
+clears; VPR search matches `submissions.some({ candidate })` and the dead columns/sort key were
+dropped; the required-field diet made LinkedIn/Last-contacted optional (Reference stays required
+except for legacy source-only rows) and dropped the false Positions asterisk; the phantom
+`personalNumber` was deleted; and the existing `RateChainWarning` was dropped into both forms.
+Plus display honesty: Job Discipline now shows on detail, bench relocation renders
+"Only to: <cities>" (checked cities-first), VPR "Cancel" → "Discard" (distinct from Close), and a
+Pending rate reads "Pending" not "—". tsc clean, 380 unit tests green.
+
+**Lesson.** When a label says *"from the candidate"* or a search box implies *"the names you see
+here"*, that's a **contract**, and the write/read path has to honor it. Most of these bugs were a
+one-way write (form → bench row) under a two-way promise, or a read (search) aimed at a column the
+write path abandoned when the data model changed (1:1 → 1:many). The cheap defense is to source
+the flag, the search, and the label from the *one* field that's the source of truth — and when a
+model changes shape, grep for every reader of the field you just orphaned. A lying asterisk or a
+phantom field is the same disease in miniature: the UI asserting something the data no longer backs.
+
+---
+
 ## 2026-07-13 · Model B pipeline — a type-family mismatch dead-ended "Selected"
 
 **Situation.** After the rounds-first (Model B) redesign, an owner review + adversarial
