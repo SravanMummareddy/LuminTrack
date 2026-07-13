@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { ConfirmSubmit } from "@/components/ui/confirm-dialog";
@@ -19,6 +18,66 @@ import {
   interviewModeLabel,
 } from "@/lib/labels";
 import { formatDateTime } from "@/lib/format";
+
+/** Inline support-provider contact popover — recruiters need the supporter's
+ *  email/phone during the interview but can't open the manager-only Settings page
+ *  the old "contact details" link pointed at. Renders the details in place. */
+function SupportContact({
+  provider,
+}: {
+  provider: { name: string; email: string | null; phone: string | null };
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+  return (
+    <span ref={ref} className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="font-medium text-amber-900 underline"
+      >
+        contact details
+      </button>
+      {open && (
+        <span className="absolute left-0 z-20 mt-1 block w-60 rounded-md border border-slate-200 bg-white p-3 shadow-lg">
+          <span className="block text-sm font-medium text-slate-900">
+            {provider.name}
+          </span>
+          <span className="mt-2 block space-y-1 text-xs">
+            <span className="flex justify-between gap-3">
+              <span className="text-slate-500">Email</span>
+              {provider.email ? (
+                <a href={`mailto:${provider.email}`} className="truncate text-indigo-600 hover:underline">
+                  {provider.email}
+                </a>
+              ) : (
+                <span className="text-slate-400">—</span>
+              )}
+            </span>
+            <span className="flex justify-between gap-3">
+              <span className="text-slate-500">Phone</span>
+              {provider.phone ? (
+                <a href={`tel:${provider.phone}`} className="text-indigo-600 hover:underline">
+                  {provider.phone}
+                </a>
+              ) : (
+                <span className="text-slate-400">—</span>
+              )}
+            </span>
+          </span>
+        </span>
+      )}
+    </span>
+  );
+}
 
 function RoundItem({
   label,
@@ -192,12 +251,7 @@ export function InterviewRoundsManager({
                     {r.supportProvider && (
                       <>
                         {" — "}
-                        <Link
-                          href="/settings?tab=support"
-                          className="font-medium text-amber-900 underline"
-                        >
-                          contact details
-                        </Link>
+                        <SupportContact provider={r.supportProvider} />
                       </>
                     )}
                   </dd>

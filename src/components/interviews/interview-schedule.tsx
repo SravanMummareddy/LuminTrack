@@ -44,81 +44,98 @@ const BUCKET_ACCENT: Record<
   },
 };
 
-function ScheduleRow({
-  row,
+/** Group a bucket's rounds by submission, preserving the bucket's sort order
+ *  (first appearance wins) so R1/R2 of one candidate render under a single row. */
+function groupBySubmission(items: InterviewListRow[]): InterviewListRow[][] {
+  const groups: InterviewListRow[][] = [];
+  const index = new Map<string, InterviewListRow[]>();
+  for (const r of items) {
+    let g = index.get(r.submission.id);
+    if (!g) {
+      g = [];
+      index.set(r.submission.id, g);
+      groups.push(g);
+    }
+    g.push(r);
+  }
+  return groups;
+}
+
+/** One candidate/submission block: the candidate + client header once, then each
+ *  of that submission's rounds in this bucket nested beneath. */
+function ScheduleGroup({
+  group,
   bucket,
   isManager,
 }: {
-  row: InterviewListRow;
+  group: InterviewListRow[];
   bucket: ScheduleBucketKey;
   isManager: boolean;
 }) {
-  const c = row.submission.candidate;
+  const first = group[0];
+  const c = first.submission.candidate;
   const done = bucket === "completed";
   const awaiting = bucket === "awaiting";
   return (
     <div
-      className={`flex items-center gap-3 px-3.5 py-2.5 ${BUCKET_ACCENT[bucket].rowBorder} ${
-        done ? "opacity-90" : ""
-      }`}
+      className={`px-3.5 py-2.5 ${BUCKET_ACCENT[bucket].rowBorder} ${done ? "opacity-90" : ""}`}
     >
-      <div className="w-[74px] shrink-0 text-xs text-slate-500">
-        <div className={done ? "" : "font-medium text-slate-700"}>
-          {row.scheduledAt ? formatDate(row.scheduledAt) : "—"}
-        </div>
-        <div suppressHydrationWarning>
-          {row.scheduledAt ? formatTime(row.scheduledAt) : ""}
-        </div>
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          {done && (
-            <CheckCircle2
-              className="h-3.5 w-3.5 shrink-0 text-emerald-500"
-              aria-hidden
-            />
-          )}
-          <Link
-            href={`/candidates/${c.id}`}
-            className={`truncate text-sm font-medium hover:underline ${
-              done ? "text-slate-600" : "text-indigo-600"
-            }`}
-          >
-            {c.fullName}
-            {deletedSuffix(c)}
-          </Link>
-        </div>
-        <p className="mt-0.5 truncate text-xs text-slate-500">
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+        {done && (
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" aria-hidden />
+        )}
+        <Link
+          href={`/candidates/${c.id}`}
+          className={`text-sm font-medium hover:underline ${done ? "text-slate-600" : "text-indigo-600"}`}
+        >
+          {c.fullName}
+          {deletedSuffix(c)}
+        </Link>
+        <span className="text-xs text-slate-500">
+          ·{" "}
           <OrgEntityLink
             kind="client"
-            id={row.submission.job.client.id}
-            name={row.submission.job.client.name}
+            id={first.submission.job.client.id}
+            name={first.submission.job.client.name}
             isManager={isManager}
-          />{" "}
-          · {INTERVIEW_TYPE_LABEL[row.interviewType]} · R{row.roundOrder}
-          <Link
-            href={`/submissions/${row.submission.id}`}
-            className="ml-1.5 font-mono text-[11px] text-slate-400 hover:underline"
-          >
-            {formatSubmissionDisplayId(row.submission)}
-          </Link>
-        </p>
+          />
+        </span>
+        <Link
+          href={`/submissions/${first.submission.id}`}
+          className="font-mono text-[11px] text-slate-400 hover:underline"
+        >
+          {formatSubmissionDisplayId(first.submission)}
+        </Link>
       </div>
 
-      <div className="shrink-0 text-right">
-        <Badge tone={INTERVIEW_RESULT_TONE[row.result]}>
-          {INTERVIEW_RESULT_LABEL[row.result]}
-        </Badge>
-        {awaiting && (
-          <Link
-            href={`/submissions/${row.submission.id}`}
-            className="mt-1 flex items-center justify-end gap-1 text-[11px] font-medium text-amber-700 hover:underline"
-          >
-            <TriangleAlert className="h-3 w-3" aria-hidden />
-            Log result
-          </Link>
-        )}
+      <div className="mt-1.5 space-y-1 border-l border-slate-100 pl-3">
+        {group.map((row) => (
+          <div key={row.id} className="flex items-center gap-3">
+            <div className="w-[74px] shrink-0 text-xs text-slate-500">
+              <span className={done ? "" : "font-medium text-slate-700"}>
+                {row.scheduledAt ? formatDate(row.scheduledAt) : "—"}
+              </span>{" "}
+              <span suppressHydrationWarning>
+                {row.scheduledAt ? formatTime(row.scheduledAt) : ""}
+              </span>
+            </div>
+            <span className="min-w-0 flex-1 truncate text-xs text-slate-600">
+              {INTERVIEW_TYPE_LABEL[row.interviewType]} · R{row.roundOrder}
+            </span>
+            <Badge tone={INTERVIEW_RESULT_TONE[row.result]}>
+              {INTERVIEW_RESULT_LABEL[row.result]}
+            </Badge>
+            {awaiting && (
+              <Link
+                href={`/submissions/${row.submission.id}`}
+                className="flex items-center gap-1 text-[11px] font-medium text-amber-700 hover:underline"
+              >
+                <TriangleAlert className="h-3 w-3" aria-hidden />
+                Log result
+              </Link>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -166,10 +183,10 @@ export function InterviewSchedule({
             </span>
           </div>
           <div className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 bg-white">
-            {b.items.map((row) => (
-              <ScheduleRow
-                key={row.id}
-                row={row}
+            {groupBySubmission(b.items).map((group) => (
+              <ScheduleGroup
+                key={group[0].submission.id}
+                group={group}
                 bucket={b.key}
                 isManager={isManager}
               />
