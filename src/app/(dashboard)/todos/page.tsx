@@ -79,11 +79,11 @@ export default async function TodosPage({
     { key: "docs", label: "Documents", count: docs.length },
   ];
   const tabHref = (key: string) => {
-    const qs = new URLSearchParams();
-    if (scope !== "me") qs.set("scope", scope);
+    // Keep the current scope on every tab — otherwise a manager viewing their own
+    // (?scope=me) list would drop back to the org default on the next click.
+    const qs = new URLSearchParams({ scope });
     if (key !== "all") qs.set("filter", key);
-    const s = qs.toString();
-    return s ? `/todos?${s}` : "/todos";
+    return `/todos?${qs.toString()}`;
   };
 
   const scopeLabel =

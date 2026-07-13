@@ -50,11 +50,11 @@ function overdueDays(at: number, now: number): number {
 }
 
 function todosHref(scope: Scope, filter: string): string {
-  const qs = new URLSearchParams();
-  if (scope !== "me") qs.set("scope", scope);
+  // Always carry the scope — a manager's "My work" card must land on their own
+  // /todos, not the org default the page falls back to when scope is absent.
+  const qs = new URLSearchParams({ scope });
   if (filter !== "all") qs.set("filter", filter);
-  const s = qs.toString();
-  return s ? `/todos?${s}` : "/todos";
+  return `/todos?${qs.toString()}`;
 }
 
 /**
