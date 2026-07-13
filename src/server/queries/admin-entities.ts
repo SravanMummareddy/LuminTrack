@@ -7,6 +7,7 @@ import {
   formatGlossaryDisplayId,
   formatDate,
   formatSubmissionDisplayId,
+  formatJobDisplayId,
 } from "@/lib/format";
 
 // WS4 — detail pages for the admin entities (Users / Teams / Roles /
@@ -102,6 +103,11 @@ async function getUserDetail(id: string): Promise<AdminEntityDetail | null> {
           job: { select: { title: true } },
         },
       },
+      jobsCreated: {
+        take: RECENT,
+        orderBy: { createdAt: "desc" },
+        select: { id: true, seq: true, title: true, status: true },
+      },
     },
   });
   if (!u) return null;
@@ -150,7 +156,11 @@ async function getUserDetail(id: string): Promise<AdminEntityDetail | null> {
         title: "Jobs created",
         count: u._count.jobsCreated,
         emptyText: "No jobs created.",
-        items: [],
+        items: u.jobsCreated.map((j) => ({
+          left: j.title,
+          href: `/jobs/${j.id}`,
+          right: formatJobDisplayId(j),
+        })),
       },
     ],
   };

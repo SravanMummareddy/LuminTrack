@@ -59,7 +59,9 @@ describe("permissions — gates default to deny", () => {
         expect(gate(TEAM_LEAD)).toBe(true);
       });
       it("denies recruiters", () => {
-        expect(gate(RECRUITER)).toBe(false);
+        // canManageRequirements now ALLOWS recruiters (owner decision 2026-07-13
+        // — recruiters create/edit VPRs); every other gate here still denies them.
+        expect(gate(RECRUITER)).toBe(name === "canManageRequirements");
       });
       it("denies null / undefined / role-less viewers", () => {
         expect(gate(null)).toBe(false);

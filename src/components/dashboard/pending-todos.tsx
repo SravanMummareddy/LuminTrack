@@ -69,11 +69,16 @@ export function PendingTodos({
   showOwner = false,
   scope = "me",
   now,
+  preview = false,
 }: {
   grouped: Record<TodoUrgency, TodoItem[]>;
   showOwner?: boolean;
   scope?: Scope;
   now: number;
+  /** This card shows a curated top-N slice (the org rollup), not the full set —
+   *  so the per-tier "View all" links to more than it displays and must not
+   *  advertise a specific count. */
+  preview?: boolean;
 }) {
   const [filter, setFilter] = useState<"all" | TodoUrgency>("all");
 
@@ -84,6 +89,10 @@ export function PendingTodos({
     soon: grouped.soon.filter((it) => !isDoc(it)),
     backlog: grouped.backlog.filter((it) => !isDoc(it)),
   };
+  // Documents are their own group (like the /todos page), not folded into the
+  // tier pills — the pill counts exclude them, so showing them under a specific
+  // tier would disagree with its count. They render only in the combined "All"
+  // view; the full /todos page has a dedicated Documents tab for triage.
   const docs = [...grouped.overdue, ...grouped.soon, ...grouped.backlog].filter(
     isDoc,
   );
@@ -158,19 +167,19 @@ export function PendingTodos({
                 />
               ))}
             </ul>
-            {items.length > cap && (
+            {(preview || items.length > cap) && (
               <Link
                 href={todosHref(scope, t.key)}
                 className="mt-1.5 inline-block text-xs font-medium text-indigo-600 hover:underline"
               >
-                View all {items.length} →
+                {preview ? "View all →" : `View all ${items.length} →`}
               </Link>
             )}
           </div>
         );
       })}
 
-      {docs.length > 0 && (filter === "all" || filter === "overdue") && (
+      {docs.length > 0 && filter === "all" && (
         <DocsSection docs={docs} scope={scope} showOwner={showOwner} />
       )}
     </div>

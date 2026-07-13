@@ -14,9 +14,9 @@ describe("permission catalog + templates", () => {
     expect(new Set(SYSTEM_ROLE_GRANTS.MANAGER)).toEqual(new Set(PERMISSION_KEYS));
   });
 
-  it("Recruiter grants exactly the two any-signed-in capabilities", () => {
+  it("Recruiter grants the any-signed-in capabilities + VPR management", () => {
     expect(SYSTEM_ROLE_GRANTS.RECRUITER.sort()).toEqual(
-      ["bench:view_credentials", "orgentity:quickadd"].sort(),
+      ["bench:view_credentials", "orgentity:quickadd", "requirement:manage"].sort(),
     );
   });
 

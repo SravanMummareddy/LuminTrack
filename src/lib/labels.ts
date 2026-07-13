@@ -198,21 +198,6 @@ export const OTHER_SOURCE = "__OTHER__";
  *  action resolves it to a created-or-reused entity by name (admin-only). */
 export const NEW_ORG_ENTITY = "__NEW_ORG__";
 
-/** Popular job boards seeded into the Job form's board picker datalist. Learned
- *  boards (new ones typed by recruiters) are a follow-up via the LookupOption
- *  learned-dropdown; for now this seed list covers the common cases. */
-export const JOB_BOARD_SEED = [
-  "LinkedIn",
-  "Indeed",
-  "Dice",
-  "Monster",
-  "CareerBuilder",
-  "ZipRecruiter",
-  "Glassdoor",
-  "Naukri",
-  "Company careers page",
-] as const;
-
 export const JOB_SOURCE_TYPE_LABEL: Record<string, string> = {
   JOB_BOARD: "Job board",
   REFERRAL: "Referral",

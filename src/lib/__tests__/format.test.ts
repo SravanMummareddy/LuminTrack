@@ -2,6 +2,10 @@ import { describe, it, expect } from "vitest";
 import {
   deletedSuffix,
   formatDate,
+  formatTime,
+  formatDateTime,
+  formatTimeInZone,
+  formatDateTimeInZone,
   jobDuration,
   daysToFirstSubmission,
   avgDaysToFirstSubmission,
@@ -53,6 +57,33 @@ describe("admin-entity display IDs (WS4)", () => {
     expect(formatRoleDisplayId({ seq: 12 })).toBe("ROLE-012");
     expect(formatOrganizationDisplayId({ seq: 1 })).toBe("ORG-001");
     expect(formatGlossaryDisplayId({ seq: 99 })).toBe("GLO-099");
+  });
+});
+
+describe("zone-aware interview time (formatTimeInZone / formatDateTimeInZone)", () => {
+  // A 20:30Z instant is 3:30 PM in Chicago (CDT, UTC-5 in July) — the prod bug
+  // rendered it in the runtime (UTC) zone as "8:30 PM".
+  it("renders the instant in the captured IANA zone, not the runtime zone", () => {
+    expect(formatTimeInZone("2026-07-15T20:30:00Z", "America/Chicago")).toBe("3:30 PM");
+    const dt = formatDateTimeInZone("2026-07-15T20:30:00Z", "America/Chicago");
+    expect(dt).toContain("3:30 PM");
+    expect(dt).toContain("Jul 15, 2026");
+  });
+
+  it("honors a very different zone", () => {
+    // Kolkata is UTC+5:30 → 20:30Z is 2:00 AM the next day.
+    expect(formatTimeInZone("2026-07-15T20:30:00Z", "Asia/Kolkata")).toBe("2:00 AM");
+  });
+
+  it("falls back to the runtime-zone formatter when no zone / an invalid zone is given", () => {
+    const d = "2026-07-15T20:30:00Z";
+    expect(formatTimeInZone(d, null)).toBe(formatTime(d));
+    expect(formatTimeInZone(d, "Not/AZone")).toBe(formatTime(d));
+    expect(formatDateTimeInZone(d, undefined)).toBe(formatDateTime(d));
+  });
+
+  it("guards an invalid date", () => {
+    expect(formatTimeInZone("nonsense", "America/Chicago")).toBe("—");
   });
 });
 

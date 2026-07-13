@@ -1528,16 +1528,22 @@ async function main() {
               : pick(["Final Round", "HR Round"]);
 
         const feedback = feedbackFor(result);
-        // The last round of an in-progress submission may be scheduled ahead.
+        // A logged (decisive) round happened in the past; a WAITING round is
+        // either still ahead (upcoming) OR already past with no outcome yet —
+        // the latter drives the "Awaiting outcome" bucket + the interview_to_log
+        // overdue todo, so seed a healthy share of them past-dated.
+        const pastDate = new Date(
+          Math.min(
+            roundCreatedAt.getTime() + randInt(1, 4) * DAY,
+            NOW.getTime() - HOUR,
+          ),
+        );
         const scheduledAt =
           result === "WAITING"
-            ? new Date(roundCreatedAt.getTime() + randInt(2, 8) * DAY)
-            : new Date(
-                Math.min(
-                  roundCreatedAt.getTime() + randInt(1, 4) * DAY,
-                  NOW.getTime() - HOUR,
-                ),
-              );
+            ? chance(0.45)
+              ? pastDate
+              : new Date(roundCreatedAt.getTime() + randInt(2, 8) * DAY)
+            : pastDate;
 
         const round = await prisma.interviewRound.create({
           data: {

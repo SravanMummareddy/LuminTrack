@@ -368,9 +368,10 @@ export function BenchConsultantForm({
           <Field label="Company" htmlFor="company" required error={errors.company}>
             <Input id="company" name="company" value={fields.company} onChange={set("company")} />
           </Field>
-          <Field label="Reference" htmlFor="reference" required error={errors.reference}>
-            <Input id="reference" name="reference" value={fields.reference} onChange={set("reference")} />
-          </Field>
+          {/* Reference is the candidate's, not the bench's — shown read-only in the
+              "From the candidate" snapshot above and submitted as-is, so the two
+              can't drift (the old editable copy is what caused the mismatch). */}
+          <input type="hidden" name="reference" value={panel?.reference ?? ""} />
         </div>
         <Field label="Skills" htmlFor="skills" required hint="Separate skills with commas." error={errors.skills}>
           <Input id="skills" name="skills" value={fields.skills} onChange={set("skills")} placeholder="Java, Spring Boot, AWS" />

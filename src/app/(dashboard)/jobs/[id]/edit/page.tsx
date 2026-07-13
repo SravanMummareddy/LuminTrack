@@ -11,7 +11,7 @@ import {
   listSisterCompanies,
   listReferrers,
 } from "@/server/queries/org";
-import { JOB_BOARD_SEED } from "@/lib/labels";
+import { listLookupValues } from "@/server/queries/lookups";
 
 export default async function EditJobPage({
   params,
@@ -19,14 +19,16 @@ export default async function EditJobPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [job, clients, vendors, sources, referrers, user] = await Promise.all([
-    getJobForEdit(id),
-    listClients(),
-    listVendors(),
-    listSisterCompanies(),
-    listReferrers(),
-    getCurrentUser(),
-  ]);
+  const [job, clients, vendors, sources, referrers, jobBoards, user] =
+    await Promise.all([
+      getJobForEdit(id),
+      listClients(),
+      listVendors(),
+      listSisterCompanies(),
+      listReferrers(),
+      listLookupValues("JOB_BOARD"),
+      getCurrentUser(),
+    ]);
   if (!job) notFound();
   const canRates = canEditJobRatesAndAssignment(user);
 
@@ -72,7 +74,7 @@ export default async function EditJobPage({
         vendors={vendors}
         sources={sources}
         referrers={referrers}
-        jobBoards={[...JOB_BOARD_SEED]}
+        jobBoards={jobBoards}
         values={values}
         todayIso={new Date().toISOString().slice(0, 10)}
         submitLabel="Save changes"

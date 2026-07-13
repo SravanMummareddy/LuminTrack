@@ -13,7 +13,7 @@ import {
 } from "@/lib/labels";
 import {
   formatDate,
-  formatTime,
+  formatTimeInZone,
   formatSubmissionDisplayId,
   deletedSuffix,
 } from "@/lib/format";
@@ -70,7 +70,7 @@ const COLUMNS: Column[] = [
     render: (r) => (
       <Td label="Time" secondary className="whitespace-nowrap">
         <span suppressHydrationWarning>
-          {r.scheduledAt ? formatTime(r.scheduledAt) : "—"}
+          {r.scheduledAt ? formatTimeInZone(r.scheduledAt, r.scheduledTimezone) : "—"}
         </span>
       </Td>
     ),

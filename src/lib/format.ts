@@ -27,6 +27,50 @@ export function formatTime(date: Date | string): string {
   return format(new Date(date), "h:mm a");
 }
 
+// Zone-aware time rendering for stored instants that carry a captured IANA zone
+// (interview rounds). `formatDateTime`/`formatTime` above render in the RUNTIME
+// zone — UTC on Vercel — so a 2:30 PM Central pick (stored as 20:30Z) would show
+// "8:30 PM". These render the instant back in the zone it was booked in, so the
+// clock matches the "(America/Chicago)" label. Falls back to the runtime-zone
+// formatter when no zone is on file, or if the stored zone string is invalid.
+function zoned(
+  date: Date | string,
+  tz: string | null | undefined,
+  opts: Intl.DateTimeFormatOptions,
+  fallback: (d: Date | string) => string,
+): string {
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return "—";
+  if (!tz) return fallback(d);
+  try {
+    return new Intl.DateTimeFormat("en-US", { ...opts, timeZone: tz }).format(d);
+  } catch {
+    // RangeError on an unrecognized IANA zone — degrade to the runtime zone.
+    return fallback(d);
+  }
+}
+
+/** Interview date + time rendered in the round's captured zone (see `zoned`). */
+export function formatDateTimeInZone(
+  date: Date | string,
+  tz: string | null | undefined,
+): string {
+  return zoned(
+    date,
+    tz,
+    { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" },
+    formatDateTime,
+  );
+}
+
+/** Interview time-of-day rendered in the round's captured zone (see `zoned`). */
+export function formatTimeInZone(
+  date: Date | string,
+  tz: string | null | undefined,
+): string {
+  return zoned(date, tz, { hour: "numeric", minute: "2-digit" }, formatTime);
+}
+
 /**
  * Human-readable duration derived from a job's projected start + end (replaces
  * the retired free-text `durationLabel`). No start → "—"; start but no end →

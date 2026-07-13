@@ -62,7 +62,9 @@ export const benchConsultantSchema = z
     realTimeExpYears: optionalExperience,
     technology: optionalText,
     skills: z.array(z.string().trim().min(1)).min(1, "Add at least one skill.").max(60),
-    reference: z.string().trim().min(1, "Reference is required."),
+    // Derived from the linked candidate (referrer/source), not user-entered here,
+    // so it's optional — a candidate may have no reference on file.
+    reference: optionalText,
     company: z.string().trim().min(1, "Company is required."),
     projectType: z.string().trim().min(1, "Project type is required."),
     leastRateC2C: optionalNonNegativeNumber,

@@ -278,6 +278,7 @@ export default async function DashboardPage({
                 showOwner
                 scope={scope}
                 now={now}
+                preview
               />
             </Card>
           )}

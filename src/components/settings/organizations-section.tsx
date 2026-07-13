@@ -16,11 +16,19 @@ import type { OrganizationRow } from "@/server/queries/organizations";
 export function OrganizationsSection({
   organizations,
   canManage,
+  openEditId,
 }: {
   organizations: OrganizationRow[];
   canManage: boolean;
+  /** When set (from `?edit=<id>`), open that row's dialog on load. */
+  openEditId?: string;
 }) {
-  const [editing, setEditing] = useState<OrganizationRow | "new" | null>(null);
+  const [editing, setEditing] = useState<OrganizationRow | "new" | null>(
+    () =>
+      openEditId
+        ? organizations.find((o) => o.id === openEditId) ?? null
+        : null,
+  );
 
   return (
     <section className="space-y-3">

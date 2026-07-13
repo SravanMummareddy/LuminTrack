@@ -24,6 +24,7 @@ import {
   isTerminal,
   resumeFlag,
   statusForResult,
+  advanceBlock,
 } from "@/lib/submission-flow";
 import { formatDateTime } from "@/lib/format";
 import type { FormState } from "@/lib/form-state";
@@ -120,6 +121,13 @@ function logResultToast(
   if (outcome.coupled === "REJECTED") return { title: "Candidate rejected" };
   if (outcome.coupled === "ON_HOLD")
     return { title: "Submission put on hold" };
+  // A decisive result whose forward move the pipeline gate refused — tell the
+  // recruiter it saved but didn't advance, and why, instead of a silent "recorded".
+  if (outcome.blockedAdvance)
+    return {
+      title: "Result saved — submission didn't advance",
+      description: outcome.blockedAdvance,
+    };
   switch (result) {
     case "NEED_ANOTHER_ROUND":
       return { title: "Result logged", description: "Add the next round to continue." };
@@ -267,6 +275,10 @@ export async function createInterviewRound(
   // Set when the round is added but the status can't advance because no résumé is
   // attached — surfaced as a notice so the recruiter isn't left guessing.
   let advanceSkippedNoResume = false;
+  // Set when the stage advance is refused by the pipeline gate — e.g. an earlier
+  // stage's round is still WAITING. Adding a round must obey the SAME leave-gate
+  // the manual advance does, so a later round can't skip an unresolved one.
+  let advanceBlockedReason: string | null = null;
   // H2: a round added in "Already happened" mode may carry a decisive result;
   // captured out here so the return can report what the coupling did.
   let couplingOutcome: CouplingOutcome = { coupled: null, blockedNoResume: false };
@@ -337,8 +349,18 @@ export async function createInterviewRound(
       !isTerminal(sub.status) &&
       SUBMISSION_STAGE_INDEX[target] > SUBMISSION_STAGE_INDEX[sub.status]
     ) {
+      // SB-5 leave-gate: don't let adding a later-stage round jump the submission
+      // past an earlier stage whose round is still WAITING (the manual advance
+      // blocks this; the two routes must agree). Reads the round set AS WRITTEN.
+      const roundsSoFar = await tx.interviewRound.findMany({
+        where: { submissionId: d.submissionId },
+        select: { interviewType: true, result: true, roundOrder: true },
+      });
+      const blocked = advanceBlock(sub.status, target, roundsSoFar);
       if (resumeFlag(sub) === "missing") {
         advanceSkippedNoResume = true;
+      } else if (blocked) {
+        advanceBlockedReason = blocked;
       } else {
         // Stamp the stage-entry time at the interview date for a round that
         // already happened (backdated) — else the manual "now" would skew
@@ -405,7 +427,11 @@ export async function createInterviewRound(
 
   // A decisive result on a just-added round reports what the coupling did,
   // taking precedence over the plain "round added" / résumé-skip notices.
-  if (couplingOutcome.coupled || couplingOutcome.blockedNoResume)
+  if (
+    couplingOutcome.coupled ||
+    couplingOutcome.blockedNoResume ||
+    couplingOutcome.blockedAdvance
+  )
     return { ok: true, toast: logResultToast(couplingResult, couplingOutcome) };
   if (advanceSkippedNoResume)
     return {
@@ -414,6 +440,14 @@ export async function createInterviewRound(
         title: "Round added — status not advanced",
         description:
           "Attach a résumé (or waive it) to move this submission into the interview stage.",
+      },
+    };
+  if (advanceBlockedReason)
+    return {
+      ok: true,
+      toast: {
+        title: "Round added — status not advanced",
+        description: advanceBlockedReason,
       },
     };
   return { ok: true };

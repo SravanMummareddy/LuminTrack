@@ -9,6 +9,7 @@ import {
   hasFullAccess,
 } from "@/lib/permissions";
 import { logActivity } from "@/server/activity";
+import { rememberLookup } from "@/server/lookups";
 import { isTerminalJobStatus } from "@/lib/job-flow";
 import {
   hardEraseJob,
@@ -151,6 +152,11 @@ export async function createJob(
       performedById: user.id,
       jobId: created.id,
     });
+
+    // Remember a newly-typed job board so it reappears in the picker next time
+    // (no-op for a blank or a curated default). src.jobBoard is null unless the
+    // source is JOB_BOARD.
+    await rememberLookup(tx, user.organizationId, "JOB_BOARD", src.jobBoard);
 
     return created;
   });
@@ -297,6 +303,9 @@ export async function updateJob(
         performedById: user.id,
         jobId,
       });
+
+    // Learn a newly-typed job board (no-op for blank / default / non-JOB_BOARD).
+    await rememberLookup(tx, user.organizationId, "JOB_BOARD", src.jobBoard);
   });
 
   revalidatePath("/jobs");

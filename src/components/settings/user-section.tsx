@@ -44,6 +44,7 @@ export function UserSection({
   teams,
   userOptions,
   roleOptions,
+  openEditId,
 }: {
   items: UserRow[];
   canManage: boolean;
@@ -55,8 +56,13 @@ export function UserSection({
   userOptions: Option[];
   /** Roles for the "Role" picker (from the RBAC roles table). */
   roleOptions: RoleOption[];
+  /** When set (from `?edit=<id>`, e.g. a detail page's Edit button), open that
+   *  row's dialog on load. */
+  openEditId?: string;
 }) {
-  const [editing, setEditing] = useState<UserRow | "new" | null>(null);
+  const [editing, setEditing] = useState<UserRow | "new" | null>(
+    () => (openEditId ? items.find((i) => i.id === openEditId) ?? null : null),
+  );
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
 
@@ -113,6 +119,7 @@ export function UserSection({
         <Table>
           <thead className="border-b border-slate-200 bg-slate-50">
             <tr>
+              <Th>ID</Th>
               <Th>Name</Th>
               <Th>Email</Th>
               <Th>Role</Th>

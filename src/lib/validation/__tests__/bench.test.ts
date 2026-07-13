@@ -26,13 +26,16 @@ describe("benchConsultantSchema — required fields", () => {
     expect(benchConsultantSchema.safeParse(full).success).toBe(true);
   });
 
+  it("allows a blank reference (it's derived from the candidate now)", () => {
+    expect(benchConsultantSchema.safeParse({ ...full, reference: "" }).success).toBe(true);
+  });
+
   it.each([
     "fullName",
     "phone",
     "currentLocation",
     "workAuthorization",
     "mVisa",
-    "reference",
     "company",
     "projectType",
     "callType",
