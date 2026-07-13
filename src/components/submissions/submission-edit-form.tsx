@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { DateTimeField } from "@/components/ui/date-field";
 import { SearchSelect } from "@/components/ui/search-select";
@@ -10,6 +10,8 @@ import {
   useUnsavedChanges,
   GuardedCancel,
 } from "@/components/ui/unsaved-changes";
+import { uploadCandidateResume } from "@/server/actions/resumes";
+import { RESUME_ACCEPT, resumeFileError } from "@/lib/validation/resume";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 import { BENCH_ENGAGEMENTS, BENCH_ENGAGEMENT_LABEL } from "@/lib/labels";
 
@@ -75,6 +77,7 @@ function LockedField({ label, value }: { label: string; value: string }) {
 export function SubmissionEditForm({
   action,
   submissionId,
+  candidateId,
   candidateName,
   jobTitle,
   recruiterName,
@@ -86,6 +89,7 @@ export function SubmissionEditForm({
 }: {
   action: SubmissionAction;
   submissionId: string;
+  candidateId: string;
   candidateName: string;
   jobTitle: string;
   recruiterName: string;
@@ -117,6 +121,72 @@ export function SubmissionEditForm({
   });
   // Free-text reason for the rate-chain soft block (see the gate below).
   const [rateReason, setRateReason] = useState("");
+
+  // Inline "upload a new résumé" — mirrors the create form (submission-form.tsx):
+  // upload eagerly to private Blob (a separate action), add the created résumé to
+  // the picker + select it, so this submit just references an existing
+  // candidateResumeId. Without this, "Attach résumé" on a submission whose
+  // candidate has no uploaded résumés was a dead-end (only pick-existing, none to
+  // pick).
+  const [uploadedResumes, setUploadedResumes] = useState<ResumeOption[]>([]);
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploadLabel, setUploadLabel] = useState("");
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadPending, startUpload] = useTransition();
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const resetUpload = () => {
+    setShowUpload(false);
+    setUploadLabel("");
+    setUploadError(null);
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const handleUpload = () => {
+    const file = fileRef.current?.files?.[0] ?? null;
+    if (!uploadLabel.trim()) {
+      setUploadError("Give this resume a label.");
+      return;
+    }
+    if (!file) {
+      setUploadError("Choose a file to upload.");
+      return;
+    }
+    const fileErr = resumeFileError(file);
+    if (fileErr) {
+      setUploadError(fileErr);
+      return;
+    }
+    const fd = new FormData();
+    fd.set("candidateId", candidateId);
+    fd.set("label", uploadLabel.trim());
+    fd.set("file", file);
+    setUploadError(null);
+    startUpload(async () => {
+      const res = await uploadCandidateResume(EMPTY_FORM_STATE, fd);
+      if (res.ok && res.createdResume) {
+        setUploadedResumes((prev) => [...prev, res.createdResume!]);
+        setFields((f) => ({ ...f, resumeSelection: res.createdResume!.id }));
+        setDirty(true);
+        resetUpload();
+      } else {
+        setUploadError(res.error ?? res.fieldErrors?.file ?? "Upload failed.");
+      }
+    });
+  };
+
+  // Dedupe by id: uploadCandidateResume revalidates the page, so a just-uploaded
+  // résumé can reappear in the `resumes` prop while still in `uploadedResumes`.
+  const resumeOptions = (() => {
+    const seen = new Set<string>();
+    const merged: ResumeOption[] = [];
+    for (const r of [...resumes, ...uploadedResumes]) {
+      if (seen.has(r.id)) continue;
+      seen.add(r.id);
+      merged.push(r);
+    }
+    return merged;
+  })();
   const set =
     (name: keyof Fields) =>
     (
@@ -217,7 +287,7 @@ export function SubmissionEditForm({
       <Field
         label="Resume"
         htmlFor="resumeSelection"
-        hint="Pick one of the candidate's uploaded resumes, or leave as no resume. Upload new resumes on the candidate's profile."
+        hint="Pick one of the candidate's uploaded resumes, upload a new one, or leave as no resume."
         error={errors.candidateResumeId}
       >
         <Select
@@ -227,13 +297,62 @@ export function SubmissionEditForm({
           onChange={set("resumeSelection")}
         >
           <option value="">No resume</option>
-          {resumes.map((r) => (
+          {resumeOptions.map((r) => (
             <option key={r.id} value={r.id}>
               {r.label}
               {r.isActive === false ? " (archived)" : ""}
             </option>
           ))}
         </Select>
+
+        {showUpload ? (
+          <div className="mt-2 space-y-2 rounded-md border border-slate-200 bg-slate-50/60 p-3">
+            <Input
+              aria-label="New resume label"
+              value={uploadLabel}
+              onChange={(e) => setUploadLabel(e.target.value)}
+              placeholder="Resume label (e.g. Backend Engineer)"
+            />
+            <input
+              ref={fileRef}
+              type="file"
+              accept={RESUME_ACCEPT}
+              className="block w-full rounded-md border border-slate-300 text-sm text-slate-700 file:mr-3 file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+            />
+            {uploadError && <p className="text-xs text-red-700">{uploadError}</p>}
+            <p className="text-xs text-slate-500">
+              Saved to this candidate&apos;s résumé library and selected for this
+              submission.
+            </p>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleUpload}
+                disabled={uploadPending}
+              >
+                {uploadPending ? "Uploading…" : "Upload"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={resetUpload}
+                disabled={uploadPending}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowUpload(true)}
+            className="mt-2 text-xs font-medium text-indigo-600 hover:underline"
+          >
+            Upload a new resume
+          </button>
+        )}
       </Field>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
