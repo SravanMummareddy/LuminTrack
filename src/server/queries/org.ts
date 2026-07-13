@@ -183,6 +183,7 @@ export async function listUsers() {
     orderBy: { fullName: "asc" },
     select: {
       id: true,
+      seq: true,
       fullName: true,
       email: true,
       role: true,
@@ -206,6 +207,7 @@ export async function listTeamsAdmin() {
     orderBy: { name: "asc" },
     select: {
       id: true,
+      seq: true,
       name: true,
       leadId: true,
       lead: { select: { fullName: true } },

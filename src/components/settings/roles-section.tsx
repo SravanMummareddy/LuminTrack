@@ -1,12 +1,14 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Plus, Trash2, Check } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Field, Input } from "@/components/ui/field";
 import { Table, Th, Td } from "@/components/ui/table";
+import { formatRoleDisplayId } from "@/lib/format";
 import { saveRole, deleteRole } from "@/server/actions/roles";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
 import {
@@ -56,6 +58,7 @@ export function RolesSection({
       <Table>
         <thead className="border-b border-slate-200 bg-slate-50">
           <tr>
+            <Th>ID</Th>
             <Th>Role</Th>
             <Th>Permissions</Th>
             <Th>Users</Th>
@@ -66,8 +69,13 @@ export function RolesSection({
         <tbody className="divide-y divide-slate-100">
           {roles.map((r) => (
             <tr key={r.id}>
+              <Td label="ID" className="font-mono text-xs text-slate-500">
+                {formatRoleDisplayId(r)}
+              </Td>
               <Td label="Role" className="font-medium text-slate-900">
-                {r.name}
+                <Link href={`/settings/role/${r.id}`} className="text-indigo-600 hover:underline">
+                  {r.name}
+                </Link>
                 {r.description && (
                   <div className="text-xs font-normal text-slate-400">
                     {r.description}

@@ -3,6 +3,7 @@ import { DEFAULT_ORG_ID } from "@/lib/default-org";
 
 export type OrganizationRow = {
   id: string;
+  seq: number;
   name: string;
   slug: string;
   isActive: boolean;
@@ -19,6 +20,7 @@ export async function listOrganizationsAdmin(): Promise<OrganizationRow[]> {
     orderBy: { createdAt: "asc" },
     select: {
       id: true,
+      seq: true,
       name: true,
       slug: true,
       isActive: true,
@@ -27,6 +29,7 @@ export async function listOrganizationsAdmin(): Promise<OrganizationRow[]> {
   });
   return orgs.map((o) => ({
     id: o.id,
+    seq: o.seq,
     name: o.name,
     slug: o.slug,
     isActive: o.isActive,

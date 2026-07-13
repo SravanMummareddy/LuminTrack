@@ -7,7 +7,6 @@ import {
   formatGlossaryDisplayId,
   formatDate,
   formatSubmissionDisplayId,
-  formatJobDisplayId,
 } from "@/lib/format";
 
 // WS4 — detail pages for the admin entities (Users / Teams / Roles /

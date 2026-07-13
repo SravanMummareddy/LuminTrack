@@ -8,6 +8,7 @@ export type GlossaryRow = GlossaryTerm & {
    *  edit/delete; built-ins are read-only. */
   isCustom: boolean;
   customId?: string;
+  customSeq?: number;
   addedBy?: string;
   addedAt?: string;
 };
@@ -30,6 +31,7 @@ export async function getGlossaryWithNotes(): Promise<GlossaryRow[]> {
       orderBy: { createdAt: "asc" },
       select: {
         id: true,
+        seq: true,
         term: true,
         label: true,
         category: true,
@@ -54,6 +56,7 @@ export async function getGlossaryWithNotes(): Promise<GlossaryRow[]> {
     note: noteByTerm.get(c.term) ?? "",
     isCustom: true,
     customId: c.id,
+    customSeq: c.seq,
     addedBy: c.createdBy.fullName,
     addedAt: formatDate(c.createdAt),
   }));

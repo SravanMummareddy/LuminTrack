@@ -1,7 +1,9 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Plus } from "lucide-react";
+import { formatUserDisplayId } from "@/lib/format";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +22,7 @@ import type { RoleOption } from "@/server/queries/roles";
 
 export type UserRow = {
   id: string;
+  seq: number;
   fullName: string;
   email: string;
   role: UserRole;
@@ -121,8 +124,13 @@ export function UserSection({
           <tbody className="divide-y divide-slate-100">
             {filtered.map((item) => (
               <tr key={item.id}>
+                <Td label="ID" className="font-mono text-xs text-slate-500">
+                  {formatUserDisplayId(item)}
+                </Td>
                 <Td label="Name" className="font-medium text-slate-900">
-                  {item.fullName}
+                  <Link href={`/settings/user/${item.id}`} className="text-indigo-600 hover:underline">
+                    {item.fullName}
+                  </Link>
                 </Td>
                 <Td label="Email">{item.email}</Td>
                 <Td label="Role">
