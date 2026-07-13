@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
+import { DateTimeField } from "@/components/ui/date-field";
 import { FormSection } from "@/components/ui/form-section";
 import { NullableField } from "@/components/ui/nullable-field";
 import { Button } from "@/components/ui/button";
@@ -44,17 +45,6 @@ export type InterviewRoundData = {
   updatedBy: { fullName: string } | null;
 };
 
-/** Converts a stored date into a `datetime-local` input value in the browser's timezone. */
-function toDateTimeLocal(value: Date | string | null): string {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
-    date.getDate(),
-  )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
 export function InterviewRoundForm({
   submissionId,
   round,
@@ -95,7 +85,9 @@ export function InterviewRoundForm({
     interviewPlatformNa: naInit(round?.interviewPlatform),
     meetingLink: round?.meetingLink ?? "",
     meetingLinkNa: naInit(round?.meetingLink),
-    scheduledAt: toDateTimeLocal(round?.scheduledAt ?? null),
+    scheduledAt: round?.scheduledAt
+      ? new Date(round.scheduledAt).toISOString()
+      : "",
     scheduledAtNa: naInit(
       round?.scheduledAt == null ? "" : String(round.scheduledAt),
     ),
@@ -195,17 +187,15 @@ export function InterviewRoundForm({
           </Field>
 
           <Field label="Interview date & time" htmlFor="scheduledAt" required error={errors.scheduledAt}>
-            {/* The visible input is timezone-naive and shows the browser's local
-                wall-clock. Post an unambiguous ISO instant instead of the naive
-                string (the nameless input above doesn't submit) — the browser
-                parses the local value to the correct UTC instant, so it stores +
-                round-trips without the +offset drift a naive string re-parsed as
-                UTC on the server would cause (which also logged phantom reschedules). */}
-            <Input id="scheduledAt" type="datetime-local" value={fields.scheduledAt} onChange={set("scheduledAt")} required />
-            <input
-              type="hidden"
+            {/* DateTimeField posts an unambiguous ISO instant via its own hidden
+                input — no +offset drift from a naive datetime-local string
+                re-parsed as UTC on the server (which used to log phantom reschedules). */}
+            <DateTimeField
+              id="scheduledAt"
               name="scheduledAt"
-              value={fields.scheduledAt ? new Date(fields.scheduledAt).toISOString() : ""}
+              value={fields.scheduledAt}
+              onChange={(v) => setFields((f) => ({ ...f, scheduledAt: v }))}
+              required
             />
           </Field>
 
