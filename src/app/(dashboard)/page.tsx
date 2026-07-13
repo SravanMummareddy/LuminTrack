@@ -10,18 +10,15 @@ import {
   CirclePause,
 } from "lucide-react";
 import { getCurrentUser, getScopedPrisma } from "@/lib/session";
-import {
-  hasFullAccess,
-  isManagerTier,
-  canViewSensitiveDocs,
-} from "@/lib/permissions";
+import { hasFullAccess, canViewSensitiveDocs } from "@/lib/permissions";
 import {
   getDashboardData,
   getMyRecentActivity,
   getOnboardingStatus,
   type MyRecentActivity,
 } from "@/server/queries/dashboard";
-import { leadsAnyTeam, ledTeamMemberIds } from "@/server/team-lead";
+import { ledTeamMemberIds } from "@/server/team-lead";
+import { resolveTodoScope, type Scope } from "@/server/pending-scope";
 import {
   getPendingTodos,
   getManagerActionItems,
@@ -65,8 +62,6 @@ function Card({
     </section>
   );
 }
-
-type Scope = "me" | "team" | "org";
 
 const SCOPE_LABEL: Record<Scope, string> = {
   me: "My work",
@@ -135,26 +130,10 @@ export default async function DashboardPage({
   // rollup; plain recruiters see only their own queue. `?scope=` can only reach
   // a scope the viewer is entitled to. `me`/`team` drive the unified pending-todo
   // view; `org` still drives the legacy manager card (redesigned in PR-B).
-  const isManager = isManagerTier(user);
   const db = await getScopedPrisma();
-  const isLead = !isManager && user ? await leadsAnyTeam(db, user.id) : false;
-  const availableScopes: Scope[] = isManager
-    ? ["me", "org"]
-    : isLead
-      ? ["me", "team"]
-      : ["me"];
   const requested = Array.isArray(sp.scope) ? sp.scope[0] : sp.scope;
-  const scope: Scope =
-    requested && availableScopes.includes(requested as Scope)
-      ? (requested as Scope)
-      : isManager
-        ? "org"
-        : "me";
-
-  const memberIds =
-    scope === "team" && user ? await ledTeamMemberIds(db, user.id) : [];
-  const todoUserIds = scope === "team" ? memberIds : user ? [user.id] : [];
-  const isTaskScope = scope === "me" || scope === "team";
+  const { scope, availableScopes, memberIds, todoUserIds, isTaskScope, isManager } =
+    await resolveTodoScope(db, user, requested);
 
   const effectiveFilters =
     scope === "me" && user
@@ -277,7 +256,12 @@ export default async function DashboardPage({
               <MemberCountStrip members={memberCounts} />
             </div>
           )}
-          <PendingTodos grouped={grouped} showOwner={scope === "team"} />
+          <PendingTodos
+            grouped={grouped}
+            showOwner={scope === "team"}
+            scope={scope}
+            now={Date.now()}
+          />
         </Card>
       ) : (
         <div className="space-y-5">
@@ -289,6 +273,8 @@ export default async function DashboardPage({
               <PendingTodos
                 grouped={groupByUrgency(teamRollup.topUrgent)}
                 showOwner
+                scope={scope}
+                now={Date.now()}
               />
             </Card>
           )}
