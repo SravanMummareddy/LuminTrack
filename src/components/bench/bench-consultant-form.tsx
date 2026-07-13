@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
+import { DateField } from "@/components/ui/date-field";
 import { LocationInput } from "@/components/ui/location-input";
 import { SuggestInput } from "@/components/ui/suggest-input";
 import { VISA_OPTIONS } from "@/lib/visa-options";
@@ -389,7 +390,7 @@ export function BenchConsultantForm({
             <SuggestInput id="technology" name="technology" value={fields.technology} suggestions={parsedSkills} onChange={set("technology")} onCommit={rememberTechInSkills} placeholder="e.g. Java" />
           </Field>
           <Field label="Marketing start date" htmlFor="marketingStartDate" hint="Optional." error={errors.marketingStartDate}>
-            <Input id="marketingStartDate" name="marketingStartDate" type="date" value={fields.marketingStartDate} onChange={set("marketingStartDate")} />
+            <DateField id="marketingStartDate" name="marketingStartDate" value={fields.marketingStartDate} onChange={(v) => setFields((f) => ({ ...f, marketingStartDate: v }))} />
           </Field>
           <Field label="Project type" htmlFor="projectType" required hint="Nature / duration of the engagement." error={errors.projectType}>
             <SuggestInput id="projectType" name="projectType" value={fields.projectType} suggestions={projectTypeOptions} onChange={set("projectType")} placeholder="Contract / Contract-to-Hire / Full-time" />

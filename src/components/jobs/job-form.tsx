@@ -2,6 +2,7 @@
 
 import { useActionState, useState, useTransition } from "react";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
+import { DateField } from "@/components/ui/date-field";
 import { LocationInput } from "@/components/ui/location-input";
 import { SearchSelect } from "@/components/ui/search-select";
 import { SuggestInput } from "@/components/ui/suggest-input";
@@ -58,7 +59,7 @@ export type JobFormValues = {
   description: string;
   notes: string;
   positions: string;
-  /** YYYY-MM-DD or "" — bound to <input type="date">. */
+  /** YYYY-MM-DD or "" — bound to the shared DateField. */
   startDate: string;
   startDateEstimated: boolean;
   endDate: string;
@@ -362,13 +363,12 @@ export function JobForm({
           error={errors.receivedAt}
           hint="When the requirement actually arrived — not today. The time-to-submit clock starts here."
         >
-          <Input
+          <DateField
             id="receivedAt"
             name="receivedAt"
-            type="date"
             value={receivedAt}
             max={todayIso}
-            onChange={(e) => setReceivedAt(e.target.value)}
+            onChange={setReceivedAt}
             required
           />
           {receivedLagDays > 0 && (
@@ -405,11 +405,11 @@ export function JobForm({
                   estimated
                 </label>
               </div>
-              <Input id="startDate" name="startDate" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              <DateField id="startDate" name="startDate" value={startDate} onChange={setStartDate} />
               {errors.startDate && <p className="text-xs font-medium text-red-600">{errors.startDate}</p>}
             </div>
             <Field label="Projected end" htmlFor="endDate" error={errors.endDate}>
-              <Input id="endDate" name="endDate" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              <DateField id="endDate" name="endDate" value={endDate} onChange={setEndDate} />
             </Field>
           </div>
           <p className="mt-1.5 text-xs text-slate-500">
@@ -419,7 +419,7 @@ export function JobForm({
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <NullableField label="Target hire-by" htmlFor="targetCloseDate" name="targetCloseDate" na={na.targetCloseDate} onToggleNa={toggleNa("targetCloseDate")} error={errors.targetCloseDate}>
-            <Input id="targetCloseDate" name="targetCloseDate" type="date" value={fields.targetCloseDate} onChange={setField("targetCloseDate")} disabled={na.targetCloseDate} className={na.targetCloseDate ? "bg-slate-50" : ""} />
+            <DateField id="targetCloseDate" name="targetCloseDate" value={fields.targetCloseDate} onChange={(v) => setFields((f) => ({ ...f, targetCloseDate: v }))} disabled={na.targetCloseDate} className={na.targetCloseDate ? "bg-slate-50" : ""} />
           </NullableField>
           <NullableField label="Work-auth requirement" htmlFor="workAuthRequirement" name="workAuthRequirement" na={na.workAuthRequirement} onToggleNa={toggleNa("workAuthRequirement")} error={errors.workAuthRequirement}>
             <Input id="workAuthRequirement" name="workAuthRequirement" value={fields.workAuthRequirement} onChange={setField("workAuthRequirement")} placeholder="e.g. USC / GC / H-1B ok" disabled={na.workAuthRequirement} className={na.workAuthRequirement ? "bg-slate-50" : ""} />

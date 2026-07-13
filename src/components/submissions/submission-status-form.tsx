@@ -2,7 +2,8 @@
 
 import { startTransition, useActionState, useEffect, useRef, useState } from "react";
 import { ArrowRight, Info, Undo2 } from "lucide-react";
-import { Select, Textarea, Input } from "@/components/ui/field";
+import { Select, Textarea } from "@/components/ui/field";
+import { DateField, DateTimeField } from "@/components/ui/date-field";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
@@ -30,13 +31,9 @@ import type { SubmissionStatus } from "@/generated/prisma/enums";
 const labelClass = "mb-1 block text-xs font-medium text-slate-500";
 const linkClass = "text-xs font-medium text-indigo-600 hover:underline";
 
-/** Current local date/time as a `datetime-local` input value. */
-function nowDateTimeLocal(): string {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
-    d.getHours(),
-  )}:${pad(d.getMinutes())}`;
+/** Current instant as an ISO string — the DateTimeField's value format. */
+function nowIso(): string {
+  return new Date().toISOString();
 }
 
 // SB-5: advancing INTO one of these stages opens a stage-detail dialog (date +
@@ -108,7 +105,7 @@ export function SubmissionStatusForm({
   // mismatch on the datetime input).
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only initial value
-    setEventAt(nowDateTimeLocal());
+    setEventAt(nowIso());
   }, []);
 
   // Confirm the save (the action revalidates instead of redirecting) and reset
@@ -128,7 +125,7 @@ export function SubmissionStatusForm({
       setExpectedJoinDate("");
       setActualJoinDate("");
       setSkip(false);
-      setEventAt(nowDateTimeLocal());
+      setEventAt(nowIso());
       setShowDetails(false);
       /* eslint-enable react-hooks/set-state-in-effect */
     }
@@ -141,7 +138,6 @@ export function SubmissionStatusForm({
   useEffect(() => {
     if (!isPending && submittedFromDialog.current) {
       submittedFromDialog.current = false;
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDialog(null);
     }
   }, [isPending]);
@@ -386,12 +382,7 @@ export function SubmissionStatusForm({
                     <Info className="h-3 w-3" aria-hidden />
                   </span>
                 </label>
-                <Input
-                  id="eventAtCtl"
-                  type="datetime-local"
-                  value={eventAt}
-                  onChange={(e) => setEventAt(e.target.value)}
-                />
+                <DateTimeField id="eventAtCtl" value={eventAt} onChange={setEventAt} />
               </div>
               <div className="min-w-[16rem] flex-1">
                 <label htmlFor="noteCtl" className={labelClass}>
@@ -615,24 +606,14 @@ export function SubmissionStatusForm({
                   <label htmlFor="advEventAt" className={labelClass}>
                     {skip ? "Effective date/time" : "When did this happen?"}
                   </label>
-                  <Input
-                    id="advEventAt"
-                    type="datetime-local"
-                    value={eventAt}
-                    onChange={(e) => setEventAt(e.target.value)}
-                  />
+                  <DateTimeField id="advEventAt" value={eventAt} onChange={setEventAt} />
                 </div>
                 {target === "OFFER_ACCEPTED" && !skip && (
                   <div className="w-56">
                     <label htmlFor="advExpectedJoin" className={labelClass}>
                       Expected join date <span className="text-rose-500">*</span>
                     </label>
-                    <Input
-                      id="advExpectedJoin"
-                      type="date"
-                      value={expectedJoinDate}
-                      onChange={(e) => setExpectedJoinDate(e.target.value)}
-                    />
+                    <DateField id="advExpectedJoin" value={expectedJoinDate} onChange={setExpectedJoinDate} />
                   </div>
                 )}
                 <div>
@@ -756,12 +737,7 @@ export function SubmissionStatusForm({
               <label htmlFor="actualJoinDlg" className={labelClass}>
                 Actual join date <span className="text-rose-500">*</span>
               </label>
-              <Input
-                id="actualJoinDlg"
-                type="date"
-                value={actualJoinDate}
-                onChange={(e) => setActualJoinDate(e.target.value)}
-              />
+              <DateField id="actualJoinDlg" value={actualJoinDate} onChange={setActualJoinDate} />
             </div>
             <div className="flex justify-end gap-2">
               <Button

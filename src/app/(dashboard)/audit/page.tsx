@@ -5,6 +5,7 @@ import { Forbidden, MANAGER_ONLY_FORBIDDEN } from "@/components/ui/forbidden";
 import { Table, Th, Td } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Pagination } from "@/components/ui/pagination";
+import { DateField } from "@/components/ui/date-field";
 import { requireUser, getScopedPrisma } from "@/lib/session";
 import { isManagerTier } from "@/lib/permissions";
 import { formatDateTime, deletedSuffix } from "@/lib/format";
@@ -243,13 +244,9 @@ export default async function AuditPage({
           >
             From
           </label>
-          <input
-            type="date"
-            id="from"
-            name="from"
-            defaultValue={fromStr ?? ""}
-            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm sm:w-auto"
-          />
+          <div className="mt-1 sm:w-48">
+            <DateField id="from" name="from" defaultValue={fromStr ?? ""} />
+          </div>
         </div>
         <div className="sm:w-auto">
           <label
@@ -258,13 +255,9 @@ export default async function AuditPage({
           >
             To
           </label>
-          <input
-            type="date"
-            id="to"
-            name="to"
-            defaultValue={toStr ?? ""}
-            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm sm:w-auto"
-          />
+          <div className="mt-1 sm:w-48">
+            <DateField id="to" name="to" defaultValue={toStr ?? ""} />
+          </div>
         </div>
         <button
           type="submit"

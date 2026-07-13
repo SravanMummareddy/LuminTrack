@@ -5,6 +5,7 @@ import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, Input, Textarea } from "@/components/ui/field";
+import { DateField } from "@/components/ui/date-field";
 import { FormSection } from "@/components/ui/form-section";
 import { NullableField } from "@/components/ui/nullable-field";
 import { updatePlacement } from "@/server/actions/placements";
@@ -112,6 +113,9 @@ function EditForm({
       e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
     ) =>
       setFields((f) => ({ ...f, [name]: e.target.value }));
+  // DateField emits a value (not an event) — value-based setter for the pickers.
+  const setDate = (name: keyof Fields) => (v: string) =>
+    setFields((f) => ({ ...f, [name]: v }));
   // Toggling TBD on clears the paired value; off leaves it for re-entry.
   const naToggle =
     (field: keyof Fields, naField: keyof Fields) => (v: boolean) =>
@@ -129,16 +133,16 @@ function EditForm({
       <FormSection n={1} title="Dates">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Start date" htmlFor="startDate" required error={errors.startDate} hint="Always known — it's why the placement exists.">
-            <Input id="startDate" name="startDate" type="date" value={fields.startDate} onChange={set("startDate")} required />
+            <DateField id="startDate" name="startDate" value={fields.startDate} onChange={setDate("startDate")} required />
           </Field>
           <NullableField label="End date" naLabel="TBD" htmlFor="endDate" name="endDate" na={fields.endDateNa} onToggleNa={naToggle("endDate", "endDateNa")} error={errors.endDate}>
-            <Input id="endDate" name="endDate" type="date" value={fields.endDate} onChange={set("endDate")} disabled={fields.endDateNa} />
+            <DateField id="endDate" name="endDate" value={fields.endDate} onChange={setDate("endDate")} disabled={fields.endDateNa} />
           </NullableField>
           <NullableField label="Date of interview" naLabel="TBD" htmlFor="interviewDate" name="interviewDate" na={fields.interviewDateNa} onToggleNa={naToggle("interviewDate", "interviewDateNa")} error={errors.interviewDate}>
-            <Input id="interviewDate" name="interviewDate" type="date" value={fields.interviewDate} onChange={set("interviewDate")} disabled={fields.interviewDateNa} />
+            <DateField id="interviewDate" name="interviewDate" value={fields.interviewDate} onChange={setDate("interviewDate")} disabled={fields.interviewDateNa} />
           </NullableField>
           <NullableField label="Date of placement" naLabel="TBD" htmlFor="placementDate" name="placementDate" na={fields.placementDateNa} onToggleNa={naToggle("placementDate", "placementDateNa")} error={errors.placementDate}>
-            <Input id="placementDate" name="placementDate" type="date" value={fields.placementDate} onChange={set("placementDate")} disabled={fields.placementDateNa} />
+            <DateField id="placementDate" name="placementDate" value={fields.placementDate} onChange={setDate("placementDate")} disabled={fields.placementDateNa} />
           </NullableField>
         </div>
       </FormSection>

@@ -3,7 +3,8 @@
 import { useActionState, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
-import { Field, Input, Select, Textarea } from "@/components/ui/field";
+import { Field, Select, Textarea } from "@/components/ui/field";
+import { DateField } from "@/components/ui/date-field";
 import { endPlacement } from "@/server/actions/placements";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
 import {
@@ -93,13 +94,7 @@ function EndForm({
         required
         error={errors.endDate}
       >
-        <Input
-          id="endDate"
-          name="endDate"
-          type="date"
-          defaultValue={today}
-          required
-        />
+        <DateField id="endDate" name="endDate" defaultValue={today} required />
       </Field>
 
       <Field label="Notes" htmlFor="endNote" error={errors.endNote}>
