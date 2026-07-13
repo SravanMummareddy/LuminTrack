@@ -351,6 +351,7 @@ export default async function SubmissionDetailPage({
       <div id="interview-rounds" className="scroll-mt-4">
         <InterviewRoundsManager
           submissionId={submission.id}
+          submissionStatus={submission.status}
           rounds={submission.interviewRounds}
           supportProviders={supportProviders}
         />

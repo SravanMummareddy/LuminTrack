@@ -10,6 +10,7 @@ import {
   createInterviewRound,
   updateInterviewRound,
 } from "@/server/actions/interviews";
+import { quickAddSupportProvider } from "@/server/actions/org-quick-add";
 import {
   INTERVIEW_TYPES,
   INTERVIEW_TYPE_LABEL,
@@ -138,6 +139,21 @@ export function InterviewRoundForm({
   });
   // "Done with support" reveals the provider + method fields.
   const [withSupport, setWithSupport] = useState(round?.supportNeeded ?? false);
+  // Support providers can be quick-added inline (no trip to Settings). New rows
+  // merge into the local option list and get auto-selected.
+  const [providerOptions, setProviderOptions] = useState(supportProviders);
+  const [addingProvider, setAddingProvider] = useState(false);
+  function onProviderAdded(p: { id: string; name: string }) {
+    setProviderOptions((opts) =>
+      opts.some((o) => o.id === p.id) ? opts : [...opts, { ...p, skills: [] }],
+    );
+    setFields((f) => ({
+      ...f,
+      supportProviderId: p.id,
+      supportProviderIdNa: false,
+    }));
+    setAddingProvider(false);
+  }
 
   type Fields = typeof fields;
   const set =
@@ -372,20 +388,35 @@ export function InterviewRoundForm({
               onChange={(e) => setWithSupport(e.target.checked)}
               className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
             />
-            Done with support (an external person assisted this interview)
+            An external person assisted with this interview (support)
           </label>
           {withSupport && (
             <div className="grid grid-cols-1 gap-3 rounded-md border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-2">
-              <NullableField label="Support provider" htmlFor="supportProviderId" name="supportProviderId" na={fields.supportProviderIdNa} onToggleNa={naToggle("supportProviderId", "supportProviderIdNa")} error={errors.supportProviderId} hint="Manage the list in Settings → Support.">
+              <NullableField label="Support provider" htmlFor="supportProviderId" name="supportProviderId" na={fields.supportProviderIdNa} onToggleNa={naToggle("supportProviderId", "supportProviderIdNa")} error={errors.supportProviderId}>
                 <Select id="supportProviderId" name="supportProviderId" value={fields.supportProviderId} onChange={set("supportProviderId")} disabled={fields.supportProviderIdNa}>
                   <option value="">— Select —</option>
-                  {supportProviders.map((p) => (
+                  {providerOptions.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name}
                       {p.skills.length ? ` · ${p.skills.slice(0, 3).join(", ")}` : ""}
                     </option>
                   ))}
                 </Select>
+                {!fields.supportProviderIdNa &&
+                  (addingProvider ? (
+                    <AddProviderInline
+                      onAdded={onProviderAdded}
+                      onCancel={() => setAddingProvider(false)}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setAddingProvider(true)}
+                      className="mt-1 text-xs font-medium text-indigo-600 hover:text-indigo-800"
+                    >
+                      + Add a new provider
+                    </button>
+                  ))}
               </NullableField>
               <NullableField label="Support method" htmlFor="supportMethod" name="supportMethod" na={fields.supportMethodNa} onToggleNa={naToggle("supportMethod", "supportMethodNa")} error={errors.supportMethod} hint="How support was given (free text).">
                 <Input id="supportMethod" name="supportMethod" placeholder="e.g. live audio support" value={fields.supportMethod} onChange={set("supportMethod")} disabled={fields.supportMethodNa} />
@@ -424,5 +455,81 @@ export function InterviewRoundForm({
         </Button>
       </div>
     </form>
+  );
+}
+
+/** Inline quick-add for a support provider. Not a <form> (it lives inside the
+ *  round form — nested forms are invalid); submits via a button handler that
+ *  calls the quick-add action and hands the new row back to be selected. */
+function AddProviderInline({
+  onAdded,
+  onCancel,
+}: {
+  onAdded: (p: { id: string; name: string }) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function submit() {
+    if (!name.trim()) return;
+    setPending(true);
+    setError(null);
+    const fd = new FormData();
+    fd.set("name", name.trim());
+    fd.set("email", email);
+    fd.set("phone", phone);
+    const res = await quickAddSupportProvider(fd);
+    setPending(false);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    onAdded({ id: res.id, name: res.name });
+  }
+
+  return (
+    <div className="mt-2 space-y-2 rounded-md border border-indigo-200 bg-indigo-50/40 p-2.5">
+      <Input
+        placeholder="Provider name"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        autoFocus
+      />
+      <div className="grid grid-cols-2 gap-2">
+        <Input
+          type="email"
+          placeholder="Email (optional)"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <Input
+          placeholder="Phone (optional)"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+        />
+      </div>
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="text-xs font-medium text-slate-500 hover:text-slate-700"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={pending || !name.trim()}
+          className="rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {pending ? "Adding…" : "Add provider"}
+        </button>
+      </div>
+    </div>
   );
 }

@@ -141,3 +141,34 @@ export async function quickAddReferrer(fd: FormData): Promise<QuickAddResult> {
       }),
   );
 }
+
+/** Quick-add an interview **support provider** inline from the interview-round
+ *  form, so a recruiter mid-form doesn't have to leave for Settings → Support.
+ *  Name only is enough; email/phone optional. Reuses a same-name provider. */
+export async function quickAddSupportProvider(
+  fd: FormData,
+): Promise<QuickAddResult> {
+  const user = await requireUser();
+  if (!canQuickAddOrgEntities(user))
+    return { ok: false, error: "You can't add a support provider." };
+  const name = String(fd.get("name") ?? "").trim();
+  if (!name) return { ok: false, error: "Enter a name." };
+  const db = await getScopedPrisma();
+  const existing = await db.supportProvider.findFirst({
+    where: { name: { equals: name, mode: "insensitive" } },
+    select: { id: true, name: true },
+  });
+  if (existing) return { ok: true, ...existing };
+  return createOrReuse(
+    () =>
+      db.supportProvider.create({
+        data: { name, email: field(fd, "email"), phone: field(fd, "phone") },
+        select: { id: true, name: true },
+      }),
+    () =>
+      db.supportProvider.findFirst({
+        where: { name: { equals: name, mode: "insensitive" } },
+        select: { id: true, name: true },
+      }),
+  );
+}

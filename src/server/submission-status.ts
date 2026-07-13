@@ -20,12 +20,13 @@ import {
   ensurePlacementOnJoined,
   terminatePlacementOnRevert,
 } from "@/server/placement-lifecycle";
-import { SUBMISSION_STATUS_LABEL } from "@/lib/labels";
+import { SUBMISSION_STATUS_LABEL, SUBMISSION_STAGE_INDEX } from "@/lib/labels";
 import {
   resolveCouplingTarget,
   advanceBlock,
   resumeFlag,
   isForwardAdvance,
+  highestSupportedStage,
   type RoundLite,
 } from "@/lib/submission-flow";
 
@@ -224,4 +225,62 @@ export async function applyResultCoupling(
     eventAt: opts.eventAt ?? null,
   });
   return { coupled: target, blockedNoResume: false };
+}
+
+/** The stages whose validity is derived from interview rounds — the only ones a
+ *  round delete / result-downgrade may pull back. An offer/joined stage a manual
+ *  advance reached is out of range and never reconciled. */
+const ROUND_DERIVED_STAGES: SubmissionStatus[] = [
+  "VENDOR_SCREENING_CALL",
+  "CLIENT_INTERVIEW",
+  "SELECTED",
+];
+
+/**
+ * Keep the submission from sitting at a round-derived stage its rounds no longer
+ * support after a round was deleted or its result edited down (the mirror of the
+ * forward coupling). If the furthest stage the current rounds justify is earlier
+ * than where the submission sits — and it sits in the round-derived range — pull
+ * it back to that stage (or Résumé-picked when no round remains) and audit it.
+ * Never touches an offer/joined stage. Call after the round write, inside the tx.
+ */
+export async function reconcileSubmissionStage(
+  tx: Tx,
+  submissionId: string,
+  actorId: string,
+): Promise<void> {
+  const sub = await tx.submission.findUnique({
+    where: { id: submissionId },
+    select: {
+      status: true,
+      candidate: { select: { fullName: true } },
+      job: { select: { title: true } },
+    },
+  });
+  if (!sub || !ROUND_DERIVED_STAGES.includes(sub.status)) return;
+
+  const rounds = await tx.interviewRound.findMany({
+    where: { submissionId },
+    select: { interviewType: true, result: true },
+  });
+  const supported = highestSupportedStage(rounds);
+  const supportedIdx = supported
+    ? SUBMISSION_STAGE_INDEX[supported]
+    : SUBMISSION_STAGE_INDEX["RESUME_PICKED"];
+  if (supportedIdx >= SUBMISSION_STAGE_INDEX[sub.status]) return;
+
+  const revertTo = supported ?? "RESUME_PICKED";
+  await tx.submission.update({
+    where: { id: submissionId },
+    data: { status: revertTo },
+  });
+  await logActivity(tx, {
+    entityType: "SUBMISSION",
+    action: "SUBMISSION_STATUS_CHANGED",
+    description: `${sub.candidate.fullName} on "${sub.job.title}": status reverted from ${SUBMISSION_STATUS_LABEL[sub.status]} to ${SUBMISSION_STATUS_LABEL[revertTo]} (interview record no longer supports it)`,
+    oldValue: SUBMISSION_STATUS_LABEL[sub.status],
+    newValue: SUBMISSION_STATUS_LABEL[revertTo],
+    performedById: actorId,
+    submissionId,
+  });
 }

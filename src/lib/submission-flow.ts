@@ -103,6 +103,26 @@ export function highestInterviewStage(
 }
 
 /**
+ * The furthest pipeline stage a set of rounds *justifies*, reading their results
+ * (not just their existence): SELECTED when a client-family round passed,
+ * CLIENT_INTERVIEW when a client-family round merely exists, else
+ * VENDOR_SCREENING_CALL for a vendor round, else null. Used to pull a submission
+ * back when a round is deleted or its result edited down so it can't sit at a
+ * stage its records no longer support (SB-5) — including a Selected with no
+ * passing round left behind it. Pure + unit-tested.
+ */
+export function highestSupportedStage(
+  rounds: { interviewType: InterviewType; result: InterviewResult }[],
+): SubmissionStatus | null {
+  const clientRounds = rounds.filter((r) => CLIENT_FAMILY.includes(r.interviewType));
+  if (clientRounds.some((r) => PASS_RESULTS.includes(r.result))) return "SELECTED";
+  if (clientRounds.length) return "CLIENT_INTERVIEW";
+  if (rounds.some((r) => r.interviewType === "VENDOR_SCREENING"))
+    return "VENDOR_SCREENING_CALL";
+  return null;
+}
+
+/**
  * SB-6: the single stage a submission moves back to for a correction. Controlled
  * transitions mean corrections step back exactly one visual stage (never an
  * arbitrary jump); the Decision-branch statuses (Rejected / Hold / Backed-out,

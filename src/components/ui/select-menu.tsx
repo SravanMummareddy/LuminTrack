@@ -41,11 +41,11 @@ export function Select({
         .map((c) => {
           const p = (c as React.ReactElement<React.ComponentProps<"option">>)
             .props;
-          const label =
-            typeof p.children === "string" || typeof p.children === "number"
-              ? String(p.children)
-              : String(p.value ?? "");
-          return { value: String(p.value ?? ""), label, disabled: !!p.disabled };
+          return {
+            value: String(p.value ?? ""),
+            label: optionLabel(p.children, p.value),
+            disabled: !!p.disabled,
+          };
         }),
     [children],
   );
@@ -200,6 +200,24 @@ export function Select({
       )}
     </div>
   );
+}
+
+/** The visible label for an `<option>`. Handles a single text child (the common
+ *  case) AND concatenated children like `{name}{" · " + skills}` — an array —
+ *  which must be flattened, not fall back to the value (that showed raw ids/CUIDs
+ *  in the support-provider picker). Falls back to the value only when there's no
+ *  text to show. */
+function optionLabel(children: React.ReactNode, value: unknown): string {
+  if (typeof children === "string" || typeof children === "number")
+    return String(children);
+  if (Array.isArray(children)) {
+    const text = children
+      .filter((c) => typeof c === "string" || typeof c === "number")
+      .map(String)
+      .join("");
+    if (text.trim()) return text;
+  }
+  return String(value ?? "");
 }
 
 /** Step from index `from` in `dir` (±1), skipping disabled, clamping at ends. */

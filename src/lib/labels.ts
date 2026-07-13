@@ -328,7 +328,9 @@ export const INTERVIEW_RESULTS: InterviewResult[] = [
 
 export const INTERVIEW_RESULT_LABEL: Record<InterviewResult, string> = {
   WAITING: "Waiting",
-  NEED_ANOTHER_ROUND: "Need Another Round",
+  // "Passed, another round to come" — worded as the positive, concluded outcome
+  // it is (this round cleared) rather than a pending-looking instruction.
+  NEED_ANOTHER_ROUND: "Passed · next round",
   SELECTED: "Selected",
   REJECTED: "Rejected",
   ON_HOLD: "On Hold",

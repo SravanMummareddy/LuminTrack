@@ -13,6 +13,7 @@ import {
   advanceBlock,
   stageForRoundType,
   highestInterviewStage,
+  highestSupportedStage,
   statusForResult,
   resolveCouplingTarget,
 } from "@/lib/submission-flow";
@@ -342,6 +343,37 @@ describe("statusForResult (H2 coupling)", () => {
       "COMPLETED",
     ] as InterviewResult[])
       expect(statusForResult(r)).toBeNull();
+  });
+});
+
+describe("highestSupportedStage (round-delete / edit-down reconcile)", () => {
+  const r = (interviewType: string, result: InterviewResult) =>
+    ({ interviewType, result }) as {
+      interviewType: import("@/generated/prisma/enums").InterviewType;
+      result: InterviewResult;
+    };
+
+  it("reads results: a passing client round justifies Selected", () => {
+    expect(highestSupportedStage([r("CLIENT_INTERVIEW", "SELECTED")])).toBe(
+      "SELECTED",
+    );
+    expect(highestSupportedStage([r("OTHER", "SELECTED")])).toBe("SELECTED");
+  });
+
+  it("a non-passing client round justifies only Client interview", () => {
+    expect(
+      highestSupportedStage([r("CLIENT_INTERVIEW", "NEED_ANOTHER_ROUND")]),
+    ).toBe("CLIENT_INTERVIEW");
+    expect(highestSupportedStage([r("MANAGER_ROUND", "WAITING")])).toBe(
+      "CLIENT_INTERVIEW",
+    );
+  });
+
+  it("falls back to vendor screening, then null", () => {
+    expect(highestSupportedStage([r("VENDOR_SCREENING", "NEED_ANOTHER_ROUND")])).toBe(
+      "VENDOR_SCREENING_CALL",
+    );
+    expect(highestSupportedStage([])).toBeNull();
   });
 });
 
