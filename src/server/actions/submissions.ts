@@ -23,11 +23,8 @@ import {
 import { rateChainWarnings } from "@/lib/rates";
 import { formatDate } from "@/lib/format";
 import type { FormState } from "@/lib/form-state";
-import {
-  ensurePlacementOnJoined,
-  terminatePlacementOnRevert,
-} from "@/server/placement-lifecycle";
 import { createSubmissionRecord } from "@/server/submission-create";
+import { applySubmissionStatus } from "@/server/submission-status";
 import { notifyNewSubmission } from "@/server/notify";
 import {
   collectSubmissionGates,
@@ -584,89 +581,21 @@ export async function changeSubmissionStatus(
   const reason =
     next === "REJECTED" || next === "ON_HOLD" ? (d.reason ?? null) : null;
 
-  // Emit the most specific audited action for the milestone statuses.
-  const action: ActivityAction =
-    next === "SELECTED"
-      ? "CANDIDATE_SELECTED"
-      : next === "REJECTED"
-        ? "CANDIDATE_REJECTED"
-        : next === "OFFER_RELEASED"
-          ? "OFFER_RELEASED"
-          : next === "OFFER_ACCEPTED"
-            ? "OFFER_ACCEPTED"
-            : next === "JOINED"
-              ? "CANDIDATE_JOINED"
-              : "SUBMISSION_STATUS_CHANGED";
-
-  // §C2: expected join date attaches to OFFER_ACCEPTED, actual to JOINED.
-  // We ignore either field when the new status doesn't accept it — keeps a
-  // stale value off the row if a recruiter fills it out for the wrong status.
-  const joinDates: { expectedJoinDate?: Date; actualJoinDate?: Date } = {};
-  if (next === "OFFER_ACCEPTED" && d.expectedJoinDate)
-    joinDates.expectedJoinDate = d.expectedJoinDate;
-  if (next === "JOINED" && d.actualJoinDate)
-    joinDates.actualJoinDate = d.actualJoinDate;
-
   // Surfaced in the success toast — set when JOINED creates/reactivates a placement.
   let placementSeq: number | null = null;
 
+  // The status update + audit + placement lifecycle all run through the shared
+  // transition so this manual path and the round-driven coupling stay identical.
   await db.$transaction(async (tx) => {
-    await tx.submission.update({
-      where: { id: d.id },
-      data: {
-        status: next,
-        // The note now carries the free-text detail the old rejection-reason
-        // textarea did, so the detail page's "Rejection reason" block is unchanged.
-        ...(next === "REJECTED" ? { rejectionReason: d.note ?? null } : {}),
-        ...joinDates,
-      },
-    });
-    await logActivity(tx, {
-      entityType: "SUBMISSION",
-      action,
-      description: `${submission.candidate.fullName} on "${submission.job.title}": status ${backward ? "corrected back" : "changed"} from ${SUBMISSION_STATUS_LABEL[submission.status]} to ${SUBMISSION_STATUS_LABEL[next]}`,
-      oldValue: SUBMISSION_STATUS_LABEL[submission.status],
-      newValue: SUBMISSION_STATUS_LABEL[next],
-      eventAt: d.eventAt ?? null,
+    ({ placementSeq } = await applySubmissionStatus(tx, submission, next, {
+      actorId: user.id,
       note: d.note ?? null,
       reason,
-      performedById: user.id,
-      submissionId: d.id,
-    });
-
-    // R4.2 — placement lifecycle hooks. Same transaction as the status change
-    // so the placement state and the audit row commit together (audit invariant).
-    if (next === "JOINED" && prev !== "JOINED") {
-      const placement = await ensurePlacementOnJoined(tx, {
-        submissionId: d.id,
-        candidateId: submission.candidateId,
-        jobId: submission.jobId,
-        payRate: submission.payRate,
-        billRate: submission.billRate,
-        clientRate: submission.clientRate,
-        candidateFullName: submission.candidate.fullName,
-        jobTitle: submission.job.title,
-        candidateStatus: submission.candidate.status,
-        performedById: user.id,
-        eventAt: d.actualJoinDate ?? d.eventAt ?? null,
-      });
-      placementSeq = placement.placementSeq;
-    } else if (
-      prev === "JOINED" &&
-      next !== "JOINED" &&
-      submission.placement &&
-      (submission.placement.status === "ACTIVE" ||
-        submission.placement.status === "EXTENDED")
-    ) {
-      await terminatePlacementOnRevert(tx, {
-        placementId: submission.placement.id,
-        candidateId: submission.candidateId,
-        candidateFullName: submission.candidate.fullName,
-        candidateStatus: submission.candidate.status,
-        newSubmissionStatus: SUBMISSION_STATUS_LABEL[next],
-        performedById: user.id,
-      });
-    }
+      eventAt: d.eventAt ?? null,
+      expectedJoinDate: d.expectedJoinDate ?? null,
+      actualJoinDate: d.actualJoinDate ?? null,
+      backward,
+    }));
   });
 
   revalidatePath("/submissions");

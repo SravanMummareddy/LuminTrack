@@ -4,8 +4,14 @@ import { revalidatePath } from "next/cache";
 import { getScopedPrisma, requireUser } from "@/lib/session";
 import { logActivity } from "@/server/activity";
 import { hashPair } from "@/server/submission-create";
-import { interviewRoundSchema } from "@/lib/validation/interview";
+import { interviewRoundSchema, logResultSchema } from "@/lib/validation/interview";
 import { toFieldErrors } from "@/lib/validation/common";
+import {
+  applyResultCoupling,
+  type CouplingOutcome,
+  type SubmissionForStatus,
+} from "@/server/submission-status";
+import type { InterviewResult } from "@/generated/prisma/enums";
 import {
   INTERVIEW_TYPE_LABEL,
   INTERVIEW_RESULT_LABEL,
@@ -17,6 +23,7 @@ import {
   isTerminal,
   resumeFlag,
   highestInterviewStage,
+  statusForResult,
 } from "@/lib/submission-flow";
 import { formatDateTime } from "@/lib/format";
 import type { FormState } from "@/lib/form-state";
@@ -65,6 +72,173 @@ function supportFields(d: {
   };
 }
 
+/** The submission fields the H2 result→status coupling needs — the rate trio for
+ *  the placement seed, candidate/job for the audit line, placement for the revert
+ *  path, and the three résumé fields for the SB-3 gate. Shared by the log-result,
+ *  edit, and add-round-when-done paths so they hydrate `SubmissionForStatus`
+ *  identically. */
+const SUBMISSION_COUPLING_SELECT = {
+  id: true,
+  status: true,
+  candidateId: true,
+  jobId: true,
+  payRate: true,
+  billRate: true,
+  clientRate: true,
+  candidateResumeId: true,
+  resumeBlobUrl: true,
+  resumeWaivedAt: true,
+  candidate: { select: { fullName: true, status: true } },
+  job: { select: { title: true } },
+  placement: { select: { id: true, status: true } },
+} as const;
+
+/** The eventAt for a round-driven status change: the interview's own time when it
+ *  already happened (so a backfilled Selected/Rejected dates to the interview,
+ *  not to "now"), otherwise null (the decision is being made now). */
+function couplingEventAt(scheduledAt: Date | null): Date | null {
+  return scheduledAt && scheduledAt < new Date() ? scheduledAt : null;
+}
+
+/** The success toast for a logged result — names what the coupling did so the
+ *  recruiter knows whether to add a round, reschedule, or that it's done. */
+function logResultToast(
+  result: InterviewResult,
+  outcome: CouplingOutcome,
+): { title: string; description?: string } {
+  if (outcome.blockedNoResume)
+    return {
+      title: "Result logged — candidate not yet Selected",
+      description:
+        "Attach a résumé (or waive it) on the submission to mark the candidate Selected.",
+    };
+  // Report what the coupling ACTUALLY did (outcome.coupled), not just the chosen
+  // result — a decisive result that wasn't a valid move (terminal submission,
+  // already past that stage, vendor round) falls through to a neutral notice.
+  if (outcome.coupled === "SELECTED")
+    return { title: "Candidate marked Selected" };
+  if (outcome.coupled === "REJECTED") return { title: "Candidate rejected" };
+  if (outcome.coupled === "ON_HOLD")
+    return { title: "Submission put on hold" };
+  switch (result) {
+    case "NEED_ANOTHER_ROUND":
+      return { title: "Result logged", description: "Add the next round to continue." };
+    case "WAITING":
+      return { title: "Saved — still awaiting the decision" };
+    case "NO_SHOW":
+    case "CANCELLED":
+      return {
+        title: "Marked as didn't happen",
+        description: "Reschedule by adding a new round.",
+      };
+    default:
+      return { title: "Result recorded" };
+  }
+}
+
+/**
+ * H2 — the focused "Log result" action. Records the outcome + feedback on a round
+ * and drives the submission status through the shared coupling
+ * (`applyResultCoupling`): SELECTED → Selected, REJECTED → Rejected (reason),
+ * ON_HOLD → On hold; the in-stage outcomes (awaiting / need-another-round /
+ * didn't-happen) keep the submission put. One transaction, so the round result
+ * and the submission status can never drift.
+ */
+export async function logInterviewResult(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const db = await getScopedPrisma();
+  const user = await requireUser();
+  const parsed = logResultSchema.safeParse({
+    roundId: formData.get("roundId") ?? "",
+    result: formData.get("result") ?? "",
+    feedback: formData.get("feedback") ?? "",
+    feedbackNa: formData.get("feedback__na") ?? "",
+    reason: formData.get("reason") ?? "",
+  });
+  if (!parsed.success)
+    return {
+      error: "Please fix the highlighted fields.",
+      fieldErrors: toFieldErrors(parsed.error),
+    };
+  const d = parsed.data;
+
+  const round = await db.interviewRound.findUnique({
+    where: { id: d.roundId },
+    select: {
+      id: true,
+      roundName: true,
+      result: true,
+      scheduledAt: true,
+      submission: { select: SUBMISSION_COUPLING_SELECT },
+    },
+  });
+  if (!round) return { error: "This interview round no longer exists." };
+  const submission = round.submission as SubmissionForStatus;
+  const result = d.result as InterviewResult;
+  const prevResult = round.result;
+  const feedbackText = d.feedback ?? null;
+  // The focused dialog hides Feedback for the didn't-happen outcomes, so a
+  // NO_SHOW / CANCELLED post carries no feedback — don't let a blank overwrite an
+  // interim read the recruiter saved earlier.
+  const touchesFeedback = result !== "NO_SHOW" && result !== "CANCELLED";
+  // Date the decision at the interview when it already happened (backdated), so
+  // the Selected/Rejected timeline entry lines up with the round, not "now".
+  const eventAt = couplingEventAt(round.scheduledAt);
+
+  let outcome: CouplingOutcome = { coupled: null, blockedNoResume: false };
+
+  await db.$transaction(async (tx) => {
+    await tx.interviewRound.update({
+      where: { id: d.roundId },
+      data: {
+        result,
+        ...(touchesFeedback ? { feedback: feedbackText } : {}),
+        updatedById: user.id,
+      },
+    });
+    if (prevResult !== result)
+      await logActivity(tx, {
+        entityType: "INTERVIEW_ROUND",
+        action: "INTERVIEW_RESULT_UPDATED",
+        description: `Result for round "${round.roundName}" changed from ${INTERVIEW_RESULT_LABEL[prevResult]} to ${INTERVIEW_RESULT_LABEL[result]}`,
+        oldValue: INTERVIEW_RESULT_LABEL[prevResult],
+        newValue: INTERVIEW_RESULT_LABEL[result],
+        performedById: user.id,
+        interviewRoundId: d.roundId,
+      });
+    if (touchesFeedback && feedbackText)
+      await logActivity(tx, {
+        entityType: "INTERVIEW_ROUND",
+        action: "FEEDBACK_ADDED",
+        description: `Feedback added to round "${round.roundName}"`,
+        performedById: user.id,
+        interviewRoundId: d.roundId,
+      });
+
+    // advanceBlock (inside the coupling) needs the round set AS WRITTEN, so load
+    // it after the update above.
+    const rounds = await tx.interviewRound.findMany({
+      where: { submissionId: submission.id },
+      select: { interviewType: true, result: true, roundOrder: true },
+    });
+    outcome = await applyResultCoupling(tx, submission, result, rounds, {
+      actorId: user.id,
+      reasonNote: d.reason ?? null,
+      eventAt,
+    });
+  });
+
+  revalidatePath(`/submissions/${submission.id}`);
+  revalidatePath("/submissions");
+  revalidatePath(`/jobs/${submission.jobId}`);
+  revalidatePath(`/candidates/${submission.candidateId}`);
+  revalidatePath("/interviews");
+
+  return { ok: true, toast: logResultToast(result, outcome) };
+}
+
 export async function createInterviewRound(
   _prev: FormState,
   formData: FormData,
@@ -93,6 +267,10 @@ export async function createInterviewRound(
   // Set when the round is added but the status can't advance because no résumé is
   // attached — surfaced as a notice so the recruiter isn't left guessing.
   let advanceSkippedNoResume = false;
+  // H2: a round added in "Already happened" mode may carry a decisive result;
+  // captured out here so the return can report what the coupling did.
+  let couplingOutcome: CouplingOutcome = { coupled: null, blockedNoResume: false };
+  let couplingResult: InterviewResult = "WAITING";
 
   await db.$transaction(async (tx) => {
     // Serialize concurrent "Add round" submits for the same submission so two
@@ -186,6 +364,36 @@ export async function createInterviewRound(
         });
       }
     }
+
+    // H2: a round added in "Already happened" mode may carry a decisive result
+    // (Selected / Rejected / On hold). Drive the submission through the same
+    // coupling the Log-result dialog uses, so backfilling a past interview and
+    // its outcome moves the submission — no drift. Reads the submission fresh so
+    // it sees the stage advance just applied above.
+    if (statusForResult(created.result)) {
+      couplingResult = created.result;
+      const full = await tx.submission.findUnique({
+        where: { id: d.submissionId },
+        select: SUBMISSION_COUPLING_SELECT,
+      });
+      if (full) {
+        const rounds = await tx.interviewRound.findMany({
+          where: { submissionId: d.submissionId },
+          select: { interviewType: true, result: true, roundOrder: true },
+        });
+        couplingOutcome = await applyResultCoupling(
+          tx,
+          full as SubmissionForStatus,
+          created.result,
+          rounds,
+          {
+            actorId: user.id,
+            reasonNote: null,
+            eventAt: couplingEventAt(created.scheduledAt),
+          },
+        );
+      }
+    }
   });
 
   // A round-driven status change shows on the submissions list + the job's and
@@ -195,6 +403,10 @@ export async function createInterviewRound(
   revalidatePath(`/jobs/${submission.jobId}`);
   revalidatePath(`/candidates/${submission.candidateId}`);
 
+  // A decisive result on a just-added round reports what the coupling did,
+  // taking precedence over the plain "round added" / résumé-skip notices.
+  if (couplingOutcome.coupled || couplingOutcome.blockedNoResume)
+    return { ok: true, toast: logResultToast(couplingResult, couplingOutcome) };
   if (advanceSkippedNoResume)
     return {
       ok: true,
@@ -226,6 +438,12 @@ export async function updateInterviewRound(
 
   const existing = await db.interviewRound.findUnique({
     where: { id: roundId },
+    select: {
+      result: true,
+      feedback: true,
+      scheduledAt: true,
+      submission: { select: SUBMISSION_COUPLING_SELECT },
+    },
   });
   if (!existing) return { error: "This interview round no longer exists." };
 
@@ -242,6 +460,11 @@ export async function updateInterviewRound(
     ? Math.floor(d.scheduledAt.getTime() / 60000)
     : null;
   const scheduledChanged = prevSched !== nextSched;
+
+  // H2: editing a round's result to a decisive outcome drives the submission too,
+  // so the full-edit path can't drift from the submission the way the old
+  // record-in-two-places flow did.
+  let outcome: CouplingOutcome = { coupled: null, blockedNoResume: false };
 
   await db.$transaction(async (tx) => {
     await tx.interviewRound.update({
@@ -299,9 +522,35 @@ export async function updateInterviewRound(
         performedById: user.id,
         interviewRoundId: roundId,
       });
+
+    // The full edit form has no dedicated reject/hold reason field — that reason
+    // is captured on the focused Log-result dialog. A rejection made through this
+    // path lands reason-less (same as the manual pipeline's optional reason).
+    if (resultChanged) {
+      const rounds = await tx.interviewRound.findMany({
+        where: { submissionId: existing.submission.id },
+        select: { interviewType: true, result: true, roundOrder: true },
+      });
+      outcome = await applyResultCoupling(
+        tx,
+        existing.submission as SubmissionForStatus,
+        d.result,
+        rounds,
+        {
+          actorId: user.id,
+          reasonNote: null,
+          eventAt: couplingEventAt(d.scheduledAt ?? null),
+        },
+      );
+    }
   });
 
   revalidatePath(`/submissions/${d.submissionId}`);
+  revalidatePath("/submissions");
+  revalidatePath(`/jobs/${existing.submission.jobId}`);
+  revalidatePath(`/candidates/${existing.submission.candidateId}`);
+  if (outcome.coupled || outcome.blockedNoResume)
+    return { ok: true, toast: logResultToast(d.result, outcome) };
   return { ok: true };
 }
 

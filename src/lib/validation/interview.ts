@@ -127,3 +127,59 @@ export const interviewRoundSchema = z
   });
 
 export type InterviewRoundInput = z.infer<typeof interviewRoundSchema>;
+
+// H2 — the focused "Log result" dialog. Records the outcome on a round and (via
+// the coupling in submission-status.ts) drives the submission status. A trimmed
+// input: the outcome, feedback, and — for a rejection / hold — the reason. Every
+// other round field is edited through the full form. COMPLETED is intentionally
+// absent (dropped in H2); WAITING is offered as "interview happened — awaiting
+// the decision" (saves feedback, keeps the submission put).
+export const LOG_RESULT_VALUES = [
+  "SELECTED",
+  "NEED_ANOTHER_ROUND",
+  "WAITING",
+  "ON_HOLD",
+  "REJECTED",
+  "NO_SHOW",
+  "CANCELLED",
+] as const;
+
+/** Outcomes where the interview happened with a verdict/interim read, so
+ *  feedback is required-or-N/A. The didn't-happen pair and a bare "still
+ *  awaiting" need none. */
+const FEEDBACK_REQUIRED_RESULTS: string[] = [
+  "SELECTED",
+  "NEED_ANOTHER_ROUND",
+  "REJECTED",
+  "ON_HOLD",
+];
+
+export const logResultSchema = z
+  .object({
+    roundId: z.string().min(1, "Missing interview round reference."),
+    result: z.enum(LOG_RESULT_VALUES),
+    feedback: optionalText,
+    feedbackNa: naFlag,
+    // Free-text reason for a rejection / hold — lands on the timeline (and, for a
+    // rejection, in the submission's rejectionReason).
+    reason: optionalText,
+  })
+  .superRefine((d, ctx) => {
+    if (FEEDBACK_REQUIRED_RESULTS.includes(d.result) && !d.feedback && !d.feedbackNa)
+      ctx.addIssue({
+        code: "custom",
+        path: ["feedback"],
+        message: "Enter feedback, or mark N/A.",
+      });
+    if ((d.result === "REJECTED" || d.result === "ON_HOLD") && !d.reason)
+      ctx.addIssue({
+        code: "custom",
+        path: ["reason"],
+        message:
+          d.result === "REJECTED"
+            ? "Say why the candidate was rejected."
+            : "Say why this is on hold.",
+      });
+  });
+
+export type LogResultInput = z.infer<typeof logResultSchema>;

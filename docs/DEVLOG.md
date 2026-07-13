@@ -10,6 +10,57 @@ short instead of long.
 
 ---
 
+## 2026-07-13 · H2 — coupling a round result to the submission status without leaking backwards
+
+**Situation.** Model B made *adding* an interview round advance the submission into that interview
+stage, but recording the *outcome* still lived in two places: you logged the round's `result` in one
+form, then made a second trip to the Status pipeline to click "Mark selected / Reject / Hold." The
+outcome was double-tracked (round `result` **and** `SubmissionStatus`) and drifted. H2 made one
+focused **Log-result** dialog that records the outcome AND drives the submission status in a single
+transaction, via a shared `applyResultCoupling` → `applySubmissionStatus` (extracted from
+`changeSubmissionStatus` so the manual and round-driven paths run the identical audited transition +
+placement lifecycle).
+
+**Diagnosis.** A three-lens adversarial review (correctness / pipeline-semantics / UI) caught that the
+first cut of the coupling was *too eager*. It gated a SELECTED advance on only `isForwardAdvance` +
+résumé — it never ran `advanceBlock`, the SB-5 gate the manual pipeline uses. Two real leaks fell out
+of that single gap:
+- **Backward drag.** `SUBMISSION_STAGE_INDEX`: SELECTED=4, OFFER_RELEASED=5, OFFER_ACCEPTED=6 — both
+  offer stages are *non-terminal*, so editing a client round's result to SELECTED on an offer-stage
+  submission passed the guard and dragged it **back** to Selected, silently skipping the SB-6
+  backward-reason and mislabeling the audit as "changed" not "corrected back."
+- **Sideways jump.** A vendor-screening round set "Selected" (allowed by the full form, which — unlike
+  the focused dialog — doesn't filter the option by type) jumped straight to stage-4 SELECTED with
+  **no client interview on file**, skipping CLIENT_INTERVIEW.
+
+Both are the same root cause: a second write-path that re-implemented *part* of the pipeline's
+transition rules instead of reusing all of them.
+
+**Fix.** Route the "is this move legal?" question through the pipeline's own logic, not a bespoke
+subset. New pure `resolveCouplingTarget(status, result)` returns the target only when the manual
+pipeline would allow it — forward-only for SELECTED, a valid `branchActions` entry for Reject/Hold
+(which also kills a Hold-past-the-decision that the manual UI never offers). Then
+`applyResultCoupling` runs `advanceBlock` with the round set *as written* for the forward case, so a
+SELECTED with no passing client-family round on file simply stays put. Both fully unit-tested. Also
+folded in: the toast now reports what the coupling *actually did* (`outcome.coupled`) rather than the
+chosen result (no more "marked Selected" on a no-op); NO_SHOW/CANCELLED stop overwriting saved
+feedback; a backfilled decision dates to the interview, not "now." Separately fixed a latent
+same-class dead-end — `OTHER`-type rounds enter CLIENT_INTERVIEW via `stageForRoundType` but were
+missing from `CLIENT_FAMILY`, so an OTHER-only submission could never reach Selected (the last type
+left out of the F7 fix).
+
+**Lesson.** When a second code-path drives the same state machine, gate it with the machine's *own*
+predicates — don't re-derive "is this a legal move" from a couple of the rules. The first version
+reimplemented ~half of `advanceBlock` inline and every missing half-rule became a leak (backward drag,
+stage-skip). The correct shape is a pure `resolveCouplingTarget` + reusing `advanceBlock`, so the two
+write-paths are provably consistent and the gate is unit-testable apart from the transaction. Corollary
+process note: this landed while a **concurrent session** was committing to the same repo/worktree — it
+reset uncommitted edits and interleaved branch pointers. Commit early to a SHA (work survives even when
+branch names get hijacked) and reconcile onto a fresh branch off `origin/main` by cherry-pick rather
+than trusting the local branch graph.
+
+---
+
 ## 2026-07-13 · Core-flow pressure test — forms had drifted from their own data
 
 **Situation.** A four-way audit of the flows the owner uses most (Jobs, VPR, Candidate, Bench —
