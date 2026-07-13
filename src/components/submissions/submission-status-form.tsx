@@ -223,6 +223,14 @@ export function SubmissionStatusForm({
   }
 
   const advance = primaryAdvance(status);
+  // Model B: the next step into an interview stage reads as "add a round", since
+  // adding one is what advances the status.
+  const interviewEntryLabel: Partial<Record<SubmissionStatus, string>> = {
+    VENDOR_SCREENING_CALL: "Add vendor screening round",
+    CLIENT_INTERVIEW: "Add client interview round",
+  };
+  const primaryLabel =
+    (advance && interviewEntryLabel[advance.next]) ?? advance?.label;
   const branches = branchActions(status);
   const terminal = isTerminal(status);
   const prevStage = previousStage(status);
@@ -268,6 +276,16 @@ export function SubmissionStatusForm({
 
   function onPrimaryClick() {
     if (!advance) return;
+    // Model B (rounds-first): entering an interview stage is done by adding a
+    // round, which auto-advances the status — so send the recruiter to the rounds
+    // section instead of a status-advance dialog that can't stand alone.
+    if (
+      advance.next === "VENDOR_SCREENING_CALL" ||
+      advance.next === "CLIENT_INTERVIEW"
+    ) {
+      goToRounds();
+      return;
+    }
     if (advance.next === "JOINED") openDialog("joined", "JOINED");
     else if (MEANINGFUL_STAGES.includes(advance.next))
       openDialog("advance", advance.next);
@@ -341,7 +359,7 @@ export function SubmissionStatusForm({
                 onClick={onPrimaryClick}
                 disabled={isPending}
               >
-                {advance.label}
+                {primaryLabel}
                 <ArrowRight className="h-4 w-4" aria-hidden />
               </Button>
             )}

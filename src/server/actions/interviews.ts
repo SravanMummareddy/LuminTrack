@@ -6,7 +6,17 @@ import { logActivity } from "@/server/activity";
 import { hashPair } from "@/server/submission-create";
 import { interviewRoundSchema } from "@/lib/validation/interview";
 import { toFieldErrors } from "@/lib/validation/common";
-import { INTERVIEW_TYPE_LABEL, INTERVIEW_RESULT_LABEL } from "@/lib/labels";
+import {
+  INTERVIEW_TYPE_LABEL,
+  INTERVIEW_RESULT_LABEL,
+  SUBMISSION_STATUS_LABEL,
+  SUBMISSION_STAGE_INDEX,
+} from "@/lib/labels";
+import {
+  stageForRoundType,
+  isTerminal,
+  resumeFlag,
+} from "@/lib/submission-flow";
 import { formatDateTime } from "@/lib/format";
 import type { FormState } from "@/lib/form-state";
 
@@ -120,6 +130,40 @@ export async function createInterviewRound(
       performedById: user.id,
       interviewRoundId: created.id,
     });
+
+    // Rounds-first (Model B): adding a round advances the submission INTO that
+    // interview stage — forward only, on an active (non-terminal) submission that
+    // already carries a résumé (preserves the SB-3 résumé-before-advance rule).
+    const target = stageForRoundType(created.interviewType);
+    const sub = await tx.submission.findUnique({
+      where: { id: d.submissionId },
+      select: {
+        status: true,
+        candidateResumeId: true,
+        resumeBlobUrl: true,
+        resumeWaivedAt: true,
+      },
+    });
+    if (
+      sub &&
+      !isTerminal(sub.status) &&
+      resumeFlag(sub) !== "missing" &&
+      SUBMISSION_STAGE_INDEX[target] > SUBMISSION_STAGE_INDEX[sub.status]
+    ) {
+      await tx.submission.update({
+        where: { id: d.submissionId },
+        data: { status: target },
+      });
+      await logActivity(tx, {
+        entityType: "SUBMISSION",
+        action: "SUBMISSION_STATUS_CHANGED",
+        description: `Status changed from ${SUBMISSION_STATUS_LABEL[sub.status]} to ${SUBMISSION_STATUS_LABEL[target]} (interview round added)`,
+        oldValue: SUBMISSION_STATUS_LABEL[sub.status],
+        newValue: SUBMISSION_STATUS_LABEL[target],
+        performedById: user.id,
+        submissionId: d.submissionId,
+      });
+    }
   });
 
   revalidatePath(`/submissions/${d.submissionId}`);

@@ -53,6 +53,22 @@ export function InterviewRoundsManager({
   const [editing, setEditing] = useState<InterviewRoundData | "new" | null>(
     null,
   );
+  // "Log result" opens an awaiting round's form straight in done mode.
+  const [startMode, setStartMode] = useState<"scheduling" | "done" | undefined>(
+    undefined,
+  );
+  function openAdd() {
+    setStartMode(undefined);
+    setEditing("new");
+  }
+  function openEdit(r: InterviewRoundData) {
+    setStartMode(undefined);
+    setEditing(r);
+  }
+  function openLogResult(r: InterviewRoundData) {
+    setStartMode("done");
+    setEditing(r);
+  }
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5">
@@ -60,7 +76,7 @@ export function InterviewRoundsManager({
         <h2 className="text-sm font-semibold text-slate-700">
           Interview rounds ({rounds.length})
         </h2>
-        <Button size="sm" onClick={() => setEditing("new")}>
+        <Button size="sm" onClick={openAdd}>
           <Plus className="h-4 w-4" />
           Add round
         </Button>
@@ -97,9 +113,18 @@ export function InterviewRoundsManager({
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
+                  {r.result === "WAITING" && (
+                    <button
+                      type="button"
+                      onClick={() => openLogResult(r)}
+                      className="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-sm font-medium text-amber-800 hover:bg-amber-100"
+                    >
+                      Log result
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => setEditing(r)}
+                    onClick={() => openEdit(r)}
                     className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
                   >
                     Edit
@@ -207,16 +232,23 @@ export function InterviewRoundsManager({
       {rounds.length > 0 && (
         <p className="mt-3 rounded-md border border-dashed border-slate-200 px-3 py-2 text-xs text-slate-500">
           <strong className="text-slate-600">After this round:</strong> another
-          round coming up? <em>Add round</em> above. Interviews done? Set the
-          outcome in the <em>Status pipeline</em> — mark the candidate{" "}
-          <strong>Selected</strong>, or reject / hold.
+          round coming up? <em>Add round</em> — it moves the submission into that
+          interview stage. Interview done? <em>Log result</em> on the round above,
+          then mark the candidate <strong>Selected</strong> (or reject / hold) in
+          the Status pipeline.
         </p>
       )}
 
       <Dialog
         open={editing !== null}
         onClose={() => setEditing(null)}
-        title={editing === "new" ? "Add interview round" : "Edit interview round"}
+        title={
+          editing === "new"
+            ? "Add interview round"
+            : startMode === "done"
+              ? "Log interview result"
+              : "Edit interview round"
+        }
       >
         {editing !== null && (
           <InterviewRoundForm
@@ -224,6 +256,7 @@ export function InterviewRoundsManager({
             round={editing === "new" ? undefined : editing}
             supportProviders={supportProviders}
             onDone={() => setEditing(null)}
+            startMode={startMode}
           />
         )}
       </Dialog>
